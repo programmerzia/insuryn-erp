@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Accounting\Http\Controllers\FinancialReportController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\PeriodCloseController;
 use App\Modules\Finance\Bank\Http\Controllers\BankController;
@@ -13,6 +14,7 @@ use App\Modules\Insurance\Party\Http\Controllers\AgentController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyController;
 use App\Modules\Insurance\Product\Http\Controllers\ProductController;
+use App\Modules\Insurance\Reports\Http\Controllers\InsuranceReportController;
 use Illuminate\Support\Facades\Route;
 
 // JSON API. Every api route runs ResolveTenant (bootstrap/app.php). Authentication is the default guard:
@@ -64,4 +66,15 @@ Route::middleware('auth')->prefix('finance')->group(function (): void {
     Route::get('bank-accounts/{bankAccount}/unmatched', [BankController::class, 'unmatched'])->whereUuid('bankAccount');
     Route::post('bank-statement-lines/{statementLine}/match', [BankController::class, 'match'])->whereUuid('statementLine');
     Route::post('bank-statement-lines/{statementLine}/explain', [BankController::class, 'explain'])->whereUuid('statementLine');
+});
+
+// Read-only reports (slice 1A.10); every figure carries URLs drilling to account activity and journals.
+Route::middleware('auth')->prefix('reports')->group(function (): void {
+    Route::get('premium-register', [InsuranceReportController::class, 'premiumRegister']);
+    Route::get('receivable-ageing', [InsuranceReportController::class, 'receivableAgeing']);
+    Route::get('suspense-ageing', [InsuranceReportController::class, 'suspenseAgeing']);
+    Route::get('commission-statement', [InsuranceReportController::class, 'commissionStatement']);
+    Route::get('profit-and-loss', [FinancialReportController::class, 'profitAndLoss']);
+    Route::get('balance-sheet', [FinancialReportController::class, 'balanceSheet']);
+    Route::get('accounts/{account}/activity', [FinancialReportController::class, 'accountActivity'])->whereUuid('account');
 });

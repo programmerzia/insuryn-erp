@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Insurance\Reports\Application;
+
+use App\Modules\Accounting\Application\Queries\SourceJournalQuery;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Premium register: written premium per policy transaction by accounting date — new business and endorsements as billed, cancellations
+ * as return premium (−unearned remaining, −tax reversal). Each row drills to the journals posted for its transaction.
+ */
+final class PremiumRegisterQuery
+{
+    public function __construct(private readonly SourceJournalQuery $journals) {}
+
+    /**
+     * @return array{entity_id: string, from: string, to: string, totals: array{gross_minor: int, net_minor: int, tax_minor: int},
+     *     rows: list<array{policy_transaction_id: string, accounting_date: string, type: string, policy_id: string, policy_number: string|null, product_code: string,
+     *     branch_id: string, agent_id: string|null, customer_id: string, currency: string, gross_minor: int, net_minor: int, tax_minor: int,
+     *     journals: list<array{journal_id: string, journal_number: string|null, posting_date: string, status: string, url: string}>}>}
+     */
+    public function register(string $entityId, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $transactions = DB::table('policy_transactions as t')->join('policies as p', 'p.id', '=', 't.policy_id')->join('products as pr', 'pr.id', '=', 'p.product_id')
+            ->where('p.entity_id', $entityId)->whereBetween('t.accounting_date', [$from->toDateString(), $to->toDateString()])->where('t.type', '<>', 'renewal')
+            ->orderBy('t.accounting_date')->orderBy('p.number')->orderBy('t.created_at')
+            ->get(['t.id', 't.accounting_date', 't.type', 't.premium_delta_minor', 't.net_delta_minor', 't.tax_delta_minor', 't.amounts',
+                'p.id as policy_id', 'p.number', 'pr.code', 'p.branch_id', 'p.agent_id', 'p.policyholder_party_id', 'p.currency']);
+        $journals = $this->journals->bySource('policy_transaction', $transactions->pluck('id')->map(fn ($id): string => (string) $id)->all());
+
+        $rows = [];
+        $totals = ['gross_minor' => 0, 'net_minor' => 0, 'tax_minor' => 0];
+        foreach ($transactions as $t) {
+            /** @var object{id: string, accounting_date: string, type: string, premium_delta_minor: int|string, net_delta_minor: int|string, tax_delta_minor: int|string, amounts: string|null,
+             *     policy_id: string, number: string|null, code: string, branch_id: string, agent_id: string|null, policyholder_party_id: string, currency: string} $t */
+            [$gross, $net, $tax] = self::writtenPremium($t);
+            $rows[] = ['policy_transaction_id' => (string) $t->id, 'accounting_date' => (string) $t->accounting_date, 'type' => (string) $t->type,
+                'policy_id' => (string) $t->policy_id, 'policy_number' => $t->number === null ? null : (string) $t->number, 'product_code' => (string) $t->code,
+                'branch_id' => (string) $t->branch_id, 'agent_id' => $t->agent_id === null ? null : (string) $t->agent_id, 'customer_id' => (string) $t->policyholder_party_id,
+                'currency' => (string) $t->currency, 'gross_minor' => $gross, 'net_minor' => $net, 'tax_minor' => $tax, 'journals' => $journals[(string) $t->id] ?? []];
+            $totals['gross_minor'] += $gross;
+            $totals['net_minor'] += $net;
+            $totals['tax_minor'] += $tax;
+        }
+
+        return ['entity_id' => $entityId, 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'totals' => $totals, 'rows' => $rows];
+    }
+
+    /**
+     * @param object{type: string, premium_delta_minor: int|string, net_delta_minor: int|string, tax_delta_minor: int|string, amounts: string|null} $transaction
+     * @return array{0: int, 1: int, 2: int} gross, net, tax
+     */
+    private static function writtenPremium(object $transaction): array
+    {
+        if ($transaction->type !== 'cancellation') {
+            return [(int) $transaction->premium_delta_minor, (int) $transaction->net_delta_minor, (int) $transaction->tax_delta_minor];
+        }
+        /** @var array<string, int> $amounts */
+        $amounts = json_decode((string) $transaction->amounts, true) ?? [];
+        $net = -(int) ($amounts['unearned_remaining'] ?? 0);
+        $tax = -(int) ($amounts['tax_reversal'] ?? 0);
+
+        return [$net + $tax, $net, $tax];
+    }
+}

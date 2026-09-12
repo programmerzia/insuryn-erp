@@ -41,7 +41,7 @@ code and in the register below, configurable.
 | 1A.7 | Commission | done | see git log |
 | 1A.8 | Reconcilers | done | see git log |
 | 1A.9 | Month-end close | done | see git log |
-| 1A.10 | Reports | pending | |
+| 1A.10 | Reports | done | see git log |
 | 1B.1 | Claims | pending | |
 | 1B.2 | Claims reconciler + close task 5 | pending | |
 | 1B.3 | Claims reports | pending | |
@@ -60,6 +60,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-6 | 1A.7 | Commission rules beyond a flat rate (tiers, term/year rules, hierarchy overrides — spec §4) are not specified: a plan is one `rate_bp` on premium received plus optional withholding (`withholding_jurisdiction` + `withholding_tax_type` → `tax_rates` with `withholding = true`; a missing rate refuses the allocation, never assumes 0). | `commission_plans` rows (`CommissionPlanService`); migration `2026_09_14_000007` (`ASSUMPTION:`). |
 | A-7 | 1A.7 | When both the product version and the agent name a commission plan, which wins is not specified: product version first, then agent. | `config/erp.php` `commission.plan_precedence` (`ASSUMPTION:`), `CommissionPlanResolver`. |
 | A-8 | 1A.8 | Subledger balances are computed as of the reconciliation date from dated business rows (`policy_transactions.accounting_date`, `receipt_allocations.posted_on`, `suspense_items.aged_since`, `commission_entries.earned_on`); commission entries count while their *current* status is not `paid` (no payout date exists yet — payouts are not built). Control accounts are those mapped to the subledger's `subledger_controls` roles on the date. | `Insurance\Collections\Application\Reconciliation\*Reconciler`, `Insurance\Commission\Application\CommissionReconciler`. |
+| A-9 | 1A.10 | Receivable ageing by installment uses each installment's *current* outstanding amount (payments and cancellation credits are not dated per installment); `as_of` sets days past due and buckets only. The premium subledger reconciliation (A-8) is dated, so control totals are unaffected. | `Insurance\Reports\Application\ReceivableAgeingQuery` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -501,3 +502,27 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   rules; bank task blocked by an unexplained line up to period end then done after explaining; premium recon variance blocks, trial
   balance waits, lock refused `CLOSE_TASKS_OPEN`; per-task permission, already done, reopened run inactive and a new run can start; API.
 - Result: 853 tests green, PHPStan 0 errors.
+
+### 1A.10 — Reports — done
+- All read-only JSON under `/api/reports` (`reports.financial`, entity-scoped where an `entity_id` is given). Every row carries drill-down:
+  `journals[]` (`journal_id`, number, date, status, `url` = `/accounting/journals/{id}`) or, for account rows, `url` to the account activity
+  report whose lines each link to their journal.
+- Kernel:
+  - `Accounting\Application\Queries\SourceJournalQuery::bySource(sourceType, ids)`: ledger journals (posted/reversed) per business object.
+  - `Accounting\Application\Reports\FinancialStatementsQuery` (primary book, normal-side amounts): `profitAndLoss(entity, from, to)`
+    (income/expense accounts' movement, totals, net profit), `balanceSheet(entity, asOf)` (assets, liabilities, equity, cumulative current
+    earnings; assets = liabilities + equity + current earnings), `accountActivity(entity, account, ?from, to)` (opening, lines, closing).
+  - `Accounting\Http\Controllers\FinancialReportController`: `GET profit-and-loss?entity_id&from&to`, `balance-sheet?entity_id&as_of`,
+    `accounts/{account}/activity?entity_id&from?&to`.
+- Insurance (`app/Modules/Insurance/Reports`):
+  - `PremiumRegisterQuery::register(entity, from, to)`: written premium per policy transaction by accounting date (new/endorsement as billed;
+    cancellation as return premium −unearned remaining / −tax reversal), product code, branch, agent, customer, totals, journals.
+  - `ReceivableAgeingQuery::ageing(entity, asOf)`: unpaid installments bucketed not_due / 1-30 / 31-60 / 61-90 / 90+ days past due (A-9),
+    most overdue first, journals of the policy's issue and endorsements.
+  - `SuspenseAgeingReport` (wraps `SuspenseQuery`, drills to RECEIPT_RECORDED journals), `CommissionStatementReport` (wraps
+    `CommissionStatementQuery`, drills to commission journals).
+  - `Http\Controllers\InsuranceReportController`: `GET premium-register`, `receivable-ageing`, `suspense-ageing`, `commission-statement?agent_id&from&to`.
+- Tests `tests/Feature/Reports/ReportsTest.php`: register rows/signs/totals/journal drill and date filter; ageing buckets, order, drill and
+  an earlier as-of; suspense and commission drill; P&L premium income = earning ledger for the month, account activity reconciles to the
+  movement and drills to journals; balance sheet balances and receivable equals GL; every endpoint 403 without and 200 with `reports.financial`.
+- Result: 859 tests green, PHPStan 0 errors.
