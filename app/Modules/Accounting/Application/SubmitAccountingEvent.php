@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application;
 
+use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
 use App\Modules\Accounting\Domain\Enums\EventStatus;
 use App\Modules\Accounting\Domain\Models\AccountingEvent;
-use App\Modules\Accounting\Infrastructure\Jobs\PostAccountingEventJob;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +19,8 @@ use Illuminate\Support\Str;
  */
 final class SubmitAccountingEvent
 {
+    public function __construct(private readonly PostingDispatcher $dispatcher) {}
+
     /**
      * @param array<string,mixed> $payload   amounts in minor units
      * @param array<string,mixed> $dimensions e.g. ['branch'=>uuid,'product'=>uuid,'policy'=>uuid,'customer'=>uuid,'agent'=>uuid,'product_code'=>'MOTOR','lob'=>'motor','channel'=>'agent']
@@ -60,7 +62,7 @@ final class SubmitAccountingEvent
             'payload' => json_encode(['event_id' => $id], JSON_THROW_ON_ERROR), 'created_at' => now(),
         ]);
         // Fast path; the outbox relay is the guarantee if this dispatch is lost.
-        PostAccountingEventJob::dispatch($tenantId, $id)->afterCommit()->onQueue('posting');
+        $this->dispatcher->dispatchAfterCommit($tenantId, $id);
 
         return AccountingEvent::query()->findOrFail($id);
     }
