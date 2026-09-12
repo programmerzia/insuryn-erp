@@ -21,13 +21,17 @@ final class PermissionsSeeder extends Seeder
         'platform.manage_users','platform.manage_roles','audit.view','reports.financial','reports.regulatory',
     ];
 
-    /** Segregation-of-duties conflicts (design §7.3), seeded per tenant by TenantSeeder. */
+    /**
+     * Segregation-of-duties conflicts (design §7.3), seeded per tenant by DemoTenantSeeder:
+     * [permission_a, permission_b, applies_to]. `object` = never both on the same object ("same claim").
+     */
     public const SOD = [
-        ['receipt.refund_request', 'receipt.refund_release'],
-        ['claim.pay_request', 'claim.pay_release'],
-        ['claim.reserve', 'claim.approve'],
-        ['accounting.create_manual_journal', 'accounting.approve_journal'],
-        ['commission.approve', 'commission.pay'],
+        ['receipt.refund_request', 'receipt.refund_release', 'user'],
+        ['claim.pay_request', 'claim.pay_release', 'user'],
+        ['claim.reserve', 'claim.approve', 'object'],
+        ['accounting.create_manual_journal', 'accounting.approve_journal', 'object'],
+        ['commission.approve', 'commission.pay', 'user'],
+        ['platform.manage_roles', 'accounting.*', 'user'],
     ];
 
     public function run(): void

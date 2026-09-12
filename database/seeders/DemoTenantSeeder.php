@@ -79,8 +79,8 @@ final class DemoTenantSeeder extends Seeder
                         'book_id' => $bookId, 'subledger' => $sub, 'control_account_role' => $role]);
                 }
             }
-            foreach (PermissionsSeeder::SOD as $i => [$a, $b]) {
-                DB::table('sod_rules')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'code' => 'SOD'.($i + 1), 'permission_a' => $a, 'permission_b' => $b, 'mode' => 'block']);
+            foreach (PermissionsSeeder::SOD as $i => [$a, $b, $appliesTo]) {
+                DB::table('sod_rules')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'code' => 'SOD'.($i + 1), 'permission_a' => $a, 'permission_b' => $b, 'mode' => 'block', 'applies_to' => $appliesTo]);
             }
             return ['tenant_id' => $tenantId, 'entity_id' => $entityId, 'branch_id' => $branchId, 'book_id' => $bookId, 'accounts' => $accounts];
         });

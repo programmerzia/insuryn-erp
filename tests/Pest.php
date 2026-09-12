@@ -38,6 +38,12 @@ function asTenant(string $tenantId, callable $fn): mixed
     return TenantContext::run($tenantId, $fn);
 }
 
+/** The design §7.2 role templates in the tenant (DatabaseSeeder does this for the demo tenant). */
+function seedRoleTemplates(string $tenantId): void
+{
+    asTenant($tenantId, fn () => App\Modules\Platform\Authorization\RoleTemplates::seedCurrentTenant());
+}
+
 /**
  * A user of the tenant holding exactly $permissions through one tenant-wide role. Returns the user id.
  *

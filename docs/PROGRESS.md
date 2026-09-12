@@ -28,7 +28,7 @@ code and in the register below, configurable.
 | 0.1 | DocumentNumberer | done | see git log |
 | 0.2 | Audit service | done | see git log |
 | 0.3 | Fiscal period service | done | see git log |
-| 0.4 | Permissions + SoD | pending | |
+| 0.4 | Permissions + SoD | done | see git log |
 | 0.5 | Manual journal + approvals | pending | |
 | 0.6 | Read side + first UI | pending | |
 | 0.7 | Import wizard | pending | |
@@ -143,3 +143,33 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Deferred by design of the slice order: §5.3 says reopen needs *approval*; the approval engine arrives in 0.5,
   which routes reopen through it when an approval policy matches.
 - Result: 130 tests green, PHPStan 0 errors.
+
+### 0.4 — Permissions + SoD — done
+- `Platform\Authorization\PermissionChecker::has(user, permission, ?AuthorizationScope)`: tenant roles apply
+  everywhere; entity roles within the entity and its branches; branch roles only in that branch.
+  `permissionsOf(user)` for assignment checks.
+- Gate integration (`PlatformServiceProvider`): `Gate::before` answers any ability that is a catalogue permission
+  code (so `can:accounting.view_journals` middleware and `Gate::allows('policy.issue', AuthorizationScope)` work);
+  other abilities fall through to normal policies.
+- `SodGuard::assert(actor, permission, AuditSubject)`: looks for the same actor exercising a conflicting
+  permission on the same object in `audit_events.permission` — independent of how many roles grant it.
+  Block-mode → `SodViolation`; warn-mode → returned warnings + `sod.warning` audit row. Wildcards (`accounting.*`).
+- `RoleAssignmentService::assign(user, role, scopeType, scopeId, actor)`: requires `platform.manage_users`;
+  blocks user-level conflicts (warn-mode returns warnings); the auditor role never combines with write
+  permissions (`AUDITOR_WRITE_PERMISSION`); audited as `user_role.assigned`.
+- `RoleTemplates` (design §7.2, "+" = previous role plus): branch_officer, branch_manager, claims_officer,
+  claims_manager, accountant, finance_manager, cfo, auditor, tenant_admin. Seeded for the demo tenant by
+  `DatabaseSeeder` (tests call `seedRoleTemplates()`; not in `DemoTenantSeeder` so the 0.0 child-table isolation
+  test keeps its exact-count assertion).
+- SoD rules seed (§7.3) now includes `platform.manage_roles ✕ accounting.*`. Migration `2026_09_13_000004_sod_rule_scope`
+  adds `sod_rules.applies_to` (`user` | `object`) + mode/applies_to checks. Interpretation of §7.3 (not an OPEN
+  item): rules marked "(same claim)" / "(same journal)" are `object` rules — the design's own Claims Manager and
+  Finance Manager templates hold both sides, so they are enforced per object by SodGuard, not at role assignment.
+- `Platform\Numbering\VoidDocumentNumber`: `numbering.void` check + audit (`document_number.voided`) around
+  `DocumentNumberer::void` (the slice-0.1 domain method and its tests are unchanged).
+- Tests: `tests/Feature/Platform/PermissionsTest.php` (scopes, Gate + `can:` middleware, templates, numbering.void),
+  `tests/Feature/Platform/SegregationOfDutiesTest.php` (every §7.3 pair per object, both directions, warn mode,
+  role-assignment block, object rules allowed in templates, manage_roles ✕ accounting.*, auditor read-only,
+  manage_users required).
+- Fresh `migrate --seed` verified on a scratch database.
+- Result: 146 tests green, PHPStan 0 errors.
