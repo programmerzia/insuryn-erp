@@ -84,6 +84,40 @@ function approvalPolicy(string $tenantId, string $objectType, array $condition, 
 }
 
 /**
+ * Insurance test world: a user holding every catalogue permission, VAT 15% (BD), a motor product version,
+ * a policyholder and an agent. Returns their ids. Used by Phase 1A/1B tests.
+ *
+ * @param array{tenant_id: string, entity_id: string, branch_id: string, book_id: string, accounts: array<string, string>} $ctx
+ * @return array{admin: string, product_id: string, product_version_id: string, policyholder_id: string, agent_id: string, agent_party_id: string}
+ */
+function seedInsuranceWorld(array $ctx, string $earningMethod = 'monthly', bool $refundTaxOnCancellation = true, ?string $commissionPlanId = null): array
+{
+    $tenantId = $ctx['tenant_id'];
+    $allPermissions = Database\Seeders\PermissionsSeeder::PERMISSIONS;
+    $admin = userWithPermissions($tenantId, $allPermissions);
+
+    return asTenant($tenantId, function () use ($ctx, $tenantId, $admin, $earningMethod, $refundTaxOnCancellation, $commissionPlanId): array {
+        Illuminate\Support\Facades\DB::table('tax_rates')->insert(['id' => (string) Illuminate\Support\Str::uuid7(), 'tenant_id' => $tenantId, 'jurisdiction' => 'BD',
+            'tax_type' => 'VAT', 'rate_bp' => 1500, 'inclusive' => true, 'withholding' => false, 'effective_from' => '2026-01-01']);
+        $catalogue = app(App\Modules\Insurance\Product\Application\ProductCatalogue::class);
+        $product = $catalogue->createProduct('MOTOR', 'Motor Comprehensive', 'motor', $admin);
+        $version = $catalogue->addVersion($product->id, [
+            'effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => $earningMethod,
+            'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true, 'refund_tax_on_cancellation' => $refundTaxOnCancellation],
+            'commission_plan_id' => $commissionPlanId, 'posting_rule_set' => 'default', 'coverages' => [['code' => 'OD', 'name' => 'Own damage']],
+        ], $admin);
+        $parties = app(App\Modules\Insurance\Party\Application\PartyService::class);
+        $holder = $parties->create(App\Modules\Insurance\Party\Domain\Enums\PartyKind::Individual, 'Rahima Akter', null,
+            [App\Modules\Insurance\Party\Domain\Enums\PartyRoleType::Customer, App\Modules\Insurance\Party\Domain\Enums\PartyRoleType::Policyholder], $admin);
+        $agentParty = $parties->create(App\Modules\Insurance\Party\Domain\Enums\PartyKind::Individual, 'Jamal Agent', null, [App\Modules\Insurance\Party\Domain\Enums\PartyRoleType::Agent], $admin);
+        $agent = app(App\Modules\Insurance\Party\Application\AgentService::class)->create($agentParty->id, 'AG-001', $ctx['branch_id'], null, $commissionPlanId, $admin);
+
+        return ['admin' => $admin, 'product_id' => $product->id, 'product_version_id' => $version->id, 'policyholder_id' => $holder->id,
+            'agent_id' => $agent->id, 'agent_party_id' => $agentParty->id];
+    });
+}
+
+/**
  * The exception of $type thrown by $operation, for asserting on its details. Fails the test when
  * nothing is thrown; any other exception propagates unchanged.
  *

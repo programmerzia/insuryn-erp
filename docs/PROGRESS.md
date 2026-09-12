@@ -34,7 +34,7 @@ code and in the register below, configurable.
 | 0.7 | Import wizard | done | see git log |
 | 1A.1 | Party, roles, bank accounts, agents | done | see git log |
 | 1A.2 | Product + versions | done | see git log |
-| 1A.3 | Policy lifecycle | pending | |
+| 1A.3 | Policy lifecycle | done | see git log |
 | 1A.4 | Installments + earning batch | pending | |
 | 1A.5 | Receipts, allocations, suspense, refunds | pending | |
 | 1A.6 | Bank | pending | |
@@ -291,3 +291,32 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Tests: `tests/Feature/Insurance/ProductCatalogueTest.php` (version resolution by date incl. boundary and no-version date, D-06
   default and override, overlap refused until end-dated, validation, permission, tenant isolation).
 - Result: 192 tests green, PHPStan 0 errors.
+
+### 1A.3 — Policy lifecycle — done
+- Module `App\Modules\Insurance\Policy`. Tables (migration `2026_09_14_000003_create_policy_tables`, tenant + RLS): `policies`
+  (status check, gross = net + tax check, unique tenant/number), `policy_transactions` (append-only source of accounting events),
+  `installments` (paid + cancelled ≤ amount check).
+- `PolicyLifecycle` per §5.4: `quote` (`policy.create`; product version in force on inception; tax split from `tax_rates` via new
+  `Platform\Tax\TaxRates` — a missing rate is refused `TAX_RATE_MISSING`, never assumed 0), `issue` (`policy.issue`; number reserved
+  via DocumentNumberer and marked used in the transaction; `new` transaction; installments; `POLICY_ISSUED`), `endorse` (`policy.endorse`;
+  issued|active; version+1; delta split; increase → new installment, decrease → credit unpaid installments; `POLICY_ENDORSED`),
+  `cancel` (`policy.cancel`; §4.4 amounts; `POLICY_CANCELLED`), `lapse`/`reinstate`, `renew` (marks renewed, creates the renewal quote),
+  `activateDue(today)`, `expireDue(today)`. Invalid transitions → 422 `INVALID_POLICY_TRANSITION`. All audited; domain events
+  `PolicyIssued`, `PolicyEndorsed`, `PolicyCancelled` dispatched inside the transaction.
+- Accounting mapper `PolicyAccountingEvents`: dims branch, product, product_code, lob, channel, policy, customer, agent;
+  idempotency `<EVENT>:{policy_transaction_id}`, source = policy transaction, source_version = policy version.
+- New rule `resources/posting-rules/POLICY_ENDORSED.default.json` + golden fixtures `01b_policy_endorsed.json`,
+  `01c_policy_endorsed_decrease.json` (CONTEXT.md: golden fixture per posting-rule change; existing fixtures untouched).
+- Pure domain: `PremiumMath` (half-even integer division, tax split inclusive/exclusive), `EarningSchedule` + `EarningLayer`
+  (daily_365 over actual cover days; monthly in equal rounded earning months with the last absorbing the residual — §4.3;
+  calendar month credited when an earning month ends; `earnedBefore(cutoff)` pro-rates a part month by days).
+- Cancellation (§4.4, D-06): earned = schedule before cancel date; unearned = net − earned; tax reversal = tax × unearned / net when
+  `refund_tax_on_cancellation`, else 0 (the engine drops the zero line); receivable credit = min(outstanding installments,
+  unearned + tax reversal), credited to installments last-first; refund due = the rest. Amounts stored on the cancellation transaction.
+- Ordering note: installment rows are created at issue in this slice (cancellation needs the outstanding receivable); slice 1A.4 adds
+  the earning batch (and posts the earning catch-up for cancelled policies).
+- API: `POST /api/insurance/policies` (quote), `GET /api/insurance/policies/{id}`, `POST .../{issue|endorse|cancel|lapse|reinstate|renew}`.
+- Tests: `tests/Feature/Insurance/PolicyLifecycleTest.php` (issue with number/tax/installments/journal and issue-once, activation/expiry/
+  lapse/reinstate/renew and invalid transitions, endorsement journal, §4.4 cancellation amounts and journal, D-06 flag off, missing tax
+  rate, API + permissions); golden tests for the new rule. Figures cross-checked with an independent exact-fraction calculation.
+- Result: 201 tests green, PHPStan 0 errors.

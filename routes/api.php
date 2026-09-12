@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Insurance\Party\Http\Controllers\AgentController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyController;
+use App\Modules\Insurance\Policy\Http\Controllers\PolicyController;
 use App\Modules\Insurance\Product\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,4 +31,9 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('products/{product}/versions', [ProductController::class, 'storeVersion'])->whereUuid('product');
     Route::get('products/{product}/versions/resolve', [ProductController::class, 'resolveVersion'])->whereUuid('product');
     Route::patch('products/{product}/versions/{version}', [ProductController::class, 'endVersion'])->whereUuid(['product', 'version']);
+    Route::post('policies', [PolicyController::class, 'store']);
+    Route::get('policies/{policy}', [PolicyController::class, 'show'])->whereUuid('policy');
+    foreach (['issue', 'endorse', 'cancel', 'lapse', 'reinstate', 'renew'] as $action) {
+        Route::post("policies/{policy}/{$action}", [PolicyController::class, $action])->whereUuid('policy');
+    }
 });
