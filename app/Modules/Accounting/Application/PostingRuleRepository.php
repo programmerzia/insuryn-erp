@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application;
 
+use App\Modules\Accounting\Application\Expressions\ExpressionScope;
 use App\Modules\Accounting\Domain\PostingRule;
 use Carbon\CarbonImmutable;
 use Symfony\Component\ExpressionLanguage\ExpressionLanguage;
@@ -46,7 +47,7 @@ final class PostingRuleRepository
             if (! $this->appliesTo($rule, $dimensions)) {
                 continue;
             }
-            if ($rule->condition !== null && ! (bool) $this->expr->evaluate($rule->condition, ['payload' => $payload, 'dims' => $dimensions])) {
+            if ($rule->condition !== null && ! (bool) $this->expr->evaluate($rule->condition, ExpressionScope::forEvent($payload, $dimensions))) {
                 continue;
             }
             $candidates[] = $rule;
