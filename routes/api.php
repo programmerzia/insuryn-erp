@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Insurance\Party\Http\Controllers\AgentController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyController;
+use App\Modules\Insurance\Product\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
 // JSON API. Every api route runs ResolveTenant (bootstrap/app.php). Authentication is the default guard:
@@ -23,4 +24,10 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('agents', [AgentController::class, 'store']);
     Route::get('agents/{agent}', [AgentController::class, 'show'])->whereUuid('agent');
     Route::patch('agents/{agent}', [AgentController::class, 'update'])->whereUuid('agent');
+    Route::get('products', [ProductController::class, 'index']);
+    Route::post('products', [ProductController::class, 'store']);
+    Route::get('products/{product}', [ProductController::class, 'show'])->whereUuid('product');
+    Route::post('products/{product}/versions', [ProductController::class, 'storeVersion'])->whereUuid('product');
+    Route::get('products/{product}/versions/resolve', [ProductController::class, 'resolveVersion'])->whereUuid('product');
+    Route::patch('products/{product}/versions/{version}', [ProductController::class, 'endVersion'])->whereUuid(['product', 'version']);
 });

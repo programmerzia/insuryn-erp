@@ -33,7 +33,7 @@ code and in the register below, configurable.
 | 0.6 | Read side + first UI | done | see git log |
 | 0.7 | Import wizard | done | see git log |
 | 1A.1 | Party, roles, bank accounts, agents | done | see git log |
-| 1A.2 | Product + versions | pending | |
+| 1A.2 | Product + versions | done | see git log |
 | 1A.3 | Policy lifecycle | pending | |
 | 1A.4 | Installments + earning batch | pending | |
 | 1A.5 | Receipts, allocations, suspense, refunds | pending | |
@@ -52,9 +52,10 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 
 | # | Slice | Assumption (conservative choice for an OPEN item) | Where / how to change |
 |---|---|---|---|
-| A-1 | 0.0 (D-06) | VAT on cancelled premium is refunded by default (`refund_tax_on_cancellation = true`); OPEN #2. | Lands with product versions (1A.2) and the cancellation mapper (1A.3). |
+| A-1 | 0.0 (D-06), 1A.2 | VAT on cancelled premium is refunded by default (`refund_tax_on_cancellation = true`); OPEN #2. | Per product version: `product_versions.tax_profile.refund_tax_on_cancellation` (`ProductCatalogue::addVersion`, `ASSUMPTION:`); mapper in 1A.3. |
 | A-2 | 0.5 | Approval thresholds and role mapping are unknown (OPEN #3): no approval policies are seeded. Every manual journal and reversal still needs one checker ≠ maker holding `accounting.approve_journal`; thresholds/steps are data in `approval_policies`. | `ApprovalService` docblock (`ASSUMPTION:`); insert rows into `approval_policies` (object_type `journal`, `journal_reversal`, `fiscal_period_reopen`). |
 | A-3 | 0.7 | Opening-balance / COA source format is unknown (OPEN #6): CSV with a header row, dot decimal separator, major units; header names per field are configurable. | `config/erp.php` `imports.*` (`ASSUMPTION:` comment). |
+| A-4 | 1A.2 | Earning method per product and short-rate table are unknown (OPEN #4): versions choose `daily_365` or `monthly` (what the earning batch implements); `24ths` and `short_rate_table` are refused, so cancellations are pro-rata. | `EarningMethod::supported()`, `StoreProductVersionRequest` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -272,3 +273,21 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Tests: `tests/Feature/Insurance/PartyApiTest.php` (multi-role party, validation, role add/remove, encrypted + masked bank
   accounts with single default, permission, tenant isolation, agent hierarchy with ancestors, cycle refusal, unique code, unknown party).
 - Result: 188 tests green, PHPStan 0 errors, vue-tsc/build OK.
+
+### 1A.2 — Product + versions — done
+- Module `App\Modules\Insurance\Product`. Tables (migration `2026_09_14_000002_create_product_tables`, tenant + RLS): `products`
+  (unique tenant/code), `product_versions` (unique product/version, earning-method check, range check, and a
+  `btree_gist` EXCLUDE constraint so versions of one product can never overlap in time — `CREATE EXTENSION btree_gist`, a trusted
+  extension the database owner may create).
+- `ProductCatalogue` (`product.manage`): `createProduct`, `addVersion` (auto version number, overlap check → 422
+  `PRODUCT_VERSION_OVERLAP`, tax profile normalised with D-06 `refund_tax_on_cancellation` default true), `endVersion` (end-date an
+  open version so a successor can start), `versionOn(product, date)` (half-open ranges; none → `PRODUCT_VERSION_NOT_EFFECTIVE`). Audited.
+- Version fields per design: term_months, earning_method, tax_profile {tax_type, jurisdiction, inclusive, refund_tax_on_cancellation},
+  commission_plan_id (plans arrive in 1A.7), posting_rule_set (informational: rule selection today uses the `product_code`
+  dimension against rule `applies_to`), coverages.
+- API: `GET|POST /api/insurance/products`, `GET /api/insurance/products/{id}`, `POST .../versions`, `GET .../versions/resolve?date=`,
+  `PATCH .../versions/{version}` (effective_to).
+- Assumption A-4 (OPEN #4): only daily_365 / monthly; no 24ths, no short-rate.
+- Tests: `tests/Feature/Insurance/ProductCatalogueTest.php` (version resolution by date incl. boundary and no-version date, D-06
+  default and override, overlap refused until end-dated, validation, permission, tenant isolation).
+- Result: 192 tests green, PHPStan 0 errors.
