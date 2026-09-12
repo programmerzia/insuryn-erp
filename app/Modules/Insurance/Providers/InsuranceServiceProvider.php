@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Providers;
 
+use App\Modules\Insurance\Collections\Domain\Events\ReceiptAllocated;
+use App\Modules\Insurance\Commission\Application\ClawBackCommissionOnCancellation;
+use App\Modules\Insurance\Commission\Application\EarnCommissionOnAllocation;
 use App\Modules\Insurance\Policy\Application\PremiumEarning\CatchUpEarningOnCancellation;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyCancelled;
 use Illuminate\Support\Facades\Event;
@@ -15,5 +18,7 @@ final class InsuranceServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::listen(PolicyCancelled::class, [CatchUpEarningOnCancellation::class, 'handle']);
+        Event::listen(PolicyCancelled::class, [ClawBackCommissionOnCancellation::class, 'handle']);
+        Event::listen(ReceiptAllocated::class, [EarnCommissionOnAllocation::class, 'handle']);
     }
 }

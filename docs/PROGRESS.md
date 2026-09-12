@@ -38,7 +38,7 @@ code and in the register below, configurable.
 | 1A.4 | Installments + earning batch | done | see git log |
 | 1A.5 | Receipts, allocations, suspense, refunds | done | see git log |
 | 1A.6 | Bank | done | see git log |
-| 1A.7 | Commission | pending | |
+| 1A.7 | Commission | done | see git log |
 | 1A.8 | Reconcilers | pending | |
 | 1A.9 | Month-end close | pending | |
 | 1A.10 | Reports | pending | |
@@ -57,6 +57,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-3 | 0.7 | Opening-balance / COA source format is unknown (OPEN #6): CSV with a header row, dot decimal separator, major units; header names per field are configurable. | `config/erp.php` `imports.*` (`ASSUMPTION:` comment). |
 | A-4 | 1A.2 | Earning method per product and short-rate table are unknown (OPEN #4): versions choose `daily_365` or `monthly` (what the earning batch implements); `24ths` and `short_rate_table` are refused, so cancellations are pro-rata. | `EarningMethod::supported()`, `StoreProductVersionRequest` (`ASSUMPTION:`). |
 | A-5 | 1A.6 | Bank statement file format is not specified (no bank named; like OPEN #6): CSV with a header row, one signed amount column in major units (positive = money in), dates `Y-m-d`. Header names and date format are configurable. | `config/erp.php` `imports.bank_statement`, `imports.bank_statement_date_format` (`ASSUMPTION:` A-3/A-5 comment). |
+| A-6 | 1A.7 | Commission rules beyond a flat rate (tiers, term/year rules, hierarchy overrides — spec §4) are not specified: a plan is one `rate_bp` on premium received plus optional withholding (`withholding_jurisdiction` + `withholding_tax_type` → `tax_rates` with `withholding = true`; a missing rate refuses the allocation, never assumes 0). | `commission_plans` rows (`CommissionPlanService`); migration `2026_09_14_000007` (`ASSUMPTION:`). |
+| A-7 | 1A.7 | When both the product version and the agent name a commission plan, which wins is not specified: product version first, then agent. | `config/erp.php` `commission.plan_precedence` (`ASSUMPTION:`), `CommissionPlanResolver`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -410,3 +412,30 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   (GL account rules + permission; receipt posts to the bank's GL account; idempotent import incl. re-import and overlap with repeated
   lines; invalid file imports nothing; auto-match window/reference/idempotent; manual many-to-one + refusals + explain + queue; API permissions).
 - Result: 832 tests green, PHPStan 0 errors.
+
+### 1A.7 — Commission — done
+- Migration `2026_09_14_000007_create_commission_tables` (tenant + forced RLS): `commission_plans` (unique code, `rate_bp` 0..10000,
+  withholding jurisdiction/tax type both or neither) and `commission_entries` per design §2.4 plus `entity_id`, `branch_id`,
+  `policy_transaction_id`, `commission_plan_id`, `currency`, `earned_on`. CHECKs: kind/status values, clawback ⇔ negative amount,
+  |withholding| ≤ |amount|. Partial unique indexes: one `earned` entry per receipt allocation, one `clawback` per cancellation per agent.
+- New posting rule `resources/posting-rules/COMMISSION_CLAWBACK.default.json` (§4.4 event C, the §4.5 mirror): DR commission_payable
+  (amount − withholding), DR commission_withholding_payable (withholding), CR commission_expense (amount); key
+  `COMMISSION_CLAWBACK:{commission_entry_id}`. New golden fixture `tests/Fixtures/golden/05b_commission_clawback.json` (existing fixtures untouched).
+- `Platform\Tax\TaxRates::withholdingRateOn` (rates with `withholding = true`).
+- Module `app/Modules/Insurance/Commission`:
+  - `CommissionPlanService::create` (`commission.manage_plans`): `INVALID_RATE`, `INVALID_WITHHOLDING`, `DUPLICATE_PLAN_CODE`.
+  - `CommissionPlanResolver` (A-7). `EarnCommissionOnAllocation` listens to Collections' `ReceiptAllocated` (direct and suspense
+    allocations): base = amount allocated (design §4.5 "10% on 50,000 received"), amount = base × rate half-even, withholding = amount ×
+    withholding rate half-even; entry `accrued`; posts `COMMISSION_EARNED` (payload base, rate_bp, withholding_bp; key
+    `COMMISSION_EARNED:{commission_entry_id}`) on the allocation's posting date, same transaction. No agent / no plan / zero amount → nothing.
+  - `ClawBackCommissionOnCancellation` listens to `PolicyCancelled`: per agent, Σ earned amount (and withholding, base) × unearned
+    remaining / net premium, half-even, as one negative `clawback` entry dated the cancellation date, posting `COMMISSION_CLAWBACK`.
+  - `CommissionStatementQuery::statement(agent, from, to)`: entries with policy number, totals (earned, clawback, withholding, net), opening
+    and closing payable (Σ amount − withholding of unpaid entries).
+- API: `POST /api/insurance/commission-plans`, `GET /api/insurance/agents/{agent}/commission-statement?from&to` (`reports.financial`).
+- Interpretations: earned entries keep their status when clawed back (the negative entry nets on the next statement, §5.6); approval and
+  payout of commission (`commission.approve` / `commission.pay`) are not in this slice's list and are not built.
+- Tests `tests/Feature/Insurance/CommissionTest.php`: §4.5 amounts, lines and key; suspense allocation date; direct/no-plan → nothing;
+  precedence default and configured; clawback amounts/lines/date and GL commission_payable per agent == Σ entries net; no clawback without
+  commission; plan validation and permission; agent statement totals and opening/closing payable; API permissions.
+- Result: 842 tests green (incl. new golden fixture), PHPStan 0 errors.

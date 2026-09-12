@@ -9,6 +9,10 @@ return [
         // Roles an event may point at a specific account through payload.account_overrides (design §4.2: a receipt's bank account).
         'overridable_roles' => ['bank_main'],
     ],
+    'commission' => [
+        // ASSUMPTION: A-7 — whose commission plan applies when both the product version and the agent name one is not specified.
+        'plan_precedence' => ['product_version', 'agent'],
+    ],
     'bank' => [
         // Auto-match (slice 1A.6): same amount, the journal's reference or receipt number in the statement text, and the
         // statement date within this many days of the posting date. Anything ambiguous is left for manual matching.
