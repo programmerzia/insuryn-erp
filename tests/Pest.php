@@ -26,7 +26,12 @@ function seedDemoTenant(string $slug = 'demo'): array
     return (new DemoTenantSeeder())->run($slug);
 }
 
-/** @template T @param callable():T $fn @return T */
+/**
+ * @template T
+ *
+ * @param callable(): T $fn
+ * @return T
+ */
 function asTenant(string $tenantId, callable $fn): mixed
 {
     return TenantContext::run($tenantId, $fn);

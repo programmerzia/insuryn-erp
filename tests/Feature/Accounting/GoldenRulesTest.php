@@ -30,7 +30,7 @@ it('posts golden fixture :dataset', function (string $file): void {
         }
         $event = DB::transaction(fn () => app(SubmitAccountingEvent::class)(
             $ctx['entity_id'], $fx['event_type'], 'fixture', (string) \Illuminate\Support\Str::uuid7(),
-            $fx['event_type'].':'.basename($file), CarbonImmutable::create(2026, 9, 15), CarbonImmutable::create(2026, 9, 15),
+            $fx['event_type'].':'.basename($file), CarbonImmutable::parse('2026-09-15'), CarbonImmutable::parse('2026-09-15'),
             'BDT', $fx['payload'], $dims));
 
         $journals = app(PostingEngine::class)->post($event->id);

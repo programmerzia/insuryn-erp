@@ -27,7 +27,7 @@ it('allows only one entity-level number sequence per document type and fiscal ye
 it('numbers journals consecutively within a fiscal year', function (): void {
     asTenant($this->ctx['tenant_id'], function (): void {
         $numberer = app(JournalNumberer::class);
-        $on = CarbonImmutable::create(2026, 9, 15);
+        $on = CarbonImmutable::parse('2026-09-15');
 
         $numbers = DB::transaction(fn (): array => [
             $numberer->next($this->ctx['entity_id'], $this->ctx['book_id'], $on),

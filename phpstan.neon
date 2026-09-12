@@ -1,5 +1,7 @@
 includes:
   - vendor/larastan/larastan/extension.neon
+  - vendor/pestphp/pest/extension.neon
+  - vendor/pestphp/pest/phpstan-pest-extension.neon
 parameters:
   level: 8
   paths: [app, database, tests]
@@ -7,3 +9,18 @@ parameters:
   phpVersion:
     min: 80400
     max: 80599
+  # Pest test closures run bound to Tests\TestCase (see Tests\PHPStan\PestClosureThisExtension); state
+  # shared from beforeEach lives in dynamic properties such as $this->ctx.
+  universalObjectCratesClasses:
+    - Tests\TestCase
+  ignoreErrors:
+    # arch() returns a TestCall that proxies expect() to the arch expectation at runtime (__call).
+    -
+      identifier: method.notFound
+      message: '#^Call to an undefined method Pest\\PendingCalls\\TestCall::expect\(\)\.$#'
+      path: tests/Architecture/*
+services:
+  -
+    class: Tests\PHPStan\PestClosureThisExtension
+    tags:
+      - phpstan.functionParameterClosureThisExtension

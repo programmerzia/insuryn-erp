@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests;
 
+use Illuminate\Database\Connection;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Collection;
+use LogicException;
 use RuntimeException;
 
 /**
@@ -36,6 +38,9 @@ abstract class TestCase extends BaseTestCase
      */
     protected function truncateTablesForConnection(ConnectionInterface $connection, ?string $name): void
     {
+        if (! $connection instanceof Connection) {
+            throw new LogicException('Truncation needs a query-grammar connection, got '.$connection::class.'.');
+        }
         $exceptTables = $this->exceptTables($connection, $name);
         $grammar = $connection->getQueryGrammar();
 

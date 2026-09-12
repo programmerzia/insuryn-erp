@@ -81,13 +81,13 @@ it('reverses with mirrored lines and links both journals; original is untouched 
     asTenant($this->ctx['tenant_id'], function (): void {
         $ev = ($this->submit)('POLICY_ISSUED', ['gross_premium' => 12000, 'net_premium' => 10435, 'tax' => 1565], 'k4');
         [$orig] = app(PostingEngine::class)->post($ev->id);
-        $rev = app(ReversalService::class)->reverse($orig->fresh(), CarbonImmutable::create(2026, 9, 20), 'issued in error', (string) Str::uuid7());
+        $rev = app(ReversalService::class)->reverse(Journal::query()->findOrFail($orig->id), CarbonImmutable::parse('2026-09-20'), 'issued in error', (string) Str::uuid7());
         $orig->refresh();
         expect($orig->status->value)->toBe('reversed')->and($orig->reversed_by_journal_id)->toBe($rev->id)->and($rev->reverses_journal_id)->toBe($orig->id);
         $o = $orig->lines->map(fn ($l) => [$l->role_code, $l->side->value, $l->amount_minor])->all();
         $r = $rev->lines->map(fn ($l) => [$l->role_code, $l->side->value === 'debit' ? 'credit' : 'debit', $l->amount_minor])->all();
         expect($r)->toEqual($o);
-        expect(fn () => app(ReversalService::class)->reverse($orig->fresh(), CarbonImmutable::create(2026, 9, 21), 'again', 'u'))->toThrow(\App\Modules\Accounting\Exceptions\PostingFailedException::class);
+        expect(fn () => app(ReversalService::class)->reverse(Journal::query()->findOrFail($orig->id), CarbonImmutable::parse('2026-09-21'), 'again', 'u'))->toThrow(\App\Modules\Accounting\Exceptions\PostingFailedException::class);
     });
 });
 
@@ -96,7 +96,7 @@ it('keeps the trial balance balanced after a mix of postings', function (): void
         foreach ([['POLICY_ISSUED', ['gross_premium' => 12000, 'net_premium' => 10435, 'tax' => 1565]], ['PREMIUM_RECEIVED', ['amount' => 5000]], ['PREMIUM_EARNED', ['earned' => 858]]] as $i => [$t, $p]) {
             app(PostingEngine::class)->post(($this->submit)($t, $p, 'tb'.$i)->id);
         }
-        $tb = app(\App\Modules\Accounting\Application\LedgerQuery::class)->trialBalance($this->ctx['entity_id'], $this->ctx['book_id'], CarbonImmutable::create(2026, 9, 30));
+        $tb = app(\App\Modules\Accounting\Application\LedgerQuery::class)->trialBalance($this->ctx['entity_id'], $this->ctx['book_id'], CarbonImmutable::parse('2026-09-30'));
         expect(array_sum(array_column($tb, 'debit')))->toBe(array_sum(array_column($tb, 'credit')))->and($tb)->not->toBeEmpty();
     });
 });
