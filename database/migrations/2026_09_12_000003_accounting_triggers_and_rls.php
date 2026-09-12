@@ -23,6 +23,11 @@ return new class extends Migration
     public function up(): void
     {
         // --- 1. Journal must balance per currency when (and only when) it becomes 'posted' ---
+        // INITIALLY IMMEDIATE (design §2.2 sketches DEFERRED on journal_lines): this trigger fires on the
+        // journal's status change, when every line already exists, and journal_lines_immutable forbids
+        // adding lines afterwards, so deferral could never admit a balancing line. Immediate checking
+        // rejects at the posting statement (a QueryException the posting transaction can roll back)
+        // instead of at COMMIT. Still DEFERRABLE for callers that SET CONSTRAINTS explicitly.
         DB::unprepared(<<<'SQL'
 CREATE OR REPLACE FUNCTION assert_journal_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -48,7 +53,7 @@ END $$;
 
 CREATE CONSTRAINT TRIGGER journal_must_balance
   AFTER INSERT OR UPDATE OF status ON journals
-  DEFERRABLE INITIALLY DEFERRED
+  DEFERRABLE INITIALLY IMMEDIATE
   FOR EACH ROW EXECUTE FUNCTION assert_journal_balanced();
 SQL);
 
