@@ -43,7 +43,7 @@ code and in the register below, configurable.
 | 1A.9 | Month-end close | done | see git log |
 | 1A.10 | Reports | done | see git log |
 | 1B.1 | Claims | done | see git log |
-| 1B.2 | Claims reconciler + close task 5 | pending | |
+| 1B.2 | Claims reconciler + close task 5 | done | see git log |
 | 1B.3 | Claims reports | pending | |
 
 ## ASSUMPTION register
@@ -561,3 +561,19 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   immutable in the DB; decrease mirror lines and limits; registration cover rules incl. cancellation; SoD on approve and release; approval
   limits at approve and pay via `approval_policies`; recovery rules, close without release, reopen then adjust, reject releases reserve; API.
 - Result: 868 tests green (incl. new golden fixture), PHPStan 0 errors.
+
+### 1B.2 — Claims reconciler + close task 5 — done
+- `Insurance\Claims\Application\ClaimsReconciler` (subledger `claims`, items per `claim`, tagged in `InsuranceServiceProvider`): per claim
+  Σ reserve history deltas recorded on or before the date − Σ payments paid on or before it = open reserve + approved-unpaid (design §6.1),
+  against the GL of both control roles of `subledger_controls` `claims` (claims_outstanding + claims_payable, normal side).
+- Close: `CloseTaskCatalogue` gains task 5 `claims_reconciliation` (reconciliation kind, owner `claims_accounting`, `periods.soft_lock`,
+  no dependencies per §5.7); the trial balance (task 13) now also depends on it.
+- Test expectations extended (stricter, not weakened) because this slice adds a subledger and a close task — recorded here as the slice's
+  own requirement, not a disputed test: `tests/Feature/Close/MonthEndCloseTest.php` (task list includes `[5, 'claims_reconciliation', []]`
+  and task 13's dependency; the end-to-end close executes it; the API test reads accruals at index 6), `tests/Feature/Insurance/SubledgerReconciliationTest.php`
+  (registered reconcilers include `claims`; September runs destructure four subledgers and assert claims 0; nightly job 16 runs = 4 periods × 4).
+- Tests `tests/Feature/Insurance/ClaimsReconciliationTest.php`: clean as of September and October with open, approved-unpaid, paid-after-month-end
+  and closed claims (6,000,000 then 5,000,000); INVARIANT over 12 seeded random claim histories (reserve, adjustments, 1–3 partial payments,
+  close): Σ claims_outstanding per closed claim = 0 and the claims subledger reconciles clean at 0; a manual adjustment on claims_payable
+  blocks task 5 (order 5) with a `claim` exception (expected 1,000,000, actual 1,050,000) and the task completes once corrected.
+- Result: 882 tests green, PHPStan 0 errors.

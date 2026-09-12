@@ -11,6 +11,7 @@ use App\Modules\Insurance\Policy\Application\PremiumEarning\PremiumEarningCloseC
 use App\Modules\Insurance\Claims\Application\ClaimPaymentApprovalHandler;
 use App\Modules\Insurance\Claims\Application\ClaimPaymentReleaseApprovalHandler;
 use App\Modules\Insurance\Claims\Application\ClaimReopenApprovalHandler;
+use App\Modules\Insurance\Claims\Application\ClaimsReconciler;
 use App\Modules\Insurance\Collections\Application\Reconciliation\PremiumReconciler;
 use App\Modules\Insurance\Collections\Application\Reconciliation\SuspenseReconciler;
 use App\Modules\Insurance\Collections\Domain\Events\ReceiptAllocated;
@@ -28,7 +29,7 @@ final class InsuranceServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->tag([PremiumReconciler::class, SuspenseReconciler::class, CommissionReconciler::class], SubledgerReconciler::class);
+        $this->app->tag([PremiumReconciler::class, SuspenseReconciler::class, CommissionReconciler::class, ClaimsReconciler::class], SubledgerReconciler::class);
         $this->app->tag([PremiumEarningCloseCheck::class, SuspenseReviewCloseCheck::class], CloseTaskCheck::class);
     }
 

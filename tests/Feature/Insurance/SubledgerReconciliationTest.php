@@ -61,11 +61,11 @@ beforeEach(function (): void {
     };
 });
 
-it('registers the premium, suspense and commission reconcilers', function (): void {
+it('registers the premium, suspense, commission and claims reconcilers', function (): void {
     $subledgers = array_map(fn (SubledgerReconciler $r): string => $r->subledger(), iterator_to_array(app()->tagged(SubledgerReconciler::class), false));
     sort($subledgers);
 
-    expect($subledgers)->toBe(['commission', 'premium', 'suspense']);
+    expect($subledgers)->toBe(['claims', 'commission', 'premium', 'suspense']);
 });
 
 it('reconciles clean at every month end of real business, as of that date', function (): void {
@@ -82,10 +82,11 @@ it('reconciles clean at every month end of real business, as of that date', func
                 expect([$subledger, $variance, $status])->toBe([$subledger, 0, 'clean'])->and($sub)->toBe($gl);
             }
         }
-        [$commission, $premium, $suspense] = ($this->runs)(($this->periodFor)('2026-09-30'));
+        [$claims, $commission, $premium, $suspense] = ($this->runs)(($this->periodFor)('2026-09-30'));
         expect($premium[1])->toBe(24_000_000 - 4_000_000)     // two policies issued, one allocation in September
             ->and($suspense[1])->toBe(1_000_000 + 2_000_000)  // r1 remainder + unallocated r2 (allocated in October)
             ->and($commission[1])->toBe(400_000)
+            ->and($claims[1])->toBe(0)
             ->and(DB::table('reconciliation_exceptions')->count())->toBe(0);
     });
 });
@@ -163,7 +164,7 @@ it('reconciles every started, unlocked period of every tenant nightly', function
 
     asTenant($this->ctx['tenant_id'], function (): void {
         expect(DB::table('reconciliation_runs')->distinct()->count('period_id'))->toBe(4) // July, August, September, October (to date)
-            ->and(DB::table('reconciliation_runs')->count())->toBe(12)
+            ->and(DB::table('reconciliation_runs')->count())->toBe(16) // × 4 subledgers
             ->and(DB::table('reconciliation_runs')->where('status', '<>', 'clean')->count())->toBe(0);
     });
 });

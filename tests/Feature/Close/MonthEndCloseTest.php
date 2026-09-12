@@ -57,8 +57,8 @@ it('starts a close run with the §5.7 tasks in order with their dependencies, on
 
         expect($tasks->map(fn (object $t): array => [(int) $t->order_no, (string) $t->code, json_decode((string) $t->depends_on, true)])->all())->toBe([
             [1, 'premium_earning', []], [2, 'suspense_review', []], [3, 'bank_reconciliation', []], [4, 'premium_reconciliation', ['premium_earning']],
-            [6, 'commission_reconciliation', ['premium_earning']], [8, 'accruals', []],
-            [13, 'trial_balance', ['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'commission_reconciliation', 'accruals']],
+            [5, 'claims_reconciliation', []], [6, 'commission_reconciliation', ['premium_earning']], [8, 'accruals', []],
+            [13, 'trial_balance', ['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'accruals']],
             [14, 'financial_statements', ['trial_balance']], [15, 'sign_off', ['trial_balance', 'financial_statements']], [16, 'period_lock', ['sign_off']],
         ])
             ->and($tasks->pluck('status')->unique()->all())->toBe(['pending'])
@@ -74,7 +74,7 @@ it('closes a clean month end to end: earning, checks, soft-lock at the trial bal
 
         expect(thrownBy(fn () => $close->execute(($this->task)($runId, 'premium_reconciliation'), $this->world['admin']), BusinessRuleViolation::class)->reasonCode)->toBe('DEPENDENCIES_OPEN');
 
-        foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'commission_reconciliation'] as $code) {
+        foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation'] as $code) {
             $close->execute(($this->task)($runId, $code), $this->world['admin']);
         }
         $close->execute(($this->task)($runId, 'accruals'), $this->world['admin'], 'No accruals this month');
@@ -203,5 +203,5 @@ it('drives the close over the API', function (): void {
     $runId = Pest\Laravel\actingAs($admin)->postJson("/api/accounting/periods/{$this->september}/close", [], $headers)->assertCreated()->json('data.id');
     $taskId = asTenant($this->ctx['tenant_id'], fn () => ($this->task)((string) $runId, 'accruals'));
     Pest\Laravel\actingAs($admin)->postJson("/api/accounting/close-tasks/{$taskId}/execute", ['note' => 'none'], $headers)->assertOk()->assertJsonPath('data.status', 'done');
-    Pest\Laravel\actingAs($admin)->getJson("/api/accounting/close-runs/{$runId}", $headers)->assertOk()->assertJsonPath('data.tasks.5.code', 'accruals')->assertJsonPath('data.tasks.5.status', 'done');
+    Pest\Laravel\actingAs($admin)->getJson("/api/accounting/close-runs/{$runId}", $headers)->assertOk()->assertJsonPath('data.tasks.6.code', 'accruals')->assertJsonPath('data.tasks.6.status', 'done');
 });
