@@ -29,14 +29,12 @@ final class ReversalService
     /** @throws PostingFailedException NOT_POSTED, REASON_REQUIRED, PERIOD_MISSING, PERIOD_CLOSED, PERIOD_SOFT_LOCKED */
     public function reverse(Journal $original, CarbonImmutable $on, string $reason, string $actorUserId, bool $actorMayPostSoftLocked = false): Journal
     {
-        if ($original->status !== JournalStatus::Posted) {
-            throw new PostingFailedException('NOT_POSTED', 'Only posted journals can be reversed');
-        }
         if ($reason === '') {
             throw new PostingFailedException('REASON_REQUIRED', 'Reversal requires a reason');
         }
 
         return DB::transaction(function () use ($original, $on, $reason, $actorUserId, $actorMayPostSoftLocked): Journal {
+            $this->lockPostedJournal($original);
             $period = $this->contexts->period($original->entity_id, $original->book_id, $on, $actorMayPostSoftLocked);
             $draft = JournalDraft::balanced('Reversal of '.$original->number, $this->mirroredLines($original));
 
@@ -52,6 +50,18 @@ final class ReversalService
 
             return $reversal;
         });
+    }
+
+    /**
+     * Reads the committed status under a row lock: the caller's copy may be stale, and a concurrent
+     * reversal of the same journal must wait and then see it reversed (reversed at most once, §2.3).
+     */
+    private function lockPostedJournal(Journal $original): void
+    {
+        $status = DB::table('journals')->where('id', $original->id)->lockForUpdate()->value('status');
+        if ($status !== JournalStatus::Posted->value) {
+            throw new PostingFailedException('NOT_POSTED', 'Only posted journals can be reversed');
+        }
     }
 
     /** @return list<DraftLine> */
