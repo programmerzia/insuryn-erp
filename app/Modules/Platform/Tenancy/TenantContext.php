@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Tenancy;
 
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
  * Single source of the current tenant. Sets the Postgres session variable that RLS policies read
  * (design §8.6). Business queries outside a tenant context return zero rows by construction.
+ *
+ * DEVIATION (Phase 0): session-level set_config instead of §8.6.1 SET LOCAL in a per-request
+ * transaction. Safe with one server connection per PHP process (php-fpm, queue workers, session-mode
+ * pooling); NOT with transaction-mode pooling (e.g. PgBouncer transaction mode). A reconnect gets the
+ * tenant re-applied by reapplyTo().
  */
 final class TenantContext
 {
@@ -18,14 +24,13 @@ final class TenantContext
     public static function set(string $tenantId): void
     {
         self::$tenantId = $tenantId;
-        // SET (not SET LOCAL) so it survives across statements on this connection for the request/job.
-        DB::statement("SELECT set_config('app.tenant_id', ?, false)", [$tenantId]);
+        self::applyTo(DB::connection(), $tenantId);
     }
 
     public static function clear(): void
     {
         self::$tenantId = null;
-        DB::statement("SELECT set_config('app.tenant_id', '', false)");
+        self::applyTo(DB::connection(), '');
     }
 
     public static function id(): string
@@ -48,5 +53,19 @@ final class TenantContext
         } finally {
             $previous === null ? self::clear() : self::set($previous);
         }
+    }
+
+    /** A new database session starts without the tenant variable: restore it for the active tenant. */
+    public static function reapplyTo(ConnectionInterface $connection): void
+    {
+        if (self::$tenantId !== null) {
+            self::applyTo($connection, self::$tenantId);
+        }
+    }
+
+    private static function applyTo(ConnectionInterface $connection, string $tenantId): void
+    {
+        // Session scope (is_local = false) so it survives across statements on this connection for the request/job.
+        $connection->statement("SELECT set_config('app.tenant_id', ?, false)", [$tenantId]);
     }
 }
