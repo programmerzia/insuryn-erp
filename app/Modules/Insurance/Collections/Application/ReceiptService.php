@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Collections\Application;
 
+use App\Modules\Finance\Bank\Application\BankAccountQuery;
 use App\Modules\Insurance\Collections\Domain\Enums\ReceiptStatus;
 use App\Modules\Insurance\Collections\Domain\Enums\SuspenseStatus;
 use App\Modules\Insurance\Collections\Domain\Models\Receipt;
@@ -30,10 +31,11 @@ final class ReceiptService
         private readonly DocumentNumberer $numbers,
         private readonly InstallmentAllocator $allocator,
         private readonly CollectionsAccountingEvents $accounting,
+        private readonly BankAccountQuery $bankAccounts,
         private readonly Audit $audit,
     ) {}
 
-    /** @throws BusinessRuleViolation INVALID_AMOUNT | ALLOCATION_EXCEEDS_RECEIPT | ALLOCATION_EXCEEDS_OUTSTANDING | CURRENCY_MISMATCH */
+    /** @throws BusinessRuleViolation INVALID_BANK_ACCOUNT | INVALID_AMOUNT | ALLOCATION_EXCEEDS_RECEIPT | ALLOCATION_EXCEEDS_OUTSTANDING | CURRENCY_MISMATCH */
     public function record(RecordReceiptRequest $request, string $actorUserId): Receipt
     {
         $scope = AuthorizationScope::branch($request->entityId, $request->branchId);
@@ -46,6 +48,9 @@ final class ReceiptService
         }
         if ($request->allocatedMinor() > $request->amountMinor) {
             throw new BusinessRuleViolation('ALLOCATION_EXCEEDS_RECEIPT', "Allocations of {$request->allocatedMinor()} exceed the receipt of {$request->amountMinor}.");
+        }
+        if ($request->bankAccountId !== null) {
+            $this->bankAccounts->glAccountFor($request->bankAccountId, $request->entityId, $request->currency);
         }
         $number = $this->numbers->reserve(new DocumentNumberScope($request->entityId, $request->branchId, 'receipt', 'RCT', $request->valueDate), $actorUserId);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application;
 
+use App\Modules\Accounting\Application\Posting\AccountOverrides;
 use App\Modules\Accounting\Application\Posting\DatabaseRuleViolation;
 use App\Modules\Accounting\Application\Posting\EventPayloadValidator;
 use App\Modules\Accounting\Application\Posting\JournalDraftBuilder;
@@ -35,6 +36,7 @@ final class PostingEngine
         private readonly JournalDraftBuilder $drafts,
         private readonly JournalWriter $writer,
         private readonly TransientFailureDetector $transientFailures,
+        private readonly AccountOverrides $overrides,
     ) {}
 
     /**
@@ -101,7 +103,8 @@ final class PostingEngine
     {
         $book = Book::query()->where('code', $bookCode)->firstOrFail();
         $context = $this->contexts->load($event->entity_id, $book->id, $event->transaction_date, $actorMayPostSoftLocked);
-        $draft = $this->drafts->build($rule, $event->payload, $event->dimensions, $event->currency, $context->accountsByRole);
+        $accounts = $this->overrides->apply($event->entity_id, $context->accountsByRole, $event->payload);
+        $draft = $this->drafts->build($rule, $event->payload, $event->dimensions, $event->currency, $accounts);
 
         return $this->writer->post([
             'entity_id' => $event->entity_id, 'book_id' => $book->id, 'batch_id' => $batch->id, 'period_id' => $context->period->id,

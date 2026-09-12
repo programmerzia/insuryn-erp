@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Http\Controllers\ImportController;
+use App\Modules\Finance\Bank\Http\Controllers\BankController;
 use App\Modules\Insurance\Collections\Http\Controllers\ReceiptController;
 use App\Modules\Insurance\Collections\Http\Controllers\RefundController;
 use App\Modules\Insurance\Collections\Http\Controllers\SuspenseController;
@@ -46,4 +47,13 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('policies/{policy}/refunds', [RefundController::class, 'store'])->whereUuid('policy');
     Route::post('refunds/{refund}/release', [RefundController::class, 'release'])->whereUuid('refund');
     Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund');
+});
+
+Route::middleware('auth')->prefix('finance')->group(function (): void {
+    Route::post('bank-accounts', [BankController::class, 'store']);
+    Route::post('bank-accounts/{bankAccount}/statements', [BankController::class, 'importStatement'])->whereUuid('bankAccount');
+    Route::post('bank-accounts/{bankAccount}/auto-match', [BankController::class, 'autoMatch'])->whereUuid('bankAccount');
+    Route::get('bank-accounts/{bankAccount}/unmatched', [BankController::class, 'unmatched'])->whereUuid('bankAccount');
+    Route::post('bank-statement-lines/{statementLine}/match', [BankController::class, 'match'])->whereUuid('statementLine');
+    Route::post('bank-statement-lines/{statementLine}/explain', [BankController::class, 'explain'])->whereUuid('statementLine');
 });

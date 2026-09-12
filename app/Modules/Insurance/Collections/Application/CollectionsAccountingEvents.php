@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Collections\Application;
 
 use App\Modules\Accounting\Application\SubmitAccountingEvent;
+use App\Modules\Finance\Bank\Application\BankAccountQuery;
 use App\Modules\Insurance\Collections\Domain\Models\Receipt;
 use App\Modules\Insurance\Collections\Domain\Models\ReceiptAllocation;
 use App\Modules\Insurance\Collections\Domain\Models\Refund;
@@ -15,11 +16,15 @@ use Carbon\CarbonImmutable;
 
 /**
  * Accounting Event Mapper for collections (design §3.1, §8.2), called inside the source transaction. Payloads carry the
- * receipt number and reference so bank reconciliation can match the posted cash (slice 1A.6).
+ * receipt number and reference so bank reconciliation can match the posted cash, and — when a bank account is known — point
+ * bank_main at that account's GL account (§4.2).
  */
 final class CollectionsAccountingEvents
 {
-    public function __construct(private readonly SubmitAccountingEvent $submit) {}
+    public function __construct(
+        private readonly SubmitAccountingEvent $submit,
+        private readonly BankAccountQuery $bankAccounts,
+    ) {}
 
     /** Design §4.2: DR bank_main / CR premium_receivable, one event per allocation. */
     public function premiumReceived(Receipt $receipt, ReceiptAllocation $allocation, Policy $policy): void
@@ -60,15 +65,23 @@ final class CollectionsAccountingEvents
         ($this->submit)(
             entityId: $refund->entity_id, eventType: 'REFUND_ISSUED', sourceType: 'refund', sourceId: $refund->id,
             idempotencyKey: 'REFUND_ISSUED:'.$refund->id, transactionDate: $paidOn, effectiveDate: $paidOn,
-            currency: $refund->currency, payload: ['amount' => $refund->amount_minor, 'refund_id' => $refund->id, 'bank_account_id' => $refund->bank_account_id],
+            currency: $refund->currency, payload: ['amount' => $refund->amount_minor, 'refund_id' => $refund->id, 'bank_account_id' => $refund->bank_account_id]
+                + $this->bankOverride($refund->bank_account_id, $refund->entity_id, $refund->currency),
             dimensions: PolicyAccountingEvents::dimensions($policy),
         );
     }
 
-    /** @return array<string, int|string|null> */
+    /** @return array<string, mixed> */
     private function receiptPayload(Receipt $receipt, int $amountMinor): array
     {
         return ['amount' => $amountMinor, 'receipt_id' => $receipt->id, 'receipt_number' => $receipt->number,
-            'reference' => $receipt->reference, 'bank_account_id' => $receipt->bank_account_id];
+            'reference' => $receipt->reference, 'bank_account_id' => $receipt->bank_account_id]
+            + $this->bankOverride($receipt->bank_account_id, $receipt->entity_id, $receipt->currency);
+    }
+
+    /** @return array{account_overrides?: array{bank_main: string}} */
+    private function bankOverride(?string $bankAccountId, string $entityId, string $currency): array
+    {
+        return $bankAccountId === null ? [] : ['account_overrides' => ['bank_main' => $this->bankAccounts->glAccountFor($bankAccountId, $entityId, $currency)]];
     }
 }

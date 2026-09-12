@@ -37,7 +37,7 @@ code and in the register below, configurable.
 | 1A.3 | Policy lifecycle | done | see git log |
 | 1A.4 | Installments + earning batch | done | see git log |
 | 1A.5 | Receipts, allocations, suspense, refunds | done | see git log |
-| 1A.6 | Bank | pending | |
+| 1A.6 | Bank | done | see git log |
 | 1A.7 | Commission | pending | |
 | 1A.8 | Reconcilers | pending | |
 | 1A.9 | Month-end close | pending | |
@@ -56,6 +56,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-2 | 0.5 | Approval thresholds and role mapping are unknown (OPEN #3): no approval policies are seeded. Every manual journal and reversal still needs one checker ≠ maker holding `accounting.approve_journal`; thresholds/steps are data in `approval_policies`. | `ApprovalService` docblock (`ASSUMPTION:`); insert rows into `approval_policies` (object_type `journal`, `journal_reversal`, `fiscal_period_reopen`). |
 | A-3 | 0.7 | Opening-balance / COA source format is unknown (OPEN #6): CSV with a header row, dot decimal separator, major units; header names per field are configurable. | `config/erp.php` `imports.*` (`ASSUMPTION:` comment). |
 | A-4 | 1A.2 | Earning method per product and short-rate table are unknown (OPEN #4): versions choose `daily_365` or `monthly` (what the earning batch implements); `24ths` and `short_rate_table` are refused, so cancellations are pro-rata. | `EarningMethod::supported()`, `StoreProductVersionRequest` (`ASSUMPTION:`). |
+| A-5 | 1A.6 | Bank statement file format is not specified (no bank named; like OPEN #6): CSV with a header row, one signed amount column in major units (positive = money in), dates `Y-m-d`. Header names and date format are configurable. | `config/erp.php` `imports.bank_statement`, `imports.bank_statement_date_format` (`ASSUMPTION:` A-3/A-5 comment). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -372,3 +373,40 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   (journals, statuses, over-allocation refused); split receipt; refusals write nothing; ageing buckets/days; refund SoD (requester
   holding both permissions is blocked), cap, `REFUND_ISSUED` journal and date; reject frees the due; API permissions.
 - Result: 819 tests green, PHPStan 0 errors.
+
+### 1A.6 — Bank — done
+- Migration `2026_09_14_000006_create_bank_tables` (tenant + forced RLS): `bank_accounts` (unique entity + GL account, status
+  active|closed), `bank_statement_lines` (signed `amount_minor`, positive = money in; `line_hash` unique per bank account;
+  `match_status` unmatched|matched|explained with `explanation`), `bank_matches` (`journal_line_id` unique: a ledger line matches
+  at most one statement line; method auto|manual).
+- Kernel: `Accounting\Application\Posting\AccountOverrides` (used by `PostingEngine::postToBook`): `payload.account_overrides
+  {role: account_id}` accepted only for roles in `erp.posting.overridable_roles` (default `['bank_main']`) and an active postable
+  account of the event's entity; otherwise the event fails `INVALID_ACCOUNT_OVERRIDE` and nothing posts (§4.2 "bank_accounts.gl_account_id
+  overrides role"). Read side for business modules: `Accounting\Application\Queries\AccountLineQuery` (`account()` → `AccountView`,
+  `postedLines`, `postedLinesByIds`: lines of standing posted journals, reversed pairs excluded, signed debit-positive, with the event's
+  `reference` / `receipt_number`).
+- `Platform\Money\MinorUnits` (moved from the kernel so every context can parse money; `Accounting\Domain\MinorUnits` delegates to it)
+  gains `fromSignedMajor`.
+- Module `app/Modules/Finance/Bank`:
+  - `BankAccountService::create` (`bank.manage_accounts`): GL account must be an active, postable, non-control asset account of the
+    entity and currency (`INVALID_GL_ACCOUNT`). `BankAccountQuery::glAccountFor` (`INVALID_BANK_ACCOUNT`) is how Collections learns it.
+  - `StatementImport::import` (`bank.import`): CSV per A-5; all rows validated first (any error → nothing imported, errors by file
+    line); `insertOrIgnore` on `line_hash` = sha256(account, date, amount, reference, description, occurrence number of identical rows
+    in the file) — re-imports and overlapping statements add only new lines, repeated identical charges are kept.
+  - `BankMatcher::autoMatch(bankAccount)`: same signed amount + posting date within `erp.bank.auto_match_date_window_days` (default 3)
+    + the journal's reference or receipt number (≥ 4 alphanumerics, case/punctuation-insensitive) in the statement reference/description;
+    only one-to-one unambiguous pairs match. `match(line, journalLineIds, actor)` (`bank.match`): one statement line to one or more
+    posted lines on the bank's GL account summing to it (`MATCH_AMOUNT_MISMATCH`, `JOURNAL_LINE_NOT_IN_BANK_ACCOUNT`,
+    `JOURNAL_LINE_ALREADY_MATCHED`, `ALREADY_MATCHED`). `explain(line, reason, actor)` for lines with no ledger counterpart.
+  - `BankReconciliationQuery::unmatched(bankAccount, asOf)`: unmatched statement lines + unmatched ledger lines (close task 3 input).
+- Collections: receipts with `bank_account_id` are validated against the bank account (entity, currency, active) and their events carry
+  `account_overrides.bank_main` = the bank's GL account (refunds too, when a bank account is set).
+- API (`/api/finance`): `POST bank-accounts`, `POST bank-accounts/{id}/statements` (multipart `file`), `POST bank-accounts/{id}/auto-match`,
+  `GET bank-accounts/{id}/unmatched`, `POST bank-statement-lines/{id}/match|explain`.
+- Interpretations: auto-match never guesses between several candidates; the matcher (not import) runs auto-match so a user sees the
+  import result first; bank statement lines are not journal postings (bank charges still need a manual journal — explaining a line
+  records why it has no ledger counterpart).
+- Tests: `tests/Feature/Accounting/AccountOverrideTest.php` (override posts; 5 refusals fail the event), `tests/Feature/Finance/BankReconciliationTest.php`
+  (GL account rules + permission; receipt posts to the bank's GL account; idempotent import incl. re-import and overlap with repeated
+  lines; invalid file imports nothing; auto-match window/reference/idempotent; manual many-to-one + refusals + explain + queue; API permissions).
+- Result: 832 tests green, PHPStan 0 errors.
