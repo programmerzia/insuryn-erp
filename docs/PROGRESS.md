@@ -44,7 +44,7 @@ code and in the register below, configurable.
 | 1A.10 | Reports | done | see git log |
 | 1B.1 | Claims | done | see git log |
 | 1B.2 | Claims reconciler + close task 5 | done | see git log |
-| 1B.3 | Claims reports | pending | |
+| 1B.3 | Claims reports | done | see git log |
 
 ## ASSUMPTION register
 
@@ -577,3 +577,24 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   close): Σ claims_outstanding per closed claim = 0 and the claims subledger reconciles clean at 0; a manual adjustment on claims_payable
   blocks task 5 (order 5) with a `claim` exception (expected 1,000,000, actual 1,050,000) and the task completes once corrected.
 - Result: 882 tests green, PHPStan 0 errors.
+
+### 1B.3 — Claims reports — done
+- Kernel: `FinancialStatementsQuery::roleMovementByDimension(entity, role, from, to, dimension)` (normal-side movement of the accounts mapped to a
+  role, split by a column dimension; `''` = lines without it; unsupported dimension → `InvalidArgumentException`); `accountActivity` gains an
+  optional `dimension` + `value` filter (API `…/activity?dimension=agent&value=<id>`; empty value = lines without the dimension).
+- Insurance (`app/Modules/Insurance/Reports/Application`):
+  - `OutstandingClaimsQuery::outstanding(entity, asOf)`: per claim reported by the date, open reserve (reserve history to the date − approved
+    by then) and approved-unpaid (approved − paid by then); claims with neither omitted; totals; journals of the claim's reserve and payment events.
+  - `LossRatioQuery::lossRatio(entity, from, to, by product|branch|agent)`: from the GL — incurred = claims_expense movement − claims_recovery_income,
+    earned = premium_income; `loss_ratio_bp` half-even (null when nothing earned); totals; per-row drill URLs to each account's activity filtered
+    to the row's dimension value. Direct business appears as `dimension_value: null` when grouped by agent.
+  - `ClaimsPaidRegisterQuery::register(entity, from, to)`: payments paid in the range with claim, policy, product, branch, payee, amount and
+    their CLAIM_APPROVED/CLAIM_PAID journals.
+  - `InsuranceReportController`: `GET /api/reports/outstanding-claims?entity_id&as_of`, `loss-ratio?entity_id&from&to&by`, `claims-paid?entity_id&from&to` (`reports.financial`).
+- Interpretation: incurred claims are net of recoveries (spec says "loss ratio by any dimension" without a formula); earned premium is the GL
+  premium income of the range.
+- Tests `tests/Feature/Reports/ClaimsReportsTest.php`: outstanding as of three dates (reserve only; reserve + approved-unpaid; closed claim gone,
+  new one listed) with totals and journal drill; loss ratio by agent (agent and direct rows, incurred net of release and recovery, ratio), by
+  product and branch, invalid dimension refused, filtered account activity equals the claims expense movement; paid register rows, journals,
+  empty range; API 403/200 and 422 for an unsupported dimension.
+- Result: 886 tests green, PHPStan 0 errors.

@@ -39,12 +39,13 @@ final class FinancialReportController
 
     public function accountActivity(Request $request, string $account): JsonResponse
     {
-        /** @var array{entity_id: string, from?: string, to: string} $data */
-        $data = $request->validate(['entity_id' => ['required', 'uuid'], 'from' => ['sometimes', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d']]);
+        /** @var array{entity_id: string, from?: string, to: string, dimension?: string, value?: string|null} $data */
+        $data = $request->validate(['entity_id' => ['required', 'uuid'], 'from' => ['sometimes', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d'],
+            'dimension' => ['sometimes', 'in:branch,product,agent,policy,claim,customer,channel,lob'], 'value' => ['nullable', 'string', 'max:64']]);
         $this->authorize($request, $data['entity_id']);
 
         return response()->json(['data' => $this->statements->accountActivity($data['entity_id'], $account,
-            isset($data['from']) ? CarbonImmutable::parse($data['from']) : null, CarbonImmutable::parse($data['to']))]);
+            isset($data['from']) ? CarbonImmutable::parse($data['from']) : null, CarbonImmutable::parse($data['to']), $data['dimension'] ?? null, $data['value'] ?? null)]);
     }
 
     private function authorize(Request $request, string $entityId): void

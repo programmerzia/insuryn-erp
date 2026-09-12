@@ -83,6 +83,9 @@ Route::middleware('auth')->prefix('reports')->group(function (): void {
     Route::get('receivable-ageing', [InsuranceReportController::class, 'receivableAgeing']);
     Route::get('suspense-ageing', [InsuranceReportController::class, 'suspenseAgeing']);
     Route::get('commission-statement', [InsuranceReportController::class, 'commissionStatement']);
+    Route::get('outstanding-claims', [InsuranceReportController::class, 'outstandingClaims']);
+    Route::get('loss-ratio', [InsuranceReportController::class, 'lossRatio']);
+    Route::get('claims-paid', [InsuranceReportController::class, 'claimsPaid']);
     Route::get('profit-and-loss', [FinancialReportController::class, 'profitAndLoss']);
     Route::get('balance-sheet', [FinancialReportController::class, 'balanceSheet']);
     Route::get('accounts/{account}/activity', [FinancialReportController::class, 'accountActivity'])->whereUuid('account');

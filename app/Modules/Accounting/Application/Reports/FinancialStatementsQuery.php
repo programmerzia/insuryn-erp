@@ -57,22 +57,24 @@ final class FinancialStatementsQuery
     }
 
     /**
-     * One account's journal lines in a date range with opening and closing balances on its normal side.
+     * One account's journal lines in a date range with opening and closing balances on its normal side, optionally only the lines carrying
+     * $value in the column dimension $dimension (a null or empty value selects lines without that dimension).
      *
      * @return array{account: array{id: string, code: string, name: string, type: string, normal_side: string}|null, from: string|null, to: string, opening_minor: int, closing_minor: int,
      *     lines: list<array{journal_id: string, journal_number: string|null, posting_date: string, description: string|null, memo: string|null, debit_minor: int, credit_minor: int, url: string}>}
      */
-    public function accountActivity(string $entityId, string $accountId, ?CarbonImmutable $from, CarbonImmutable $to): array
+    public function accountActivity(string $entityId, string $accountId, ?CarbonImmutable $from, CarbonImmutable $to, ?string $dimension = null, ?string $value = null): array
     {
+        $column = $dimension === null ? null : self::dimensionColumn($dimension);
         $account = DB::table('accounts')->where('id', $accountId)->where('entity_id', $entityId)->first(['id', 'code', 'name', 'type', 'normal_side']);
         $empty = ['account' => null, 'from' => $from?->toDateString(), 'to' => $to->toDateString(), 'opening_minor' => 0, 'closing_minor' => 0, 'lines' => []];
         if ($account === null) {
             return $empty;
         }
         $sign = $account->normal_side === 'debit' ? 1 : -1;
-        $opening = $from === null ? 0 : $sign * (int) $this->lines($entityId)->where('l.account_id', $accountId)->where('j.posting_date', '<', $from->toDateString())
+        $opening = $from === null ? 0 : $sign * (int) $this->filtered($this->lines($entityId), $column, $value)->where('l.account_id', $accountId)->where('j.posting_date', '<', $from->toDateString())
             ->selectRaw("coalesce(sum(case when l.side = 'debit' then l.amount_minor else -l.amount_minor end), 0) as b")->value('b');
-        $rows = $this->lines($entityId)->where('l.account_id', $accountId)->where('j.posting_date', '<=', $to->toDateString())
+        $rows = $this->filtered($this->lines($entityId), $column, $value)->where('l.account_id', $accountId)->where('j.posting_date', '<=', $to->toDateString())
             ->when($from !== null, fn (Builder $q) => $q->where('j.posting_date', '>=', $from?->toDateString()))
             ->orderBy('j.posting_date')->orderBy('j.id')->orderBy('l.line_no')
             ->get(['j.id', 'j.number', 'j.posting_date', 'j.description', 'l.memo', 'l.side', 'l.amount_minor']);
@@ -91,6 +93,52 @@ final class FinancialStatementsQuery
 
         return ['account' => ['id' => (string) $account->id, 'code' => (string) $account->code, 'name' => (string) $account->name, 'type' => (string) $account->type,
             'normal_side' => (string) $account->normal_side], 'from' => $from?->toDateString(), 'to' => $to->toDateString(), 'opening_minor' => $opening, 'closing_minor' => $closing, 'lines' => $lines];
+    }
+
+    /**
+     * Movement in a date range of the accounts mapped to $roleCode (primary book, on `to`), on their normal side, split by a column dimension
+     * (key '' = lines without it). Used for ratios over the GL such as loss ratio.
+     *
+     * @return array{account_ids: list<string>, by_dimension: array<string, int>}
+     *
+     * @throws \InvalidArgumentException for a dimension without its own journal_lines column
+     */
+    public function roleMovementByDimension(string $entityId, string $roleCode, CarbonImmutable $from, CarbonImmutable $to, string $dimension): array
+    {
+        $column = self::dimensionColumn($dimension);
+        $accountIds = array_values(DB::table('account_role_mappings as m')->join('books as b', 'b.id', '=', 'm.book_id')->where('b.is_primary', true)
+            ->where('m.entity_id', $entityId)->where('m.role_code', $roleCode)->where('m.effective_from', '<=', $to->toDateString())
+            ->where(fn ($q) => $q->whereNull('m.effective_to')->orWhere('m.effective_to', '>', $to->toDateString()))
+            ->pluck('m.account_id')->map(fn ($id): string => (string) $id)->all());
+        $rows = $this->lines($entityId)->join('accounts as a', 'a.id', '=', 'l.account_id')->whereIn('l.account_id', $accountIds)
+            ->whereBetween('j.posting_date', [$from->toDateString(), $to->toDateString()])
+            ->groupBy($column)->selectRaw("{$column}::text as dimension_value, sum(case when l.side = a.normal_side then l.amount_minor else -l.amount_minor end) as movement")->get();
+        $byDimension = [];
+        foreach ($rows as $row) {
+            $byDimension[(string) ($row->dimension_value ?? '')] = (int) $row->movement;
+        }
+
+        return ['account_ids' => $accountIds, 'by_dimension' => $byDimension];
+    }
+
+    /** @return literal-string */
+    private static function dimensionColumn(string $dimension): string
+    {
+        return match ($dimension) {
+            'branch' => 'l.dim_branch', 'product' => 'l.dim_product', 'agent' => 'l.dim_agent', 'policy' => 'l.dim_policy', 'claim' => 'l.dim_claim',
+            'customer' => 'l.dim_customer', 'channel' => 'l.dim_channel', 'lob' => 'l.dim_lob',
+            default => throw new \InvalidArgumentException("Dimension '{$dimension}' cannot be reported on."),
+        };
+    }
+
+    /** @param literal-string|null $column */
+    private function filtered(Builder $query, ?string $column, ?string $value): Builder
+    {
+        if ($column === null) {
+            return $query;
+        }
+
+        return $value === null || $value === '' ? $query->whereNull($column) : $query->where($column, $value);
     }
 
     /**
