@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application;
 
+use App\Modules\Platform\Tenancy\FiscalCalendar;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -13,15 +14,17 @@ use LogicException;
 /**
  * Journal numbers: JV-<FY>-<seq>, allocated under the sequence row lock (design §2.1).
  * Journals are posted in the same transaction as numbering, so 'reserved'→'used' collapses to one step here.
- * Document types that can be abandoned (receipts, policies) must use the two-step DocumentNumberer (TODO Phase 1A).
+ * Document types that can be abandoned (receipts, policies) use the two-step Platform\Numbering\DocumentNumberer.
  */
 final class JournalNumberer
 {
     private const PREFIX = 'JV';
 
+    public function __construct(private readonly FiscalCalendar $calendar) {}
+
     public function next(string $entityId, string $bookId, CarbonImmutable $on): string
     {
-        $fiscalYear = $this->fiscalYear($on);
+        $fiscalYear = $this->calendar->fiscalYear($on);
         $docType = 'JV:'.$bookId;
 
         $allocated = $this->allocate($entityId, $docType, $fiscalYear);
@@ -58,12 +61,5 @@ final class JournalNumberer
             'doc_type' => $docType, 'fiscal_year' => $fiscalYear, 'prefix' => self::PREFIX, 'next_no' => 1,
             'created_at' => now(), 'updated_at' => now(),
         ]);
-    }
-
-    private function fiscalYear(CarbonImmutable $on): int
-    {
-        $startMonth = (int) (DB::table('tenants')->where('id', TenantContext::id())->value('fiscal_year_start_month') ?? 1);
-
-        return $on->month >= $startMonth ? $on->year : $on->year - 1;
     }
 }

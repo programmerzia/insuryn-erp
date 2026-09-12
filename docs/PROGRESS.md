@@ -25,7 +25,7 @@ code and in the register below, configurable.
 | Slice | Name | Status | Commit |
 |---|---|---|---|
 | 0.0 | Apply review decisions D-01..D-11 | done | see git log |
-| 0.1 | DocumentNumberer | pending | |
+| 0.1 | DocumentNumberer | done | see git log |
 | 0.2 | Audit service | pending | |
 | 0.3 | Fiscal period service | pending | |
 | 0.4 | Permissions + SoD | pending | |
@@ -91,3 +91,23 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   expiry, so a lost dispatch blocked relay re-delivery forever. Now `WithoutOverlapping` keyed by event id.
 - D-06 and D-11 are accepted here and implemented in the slices that own the tables/workflows (1A.2/1A.3, 0.4/0.5).
 - Result: 108 tests green, PHPStan 0 errors.
+
+### 0.1 — DocumentNumberer — done
+- `App\Modules\Platform\Numbering\DocumentNumberer`: `reserve(scope, reservedBy)` (row-locked atomic
+  `UPDATE … RETURNING` on `number_sequences`, own transaction so the number survives a business rollback),
+  `markUsed(id, objectType, objectId)` (must run inside the business transaction; reserved → used CAS),
+  `void(id, reason, voidedBy)` (reason required; reserved numbers only), `voidExpiredReservations(ttl)`,
+  `voidedNumbers(sequenceId)` report, `unexplainedGaps(sequenceId)`.
+- Scope = entity, optional branch (null = entity-level), doc_type, fiscal year of the business date
+  (`Platform\Tenancy\FiscalCalendar`, now also used by `JournalNumberer`). Format `<PREFIX>-<FY>-<000001>`.
+- `ReservationSweeperJob` (design §8.5, every 15 min): per-tenant loop, voids reservations older than
+  `erp.numbering.reservation_ttl_minutes` (15) with `void_reason = reservation_expired`.
+- Migration `2026_09_13_000002_document_number_integrity`: `sequence_no` + unique(sequence_id, sequence_no),
+  status check, `voided_by`, trigger `protect_document_numbers` (no delete, no renumbering, only
+  reserved → used | voided) — the §2.1 "no unexplained gap" invariant is enforced by the database.
+- Tests: `tests/Feature/Platform/DocumentNumbererTest.php` (sequence per scope + FY reset, used once,
+  used only inside a transaction, void with reason, no void of used numbers, expiry sweep across tenants,
+  no gap + immutability).
+- Interpretation (not an OPEN item): used numbers cannot be voided — cancel the business document instead.
+- The `numbering.void` permission check is wired in slice 0.4 (authorization layer did not exist yet).
+- Result: 115 tests green, PHPStan 0 errors.
