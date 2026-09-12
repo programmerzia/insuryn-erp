@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Http\Controllers\ImportController;
+use App\Modules\Accounting\Http\Controllers\PeriodCloseController;
 use App\Modules\Finance\Bank\Http\Controllers\BankController;
 use App\Modules\Insurance\Collections\Http\Controllers\ReceiptController;
 use App\Modules\Insurance\Collections\Http\Controllers\RefundController;
@@ -18,6 +19,10 @@ use Illuminate\Support\Facades\Route;
 // token authentication for external clients (Sanctum, design §0) is not built yet.
 Route::middleware('auth')->prefix('accounting')->group(function (): void {
     Route::post('imports/{type}', [ImportController::class, 'api'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('api.accounting.imports');
+    Route::post('periods/{period}/close', [PeriodCloseController::class, 'start'])->whereUuid('period');
+    Route::get('close-runs/{run}', [PeriodCloseController::class, 'show'])->whereUuid('run');
+    Route::post('close-tasks/{task}/execute', [PeriodCloseController::class, 'execute'])->whereUuid('task');
+    Route::post('close-tasks/{task}/skip', [PeriodCloseController::class, 'skip'])->whereUuid('task');
 });
 
 Route::middleware('auth')->prefix('insurance')->group(function (): void {

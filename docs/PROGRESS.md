@@ -40,7 +40,7 @@ code and in the register below, configurable.
 | 1A.6 | Bank | done | see git log |
 | 1A.7 | Commission | done | see git log |
 | 1A.8 | Reconcilers | done | see git log |
-| 1A.9 | Month-end close | pending | |
+| 1A.9 | Month-end close | done | see git log |
 | 1A.10 | Reports | pending | |
 | 1B.1 | Claims | pending | |
 | 1B.2 | Claims reconciler + close task 5 | pending | |
@@ -468,3 +468,36 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   dimension) produces variance −100,000 with a `policy` exception and a `journal` exception, other subledgers clean, period lock refused;
   correcting journals reconcile clean and a clean rerun resolves the variance run; the nightly job runs 4 periods × 3 subledgers clean.
 - Result: 846 tests green, PHPStan 0 errors.
+
+### 1A.9 — Month-end close — done
+- Kernel (`app/Modules/Accounting/Application/Close`):
+  - `CloseTaskCatalogue`: design §5.7 tasks 1 `premium_earning`, 2 `suspense_review`, 3 `bank_reconciliation`, 4 `premium_reconciliation`
+    (depends 1), 6 `commission_reconciliation` (depends 1), 8 `accruals`, 13 `trial_balance` (depends every earlier task), 14
+    `financial_statements` (13), 15 `sign_off` (13, 14), 16 `period_lock` (15); owner roles from §5.7. Task 5 (claims) is added in 1B.2.
+  - `PeriodCloseService`: `start(period)` (`periods.soft_lock`; period open or soft-locked; one running run per period →
+    `CLOSE_ALREADY_RUNNING`), `execute(task, actor, ?note)` (the task's permission; run must be `running` → `CLOSE_RUN_NOT_ACTIVE`; not done/
+    skipped → `TASK_ALREADY_DONE`; dependencies done or skipped → `DEPENDENCIES_OPEN`; outcome `done` or `blocked` with a JSON result,
+    rerunnable; business-rule refusals inside a task become `blocked` with their reason code), `skip(task, reason)` (`REASON_REQUIRED`,
+    `TASK_NOT_SKIPPABLE`). Everything audited. Task 16 marks itself done and calls `FiscalPeriodService::lock` in one transaction and
+    completes the run — the existing INVARIANT guard (open tasks, reconciliation variance) still decides.
+  - `CloseTaskExecutor`: `check` tasks call the tagged `Accounting\Application\Contracts\CloseTaskCheck` for the code (none registered →
+    blocked); reconciliation tasks run `ReconciliationService::run` for the subledger (blocked on variance, details with run id and
+    variance); task 13 soft-locks the period (§5.7) then checks Σdebit = Σcredit; task 14 stores assets, liabilities, equity, income,
+    expense, net profit as of the period end; task 15 requires all other tasks done/skipped and regenerates 13/14 results (so postings made
+    under `accounting.post_in_soft_locked` after task 13 are reflected).
+  - `CloseRunQuery`, `Http\Controllers\PeriodCloseController`: `POST /api/accounting/periods/{period}/close`, `GET close-runs/{run}`,
+    `POST close-tasks/{task}/execute|skip`.
+- Business checks (tagged `CloseTaskCheck`): `Insurance\Policy\...\PremiumEarningCloseCheck` (runs `PremiumEarningRun` for the period, then
+  blocks on `missingEarning` — policies on cover with a non-zero scheduled amount and no ledger row), `Insurance\Collections\SuspenseReviewCloseCheck`
+  (open suspense older than `erp.close.suspense_max_age_days` at period end; waivable by skip with reason), `Finance\Bank\BankReconciliationCloseCheck`
+  (statement lines dated ≤ period end neither matched nor explained). New `Finance\Providers\FinanceServiceProvider` (registered in `bootstrap/providers.php`).
+- Interpretations: the catalogue has no close permissions, so each task uses its owner's working permission (earning/recon/TB:
+  `periods.soft_lock`; suspense: `receipt.allocate`; bank: `bank.match`; accruals: `accounting.create_manual_journal`; statements:
+  `reports.financial`; sign-off and lock: `periods.lock`). Only suspense review and accruals are skippable. "Approval by CFO role" on the
+  lock is not built (thresholds/role mapping are OPEN #3, A-2; `periods.lock` is required). Automatic re-run of 13/14 on later postings is
+  done at sign-off rather than on every posting. Suspense ageing uses the items' current open amount.
+- Tests `tests/Feature/Close/MonthEndCloseTest.php`: task list/order/dependencies and single running run; end-to-end clean close (earning
+  runs once, soft-lock at 13, TB balances, statements identity, run completed, period locked); suspense blocking, waive by skip, skip
+  rules; bank task blocked by an unexplained line up to period end then done after explaining; premium recon variance blocks, trial
+  balance waits, lock refused `CLOSE_TASKS_OPEN`; per-task permission, already done, reopened run inactive and a new run can start; API.
+- Result: 853 tests green, PHPStan 0 errors.

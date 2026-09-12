@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Accounting;
 
 use App\Modules\Accounting\Application\AmountEvaluator;
+use App\Modules\Accounting\Application\Close\CloseTaskExecutor;
+use App\Modules\Accounting\Application\Contracts\CloseTaskCheck;
 use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
 use App\Modules\Accounting\Application\Contracts\SubledgerReconciler;
 use App\Modules\Accounting\Application\Expressions\PostingFunctionProvider;
@@ -35,6 +37,8 @@ final class AccountingServiceProvider extends ServiceProvider
             (string) config('erp.posting.rules_path'), $app->make(ExpressionLanguage::class)));
         // Business contexts tag their SubledgerReconciler implementations (design §6.2); the kernel never names them.
         $this->app->when(ReconciliationService::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
+        $this->app->when(CloseTaskExecutor::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
+        $this->app->when(CloseTaskExecutor::class)->needs('$checks')->giveTagged(CloseTaskCheck::class);
         $this->mergeConfigFrom(base_path('config/erp.php'), 'erp');
     }
 

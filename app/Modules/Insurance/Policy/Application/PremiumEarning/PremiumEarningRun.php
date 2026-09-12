@@ -45,10 +45,7 @@ final class PremiumEarningRun
         $monthKey = $period->starts->format('Y-m');
         [$count, $total] = [0, 0];
 
-        Policy::query()->where('entity_id', $period->entityId)
-            ->whereIn('status', array_map(fn (PolicyStatus $s): string => $s->value, self::EARNING_STATUSES))
-            ->where('inception', '<=', $period->ends->toDateString())->where('expiry', '>=', $period->starts->toDateString())
-            ->orderBy('id')->chunkById(500, function ($policies) use ($period, $monthKey, $runId, &$count, &$total): void {
+        $this->policiesOnCover($period)->chunkById(500, function ($policies) use ($period, $monthKey, $runId, &$count, &$total): void {
                 foreach ($policies as $policy) {
                     $amount = $this->scheduledAmount($policy, $monthKey);
                     if ($amount !== 0 && $this->earn($policy, $period, $amount, 'scheduled', $runId, $period->ends)) {
@@ -59,6 +56,27 @@ final class PremiumEarningRun
             });
 
         return new EarningRunResult($count, $total);
+    }
+
+    /**
+     * Design §5.7 task 1 blocking condition: policies on cover in the period with a non-zero scheduled amount but no earning row for it.
+     *
+     * @return list<string> policy ids
+     */
+    public function missingEarning(FiscalPeriodView $period): array
+    {
+        $monthKey = $period->starts->format('Y-m');
+        $earned = DB::table('premium_earning_ledger')->where('period_id', $period->id)->pluck('policy_id')->flip()->all();
+        $missing = [];
+        $this->policiesOnCover($period)->chunkById(500, function ($policies) use ($monthKey, $earned, &$missing): void {
+            foreach ($policies as $policy) {
+                if (! isset($earned[$policy->id]) && $this->scheduledAmount($policy, $monthKey) !== 0) {
+                    $missing[] = $policy->id;
+                }
+            }
+        });
+
+        return $missing;
     }
 
     /**
@@ -84,6 +102,15 @@ final class PremiumEarningRun
 
             return true;
         });
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Builder<Policy> */
+    private function policiesOnCover(FiscalPeriodView $period): \Illuminate\Database\Eloquent\Builder
+    {
+        return Policy::query()->where('entity_id', $period->entityId)
+            ->whereIn('status', array_map(fn (PolicyStatus $s): string => $s->value, self::EARNING_STATUSES))
+            ->where('inception', '<=', $period->ends->toDateString())->where('expiry', '>=', $period->starts->toDateString())
+            ->orderBy('id');
     }
 
     private function scheduledAmount(Policy $policy, string $monthKey): int
