@@ -39,7 +39,7 @@ code and in the register below, configurable.
 | 1A.5 | Receipts, allocations, suspense, refunds | done | see git log |
 | 1A.6 | Bank | done | see git log |
 | 1A.7 | Commission | done | see git log |
-| 1A.8 | Reconcilers | pending | |
+| 1A.8 | Reconcilers | done | see git log |
 | 1A.9 | Month-end close | pending | |
 | 1A.10 | Reports | pending | |
 | 1B.1 | Claims | pending | |
@@ -59,6 +59,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-5 | 1A.6 | Bank statement file format is not specified (no bank named; like OPEN #6): CSV with a header row, one signed amount column in major units (positive = money in), dates `Y-m-d`. Header names and date format are configurable. | `config/erp.php` `imports.bank_statement`, `imports.bank_statement_date_format` (`ASSUMPTION:` A-3/A-5 comment). |
 | A-6 | 1A.7 | Commission rules beyond a flat rate (tiers, term/year rules, hierarchy overrides — spec §4) are not specified: a plan is one `rate_bp` on premium received plus optional withholding (`withholding_jurisdiction` + `withholding_tax_type` → `tax_rates` with `withholding = true`; a missing rate refuses the allocation, never assumes 0). | `commission_plans` rows (`CommissionPlanService`); migration `2026_09_14_000007` (`ASSUMPTION:`). |
 | A-7 | 1A.7 | When both the product version and the agent name a commission plan, which wins is not specified: product version first, then agent. | `config/erp.php` `commission.plan_precedence` (`ASSUMPTION:`), `CommissionPlanResolver`. |
+| A-8 | 1A.8 | Subledger balances are computed as of the reconciliation date from dated business rows (`policy_transactions.accounting_date`, `receipt_allocations.posted_on`, `suspense_items.aged_since`, `commission_entries.earned_on`); commission entries count while their *current* status is not `paid` (no payout date exists yet — payouts are not built). Control accounts are those mapped to the subledger's `subledger_controls` roles on the date. | `Insurance\Collections\Application\Reconciliation\*Reconciler`, `Insurance\Commission\Application\CommissionReconciler`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -439,3 +440,31 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   precedence default and configured; clawback amounts/lines/date and GL commission_payable per agent == Σ entries net; no clawback without
   commission; plan validation and permission; agent statement totals and opening/closing payable; API permissions.
 - Result: 842 tests green (incl. new golden fixture), PHPStan 0 errors.
+
+### 1A.8 — Reconcilers — done
+- Kernel:
+  - `Accounting\Application\Contracts\SubledgerReconciler` gains `itemDimension()` (the journal-line dimension tying control-account lines
+    to subledger items). Implementations are container-tagged with the interface; `AccountingServiceProvider` gives the tagged set to
+    `ReconciliationService` (the kernel never names a business module).
+  - `Accounting\Application\Reconciliation\ReconciliationService::runAll(periodId, ?asOf)` / `run(reconciler, periodId, ?asOf)`: GL =
+    normal-side balance of the accounts mapped to the subledger's `subledger_controls` roles, as of the period end (or `asOf`);
+    variance = subledger − GL; writes `reconciliation_runs` (clean|variance). Variance → `reconciliation_exceptions` per object whose
+    subledger vs GL amounts differ (object_type = the dimension, e.g. `policy`), plus one per journal whose control-account lines lack the
+    dimension (object_type `journal`). A clean rerun marks the period's earlier variance runs for that subledger `resolved` with a note.
+    `FiscalPeriodService::lock` already refuses a period with a `variance` run (`RECONCILIATION_VARIANCE`).
+  - `LedgerQuery::normalBalanceByDimension(accountIds, book, asOf, dimension)`.
+  - `Accounting\Infrastructure\Jobs\ReconciliationJob` (queue `recon`, scheduled daily 02:00 in `routes/console.php`): per tenant, every
+    started period that is not locked, as of its end or today.
+- Insurance reconcilers (A-8), tagged in `InsuranceServiceProvider::register`:
+  - `PremiumReconciler` (`premium` → premium_receivable, items per `policy`): issue/endorsement premium deltas − cancellation
+    `receivable_outstanding` − premium allocated, by accounting date.
+  - `SuspenseReconciler` (`suspense` → suspense_receipts, items per `receipt`): suspense received − suspense allocated, by date.
+  - `CommissionReconciler` (`commission` → commission_payable, items per `agent`): Σ amount − withholding of unpaid entries by `earned_on`.
+- Migration `2026_09_14_000008_add_subledger_dates`: `policy_transactions.accounting_date` (issue date for `new`, effective date otherwise;
+  set by `PolicyLifecycle::record`) and `receipt_allocations.posted_on` (set by `InstallmentAllocator`), both NOT NULL after backfill.
+- Tests `tests/Feature/Insurance/SubledgerReconciliationTest.php`: the three reconcilers are registered; a quarter of real activity
+  (two policies, partial and suspense allocations across month end, endorsement, cancellation, commission) reconciles clean (variance 0)
+  at three month ends with the expected September balances; a manual adjustment on premium_receivable (with and without a policy
+  dimension) produces variance −100,000 with a `policy` exception and a `journal` exception, other subledgers clean, period lock refused;
+  correcting journals reconcile clean and a clean rerun resolves the variance run; the nightly job runs 4 periods × 3 subledgers clean.
+- Result: 846 tests green, PHPStan 0 errors.

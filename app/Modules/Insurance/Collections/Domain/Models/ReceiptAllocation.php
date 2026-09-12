@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $policy_id
  * @property string|null $suspense_item_id
  * @property int $amount_minor
+ * @property CarbonImmutable $posted_on
  * @property CarbonImmutable $allocated_at
  * @property string|null $allocated_by
  */
@@ -30,5 +31,5 @@ final class ReceiptAllocation extends Model
     public $timestamps = false;
     protected $table = 'receipt_allocations';
     protected $guarded = [];
-    protected $casts = ['allocated_at' => 'immutable_datetime', 'amount_minor' => 'int'];
+    protected $casts = ['allocated_at' => 'immutable_datetime', 'posted_on' => 'immutable_date', 'amount_minor' => 'int'];
 }

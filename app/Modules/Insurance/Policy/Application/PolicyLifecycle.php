@@ -82,7 +82,7 @@ final class PolicyLifecycle
             $policy = $this->lock($policyId, [PolicyStatus::Quote], 'issue');
             $policy->forceFill(['status' => PolicyStatus::Issued->value, 'number' => $number->number, 'issued_at' => CarbonImmutable::now()])->save();
             $this->numbers->markUsed($number->id, 'policy', $policy->id);
-            $transaction = $this->record($policy, PolicyTransactionType::New, $policy->inception, $policy->gross_premium_minor, $policy->net_premium_minor, $policy->tax_minor, null, null, $actorUserId);
+            $transaction = $this->record($policy, PolicyTransactionType::New, $policy->inception, $policy->gross_premium_minor, $policy->net_premium_minor, $policy->tax_minor, null, null, $actorUserId, $on);
             $this->installments->planFor($policy);
             $this->accounting->issued($policy, $transaction, $on);
             $this->audit->record('policy.issued', AuditSubject::of('policy', $policy->id), ['status' => 'quote'], ['status' => 'issued', 'number' => $policy->number], null, 'policy.issue', Actor::user($actorUserId));
@@ -225,11 +225,16 @@ final class PolicyLifecycle
         });
     }
 
-    /** @param array<string, int>|null $amounts */
-    private function record(Policy $policy, PolicyTransactionType $type, CarbonImmutable $effectiveDate, int $gross, int $net, int $tax, ?string $reason, ?array $amounts, string $actorUserId): PolicyTransaction
+    /**
+     * @param array<string, int>|null $amounts
+     * @param CarbonImmutable|null $accountingDate the date the transaction's accounting event posts on (default: effective date)
+     */
+    private function record(Policy $policy, PolicyTransactionType $type, CarbonImmutable $effectiveDate, int $gross, int $net, int $tax, ?string $reason, ?array $amounts,
+        string $actorUserId, ?CarbonImmutable $accountingDate = null): PolicyTransaction
     {
         return PolicyTransaction::query()->create([
             'policy_id' => $policy->id, 'type' => $type->value, 'effective_date' => $effectiveDate->toDateString(),
+            'accounting_date' => ($accountingDate ?? $effectiveDate)->toDateString(),
             'premium_delta_minor' => $gross, 'net_delta_minor' => $net, 'tax_delta_minor' => $tax, 'policy_version' => $policy->version,
             'reason' => $reason, 'amounts' => $amounts, 'created_by' => $actorUserId,
         ]);

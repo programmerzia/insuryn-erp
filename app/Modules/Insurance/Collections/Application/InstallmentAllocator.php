@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Event;
 final class InstallmentAllocator
 {
     /**
+     * $allocatedOn is the date the allocation's accounting event posts on.
+     *
      * @return array{0: ReceiptAllocation, 1: Policy}
      *
      * @throws BusinessRuleViolation INVALID_AMOUNT | CURRENCY_MISMATCH | ALLOCATION_EXCEEDS_OUTSTANDING
@@ -44,7 +46,8 @@ final class InstallmentAllocator
         $installment->save();
         $allocation = ReceiptAllocation::query()->create([
             'receipt_id' => $receipt->id, 'target_type' => 'installment', 'target_id' => $installment->id, 'policy_id' => $policy->id,
-            'suspense_item_id' => $suspenseItemId, 'amount_minor' => $amountMinor, 'allocated_at' => CarbonImmutable::now(), 'allocated_by' => $actorUserId,
+            'suspense_item_id' => $suspenseItemId, 'amount_minor' => $amountMinor, 'posted_on' => $allocatedOn->toDateString(),
+            'allocated_at' => CarbonImmutable::now(), 'allocated_by' => $actorUserId,
         ]);
         Event::dispatch(new ReceiptAllocated($allocation->id, $receipt->id, $policy->id, $amountMinor, $allocatedOn));
 

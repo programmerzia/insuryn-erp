@@ -6,10 +6,12 @@ namespace App\Modules\Accounting;
 
 use App\Modules\Accounting\Application\AmountEvaluator;
 use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
+use App\Modules\Accounting\Application\Contracts\SubledgerReconciler;
 use App\Modules\Accounting\Application\Expressions\PostingFunctionProvider;
 use App\Modules\Accounting\Application\ManualJournals\ManualJournalApprovalHandler;
 use App\Modules\Accounting\Application\Periods\PeriodReopenApprovalHandler;
 use App\Modules\Accounting\Application\PostingRuleRepository;
+use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Application\Reversals\ReversalApprovalHandler;
 use App\Modules\Accounting\Infrastructure\QueuePostingDispatcher;
 use App\Modules\Platform\Approvals\ApprovalHandlerRegistry;
@@ -31,6 +33,8 @@ final class AccountingServiceProvider extends ServiceProvider
         $this->app->singleton(AmountEvaluator::class, fn ($app) => new AmountEvaluator($app->make(ExpressionLanguage::class)));
         $this->app->singleton(PostingRuleRepository::class, fn ($app) => new PostingRuleRepository(
             (string) config('erp.posting.rules_path'), $app->make(ExpressionLanguage::class)));
+        // Business contexts tag their SubledgerReconciler implementations (design §6.2); the kernel never names them.
+        $this->app->when(ReconciliationService::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
         $this->mergeConfigFrom(base_path('config/erp.php'), 'erp');
     }
 
