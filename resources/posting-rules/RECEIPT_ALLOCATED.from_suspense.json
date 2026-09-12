@@ -1,0 +1,18 @@
+{
+  "code": "RECEIPT_ALLOCATED.from_suspense",
+  "version": 1,
+  "event_type": "RECEIPT_ALLOCATED",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch","policy","customer"], "inherit_from_event": true },
+  "lines": [
+    { "role": "suspense_receipts",  "side": "debit",  "amount": "payload.amount" },
+    { "role": "premium_receivable", "side": "credit", "amount": "payload.amount" }
+  ],
+  "validation": ["amount > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "RECEIPT_ALLOCATED:{receipt_allocation_id}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}

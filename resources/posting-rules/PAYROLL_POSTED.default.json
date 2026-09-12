@@ -1,0 +1,21 @@
+{
+  "code": "PAYROLL_POSTED.default",
+  "version": 1,
+  "event_type": "PAYROLL_POSTED",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch"], "inherit_from_event": true },
+  "lines": [
+    { "role": "salary_expense",       "side": "debit",  "amount": "payload.gross" },
+    { "role": "employer_pf_expense",  "side": "debit",  "amount": "payload.employer_pf" },
+    { "role": "salary_payable",       "side": "credit", "amount": "payload.net" },
+    { "role": "employee_tax_payable", "side": "credit", "amount": "payload.employee_tax" },
+    { "role": "pf_payable",           "side": "credit", "amount": "add(payload.employee_pf, payload.employer_pf)" }
+  ],
+  "validation": ["amount > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "PAYROLL_POSTED:{payroll_run_id}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}

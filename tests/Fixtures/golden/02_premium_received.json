@@ -1,0 +1,1 @@
+{ "event_type": "PREMIUM_RECEIVED", "payload": {"amount":5000000}, "dimensions": {"branch":"B1","product":"P1","product_code":"MOTOR","lob":"motor","channel":"agent","policy":"POL1","customer":"CU1","agent":"AG1","claim":"CL1"}, "expected": [["bank_main","debit",5000000],["premium_receivable","credit",5000000]] }

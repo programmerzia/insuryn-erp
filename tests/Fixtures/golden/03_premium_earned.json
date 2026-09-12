@@ -1,0 +1,1 @@
+{ "event_type": "PREMIUM_EARNED", "payload": {"earned":857600}, "dimensions": {"branch":"B1","product":"P1","product_code":"MOTOR","lob":"motor","channel":"agent","policy":"POL1","customer":"CU1","agent":"AG1","claim":"CL1"}, "expected": [["unearned_premium","debit",857600],["premium_income","credit",857600]] }
