@@ -12,6 +12,9 @@ use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\JournalStatus;
 use App\Modules\Accounting\Domain\Models\Journal;
 use App\Modules\Accounting\Exceptions\PostingFailedException;
+use App\Modules\Platform\Audit\Actor;
+use App\Modules\Platform\Audit\Audit;
+use App\Modules\Platform\Audit\AuditSubject;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -24,6 +27,7 @@ final class ReversalService
     public function __construct(
         private readonly PostingContextLoader $contexts,
         private readonly JournalWriter $writer,
+        private readonly Audit $audit,
     ) {}
 
     /** @throws PostingFailedException NOT_POSTED, REASON_REQUIRED, PERIOD_MISSING, PERIOD_CLOSED, PERIOD_SOFT_LOCKED */
@@ -47,6 +51,9 @@ final class ReversalService
             ], $draft);
             // Only these two columns may change on a posted journal (DB trigger enforces).
             $original->forceFill(['status' => JournalStatus::Reversed->value, 'reversed_by_journal_id' => $reversal->id])->save();
+            $this->audit->record('journal.reversed', AuditSubject::of('journal', $original->id),
+                ['status' => JournalStatus::Posted->value], ['status' => JournalStatus::Reversed->value, 'reversed_by_journal_id' => $reversal->id],
+                $reason, 'accounting.reverse_journal', Actor::user($actorUserId));
 
             return $reversal;
         });

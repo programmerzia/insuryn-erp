@@ -26,7 +26,7 @@ code and in the register below, configurable.
 |---|---|---|---|
 | 0.0 | Apply review decisions D-01..D-11 | done | see git log |
 | 0.1 | DocumentNumberer | done | see git log |
-| 0.2 | Audit service | pending | |
+| 0.2 | Audit service | done | see git log |
 | 0.3 | Fiscal period service | pending | |
 | 0.4 | Permissions + SoD | pending | |
 | 0.5 | Manual journal + approvals | pending | |
@@ -111,3 +111,19 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Interpretation (not an OPEN item): used numbers cannot be voided — cancel the business document instead.
 - The `numbering.void` permission check is wired in slice 0.4 (authorization layer did not exist yet).
 - Result: 115 tests green, PHPStan 0 errors.
+
+### 0.2 — Audit service — done
+- `App\Modules\Platform\Audit\Audit::record(action, AuditSubject, before, after, reason, permission, actor)`:
+  writes `audit_events` in the caller's transaction. Actor = explicit `Actor`, else the authenticated user,
+  else `system`. On HTTP requests it records `request_id` (X-Request-Id if a UUID, else a UUIDv7 per request),
+  `ip`, `user_agent`.
+- Migration `2026_09_13_000003_audit_trail_append_only`: `audit_events.permission` (the permission exercised;
+  read by SoD in 0.4), index (object_type, object_id, actor_user_id), trigger `audit_events_append_only`
+  (UPDATE/DELETE raise `AUDIT_APPEND_ONLY`).
+- Wired: `JournalWriter::post` audits `journal.posted` for every posted journal (system, manual, reversal,
+  opening — all journal paths go through it; actor = `created_by` when present); `ReversalService` audits
+  `journal.reversed` on the original with reason, actor and permission `accounting.reverse_journal`.
+  Period changes are audited by the fiscal period service in slice 0.3 (the service did not exist yet).
+- Tests: `tests/Feature/Platform/AuditTest.php` (fields, authenticated HTTP actor + request details, system
+  actor, append-only, every posted/reversed journal audited, failed posting leaves no audit row).
+- Result: 121 tests green, PHPStan 0 errors.

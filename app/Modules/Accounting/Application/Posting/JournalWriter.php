@@ -7,6 +7,9 @@ namespace App\Modules\Accounting\Application\Posting;
 use App\Modules\Accounting\Application\JournalNumberer;
 use App\Modules\Accounting\Domain\Enums\JournalStatus;
 use App\Modules\Accounting\Domain\Models\Journal;
+use App\Modules\Platform\Audit\Actor;
+use App\Modules\Platform\Audit\Audit;
+use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,10 +18,14 @@ use Illuminate\Support\Str;
  * The one place journal and journal_lines rows are written (CONTEXT.md non-negotiable #4), shared by
  * posting and reversal. Lines go in with one bulk insert through the query builder, which bypasses
  * Eloquent casts and hooks, so id, tenant_id, the side value and JSON dims_ext are set explicitly.
+ * Every posted journal is audited in the same transaction (design §3.3 step 4).
  */
 final class JournalWriter
 {
-    public function __construct(private readonly JournalNumberer $numberer) {}
+    public function __construct(
+        private readonly JournalNumberer $numberer,
+        private readonly Audit $audit,
+    ) {}
 
     /**
      * Inserts the journal as draft with its lines, then numbers it and marks it posted, all in the
@@ -35,8 +42,18 @@ final class JournalWriter
             'status' => JournalStatus::Posted->value,
             'posted_at' => now(),
         ])->save();
+        $this->auditPosted($journal);
 
         return $journal;
+    }
+
+    private function auditPosted(Journal $journal): void
+    {
+        $createdBy = $journal->getAttribute('created_by');
+        $this->audit->record('journal.posted', AuditSubject::of('journal', $journal->id), null, [
+            'number' => $journal->number, 'kind' => $journal->kind->value, 'status' => $journal->status->value,
+            'posting_date' => $journal->posting_date->toDateString(), 'source_type' => $journal->source_type, 'source_id' => $journal->source_id,
+        ], $journal->reason, actor: is_string($createdBy) ? Actor::user($createdBy) : null);
     }
 
     /** @return list<array<string, mixed>> one row per line, every row with the same columns */
