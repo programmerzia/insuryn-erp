@@ -99,6 +99,23 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        // Schema owner (erp_owner). Migrations only: the app runs as the non-owner role on `pgsql`
+        // so FORCE ROW LEVEL SECURITY applies (design §8.6.6). Usage: migrate --database=pgsql_migrations
+        'pgsql_migrations' => [
+            'driver' => 'pgsql',
+            'url' => env('MIGRATION_DB_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('MIGRATION_DB_USERNAME', 'erp_owner'),
+            'password' => env('MIGRATION_DB_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

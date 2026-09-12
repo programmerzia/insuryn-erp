@@ -125,6 +125,8 @@ SQL);
         }
         // Grant the runtime role access (owner runs migrations; app runs as erp_app).
         DB::unprepared('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO erp_app');
+        // Framework tables (jobs, failed_jobs) use bigserial keys.
+        DB::unprepared('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO erp_app');
     }
 
     public function down(): void
