@@ -27,7 +27,7 @@ code and in the register below, configurable.
 | 0.0 | Apply review decisions D-01..D-11 | done | see git log |
 | 0.1 | DocumentNumberer | done | see git log |
 | 0.2 | Audit service | done | see git log |
-| 0.3 | Fiscal period service | pending | |
+| 0.3 | Fiscal period service | done | see git log |
 | 0.4 | Permissions + SoD | pending | |
 | 0.5 | Manual journal + approvals | pending | |
 | 0.6 | Read side + first UI | pending | |
@@ -127,3 +127,19 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Tests: `tests/Feature/Platform/AuditTest.php` (fields, authenticated HTTP actor + request details, system
   actor, append-only, every posted/reversed journal audited, failed posting leaves no audit row).
 - Result: 121 tests green, PHPStan 0 errors.
+
+### 0.3 — Fiscal period service — done
+- `App\Modules\Accounting\Application\Periods\FiscalPeriodService`: `softLock`, `lock`, `reopen(reason)` per §5.3.
+  Each transition: permission (`periods.soft_lock` / `periods.lock` / `periods.reopen`), period row lock,
+  allowed-from check (`INVALID_PERIOD_TRANSITION`), audit row with before/after/permission/actor, outbox message
+  (`PeriodSoftLocked`, `PeriodLocked`, `PeriodReopened`). `lock` sets `locked_by`/`locked_at`; reopen clears them.
+- §5.7 INVARIANT enforced now: `lock` refuses with `CLOSE_TASKS_OPEN` (tasks not done/skipped on a live close run)
+  or `RECONCILIATION_VARIANCE`. Reopen marks the period's close runs `reopened` so the close must be re-run.
+- New Platform pieces: `Authorization\PermissionChecker` (user_roles → role_permissions; scopes, Gate and SoD come
+  in 0.4), `Authorization\PermissionDenied`, `Messaging\Outbox` (transactional outbox writer).
+- Tests: `tests/Feature/Accounting/FiscalPeriodServiceTest.php` (happy path with audit + outbox, permission per
+  transition, invalid transitions, reopen reason + close-run invalidation, lock blockers, posting after reopen);
+  test helper `userWithPermissions()` in `tests/Pest.php`.
+- Deferred by design of the slice order: §5.3 says reopen needs *approval*; the approval engine arrives in 0.5,
+  which routes reopen through it when an approval policy matches.
+- Result: 130 tests green, PHPStan 0 errors.

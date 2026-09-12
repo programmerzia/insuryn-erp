@@ -39,6 +39,28 @@ function asTenant(string $tenantId, callable $fn): mixed
 }
 
 /**
+ * A user of the tenant holding exactly $permissions through one tenant-wide role. Returns the user id.
+ *
+ * @param list<string> $permissions
+ */
+function userWithPermissions(string $tenantId, array $permissions, string $scopeType = 'tenant', ?string $scopeId = null): string
+{
+    return asTenant($tenantId, function () use ($tenantId, $permissions, $scopeType, $scopeId): string {
+        $userId = (string) Illuminate\Support\Str::uuid7();
+        $roleId = (string) Illuminate\Support\Str::uuid7();
+        Illuminate\Support\Facades\DB::table('users')->insert(['id' => $userId, 'tenant_id' => $tenantId, 'email' => "user-{$userId}@example.test", 'name' => 'Test user', 'status' => 'active']);
+        Illuminate\Support\Facades\DB::table('roles')->insert(['id' => $roleId, 'tenant_id' => $tenantId, 'code' => 'test-'.$roleId, 'name' => 'Test role']);
+        foreach ($permissions as $permission) {
+            Illuminate\Support\Facades\DB::table('role_permissions')->insert(['tenant_id' => $tenantId, 'role_id' => $roleId, 'permission_code' => $permission]);
+        }
+        Illuminate\Support\Facades\DB::table('user_roles')->insert(['tenant_id' => $tenantId, 'user_id' => $userId, 'role_id' => $roleId,
+            'scope_type' => $scopeType, 'scope_id' => $scopeId ?? $tenantId]);
+
+        return $userId;
+    });
+}
+
+/**
  * The exception of $type thrown by $operation, for asserting on its details. Fails the test when
  * nothing is thrown; any other exception propagates unchanged.
  *
