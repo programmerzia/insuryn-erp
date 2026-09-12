@@ -182,7 +182,8 @@ return new class extends Migration
             $t->string('subledger'); // premium|claims|commission|customer|agent|bank|ap|ar|suspense
             $t->string('control_account_role');
             $t->uuid('book_id');
-            $t->unique(['entity_id', 'book_id', 'subledger']);
+            // A subledger may reconcile to several control accounts (design §6.1: claims → claims_outstanding and claims_payable).
+            $t->unique(['entity_id', 'book_id', 'subledger', 'control_account_role']);
         });
 
         Schema::create('reconciliation_runs', function (Blueprint $t) {

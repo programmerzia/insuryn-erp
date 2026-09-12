@@ -75,14 +75,14 @@ final class DemoTenantSeeder extends Seeder
                 DB::table('account_role_mappings')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'entity_id' => $entityId, 'book_id' => $bookId,
                     'role_code' => $role, 'account_id' => $id, 'effective_from' => '2026-01-01', 'effective_to' => null]);
                 if ($sub !== null) {
-                    DB::table('subledger_controls')->updateOrInsert(['entity_id' => $entityId, 'book_id' => $bookId, 'subledger' => $sub],
-                        ['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'control_account_role' => $role]);
+                    DB::table('subledger_controls')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'entity_id' => $entityId,
+                        'book_id' => $bookId, 'subledger' => $sub, 'control_account_role' => $role]);
                 }
             }
             foreach (PermissionsSeeder::SOD as $i => [$a, $b]) {
                 DB::table('sod_rules')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'code' => 'SOD'.($i + 1), 'permission_a' => $a, 'permission_b' => $b, 'mode' => 'block']);
             }
-            return compact('tenantId', 'entityId', 'branchId', 'bookId', 'accounts') + ['tenant_id' => $tenantId, 'entity_id' => $entityId, 'branch_id' => $branchId, 'book_id' => $bookId];
+            return ['tenant_id' => $tenantId, 'entity_id' => $entityId, 'branch_id' => $branchId, 'book_id' => $bookId, 'accounts' => $accounts];
         });
     }
 }

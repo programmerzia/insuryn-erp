@@ -155,7 +155,9 @@ return new class extends Migration
             $t->string('prefix');
             $t->unsignedBigInteger('next_no')->default(1);
             $t->timestampsTz();
-            $t->unique(['entity_id', 'branch_id', 'doc_type', 'fiscal_year'], 'number_sequences_scope_unique');
+            // Design §2.1 unique(t,e,coalesce(branch_id,'0'),doc_type,fiscal_year): an entity-level (NULL branch)
+            // sequence must be unique too, or concurrent first use creates duplicate sequences.
+            $t->unique(['entity_id', 'branch_id', 'doc_type', 'fiscal_year'], 'number_sequences_scope_unique')->nullsNotDistinct();
         });
 
         Schema::create('document_numbers', function (Blueprint $t) {
