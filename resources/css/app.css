@@ -2,8 +2,42 @@
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../js/**/*.vue';
 
+/*
+ * CoreBari design tokens (source of truth: corebari/src/styles/globals.css; brand/COLOURS.md for
+ * contrast ratios). Dark-first. This is the only file in this repo allowed to contain hex colours:
+ * components use the semantic utilities (bg-surface, text-ivory-dim, border-line, …).
+ * Brick is a background colour; warm text on dark uses brick-soft.
+ */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --color-bg: #0b1330;
+    --color-bg-deep: #070c22;
+    --color-surface: #101a3d;
+    --color-surface-raised: #152048;
+    --color-ivory: #f4f1e9;
+    --color-ivory-dim: #b6b2ce;
+    --color-blueprint: #8fd3ff;
+    --color-brick: #a8462a;
+    --color-brick-soft: #c96a48;
+    --color-brick-hover: #b04e2e;
+    --color-amber: #e8b04b;
+    --color-green: #4fbf95;
+    --color-line: rgb(143 211 255 / 0.16);
+    --color-line-control: rgb(143 211 255 / 0.5);
+
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+    h1, h2, h3 {
+        font-family: var(--font-display);
+        text-wrap: balance;
+    }
+    :focus-visible {
+        outline: 2px solid var(--color-blueprint);
+        outline-offset: 2px;
+    }
 }

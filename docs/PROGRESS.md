@@ -30,7 +30,7 @@ code and in the register below, configurable.
 | 0.3 | Fiscal period service | done | see git log |
 | 0.4 | Permissions + SoD | done | see git log |
 | 0.5 | Manual journal + approvals | done | see git log |
-| 0.6 | Read side + first UI | pending | |
+| 0.6 | Read side + first UI | done | see git log |
 | 0.7 | Import wizard | pending | |
 | 1A.1 | Party, roles, bank accounts, agents | pending | |
 | 1A.2 | Product + versions | pending | |
@@ -205,3 +205,22 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   rejection, reopen via approval), arch rule in `DependencyTest`. Helper `approvalPolicy()` in `tests/Pest.php`.
 - Assumption A-2 (OPEN #3): no approval policies seeded.
 - Result: 158 tests green, PHPStan 0 errors; fresh migrate --seed verified.
+
+### 0.6 — Read side + first UI — done
+- Stack added: `inertiajs/inertia-laravel` 3.3 (server), `@inertiajs/vue3` 3.7 + Vue 3.5 + TypeScript 5.9 (pinned; TS 7 lacks
+  the API vue-tsc uses) + `vue-tsc`, `@vitejs/plugin-vue`, Tailwind 4, shadcn-vue style table components
+  (`resources/js/components/ui/table/*`, `cn()` in `resources/js/lib/utils.ts`). `npm run typecheck`, `npm run build`.
+- Theme: CoreBari tokens (Navy/Brick/Blueprint, IBM Plex Sans/Condensed/Mono) in `resources/css/app.css` — the only file with hex colours.
+- Read models: `Accounting\Application\Queries\JournalQuery` (paginated list with debit totals and status filter; typed detail with lines,
+  source event, reverses / reversed_by / corrects links and corrections) and the existing `LedgerQuery::trialBalance`.
+- HTTP (thin): `Accounting\Http\Controllers\{TrialBalanceController, JournalController, ReportingScope}` — entity from `?entity_id=`
+  (default: first entity by code; §9.2 single-entity UI), primary book. Amounts formatted by `Http\Presenters\MinorUnits`
+  (integer string arithmetic, no floats). Routes in `routes/web.php` under `auth` + `can:accounting.view_journals`:
+  `/accounting/trial-balance`, `/accounting/journals`, `/accounting/journals/{id}`; `/` redirects to journals.
+- Pages: `resources/js/pages/accounting/{TrialBalance, journals/Index, journals/Show}.vue`, layout `layouts/AppLayout.vue`,
+  `components/StatusBadge.vue`. Root view `resources/views/app.blade.php`; `HandleInertiaRequests` shares the signed-in user.
+- No login page exists (Zitadel OIDC sign-in is not in the slice list): guests get HTTP 401 (`bootstrap/app.php`:
+  `redirectGuestsTo` null + AuthenticationException render). Pages need an authenticated session.
+- Tests: `tests/Feature/Accounting/LedgerPagesTest.php` (TB figures and balance, list order/kind/totals, status filter, detail with
+  lines/event/reversal links both ways, drafts listed but not in TB, 401/403, cross-tenant 404), `tests/Unit/Accounting/MinorUnitsTest.php`.
+- Result: 172 tests green, PHPStan 0 errors, vue-tsc 0 errors, vite build OK.
