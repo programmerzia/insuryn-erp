@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Platform\Http\Middleware\ResolveTenant;
+use App\Modules\Accounting\Exceptions\AccountingException;
+use App\Modules\Platform\Approvals\ApprovalException;
+use App\Modules\Platform\Authorization\PermissionDenied;
+use App\Modules\Platform\Authorization\SodViolation;
+use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Numbering\Exceptions\NumberingException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -37,4 +43,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (AuthenticationException $e, Request $request) => $request->expectsJson()
             ? null
             : response('Unauthenticated.', 401));
+        // Business rule outcomes map to HTTP: missing permission or segregation of duties → 403,
+        // a broken business rule → 422, both with the machine-readable reason code.
+        $exceptions->render(fn (PermissionDenied $e) => response()->json(['message' => $e->getMessage(), 'reason' => 'PERMISSION_DENIED', 'permission' => $e->permission], 403));
+        $exceptions->render(fn (SodViolation $e) => response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403));
+        $exceptions->render(fn (AccountingException|BusinessRuleViolation|ApprovalException|NumberingException $e) => response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode], 422));
     })->create();

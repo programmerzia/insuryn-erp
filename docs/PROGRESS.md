@@ -32,7 +32,7 @@ code and in the register below, configurable.
 | 0.5 | Manual journal + approvals | done | see git log |
 | 0.6 | Read side + first UI | done | see git log |
 | 0.7 | Import wizard | done | see git log |
-| 1A.1 | Party, roles, bank accounts, agents | pending | |
+| 1A.1 | Party, roles, bank accounts, agents | done | see git log |
 | 1A.2 | Product + versions | pending | |
 | 1A.3 | Policy lifecycle | pending | |
 | 1A.4 | Installments + earning batch | pending | |
@@ -55,6 +55,15 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-1 | 0.0 (D-06) | VAT on cancelled premium is refunded by default (`refund_tax_on_cancellation = true`); OPEN #2. | Lands with product versions (1A.2) and the cancellation mapper (1A.3). |
 | A-2 | 0.5 | Approval thresholds and role mapping are unknown (OPEN #3): no approval policies are seeded. Every manual journal and reversal still needs one checker ≠ maker holding `accounting.approve_journal`; thresholds/steps are data in `approval_policies`. | `ApprovalService` docblock (`ASSUMPTION:`); insert rows into `approval_policies` (object_type `journal`, `journal_reversal`, `fiscal_period_reopen`). |
 | A-3 | 0.7 | Opening-balance / COA source format is unknown (OPEN #6): CSV with a header row, dot decimal separator, major units; header names per field are configurable. | `config/erp.php` `imports.*` (`ASSUMPTION:` comment). |
+
+## Catalogue extensions and interpretations (not OPEN items)
+
+- Permissions added to the §7.1 "MVP subset" for configuration/CRUD the catalogue does not name: `party.manage` (branch_officer+),
+  `agent.manage` (branch_manager), `product.manage`, `bank.manage_accounts`, `commission.manage_plans` (finance_manager, cfo),
+  `claim.close` (claims_manager). Seeded by `PermissionsSeeder`, inserted by the slice migrations, mapped in `RoleTemplates`.
+- HTTP error contract: `PermissionDenied` → 403 `{reason: PERMISSION_DENIED, permission}`, `SodViolation` → 403 `{reason, rule}`,
+  business rule exceptions (Accounting, Approval, Numbering, `Platform\Exceptions\BusinessRuleViolation`) → 422 `{reason}`.
+- Business contexts (Insurance, Finance, People) may use Platform and `App\Modules\Accounting\Application` only (arch test).
 
 ## Disputed tests
 
@@ -246,3 +255,20 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Tests: `tests/Feature/Accounting/ImportWizardTest.php` (invalid COA rows reported, dry-run writes nothing, commit with parents/controls/audit,
   invalid/unbalanced opening balances, dry-run then commit as pending opening journal, permissions, page round-trip).
 - Result: 179 tests green, PHPStan 0 errors, vue-tsc 0 errors, vite build OK; fresh migrate --seed verified.
+
+### 1A.1 — Party, roles, bank accounts, agents — done
+- Module `App\Modules\Insurance\Party` (Domain models/enums, Application services, Http controllers + FormRequests).
+- Tables (migration `2026_09_14_000001_create_party_tables`, all tenant + RLS): `parties` (kind check), `party_roles`
+  (unique party/role, role check), `party_bank_accounts` (`account_no_enc` via Laravel `encrypted` cast, `account_no_masked`,
+  partial unique index: one default per party), `agents` (unique party, unique tenant/code, not-own-parent check).
+- `PartyService` (`party.manage`): create/update with role sync, `addBankAccount` (mask = last 4 digits, first account becomes
+  default, new default clears the old one). `AgentService` (`agent.manage`): create (adds the `agent` role to the party),
+  update, `ancestors` (recursive CTE); reparenting that would create a cycle → 422 `AGENT_HIERARCHY_CYCLE`. All changes audited.
+- API (routes/api.php, `auth`): `GET|POST /api/insurance/parties`, `GET|PATCH /api/insurance/parties/{id}`,
+  `POST /api/insurance/parties/{id}/bank-accounts`, `GET|POST /api/insurance/agents`, `GET|PATCH /api/insurance/agents/{id}`.
+  The account number is never returned; responses carry the mask only.
+- Global exception → HTTP mapping added in `bootstrap/app.php` (see "Catalogue extensions and interpretations").
+- New arch rules: business contexts use only Accounting's Application layer; Insurance and Finance do not use each other's Domain.
+- Tests: `tests/Feature/Insurance/PartyApiTest.php` (multi-role party, validation, role add/remove, encrypted + masked bank
+  accounts with single default, permission, tenant isolation, agent hierarchy with ancestors, cycle refusal, unique code, unknown party).
+- Result: 188 tests green, PHPStan 0 errors, vue-tsc/build OK.

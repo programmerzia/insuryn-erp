@@ -37,5 +37,16 @@ arch('journal writer is used only by the kernel posting path')
         'App\Modules\Accounting\Application\ManualJournals',
     ]);
 
+/** Design §1: business contexts depend on Platform + Accounting\Application contracts only, and not on each other's Domain. */
+arch('business contexts use only the accounting application layer')
+    ->expect(['App\Modules\Insurance', 'App\Modules\Finance', 'App\Modules\People'])
+    ->not->toUse(['App\Modules\Accounting\Domain', 'App\Modules\Accounting\Infrastructure', 'App\Modules\Accounting\Http']);
+
+arch('insurance does not use the finance domain')->expect('App\Modules\Insurance')->not->toUse('App\Modules\Finance\Bank\Domain');
+arch('finance does not use the insurance domain')->expect('App\Modules\Finance')->not->toUse([
+    'App\Modules\Insurance\Party\Domain', 'App\Modules\Insurance\Product\Domain', 'App\Modules\Insurance\Policy\Domain',
+    'App\Modules\Insurance\Collections\Domain', 'App\Modules\Insurance\Commission\Domain', 'App\Modules\Insurance\Claims\Domain',
+]);
+
 arch('strict types everywhere')->expect('App')->toUseStrictTypes();
 arch('no floats in accounting')->expect('App\Modules\Accounting')->not->toUse(['floatval', 'round', 'number_format']);
