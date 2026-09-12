@@ -203,7 +203,8 @@ final class ManualJournalService
         if ($control === null) {
             return;
         }
-        $allowed = $kind === JournalKind::Adjustment && trim((string) $reason) !== ''
+        // Opening balances legitimately land on control accounts, under the same conditions as an adjustment.
+        $allowed = in_array($kind, [JournalKind::Adjustment, JournalKind::Opening], true) && trim((string) $reason) !== ''
             && $this->permissions->has($actorId, 'accounting.post_to_control', AuthorizationScope::entity((string) $control->entity_id));
         if (! $allowed) {
             throw new ManualJournalException('CONTROL_ACCOUNT',

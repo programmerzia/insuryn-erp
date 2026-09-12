@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Modules\Accounting\Application\LedgerQuery;
-use App\Modules\Accounting\Http\Presenters\MinorUnits;
+use App\Modules\Accounting\Domain\MinorUnits;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

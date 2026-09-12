@@ -6,7 +6,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Modules\Accounting\Application\Queries\JournalQuery;
 use App\Modules\Accounting\Domain\Enums\JournalStatus;
-use App\Modules\Accounting\Http\Presenters\MinorUnits;
+use App\Modules\Accounting\Domain\MinorUnits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;

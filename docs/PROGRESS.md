@@ -31,7 +31,7 @@ code and in the register below, configurable.
 | 0.4 | Permissions + SoD | done | see git log |
 | 0.5 | Manual journal + approvals | done | see git log |
 | 0.6 | Read side + first UI | done | see git log |
-| 0.7 | Import wizard | pending | |
+| 0.7 | Import wizard | done | see git log |
 | 1A.1 | Party, roles, bank accounts, agents | pending | |
 | 1A.2 | Product + versions | pending | |
 | 1A.3 | Policy lifecycle | pending | |
@@ -54,6 +54,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 |---|---|---|---|
 | A-1 | 0.0 (D-06) | VAT on cancelled premium is refunded by default (`refund_tax_on_cancellation = true`); OPEN #2. | Lands with product versions (1A.2) and the cancellation mapper (1A.3). |
 | A-2 | 0.5 | Approval thresholds and role mapping are unknown (OPEN #3): no approval policies are seeded. Every manual journal and reversal still needs one checker ≠ maker holding `accounting.approve_journal`; thresholds/steps are data in `approval_policies`. | `ApprovalService` docblock (`ASSUMPTION:`); insert rows into `approval_policies` (object_type `journal`, `journal_reversal`, `fiscal_period_reopen`). |
+| A-3 | 0.7 | Opening-balance / COA source format is unknown (OPEN #6): CSV with a header row, dot decimal separator, major units; header names per field are configurable. | `config/erp.php` `imports.*` (`ASSUMPTION:` comment). |
 
 ## Disputed tests
 
@@ -224,3 +225,24 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
 - Tests: `tests/Feature/Accounting/LedgerPagesTest.php` (TB figures and balance, list order/kind/totals, status filter, detail with
   lines/event/reversal links both ways, drafts listed but not in TB, 401/403, cross-tenant 404), `tests/Unit/Accounting/MinorUnitsTest.php`.
 - Result: 172 tests green, PHPStan 0 errors, vue-tsc 0 errors, vite build OK.
+
+### 0.7 — Import wizard — done
+- Spec §7 pipeline: `mode` = `validate` (errors only) | `dry_run` (errors + preview, writes nothing) | `commit`. Errors are
+  `{row, field, message}` (row = CSV line; row 0 = file-level, listed last); any error → HTTP 422 and nothing is written.
+- `Accounting\Application\Imports\ChartOfAccountsImport` (`accounting.manage_coa`): new accounts only (existing code = error),
+  type/side/boolean checks, parent in file or entity, control accounts need a subledger, optional ISO currency, optional semantic
+  role (mapped in the primary book from today). Commit inserts accounts (+ mappings) in one transaction; audit `chart_of_accounts.imported`.
+- `OpeningBalancesImport` (`accounting.create_manual_journal`): account in entity and postable, exactly one positive side, amounts
+  parsed with string arithmetic (`Domain\MinorUnits::fromMajor`), optional branch, file must balance, ≥2 lines. Commit creates a
+  kind=`opening` journal through `ManualJournalService` and submits it — it posts only after a different user approves (D-11).
+  Opening journals may touch control accounts under the adjustment conditions (reason + `accounting.post_to_control`).
+- `Platform\Imports\CsvTable`: header-mapped CSV parsing with configurable header names and a row limit.
+- HTTP: JSON API `POST /api/accounting/imports/{chart-of-accounts|opening-balances}` (routes/api.php, now enabled) and page
+  `GET /accounting/imports` + `POST /accounting/imports/{type}` (Inertia, `resources/js/pages/accounting/Imports.vue`), both via
+  `Accounting\Http\Controllers\ImportController`. API authentication is the default guard; token auth (Sanctum) is not built.
+- Refactor: `MinorUnits` moved to `App\Modules\Accounting\Domain\MinorUnits` (format + fromMajor) so Application code does not
+  depend on Http; the 0.6 unit test only changed its `use` line.
+- Assumption A-3 (OPEN #6): import format.
+- Tests: `tests/Feature/Accounting/ImportWizardTest.php` (invalid COA rows reported, dry-run writes nothing, commit with parents/controls/audit,
+  invalid/unbalanced opening balances, dry-run then commit as pending opening journal, permissions, page round-trip).
+- Result: 179 tests green, PHPStan 0 errors, vue-tsc 0 errors, vite build OK; fresh migrate --seed verified.

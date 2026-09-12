@@ -10,6 +10,7 @@ const user = computed(() => page.props.auth.user);
 const nav = [
     { label: 'Journals', href: '/accounting/journals' },
     { label: 'Trial balance', href: '/accounting/trial-balance' },
+    { label: 'Imports', href: '/accounting/imports' },
 ];
 </script>
 

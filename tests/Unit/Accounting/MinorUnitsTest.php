@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Modules\Accounting\Http\Presenters\MinorUnits;
+use App\Modules\Accounting\Domain\MinorUnits;
 
 it('formats minor units with grouping and the currency scale, without floats', function (int $minor, string $currency, string $expected): void {
     expect(MinorUnits::format($minor, $currency))->toBe($expected);
