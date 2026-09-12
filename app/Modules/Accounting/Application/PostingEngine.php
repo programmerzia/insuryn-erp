@@ -15,9 +15,12 @@ use App\Modules\Accounting\Domain\Models\FiscalPeriod;
 use App\Modules\Accounting\Domain\Models\Journal;
 use App\Modules\Accounting\Domain\Models\JournalBatch;
 use App\Modules\Accounting\Domain\Models\JournalLine;
+use App\Modules\Accounting\Application\Posting\TransientFailureDetector;
 use App\Modules\Accounting\Domain\PostingRule;
+use App\Modules\Accounting\Exceptions\AccountingException;
 use App\Modules\Accounting\Exceptions\PostingFailedException;
 use App\Modules\Accounting\Exceptions\UnbalancedJournalException;
+use App\Modules\Accounting\Exceptions\UnexpectedPostingException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -35,44 +38,70 @@ final class PostingEngine
         private readonly PostingRuleRepository $rules,
         private readonly AmountEvaluator $amounts,
         private readonly JournalNumberer $numberer,
+        private readonly TransientFailureDetector $transientFailures,
     ) {}
 
-    /** @return list<Journal> journals created (one per book) */
+    /**
+     * Claim and post in ONE transaction, so any exception rolls the event back to `queued` and a
+     * crashed worker never leaves it stuck in `posting`. Outcomes (design §8.4): business failure →
+     * `failed` with reason, no exception; transient DB error → rethrown for the queue to retry;
+     * anything else → `failed` with an UNEXPECTED reason and UnexpectedPostingException.
+     *
+     * @return list<Journal> journals created (one per book); empty when nothing was posted
+     */
     public function post(string $eventId, bool $actorMayPostSoftLocked = false): array
     {
-        // Step 1: CAS the status so a retried/duplicate worker exits without side effects (§8.3a).
-        $claimed = DB::table('accounting_events')->where('id', $eventId)->where('status', EventStatus::Queued->value)
-            ->update(['status' => EventStatus::Posting->value]);
-        if ($claimed === 0) {
+        try {
+            return DB::transaction(fn (): array => $this->claimAndPost($eventId, $actorMayPostSoftLocked));
+        } catch (AccountingException $e) {
+            $this->markFailed($eventId, $e->reasonCode.': '.$e->getMessage());
+
+            return [];
+        } catch (Throwable $e) {
+            if ($this->transientFailures->isTransient($e)) {
+                throw $e;
+            }
+            $this->markFailed($eventId, 'UNEXPECTED: '.$e::class.': '.$e->getMessage());
+
+            throw UnexpectedPostingException::forEvent($eventId, $e);
+        }
+    }
+
+    /** @return list<Journal> */
+    private function claimAndPost(string $eventId, bool $actorMayPostSoftLocked): array
+    {
+        if (! $this->claim($eventId)) {
             return [];
         }
         $event = AccountingEvent::query()->findOrFail($eventId);
+        $rule = $this->rules->resolve($event->event_type, $event->effective_date, $event->payload, $event->dimensions);
+        $this->assertDimensions($rule, $event->dimensions);
 
-        try {
-            return DB::transaction(function () use ($event, $actorMayPostSoftLocked): array {
-                $rule = $this->rules->resolve($event->event_type, $event->effective_date, $event->payload, $event->dimensions);
-                $this->assertDimensions($rule, $event->dimensions);
-
-                $batch = JournalBatch::query()->create(['entity_id' => $event->entity_id, 'accounting_event_id' => $event->id, 'created_at' => now()]);
-                $journals = [];
-                foreach ($rule->books as $bookCode) {
-                    $book = Book::query()->where('code', $bookCode)->firstOrFail();
-                    $journals[] = $this->buildAndPost($event, $rule, $book, $batch, $actorMayPostSoftLocked);
-                }
-                $event->forceFill(['status' => EventStatus::Posted->value, 'journal_batch_id' => $batch->id])->save();
-                DB::table('outbox')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $event->tenant_id, 'message_type' => 'JournalPosted',
-                    'payload' => json_encode(['batch_id' => $batch->id, 'event_id' => $event->id], JSON_THROW_ON_ERROR), 'created_at' => now()]);
-                return $journals;
-            });
-        } catch (PostingFailedException|UnbalancedJournalException $e) {
-            // Business failure: no retry (§8.4). Surface in the exceptions screen.
-            $event->forceFill(['status' => EventStatus::Failed->value, 'failure_reason' => $e->reasonCode.': '.$e->getMessage()])->save();
-            return [];
-        } catch (Throwable $e) {
-            // Transient/unknown: put back to queued so the job may retry.
-            $event->forceFill(['status' => EventStatus::Queued->value, 'failure_reason' => 'TRANSIENT: '.$e->getMessage()])->save();
-            throw $e;
+        $batch = JournalBatch::query()->create(['entity_id' => $event->entity_id, 'accounting_event_id' => $event->id, 'created_at' => now()]);
+        $journals = [];
+        foreach ($rule->books as $bookCode) {
+            $book = Book::query()->where('code', $bookCode)->firstOrFail();
+            $journals[] = $this->buildAndPost($event, $rule, $book, $batch, $actorMayPostSoftLocked);
         }
+        $event->forceFill(['status' => EventStatus::Posted->value, 'journal_batch_id' => $batch->id])->save();
+        DB::table('outbox')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $event->tenant_id, 'message_type' => 'JournalPosted',
+            'payload' => json_encode(['batch_id' => $batch->id, 'event_id' => $event->id], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+
+        return $journals;
+    }
+
+    /** CAS on the status: a retried or duplicate worker finds nothing to claim and exits (§8.3a). */
+    private function claim(string $eventId): bool
+    {
+        return DB::table('accounting_events')->where('id', $eventId)->where('status', EventStatus::Queued->value)
+            ->update(['status' => EventStatus::Posting->value]) === 1;
+    }
+
+    /** Runs after the rollback, guarded by the status the rollback restored, so a concurrent change is never overwritten. */
+    private function markFailed(string $eventId, string $reason): void
+    {
+        DB::table('accounting_events')->where('id', $eventId)->where('status', EventStatus::Queued->value)
+            ->update(['status' => EventStatus::Failed->value, 'failure_reason' => $reason]);
     }
 
     private function buildAndPost(AccountingEvent $event, PostingRule $rule, Book $book, JournalBatch $batch, bool $mayPostSoftLocked): Journal

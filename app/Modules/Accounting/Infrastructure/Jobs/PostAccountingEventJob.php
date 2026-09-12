@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Infrastructure\Jobs;
 
 use App\Modules\Accounting\Application\PostingEngine;
+use App\Modules\Accounting\Exceptions\UnexpectedPostingException;
 use App\Modules\Platform\Jobs\TenantAware;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
+/**
+ * Design §8.4: business failures complete the job (the event carries the reason); transient
+ * database errors propagate so the queue retries with backoff; unexpected errors dead-letter
+ * immediately into failed_jobs, since a retry would only repeat the same crash.
+ */
 final class PostAccountingEventJob implements ShouldQueue, ShouldBeUnique
 {
     use Queueable, TenantAware;
@@ -34,6 +40,10 @@ final class PostAccountingEventJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(PostingEngine $engine): void
     {
-        $this->withTenant(fn () => $engine->post($this->eventId));
+        try {
+            $this->withTenant(fn () => $engine->post($this->eventId));
+        } catch (UnexpectedPostingException $e) {
+            $this->fail($e);
+        }
     }
 }
