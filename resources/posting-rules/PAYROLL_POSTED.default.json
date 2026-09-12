@@ -2,6 +2,7 @@
   "code": "PAYROLL_POSTED.default",
   "version": 1,
   "event_type": "PAYROLL_POSTED",
+  "_comment": "D-05: summary-level lines for MVP. Per-employee lines with dim_employee / dim_cost_centre (design §4.10 DECISION) are Phase 2.",
   "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
   "effective_from": "2026-01-01",
   "effective_to": null,

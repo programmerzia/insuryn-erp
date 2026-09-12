@@ -20,6 +20,10 @@ php artisan migrate --database=pgsql_migrations --seed
 - `erp_app` is the runtime role (`DB_USERNAME`). RLS is `FORCE`d, so a query without a tenant context returns zero rows.
 - `Tests\TestCase` refuses to run as a role that bypasses RLS, because the tenancy invariants would pass vacuously.
 
+## Deployment
+
+Deploy with direct connections or session-mode pooling only; transaction-mode PgBouncer is unsupported until SET LOCAL per request is implemented (LATER). The tenant id is a session-level Postgres setting (docs/DECISIONS.md D-02).
+
 ## Notes
 
 - `App\Modules\...` is covered by the default `App\` PSR-4 mapping.

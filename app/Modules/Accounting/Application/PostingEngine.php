@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application;
 
+use App\Modules\Accounting\Application\Posting\DatabaseRuleViolation;
+use App\Modules\Accounting\Application\Posting\EventPayloadValidator;
 use App\Modules\Accounting\Application\Posting\JournalDraftBuilder;
 use App\Modules\Accounting\Application\Posting\JournalWriter;
 use App\Modules\Accounting\Application\Posting\PostingContextLoader;
@@ -38,8 +40,9 @@ final class PostingEngine
     /**
      * Claim and post in ONE transaction, so any exception rolls the event back to `queued` and a
      * crashed worker never leaves it stuck in `posting`. Outcomes (design §8.4): business failure →
-     * `failed` with reason, no exception; transient DB error → rethrown for the queue to retry;
-     * anything else → `failed` with an UNEXPECTED reason and UnexpectedPostingException.
+     * `failed` with reason, no exception (a kernel trigger rejection counts, D-10); transient DB error →
+     * rethrown for the queue to retry; anything else → `failed` with an UNEXPECTED reason and
+     * UnexpectedPostingException.
      *
      * @return list<Journal> journals created (one per book); empty when nothing was posted
      */
@@ -55,6 +58,12 @@ final class PostingEngine
             if ($this->transientFailures->isTransient($e)) {
                 throw $e;
             }
+            $ruleViolation = DatabaseRuleViolation::reasonCode($e);
+            if ($ruleViolation !== null) {
+                $this->markFailed($eventId, $ruleViolation.': '.$e->getMessage());
+
+                return [];
+            }
             $this->markFailed($eventId, 'UNEXPECTED: '.$e::class.': '.$e->getMessage());
 
             throw UnexpectedPostingException::forEvent($eventId, $e);
@@ -68,6 +77,7 @@ final class PostingEngine
             return [];
         }
         $event = AccountingEvent::query()->findOrFail($eventId);
+        EventPayloadValidator::assertValid($event->event_type, $event->payload);
         $rule = $this->rules->resolve($event->event_type, $event->effective_date, $event->payload, $event->dimensions);
 
         $batch = JournalBatch::query()->create(['entity_id' => $event->entity_id, 'accounting_event_id' => $event->id, 'created_at' => now()]);

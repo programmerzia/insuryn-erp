@@ -28,6 +28,8 @@ return new class extends Migration
         // adding lines afterwards, so deferral could never admit a balancing line. Immediate checking
         // rejects at the posting statement (a QueryException the posting transaction can roll back)
         // instead of at COMMIT. Still DEFERRABLE for callers that SET CONSTRAINTS explicitly.
+        // D-01 (accepted): every line MUST be inserted before the journal's status becomes 'posted';
+        // JournalWriter inserts the draft journal, then its lines, then flips the status.
         DB::unprepared(<<<'SQL'
 CREATE OR REPLACE FUNCTION assert_journal_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE

@@ -16,6 +16,9 @@ Read `docs/design-package-v1.md` before writing code. `docs/spec-v2.md` is produ
 9. Maker ≠ checker (SoD) on refunds, claim payments, manual journals, commission payouts.
 10. Dependency direction: Platform ← Accounting ← (Insurance | Finance | People | Compliance). `App\Modules\Accounting` must not reference Policy/Claim/Commission/Employee.
 
+## Deployment constraints
+- Deploy with direct connections or session-mode pooling only; transaction-mode PgBouncer is unsupported until SET LOCAL per request is implemented (LATER). (D-02: the tenant id is a session-level Postgres setting.)
+
 ## Conventions
 - PHP 8.4, `declare(strict_types=1)`, PHPStan level 8, readonly value objects, enums for statuses.
 - Module layout: `app/Modules/<Context>/{Domain,Application,Infrastructure,Http}`.
