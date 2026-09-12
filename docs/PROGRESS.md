@@ -35,7 +35,7 @@ code and in the register below, configurable.
 | 1A.1 | Party, roles, bank accounts, agents | done | see git log |
 | 1A.2 | Product + versions | done | see git log |
 | 1A.3 | Policy lifecycle | done | see git log |
-| 1A.4 | Installments + earning batch | pending | |
+| 1A.4 | Installments + earning batch | done | see git log |
 | 1A.5 | Receipts, allocations, suspense, refunds | pending | |
 | 1A.6 | Bank | pending | |
 | 1A.7 | Commission | pending | |
@@ -320,3 +320,26 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   lapse/reinstate/renew and invalid transitions, endorsement journal, §4.4 cancellation amounts and journal, D-06 flag off, missing tax
   rate, API + permissions); golden tests for the new rule. Figures cross-checked with an independent exact-fraction calculation.
 - Result: 201 tests green, PHPStan 0 errors.
+
+### 1A.4 — Installments + earning batch — done
+- `premium_earning_ledger` (migration `2026_09_14_000004`, tenant + RLS): unique (policy, period, kind), kind = `scheduled` |
+  `cancellation_catch_up`. Extension of the design's unique(policy, period): a catch-up may land in an already-earned period.
+- `Insurance\Policy\Application\PremiumEarning\PremiumEarningRun::run(periodId)`: open periods only (`PERIOD_NOT_OPEN` otherwise, so the
+  ledger never records earning the GL would reject); policies issued/active/expired/lapsed/renewed on cover in the period earn the
+  schedule amount for that calendar month; ledger row + `PREMIUM_EARNED` event (key `PREMIUM_EARNED:{policy_id}:{period_id}`) in one
+  transaction; `insertOrIgnore` makes reruns insert and post nothing. Chunked 500 policies.
+- `CatchUpEarningOnCancellation` (listener on `PolicyCancelled`, same transaction): posts earned-to-date − Σ ledger in the cancellation
+  period (negative when a month was earned in full but cover stopped inside it). Result: the policy's unearned premium GL balance is 0.
+- `PremiumEarningJob` (batch queue, nightly 01:00, per tenant): `activateDue`, `expireDue`, then earns every open period that has ended
+  (current period is not earned early). Schedule registered in `routes/console.php` with the outbox relay (every second) and the
+  reservation sweeper (every 15 min). New `Insurance\Providers\InsuranceServiceProvider` wires listeners.
+- `InstallmentQuery::overdue(entity, asOf)`: unpaid installments past due with outstanding and days overdue.
+- `Accounting\Application\Queries\FiscalPeriodQuery` (+ `FiscalPeriodView`): how business modules read periods (arch rule).
+- Interpretation: a lapsed policy keeps earning until cancelled (it is still on the books); monthly earning months are credited in the
+  calendar month they end; daily_365 uses actual cover days so leap-year terms stay exact.
+- Tests: `tests/Unit/Insurance/EarningScheduleTest.php` — property test over 300 seeded random policies (both methods, optional
+  endorsement increase/decrease): Σ = net, full earning after expiry, zero before inception, monotonic and bounded; §4.3 worked
+  example; month-end crediting. `tests/Feature/Insurance/PremiumEarningTest.php` — full-term Σ ledger = net with 12 events and GL
+  unearned 0 (both methods), rerun no-op, no earning before cover/for quotes, cancellation catch-up (positive and negative) leaves GL
+  unearned 0, nightly job earns ended periods only and activates policies, overdue installments, locked period refused.
+- Result: 811 tests green (600 property cases), PHPStan 0 errors.

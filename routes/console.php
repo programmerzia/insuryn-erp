@@ -1,8 +1,13 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+declare(strict_types=1);
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+use App\Modules\Accounting\Infrastructure\Jobs\OutboxRelayJob;
+use App\Modules\Insurance\Policy\Infrastructure\Jobs\PremiumEarningJob;
+use App\Modules\Platform\Numbering\ReservationSweeperJob;
+use Illuminate\Support\Facades\Schedule;
+
+// Design §8.5 background jobs. Each job loops over tenants itself (D-07).
+Schedule::job(new OutboxRelayJob(), 'posting')->everySecond()->withoutOverlapping();
+Schedule::job(new ReservationSweeperJob())->everyFifteenMinutes();
+Schedule::job(new PremiumEarningJob(), 'batch')->dailyAt('01:00')->withoutOverlapping();
