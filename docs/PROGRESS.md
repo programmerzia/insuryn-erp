@@ -42,7 +42,7 @@ code and in the register below, configurable.
 | 1A.8 | Reconcilers | done | see git log |
 | 1A.9 | Month-end close | done | see git log |
 | 1A.10 | Reports | done | see git log |
-| 1B.1 | Claims | pending | |
+| 1B.1 | Claims | done | see git log |
 | 1B.2 | Claims reconciler + close task 5 | pending | |
 | 1B.3 | Claims reports | pending | |
 
@@ -526,3 +526,38 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   an earlier as-of; suspense and commission drill; P&L premium income = earning ledger for the month, account activity reconciles to the
   movement and drills to journals; balance sheet balances and receivable equals GL; every endpoint 403 without and 200 with `reports.financial`.
 - Result: 859 tests green, PHPStan 0 errors.
+
+### 1B.1 — Claims — done
+- Migration `2026_09_14_000009_create_claims_tables` (all tenant + forced RLS): `claims` (number `CLM-<FY>-nnnnnn` per branch, loss/report
+  dates, status per §5.5, current `reserve_minor` + `reserve_version`), `claim_reserves` (append-only history: version, new total, delta,
+  kind reserve|adjustment|close_release|reject_release, reason, date — trigger `claim_reserves_append_only` refuses UPDATE/DELETE),
+  `claim_payments` (pending_approval → approved → release_requested → release_pending_approval → paid; rejected), `claim_recoveries`.
+- New posting rule `resources/posting-rules/CLAIM_CLOSED.default.json` (§4.7: DR claims_outstanding / CR claims_expense `payload.release`,
+  key `CLAIM_CLOSED:{claim_id}:{reserve_version}`) and golden fixture `tests/Fixtures/golden/07b_claim_closed.json` (existing fixtures untouched).
+- Module `app/Modules/Insurance/Claims`:
+  - `ClaimService`: `register(policy, lossDate, description, actor, reportedOn)` (`claim.register`; policy must have been issued and the loss
+    fall in cover — inception to expiry, or to the day before a cancellation — `POLICY_NOT_ON_COVER`, `LOSS_OUTSIDE_COVER`,
+    `REPORTED_BEFORE_LOSS`); `reserve(claim, newTotal, reason, actor, on)` (`claim.reserve`; first → `CLAIM_RESERVED`
+    `{claim_id}:1`, later → `CLAIM_RESERVE_ADJUSTED` delta ±; `RESERVE_UNCHANGED`, `RESERVE_BELOW_APPROVED`); `close` (`claim.close`,
+    from approved|paid, `PAYMENTS_OUTSTANDING` while a payment is unsettled; releases reserve − approved as a `close_release` version posting
+    `CLAIM_CLOSED` → Σ claims_outstanding per claim = 0); `reject` (from registered|reserved, reason, releases the reserve with
+    `CLAIM_RESERVE_ADJUSTED`); `reopen` (closed → reserved; waits for a `claim_reopen` approval policy when one matches); `recover`
+    (after payment, `CLAIM_RECOVERED`).
+  - `ClaimPaymentService`: `approve(claim, amount, payee, actor, on)` (`claim.approve`; SodGuard claim.reserve ✕ claim.approve on the claim;
+    `APPROVAL_EXCEEDS_RESERVE` against reserve − committed; `claim_payment` approval policy by amount → waits, else immediate; posts
+    `CLAIM_APPROVED:{claim_payment_id}`), `requestRelease` (`claim.pay_request`, optional bank account), `release(payment, actor, paidOn)`
+    (`claim.pay_release`; SodGuard claim.pay_request ✕ claim.pay_release on the payment; `claim_payment_release` approval policy by amount →
+    waits, else posts `CLAIM_PAID:{claim_payment_id}` on the paid date). Final approvers pass the claim SoD check too. Rejected approvals:
+    payment rejected; rejected release: back to approved.
+  - `ClaimReserveBook` (history + event per change), `ClaimAccountingEvents` (dims = policy dims + claim; bank override when a bank account
+    is given), approval handlers registered in `InsuranceServiceProvider::boot`.
+- API (`/api/insurance`): `POST claims`, `GET claims/{id}` (with reserves and payments), `POST claims/{id}/reserve|close|reject|reopen|recover`,
+  `POST claims/{id}/payments`, `POST claim-payments/{id}/request-release|release`.
+- Interpretations: `reserve` takes the new total (§4.6 "adjusted to 250,000"); the design's `kind='adjustment', corrects_journal_id=first`
+  for reserve adjustments is not applied (events post system journals; the reserve history links versions instead); recoveries use
+  `claim.pay_request` (no recovery permission in §7.1); reject and reopen use `claim.approve`; reserve changes are allowed while approved or
+  paid (partial payments) but never below the committed amount.
+- Tests `tests/Feature/Insurance/ClaimsTest.php`: full §4.6/§4.7 lifecycle with every journal, keys, history and Σ outstanding 0; history
+  immutable in the DB; decrease mirror lines and limits; registration cover rules incl. cancellation; SoD on approve and release; approval
+  limits at approve and pay via `approval_policies`; recovery rules, close without release, reopen then adjust, reject releases reserve; API.
+- Result: 868 tests green (incl. new golden fixture), PHPStan 0 errors.

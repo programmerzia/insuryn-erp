@@ -1,0 +1,1 @@
+{ "event_type": "CLAIM_CLOSED", "payload": {"release":7000000}, "dimensions": {"branch":"B1","product":"P1","product_code":"MOTOR","lob":"motor","channel":"agent","policy":"POL1","customer":"CU1","agent":"AG1","claim":"CL1"}, "expected": [["claims_outstanding","debit",7000000],["claims_expense","credit",7000000]] }

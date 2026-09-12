@@ -6,6 +6,7 @@ use App\Modules\Accounting\Http\Controllers\FinancialReportController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\PeriodCloseController;
 use App\Modules\Finance\Bank\Http\Controllers\BankController;
+use App\Modules\Insurance\Claims\Http\Controllers\ClaimController;
 use App\Modules\Insurance\Collections\Http\Controllers\ReceiptController;
 use App\Modules\Insurance\Collections\Http\Controllers\RefundController;
 use App\Modules\Insurance\Collections\Http\Controllers\SuspenseController;
@@ -57,6 +58,14 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund');
     Route::post('commission-plans', [CommissionController::class, 'storePlan']);
     Route::get('agents/{agent}/commission-statement', [CommissionController::class, 'statement'])->whereUuid('agent');
+    Route::post('claims', [ClaimController::class, 'store']);
+    Route::get('claims/{claim}', [ClaimController::class, 'show'])->whereUuid('claim');
+    foreach (['reserve', 'close', 'reject', 'reopen', 'recover'] as $action) {
+        Route::post("claims/{claim}/{$action}", [ClaimController::class, $action])->whereUuid('claim');
+    }
+    Route::post('claims/{claim}/payments', [ClaimController::class, 'approvePayment'])->whereUuid('claim');
+    Route::post('claim-payments/{payment}/request-release', [ClaimController::class, 'requestRelease'])->whereUuid('payment');
+    Route::post('claim-payments/{payment}/release', [ClaimController::class, 'release'])->whereUuid('payment');
 });
 
 Route::middleware('auth')->prefix('finance')->group(function (): void {

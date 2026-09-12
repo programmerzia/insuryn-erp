@@ -1,0 +1,18 @@
+{
+  "code": "CLAIM_CLOSED.default",
+  "version": 1,
+  "event_type": "CLAIM_CLOSED",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch","product","policy","claim"], "inherit_from_event": true },
+  "lines": [
+    { "role": "claims_outstanding", "side": "debit",  "amount": "payload.release" },
+    { "role": "claims_expense",     "side": "credit", "amount": "payload.release" }
+  ],
+  "validation": ["amount > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "CLAIM_CLOSED:{claim_id}:{reserve_version}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}
