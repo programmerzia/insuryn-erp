@@ -31,7 +31,7 @@ final class DemoTenantSeeder extends Seeder
             $bookId = (string) Str::uuid7();
             DB::table('books')->insert(['id' => $bookId, 'tenant_id' => $tenantId, 'code' => 'LOCAL', 'name' => 'Local GAAP', 'is_primary' => true]);
 
-            $start = CarbonImmutable::create(2026, 7, 1);
+            $start = CarbonImmutable::parse('2026-07-01');
             for ($p = 1; $p <= 12; $p++) {
                 $s = $start->addMonths($p - 1);
                 DB::table('fiscal_periods')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'entity_id' => $entityId, 'book_id' => $bookId,

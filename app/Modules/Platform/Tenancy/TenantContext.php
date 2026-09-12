@@ -43,7 +43,12 @@ final class TenantContext
         return self::$tenantId !== null;
     }
 
-    /** @template T @param callable():T $fn @return T */
+    /**
+     * @template T
+     *
+     * @param callable(): T $fn
+     * @return T
+     */
     public static function run(string $tenantId, callable $fn): mixed
     {
         $previous = self::$tenantId;
