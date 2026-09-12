@@ -40,10 +40,10 @@ it('rejects a reversal into a soft-locked period without the permission and leav
     asTenant($this->ctx['tenant_id'], function (): void {
         lockSeptember('soft_locked');
 
-        expect(fn () => app(ReversalService::class)->reverse($this->original, CarbonImmutable::parse('2026-09-20'), 'soft lock check', (string) Str::uuid7()))
-            ->toThrow(fn (PostingFailedException $e) => expect($e->reasonCode)->toBe('PERIOD_SOFT_LOCKED'));
+        $failure = thrownBy(fn () => app(ReversalService::class)->reverse($this->original, CarbonImmutable::parse('2026-09-20'), 'soft lock check', (string) Str::uuid7()), PostingFailedException::class);
+        expect($failure->reasonCode)->toBe('PERIOD_SOFT_LOCKED');
 
-        $original = Journal::query()->findOrFail($this->original->id);
+        $original = Journal::query()->findOrFail((string) $this->original->id);
         expect($original->status->value)->toBe('posted')->and($original->reversed_by_journal_id)->toBeNull()
             ->and(Journal::query()->count())->toBe(1);
     });
@@ -56,7 +56,7 @@ it('reverses into a soft-locked period when the actor may post there', function 
         $reversal = app(ReversalService::class)->reverse($this->original, CarbonImmutable::parse('2026-09-20'), 'soft lock check', (string) Str::uuid7(), true);
 
         expect($reversal->status->value)->toBe('posted')->and($reversal->reverses_journal_id)->toBe($this->original->id)
-            ->and(Journal::query()->findOrFail($this->original->id)->status->value)->toBe('reversed');
+            ->and(Journal::query()->findOrFail((string) $this->original->id)->status->value)->toBe('reversed');
     });
 });
 
@@ -64,9 +64,9 @@ it('rejects a reversal into a locked period even with the soft-lock permission',
     asTenant($this->ctx['tenant_id'], function (): void {
         lockSeptember('locked');
 
-        expect(fn () => app(ReversalService::class)->reverse($this->original, CarbonImmutable::parse('2026-09-20'), 'locked check', (string) Str::uuid7(), true))
-            ->toThrow(fn (PostingFailedException $e) => expect($e->reasonCode)->toBe('PERIOD_CLOSED'));
+        $failure = thrownBy(fn () => app(ReversalService::class)->reverse($this->original, CarbonImmutable::parse('2026-09-20'), 'locked check', (string) Str::uuid7(), true), PostingFailedException::class);
+        expect($failure->reasonCode)->toBe('PERIOD_CLOSED');
 
-        expect(Journal::query()->findOrFail($this->original->id)->status->value)->toBe('posted')->and(Journal::query()->count())->toBe(1);
+        expect(Journal::query()->findOrFail((string) $this->original->id)->status->value)->toBe('posted')->and(Journal::query()->count())->toBe(1);
     });
 });

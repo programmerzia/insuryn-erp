@@ -6,6 +6,7 @@ use App\Modules\Platform\Tenancy\TenantContext;
 use Database\Seeders\AccountRolesSeeder;
 use Database\Seeders\DemoTenantSeeder;
 use Database\Seeders\PermissionsSeeder;
+use PHPUnit\Framework\AssertionFailedError;
 
 /*
  | Tests run against the REAL Postgres (RLS + triggers are the subject under test).
@@ -35,4 +36,27 @@ function seedDemoTenant(string $slug = 'demo'): array
 function asTenant(string $tenantId, callable $fn): mixed
 {
     return TenantContext::run($tenantId, $fn);
+}
+
+/**
+ * The exception of $type thrown by $operation, for asserting on its details. Fails the test when
+ * nothing is thrown; any other exception propagates unchanged.
+ *
+ * @template TException of Throwable
+ *
+ * @param class-string<TException> $type
+ * @return TException
+ */
+function thrownBy(callable $operation, string $type): Throwable
+{
+    try {
+        $operation();
+    } catch (Throwable $thrown) {
+        if ($thrown instanceof $type) {
+            return $thrown;
+        }
+        throw $thrown;
+    }
+
+    throw new AssertionFailedError("Expected {$type} to be thrown.");
 }

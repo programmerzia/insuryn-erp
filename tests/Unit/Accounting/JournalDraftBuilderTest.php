@@ -32,7 +32,10 @@ function ruleWithLines(array $lines, array $requiredDimensions = []): PostingRul
 
 const ACCOUNTS_BY_ROLE = ['bank_main' => 'acc-bank', 'premium_receivable' => 'acc-receivable', 'claims_expense' => 'acc-claims', 'claims_outstanding' => 'acc-reserve'];
 
-/** @return list<array{int, string, string, int}> */
+/**
+ * @param list<DraftLine> $lines
+ * @return list<array{int, string, string, int}>
+ */
 function summarise(array $lines): array
 {
     return array_map(fn (DraftLine $l): array => [$l->lineNo, $l->roleCode ?? '', $l->side->value, $l->amountMinor], $lines);
@@ -84,8 +87,8 @@ it('refuses an unbalanced draft with UNBALANCED', function (): void {
         ['role' => 'premium_receivable', 'side' => 'credit', 'amount' => 'sub(payload.amount, 1)'],
     ]);
 
-    expect(fn () => draftBuilder()->build($rule, ['amount' => 1_000], [], 'BDT', ACCOUNTS_BY_ROLE))
-        ->toThrow(fn (UnbalancedJournalException $e) => expect($e->reasonCode)->toBe('UNBALANCED'));
+    $failure = thrownBy(fn () => draftBuilder()->build($rule, ['amount' => 1_000], [], 'BDT', ACCOUNTS_BY_ROLE), UnbalancedJournalException::class);
+    expect($failure->reasonCode)->toBe('UNBALANCED');
 });
 
 it('refuses a draft without lines with EMPTY_JOURNAL', function (): void {
@@ -94,8 +97,8 @@ it('refuses a draft without lines with EMPTY_JOURNAL', function (): void {
         ['role' => 'premium_receivable', 'side' => 'credit', 'amount' => 'payload.amount'],
     ]);
 
-    expect(fn () => draftBuilder()->build($rule, ['amount' => 0], [], 'BDT', ACCOUNTS_BY_ROLE))
-        ->toThrow(fn (PostingFailedException $e) => expect($e->reasonCode)->toBe('EMPTY_JOURNAL'));
+    $failure = thrownBy(fn () => draftBuilder()->build($rule, ['amount' => 0], [], 'BDT', ACCOUNTS_BY_ROLE), PostingFailedException::class);
+    expect($failure->reasonCode)->toBe('EMPTY_JOURNAL');
 });
 
 it('fails with UNMAPPED_ROLE when a line role has no account', function (): void {
@@ -104,8 +107,8 @@ it('fails with UNMAPPED_ROLE when a line role has no account', function (): void
         ['role' => 'unearned_premium', 'side' => 'credit', 'amount' => 'payload.amount'],
     ]);
 
-    expect(fn () => draftBuilder()->build($rule, ['amount' => 10], [], 'BDT', ACCOUNTS_BY_ROLE))
-        ->toThrow(fn (PostingFailedException $e) => expect($e->reasonCode)->toBe('UNMAPPED_ROLE')->and($e->getMessage())->toContain('unearned_premium'));
+    $failure = thrownBy(fn () => draftBuilder()->build($rule, ['amount' => 10], [], 'BDT', ACCOUNTS_BY_ROLE), PostingFailedException::class);
+    expect($failure->reasonCode)->toBe('UNMAPPED_ROLE')->and($failure->getMessage())->toContain('unearned_premium');
 });
 
 it('fails with DIMENSION_MISSING when a required dimension is absent or blank', function (array $dimensions): void {
@@ -114,8 +117,8 @@ it('fails with DIMENSION_MISSING when a required dimension is absent or blank', 
         ['role' => 'premium_receivable', 'side' => 'credit', 'amount' => 'payload.amount'],
     ], ['branch', 'policy']);
 
-    expect(fn () => draftBuilder()->build($rule, ['amount' => 10], $dimensions, 'BDT', ACCOUNTS_BY_ROLE))
-        ->toThrow(fn (PostingFailedException $e) => expect($e->reasonCode)->toBe('DIMENSION_MISSING')->and($e->getMessage())->toContain('policy'));
+    $failure = thrownBy(fn () => draftBuilder()->build($rule, ['amount' => 10], $dimensions, 'BDT', ACCOUNTS_BY_ROLE), PostingFailedException::class);
+    expect($failure->reasonCode)->toBe('DIMENSION_MISSING')->and($failure->getMessage())->toContain('policy');
 })->with([
     'absent' => [['branch' => 'b1']],
     'blank' => [['branch' => 'b1', 'policy' => '']],

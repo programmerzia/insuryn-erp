@@ -80,8 +80,8 @@ it('marks an unexpected error as failed, reports the exception type and fails lo
         useRuleThatCrashesOnStringAmounts($this->rulesDir);
         $event = ($this->submit)('TYPE_ERROR', ['amount' => 'x'], 'unexpected');
 
-        expect(fn () => app(PostingEngine::class)->post($event->id))
-            ->toThrow(fn (UnexpectedPostingException $e) => expect($e->getPrevious())->toBeInstanceOf(TypeError::class));
+        $unexpected = thrownBy(fn () => app(PostingEngine::class)->post($event->id), UnexpectedPostingException::class);
+        expect($unexpected->getPrevious())->toBeInstanceOf(TypeError::class);
 
         $event->refresh();
         expect($event->status->value)->toBe('failed')->and($event->failure_reason)->toStartWith('UNEXPECTED: TypeError');
@@ -119,8 +119,8 @@ it('leaves the event queued and rethrows when the claim hits a lock timeout, so 
     DB::statement("set lock_timeout = '200ms'");
     try {
         asTenant($this->ctx['tenant_id'], function () use ($event): void {
-            expect(fn () => app(PostingEngine::class)->post($event->id))
-                ->toThrow(fn (QueryException $e) => expect($e->errorInfo[0] ?? null)->toBe('55P03'));
+            $lockTimeout = thrownBy(fn () => app(PostingEngine::class)->post($event->id), QueryException::class);
+            expect($lockTimeout->errorInfo[0] ?? null)->toBe('55P03');
         });
     } finally {
         DB::statement('reset lock_timeout');

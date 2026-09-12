@@ -13,18 +13,6 @@ function postingExpressions(): ExpressionLanguage
     return new ExpressionLanguage(null, [new PostingFunctionProvider()]);
 }
 
-/** Reason code of the posting failure raised by $operation, or null when it does not fail. */
-function postingFailureReason(callable $operation): ?string
-{
-    try {
-        $operation();
-    } catch (PostingFailedException $failure) {
-        return $failure->reasonCode;
-    }
-
-    return null;
-}
-
 it('evaluates rule amount expressions over the payload in minor units', function (): void {
     $amounts = new AmountEvaluator(postingExpressions());
     $payload = ['base' => 5_000_000, 'rate_bp' => 1_000, 'withholding_bp' => 500];
@@ -37,13 +25,13 @@ it('evaluates rule amount expressions over the payload in minor units', function
 it('fails the posting with PAYLOAD_FIELD_MISSING when an expression reads an absent payload field', function (): void {
     $amounts = new AmountEvaluator(postingExpressions());
 
-    expect(postingFailureReason(fn () => $amounts->evaluate('payload.amount', ['gross' => 1], [])))->toBe('PAYLOAD_FIELD_MISSING');
+    expect(thrownBy(fn () => $amounts->evaluate('payload.amount', ['gross' => 1], []), PostingFailedException::class)->reasonCode)->toBe('PAYLOAD_FIELD_MISSING');
 });
 
 it('fails the posting with DIMENSION_MISSING when an expression reads an absent dimension', function (): void {
     $scope = ExpressionScope::forEvent([], ['branch' => 'b1']);
 
-    expect(postingFailureReason(fn () => postingExpressions()->evaluate('dims.policy', $scope)))->toBe('DIMENSION_MISSING');
+    expect(thrownBy(fn () => postingExpressions()->evaluate('dims.policy', $scope), PostingFailedException::class)->reasonCode)->toBe('DIMENSION_MISSING');
 });
 
 it('lets the null-coalescing operator treat absent fields as null', function (): void {
@@ -55,7 +43,7 @@ it('lets the null-coalescing operator treat absent fields as null', function ():
 it('rejects non-integer amounts because amounts are minor units', function (): void {
     $amounts = new AmountEvaluator(postingExpressions());
 
-    expect(postingFailureReason(fn () => $amounts->evaluate('payload.amount', ['amount' => '1000'], [])))->toBe('AMOUNT_NOT_INTEGER');
+    expect(thrownBy(fn () => $amounts->evaluate('payload.amount', ['amount' => '1000'], []), PostingFailedException::class)->reasonCode)->toBe('AMOUNT_NOT_INTEGER');
 });
 
 it('exposes nested payload objects as scopes', function (): void {
