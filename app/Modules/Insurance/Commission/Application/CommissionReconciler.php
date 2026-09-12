@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Design §6.1 commission subledger → commission_payable: per agent, Σ (amount − withholding) of entries dated on or before the date and
  * not paid. Withholding is owed to the tax authority (commission_withholding_payable), not to the agent.
+ *
+ * ASSUMPTION: A-8 — "not paid" is the entry's current status (payouts, and so payout dates, are not built yet).
  */
 final class CommissionReconciler implements SubledgerReconciler
 {

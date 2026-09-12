@@ -70,10 +70,18 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 - HTTP error contract: `PermissionDenied` → 403 `{reason: PERMISSION_DENIED, permission}`, `SodViolation` → 403 `{reason, rule}`,
   business rule exceptions (Accounting, Approval, Numbering, `Platform\Exceptions\BusinessRuleViolation`) → 422 `{reason}`.
 - Business contexts (Insurance, Finance, People) may use Platform and `App\Modules\Accounting\Application` only (arch test).
+- Kernel extension points (container tags): `SubledgerReconciler` (premium, suspense, commission, claims) and `CloseTaskCheck` (premium earning,
+  suspense review, bank reconciliation); `payload.account_overrides` for `erp.posting.overridable_roles` (bank accounts' GL accounts).
+- Permission use where §7.1 names none (run 1A.5–1B.3): receipts with allocations also need `receipt.allocate`; refund reject under
+  `receipt.refund_release`; suspense ageing API under `receipt.allocate`; commission statement and all `/api/reports` under `reports.financial`;
+  close tasks use their owner's working permission (see 1A.9); claim recoveries under `claim.pay_request`; claim reject/reopen under `claim.approve`.
+- Approval object types added: `claim_payment` (approve), `claim_payment_release` (pay), `claim_reopen` — configure limits as `approval_policies`
+  rows (A-2); refunds use maker ≠ checker through SodGuard only.
+- Reports compute P&L/BS income and expense cumulatively (no year-end close into retained earnings yet); loss ratio incurred is net of recoveries.
 
 ## Disputed tests
 
-None.
+None. (Slice 1B.2 extended — never weakened — three expectations of 1A.8/1A.9 tests because it adds the claims subledger and close task 5; see 1B.2.)
 
 ## Blocked slices
 
@@ -82,8 +90,16 @@ None.
 ## Open questions (carried, never guessed)
 
 From design "OPEN questions": 1 carrier vs broker/MGA; 2 tax on premium and cancellation refunds (see A-1);
-3 approval thresholds and role mapping; 4 earning method per product and short-rate table; 5 regulator
-report formats; 6 opening balance source/import format.
+3 approval thresholds and role mapping (see A-2; also the CFO approval on the period lock, 1A.9); 4 earning method per product and
+short-rate table (see A-4); 5 regulator report formats; 6 opening balance source/import format (see A-3).
+
+Unknowns met in Phase 1A/1B that the design does not tag OPEN but does not settle either (each handled conservatively and registered):
+bank statement format (A-5); commission tiers/term-year rules/hierarchy overrides and plan precedence (A-6, A-7); dated history for
+commission payouts and per-installment payments/credits (A-8, A-9). For the customer: which commission payout workflow (`commission.approve`
+/ `commission.pay`) and claims reopen/limits policies to configure.
+
+State at end of run: all slices 0.0 → 1B.3 done; nothing partial or blocked; 886 tests green on PHP 8.5 and PHP 8.4, PHPStan level 8 clean, vue-tsc and
+vite build green.
 
 ## Slice details
 

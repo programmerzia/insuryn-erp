@@ -28,7 +28,7 @@ use Illuminate\Support\Str;
  * (amount < value), kinds (attributes.kind in list). When several policies match, the strictest wins:
  * most steps, then highest min_amount_minor.
  *
- * ASSUMPTION: approval thresholds and who approves are unknown (design OPEN #3), so no policies are seeded;
+ * ASSUMPTION: A-2 — approval thresholds and who approves are unknown (design OPEN #3), so no policies are seeded;
  * callers fall back to one checker ≠ maker. Configure thresholds as approval_policies rows.
  */
 final class ApprovalService

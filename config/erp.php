@@ -22,7 +22,7 @@ return [
     'close' => ['suspense_max_age_days' => 30],
 
     /*
-     * ASSUMPTION: design OPEN #6 — whether opening balances come from an existing system, and in which
+     * ASSUMPTION: A-3 — design OPEN #6 — whether opening balances come from an existing system, and in which
      * format, is unknown. Imports accept CSV with a header row; these are the header names expected for
      * each field (rename them here to match a source system's export). Amounts are major units with a
      * dot decimal separator ("1234.56").

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
  * Design §6.1 premium subledger → premium_receivable: per policy, premium billed (issue and endorsement deltas) less receivable credited on
  * cancellation less premium allocated, each counted from the date its accounting event posts on. Equals Σ(installment amount − paid −
  * cancelled) once every dated movement has happened.
+ *
+ * ASSUMPTION: A-8 — subledger balances are rebuilt as of the date from dated business rows (accounting_date, posted_on).
  */
 final class PremiumReconciler implements SubledgerReconciler
 {
