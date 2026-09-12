@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Http\Controllers\ImportController;
+use App\Modules\Insurance\Collections\Http\Controllers\ReceiptController;
+use App\Modules\Insurance\Collections\Http\Controllers\RefundController;
+use App\Modules\Insurance\Collections\Http\Controllers\SuspenseController;
 use App\Modules\Insurance\Party\Http\Controllers\AgentController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyController;
@@ -36,4 +39,11 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     foreach (['issue', 'endorse', 'cancel', 'lapse', 'reinstate', 'renew'] as $action) {
         Route::post("policies/{policy}/{$action}", [PolicyController::class, $action])->whereUuid('policy');
     }
+    Route::post('receipts', [ReceiptController::class, 'store']);
+    Route::get('receipts/{receipt}', [ReceiptController::class, 'show'])->whereUuid('receipt');
+    Route::get('suspense/ageing', [SuspenseController::class, 'ageing']);
+    Route::post('suspense-items/{suspenseItem}/allocate', [SuspenseController::class, 'allocate'])->whereUuid('suspenseItem');
+    Route::post('policies/{policy}/refunds', [RefundController::class, 'store'])->whereUuid('policy');
+    Route::post('refunds/{refund}/release', [RefundController::class, 'release'])->whereUuid('refund');
+    Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund');
 });

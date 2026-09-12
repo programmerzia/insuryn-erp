@@ -36,7 +36,7 @@ code and in the register below, configurable.
 | 1A.2 | Product + versions | done | see git log |
 | 1A.3 | Policy lifecycle | done | see git log |
 | 1A.4 | Installments + earning batch | done | see git log |
-| 1A.5 | Receipts, allocations, suspense, refunds | pending | |
+| 1A.5 | Receipts, allocations, suspense, refunds | done | see git log |
 | 1A.6 | Bank | pending | |
 | 1A.7 | Commission | pending | |
 | 1A.8 | Reconcilers | pending | |
@@ -343,3 +343,32 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   unearned 0 (both methods), rerun no-op, no earning before cover/for quotes, cancellation catch-up (positive and negative) leaves GL
   unearned 0, nightly job earns ended periods only and activates policies, overdue installments, locked period refused.
 - Result: 811 tests green (600 property cases), PHPStan 0 errors.
+
+### 1A.5 — Receipts, allocations, suspense, refunds — done
+- Migration `2026_09_14_000005_create_collections_tables` (all tenant + forced RLS): `receipts` (unique number per tenant, `value_date`
+  business date, `bank_account_id` nullable until 1A.6), `receipt_allocations` (+ `policy_id`, `suspense_item_id` for traceability),
+  `suspense_items` (+ `allocated_minor` so an item can be allocated in parts), `refunds` (requested → released | rejected).
+- Module `app/Modules/Insurance/Collections`:
+  - `ReceiptService::record(RecordReceiptRequest, actor)`: `receipt.create` (and `receipt.allocate` when the receipt carries
+    allocations), number `RCT-<FY>-nnnnnn` per branch from `DocumentNumberer`; each allocation pays down an installment and posts
+    `PREMIUM_RECEIVED` (key `PREMIUM_RECEIVED:{receipt_allocation_id}`, §4.2); any remainder becomes a suspense item and posts
+    `RECEIPT_RECORDED` (key `RECEIPT_RECORDED:{receipt_id}`, dims branch + receipt, §4.9). Refusals: `INVALID_AMOUNT`,
+    `ALLOCATION_EXCEEDS_RECEIPT`, `ALLOCATION_EXCEEDS_OUTSTANDING`, `CURRENCY_MISMATCH` — all before commit, nothing written.
+  - `SuspenseService::allocate(item, installment, amount, actor, on)`: `receipt.allocate`; posts `RECEIPT_ALLOCATED`
+    (key `RECEIPT_ALLOCATED:{receipt_allocation_id}`) on the later of `on` and the receipt value date; `SUSPENSE_NOT_OPEN`,
+    `ALLOCATION_EXCEEDS_SUSPENSE`. Receipt status follows remaining open suspense.
+  - `RefundService::request/release/reject`: `receipt.refund_request` then `receipt.refund_release` by someone else (SodGuard on the
+    refund's audit history, §7.3); release posts `REFUND_ISSUED` (key `REFUND_ISSUED:{refund_id}`, §4.4 event B) on the paid date.
+    Amount capped at Σ cancellation `refund_due` − refunds requested or released (`REFUND_EXCEEDS_DUE`). Rejection needs a reason and
+    frees the amount again.
+  - `SuspenseQuery::ageing(?entity, asOf)`: open suspense received on/before asOf, buckets 0-30 / 31-60 / 61-90 / 90+ days.
+  - Domain event `ReceiptAllocated` (both allocation paths, same transaction) for commission (1A.7).
+  - `CollectionsAccountingEvents` mapper: payloads carry `receipt_id`, `receipt_number`, `reference`, `bank_account_id` for bank matching.
+- API: `POST /api/insurance/receipts`, `GET receipts/{id}`, `GET suspense/ageing`, `POST suspense-items/{id}/allocate`,
+  `POST policies/{id}/refunds`, `POST refunds/{id}/release|reject`.
+- Interpretations: allocating at receipt time needs `receipt.allocate` as well as `receipt.create` (§7.2 branch officers create,
+  managers allocate); a refund reject is decided under `receipt.refund_release`; the suspense ageing endpoint needs `receipt.allocate`.
+- Tests `tests/Feature/Insurance/CollectionsTest.php`: §4.2 journal + key + installment paid; §4.9 suspense then two part allocations
+  (journals, statuses, over-allocation refused); split receipt; refusals write nothing; ageing buckets/days; refund SoD (requester
+  holding both permissions is blocked), cap, `REFUND_ISSUED` journal and date; reject frees the due; API permissions.
+- Result: 819 tests green, PHPStan 0 errors.
