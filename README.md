@@ -1,23 +1,27 @@
-# Insurance ERP — Phase 0 kernel skeleton
+# Insurance ERP — Phase 0 accounting kernel
 
-This is a **file overlay**, not a runnable app yet. Bootstrap on your PC:
+Laravel 13 · PHP 8.4 · PostgreSQL 17 with row-level security. Read `CONTEXT.md`, then `docs/design-package-v1.md`. Build order: §9.3.
+
+## Setup
 
 ```bash
-composer create-project laravel/laravel insurance-erp && cd insurance-erp
-# copy everything from this overlay into the project root (overwrite CONTEXT.md, tests/Pest.php, phpstan.neon, docker-compose.yml)
-composer require brick/money symfony/expression-language laravel/horizon laravel/socialite
-composer require --dev pestphp/pest pestphp/pest-plugin-laravel larastan/larastan
-# .env: DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_DATABASE=erp DB_USERNAME=erp_app DB_PASSWORD=erp
-#       MIGRATION_DB_USERNAME=erp_owner MIGRATION_DB_PASSWORD=erp   (see config/database note below)
-docker compose up -d
-php artisan migrate --seed
+composer install
+cp .env.example .env && php artisan key:generate
+docker compose up -d        # ERP_DB_PORT / ERP_REDIS_PORT override the published ports
+php artisan migrate --database=pgsql_migrations --seed
 ./vendor/bin/pest
 ./vendor/bin/phpstan analyse
 ```
 
-Notes
-- Default Laravel psr-4 `App\` → `app/` already covers `App\Modules\...`; no composer change needed.
-- Register `App\Modules\Platform\Http\Middleware\ResolveTenant` in `bootstrap/app.php` (web + api).
-- Migrations must run as the DB owner (`erp_owner`); the app runs as `erp_app` so RLS is enforced. Simplest: add a second `pgsql_migrations` connection in `config/database.php` using MIGRATION_DB_* and run `php artisan migrate --database=pgsql_migrations`.
-- Read `CONTEXT.md`, then `docs/design-package-v1.md`. Build order: §9.3.
-- Nothing here has been executed. Run migrations and `tests/Feature/Accounting/*` first; fix what trips.
+## Database roles
+
+- `database/init/01-roles.sql` creates two roles, neither of which is a superuser or can bypass RLS, and the `erp` and `erp_test` databases.
+- `erp_owner` owns the schema. It is used only for migrations (`--database=pgsql_migrations`, `MIGRATION_DB_*`) and by the test suite, which also runs migrations.
+- `erp_app` is the runtime role (`DB_USERNAME`). RLS is `FORCE`d, so a query without a tenant context returns zero rows.
+- `Tests\TestCase` refuses to run as a role that bypasses RLS, because the tenancy invariants would pass vacuously.
+
+## Notes
+
+- `App\Modules\...` is covered by the default `App\` PSR-4 mapping.
+- `ResolveTenant` runs on the `web` and `api` groups, after the session starts and before authentication.
+- Tests run against real Postgres and truncate between tests. The invariants are commit-time database behaviour, so they cannot run inside a rolled-back transaction.
