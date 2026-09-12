@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Infrastructure\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class OutboxRelayJob implements ShouldQueue, ShouldBeUnique
 {
+    use Queueable;
+
     public function handle(): void
     {
         DB::transaction(function (): void {

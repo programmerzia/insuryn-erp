@@ -6,15 +6,13 @@ namespace App\Modules\Accounting\Infrastructure\Jobs;
 
 use App\Modules\Accounting\Application\PostingEngine;
 use App\Modules\Platform\Jobs\TenantAware;
-use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
+use Illuminate\Foundation\Queue\Queueable;
 
 final class PostAccountingEventJob implements ShouldQueue, ShouldBeUnique
 {
-    use Queueable, InteractsWithQueue, SerializesModels, TenantAware;
+    use Queueable, TenantAware;
 
     public int $tries = 5;
 
