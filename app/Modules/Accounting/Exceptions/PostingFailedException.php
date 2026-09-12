@@ -4,12 +4,5 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Exceptions;
 
-use RuntimeException;
-
-final class PostingFailedException extends RuntimeException
-{
-    public function __construct(public readonly string $reasonCode, string $message = '')
-    {
-        parent::__construct($message !== '' ? $message : $reasonCode);
-    }
-}
+/** Reason codes: NO_RULE, AMBIGUOUS_RULE, PERIOD_MISSING, PERIOD_CLOSED, PERIOD_SOFT_LOCKED, UNMAPPED_ROLE, DIMENSION_MISSING, ... */
+final class PostingFailedException extends AccountingException {}
