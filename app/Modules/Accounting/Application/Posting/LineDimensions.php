@@ -38,6 +38,16 @@ final readonly class LineDimensions
         return new self(array_diff_key($values, array_flip(self::ROUTING_ONLY)));
     }
 
+    /**
+     * Dimensions entered directly on a line (manual and opening journals).
+     *
+     * @param array<string, mixed> $values dimension code → value
+     */
+    public static function fromValues(array $values): self
+    {
+        return new self(array_diff_key($values, array_flip(self::ROUTING_ONLY)));
+    }
+
     /** Exactly what a posted line stores, so a reversal mirrors its dimensions (§2.3). */
     public static function fromStoredLine(JournalLine $line): self
     {

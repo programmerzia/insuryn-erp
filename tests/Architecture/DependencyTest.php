@@ -28,5 +28,14 @@ arch('accounting domain does not depend on application or infrastructure')
     ->expect('App\Modules\Accounting\Domain')
     ->not->toUse(['App\Modules\Accounting\Application', 'App\Modules\Accounting\Infrastructure']);
 
+/** CONTEXT.md non-negotiable #4: only the posting engine's journal path writes journals. */
+arch('journal writer is used only by the kernel posting path')
+    ->expect('App\Modules\Accounting\Application\Posting\JournalWriter')
+    ->toOnlyBeUsedIn([
+        'App\Modules\Accounting\Application\PostingEngine',
+        'App\Modules\Accounting\Application\ReversalService',
+        'App\Modules\Accounting\Application\ManualJournals',
+    ]);
+
 arch('strict types everywhere')->expect('App')->toUseStrictTypes();
 arch('no floats in accounting')->expect('App\Modules\Accounting')->not->toUse(['floatval', 'round', 'number_format']);

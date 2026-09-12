@@ -29,7 +29,7 @@ code and in the register below, configurable.
 | 0.2 | Audit service | done | see git log |
 | 0.3 | Fiscal period service | done | see git log |
 | 0.4 | Permissions + SoD | done | see git log |
-| 0.5 | Manual journal + approvals | pending | |
+| 0.5 | Manual journal + approvals | done | see git log |
 | 0.6 | Read side + first UI | pending | |
 | 0.7 | Import wizard | pending | |
 | 1A.1 | Party, roles, bank accounts, agents | pending | |
@@ -53,6 +53,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | # | Slice | Assumption (conservative choice for an OPEN item) | Where / how to change |
 |---|---|---|---|
 | A-1 | 0.0 (D-06) | VAT on cancelled premium is refunded by default (`refund_tax_on_cancellation = true`); OPEN #2. | Lands with product versions (1A.2) and the cancellation mapper (1A.3). |
+| A-2 | 0.5 | Approval thresholds and role mapping are unknown (OPEN #3): no approval policies are seeded. Every manual journal and reversal still needs one checker ≠ maker holding `accounting.approve_journal`; thresholds/steps are data in `approval_policies`. | `ApprovalService` docblock (`ASSUMPTION:`); insert rows into `approval_policies` (object_type `journal`, `journal_reversal`, `fiscal_period_reopen`). |
 
 ## Disputed tests
 
@@ -173,3 +174,34 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   manage_users required).
 - Fresh `migrate --seed` verified on a scratch database.
 - Result: 146 tests green, PHPStan 0 errors.
+
+### 0.5 — Manual journal + approvals — done
+- Approval engine `App\Modules\Platform\Approvals\ApprovalService`: `request(objectType, objectId, ApprovalFacts, requestedBy, on, context)`
+  returns an approval id when an effective policy's condition matches (`min_amount_minor`, `max_amount_minor`, `kinds`;
+  strictest wins: most steps, then highest threshold), else null. `decide(approvalId, decider, Decision, reason)`:
+  step permission, decider ≠ requester (`MAKER_CHECKER`), one decision per person per approval (`APPROVER_ALREADY_DECIDED`),
+  `SodGuard` on the object, reason required to reject; audits `approval.decided` with the step permission; on final
+  approval/rejection calls the `ApprovalHandler` registered for the object type (`ApprovalHandlerRegistry`, registered in
+  `AccountingServiceProvider::boot`). Platform never depends on Accounting.
+- Manual journals `App\Modules\Accounting\Application\ManualJournals\ManualJournalService` (kinds manual | adjustment | opening):
+  `create` (permission, ≥2 lines, positive amounts, accounts of the entity and postable, balanced via `JournalDraft`, period not
+  locked) → `draft`; `submit` (maker only) → `pending_approval` + approval when a `journal` policy matches; `approve` → policy step
+  or single checker (`accounting.approve_journal`, checker ≠ maker, SodGuard) → `postApproved` through `JournalWriter::postDraft`
+  (soft-lock needs the approver's `accounting.post_in_soft_locked`); `reject` (reason) → `cancelled`. Audited: journal.created,
+  journal.submitted, journal.approved, journal.rejected, journal.posted (actor = approver).
+- §6.2 control accounts: lines on `is_control` accounts need kind=adjustment + reason + `accounting.post_to_control` for the maker
+  AND for the approver who posts (interpretation: the invariant names "the actor"; both actors of a maker-checker journal must qualify).
+- Reversal approval (D-11) `Reversals\ReversalRequestService`: `request` (accounting.reverse_journal, reason, posted journal, one pending
+  request per journal) → `approve` (policy `journal_reversal` steps or single checker ≠ requester) → `execute` via
+  `ReversalService::reverse(..., approvedBy)`; `reject`. New tenant table `journal_reversal_requests` (RLS).
+- §5.3 reopen via approval: `FiscalPeriodService::reopen` now returns an approval id when a `fiscal_period_reopen` policy matches
+  (completed by `PeriodReopenApprovalHandler`), else reopens immediately and returns null (0.3 behaviour unchanged).
+- `JournalWriter` split into `draft()` + `postDraft(journal, approvedBy)`; `post()` = both. Arch test: `JournalWriter` only used by
+  PostingEngine, ReversalService and ManualJournals (non-negotiable #4).
+- Migration `2026_09_13_000005_approvals_and_reversal_requests`: approvals.context/decided_at, status/decision checks,
+  unique(approval_id, step_no), `journal_reversal_requests`.
+- Tests: `ManualJournalTest` (maker≠checker, checker permission, invalid drafts, threshold routing through ordered steps with
+  distinct approvers, rejection, control-account rule), `ReversalApprovalTest` (checker ≠ requester, permissions, policy steps,
+  rejection, reopen via approval), arch rule in `DependencyTest`. Helper `approvalPolicy()` in `tests/Pest.php`.
+- Assumption A-2 (OPEN #3): no approval policies seeded.
+- Result: 158 tests green, PHPStan 0 errors; fresh migrate --seed verified.

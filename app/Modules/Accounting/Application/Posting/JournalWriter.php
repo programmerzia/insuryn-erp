@@ -35,13 +35,31 @@ final class JournalWriter
      */
     public function post(array $header, JournalDraft $draft): Journal
     {
+        return $this->postDraft($this->draft($header, $draft), null);
+    }
+
+    /**
+     * Inserts the journal as draft with its lines (manual journals wait here for approval). Drafts carry
+     * no number and do not count in the ledger.
+     *
+     * @param array<string, mixed> $header as for post()
+     */
+    public function draft(array $header, JournalDraft $draft): Journal
+    {
         $journal = Journal::query()->create($header + ['status' => JournalStatus::Draft->value]);
         DB::table('journal_lines')->insert($this->rows($journal, $draft));
+
+        return $journal;
+    }
+
+    /** Numbers a draft or approved journal and marks it posted; $approvedBy is the checker who released it. */
+    public function postDraft(Journal $journal, ?string $approvedBy): Journal
+    {
         $journal->forceFill([
             'number' => $this->numberer->next($journal->entity_id, $journal->book_id, $journal->posting_date),
             'status' => JournalStatus::Posted->value,
             'posted_at' => now(),
-        ])->save();
+        ] + ($approvedBy === null ? [] : ['approved_by' => $approvedBy]))->save();
         $this->auditPosted($journal);
 
         return $journal;
@@ -49,11 +67,11 @@ final class JournalWriter
 
     private function auditPosted(Journal $journal): void
     {
-        $createdBy = $journal->getAttribute('created_by');
+        $actorId = $journal->getAttribute('approved_by') ?? $journal->getAttribute('created_by');
         $this->audit->record('journal.posted', AuditSubject::of('journal', $journal->id), null, [
             'number' => $journal->number, 'kind' => $journal->kind->value, 'status' => $journal->status->value,
             'posting_date' => $journal->posting_date->toDateString(), 'source_type' => $journal->source_type, 'source_id' => $journal->source_id,
-        ], $journal->reason, actor: is_string($createdBy) ? Actor::user($createdBy) : null);
+        ], $journal->reason, actor: is_string($actorId) ? Actor::user($actorId) : null);
     }
 
     /** @return list<array<string, mixed>> one row per line, every row with the same columns */

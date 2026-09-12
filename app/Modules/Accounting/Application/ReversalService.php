@@ -31,13 +31,14 @@ final class ReversalService
     ) {}
 
     /** @throws PostingFailedException NOT_POSTED, REASON_REQUIRED, PERIOD_MISSING, PERIOD_CLOSED, PERIOD_SOFT_LOCKED */
-    public function reverse(Journal $original, CarbonImmutable $on, string $reason, string $actorUserId, bool $actorMayPostSoftLocked = false): Journal
+    /** @param string|null $approvedBy the checker who approved the reversal request (ReversalRequestService) */
+    public function reverse(Journal $original, CarbonImmutable $on, string $reason, string $actorUserId, bool $actorMayPostSoftLocked = false, ?string $approvedBy = null): Journal
     {
         if ($reason === '') {
             throw new PostingFailedException('REASON_REQUIRED', 'Reversal requires a reason');
         }
 
-        return DB::transaction(function () use ($original, $on, $reason, $actorUserId, $actorMayPostSoftLocked): Journal {
+        return DB::transaction(function () use ($original, $on, $reason, $actorUserId, $actorMayPostSoftLocked, $approvedBy): Journal {
             $this->lockPostedJournal($original);
             $period = $this->contexts->period($original->entity_id, $original->book_id, $on, $actorMayPostSoftLocked);
             $draft = JournalDraft::balanced('Reversal of '.$original->number, $this->mirroredLines($original));
@@ -48,7 +49,7 @@ final class ReversalService
                 'kind' => JournalKind::Reversal->value, 'reverses_journal_id' => $original->id, 'original_transaction_id' => $original->source_id,
                 'reason' => $reason, 'source_type' => $original->source_type, 'source_id' => $original->source_id,
                 'currency' => $original->currency, 'created_by' => $actorUserId, 'description' => 'Reversal of '.$original->number,
-            ], $draft);
+            ] + ($approvedBy === null ? [] : ['approved_by' => $approvedBy]), $draft);
             // Only these two columns may change on a posted journal (DB trigger enforces).
             $original->forceFill(['status' => JournalStatus::Reversed->value, 'reversed_by_journal_id' => $reversal->id])->save();
             $this->audit->record('journal.reversed', AuditSubject::of('journal', $original->id),

@@ -67,6 +67,23 @@ function userWithPermissions(string $tenantId, array $permissions, string $scope
 }
 
 /**
+ * An effective approval policy for $objectType (design §2.1 approval_policies).
+ *
+ * @param array<string, mixed> $condition
+ * @param list<array{permission: string}> $steps
+ */
+function approvalPolicy(string $tenantId, string $objectType, array $condition, array $steps): string
+{
+    return asTenant($tenantId, function () use ($tenantId, $objectType, $condition, $steps): string {
+        $id = (string) Illuminate\Support\Str::uuid7();
+        Illuminate\Support\Facades\DB::table('approval_policies')->insert(['id' => $id, 'tenant_id' => $tenantId, 'object_type' => $objectType,
+            'condition' => json_encode($condition, JSON_THROW_ON_ERROR), 'steps' => json_encode($steps, JSON_THROW_ON_ERROR), 'effective_from' => '2026-01-01']);
+
+        return $id;
+    });
+}
+
+/**
  * The exception of $type thrown by $operation, for asserting on its details. Fails the test when
  * nothing is thrown; any other exception propagates unchanged.
  *

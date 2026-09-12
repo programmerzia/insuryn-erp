@@ -6,6 +6,8 @@ namespace App\Modules\Accounting\Application\Periods;
 
 use App\Modules\Accounting\Domain\Enums\PeriodStatus;
 use App\Modules\Accounting\Exceptions\PeriodTransitionException;
+use App\Modules\Platform\Approvals\ApprovalFacts;
+use App\Modules\Platform\Approvals\ApprovalService;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
@@ -27,6 +29,7 @@ final class FiscalPeriodService
         private readonly PermissionChecker $permissions,
         private readonly Audit $audit,
         private readonly Outbox $outbox,
+        private readonly ApprovalService $approvals,
     ) {}
 
     public function softLock(string $periodId, string $actorUserId): void
@@ -41,17 +44,55 @@ final class FiscalPeriodService
     }
 
     /**
+     * §5.3 reopen(approval + reason). When an approval policy for `fiscal_period_reopen` matches, the reopen
+     * waits for it and the approval id is returned; otherwise the period reopens now and null is returned.
      * Reopening invalidates the period's close runs: posting into a reopened period requires the close
-     * to be re-executed (§5.3).
+     * to be re-executed.
      */
-    public function reopen(string $periodId, string $actorUserId, string $reason): void
+    public function reopen(string $periodId, string $actorUserId, string $reason): ?string
     {
         if (trim($reason) === '') {
             throw new PeriodTransitionException('REASON_REQUIRED', 'Reopening a period requires a reason.');
         }
+        $this->permissions->authorize($actorUserId, 'periods.reopen');
+
+        return DB::transaction(function () use ($periodId, $actorUserId, $reason): ?string {
+            $this->assertStatusIn($periodId, [PeriodStatus::SoftLocked, PeriodStatus::Locked], PeriodStatus::Open);
+            $approvalId = $this->approvals->request('fiscal_period_reopen', $periodId, new ApprovalFacts(0), $actorUserId, CarbonImmutable::today(), ['reason' => trim($reason)]);
+            if ($approvalId !== null) {
+                $this->audit->record('period.reopen_requested', AuditSubject::of('fiscal_period', $periodId), null, ['approval_id' => $approvalId],
+                    trim($reason), 'periods.reopen', Actor::user($actorUserId));
+
+                return $approvalId;
+            }
+            $this->performReopen($periodId, $actorUserId, trim($reason));
+
+            return null;
+        });
+    }
+
+    /** Called by PeriodReopenApprovalHandler once the reopen approval is complete. */
+    public function completeApprovedReopen(string $periodId, string $requestedBy, string $reason, string $finalApproverId): void
+    {
+        $this->performReopen($periodId, $requestedBy, $reason);
+    }
+
+    private function performReopen(string $periodId, string $actorUserId, string $reason): void
+    {
         $this->transition($periodId, $actorUserId, 'periods.reopen', [PeriodStatus::SoftLocked, PeriodStatus::Locked], PeriodStatus::Open, 'period.reopened',
             fn () => DB::table('period_close_runs')->where('period_id', $periodId)->where('status', '<>', 'reopened')->update(['status' => 'reopened']),
-            trim($reason));
+            $reason, authorize: false);
+    }
+
+    /** @param list<PeriodStatus> $allowedFrom */
+    private function assertStatusIn(string $periodId, array $allowedFrom, PeriodStatus $to): PeriodStatus
+    {
+        $from = $this->lockedStatus($periodId);
+        if (! in_array($from, $allowedFrom, true)) {
+            throw new PeriodTransitionException('INVALID_PERIOD_TRANSITION', "Period {$periodId} cannot move from {$from->value} to {$to->value}.");
+        }
+
+        return $from;
     }
 
     /**
@@ -67,14 +108,14 @@ final class FiscalPeriodService
         string $auditAction,
         ?callable $guard = null,
         ?string $reason = null,
+        bool $authorize = true,
     ): void {
-        $this->permissions->authorize($actorUserId, $permission);
+        if ($authorize) {
+            $this->permissions->authorize($actorUserId, $permission);
+        }
 
         DB::transaction(function () use ($periodId, $actorUserId, $permission, $allowedFrom, $to, $auditAction, $guard, $reason): void {
-            $from = $this->lockedStatus($periodId);
-            if (! in_array($from, $allowedFrom, true)) {
-                throw new PeriodTransitionException('INVALID_PERIOD_TRANSITION', "Period {$periodId} cannot move from {$from->value} to {$to->value}.");
-            }
+            $from = $this->assertStatusIn($periodId, $allowedFrom, $to);
             if ($guard !== null) {
                 $guard();
             }

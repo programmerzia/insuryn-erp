@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Platform;
 
 use App\Models\User;
+use App\Modules\Platform\Approvals\ApprovalHandlerRegistry;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Tenancy\TenantContext;
@@ -27,6 +28,11 @@ final class PlatformServiceProvider extends ServiceProvider
         }
 
         return self::$catalogue[$ability] ??= DB::table('permissions')->where('code', $ability)->exists();
+    }
+
+    public function register(): void
+    {
+        $this->app->singleton(ApprovalHandlerRegistry::class);
     }
 
     public function boot(): void
