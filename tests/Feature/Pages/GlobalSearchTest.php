@@ -53,8 +53,11 @@ it('finds policies, customers, claims and cheques only in areas the user may ope
     actingAs($clerk)->getJson('/search?q='.urlencode(substr($policyNumber, -6)), $this->headers)->assertOk()
         ->assertJsonPath('results.0.kind', 'policy')->assertJsonPath('results.0.label', $policyNumber)
         ->assertJsonPath('results.0.detail', 'Rahima Akter · Issued')->assertJsonPath('results.0.href', fn (string $href): bool => str_starts_with($href, '/policies/'));
-    $short = preg_replace('/^([A-Z]+)-\d{4}-0*(\d+)$/', '$1-$2', $policyNumber); // POL-2026-000001 typed as POL-1
+    $short = preg_replace('/^([A-Z]+)-[A-Z0-9]+-\d{4}-0*(\d+)$/', '$1-$2', $policyNumber); // POL-HO-2026-000001 typed as POL-1
+    expect($short)->not->toBe($policyNumber);
     actingAs($clerk)->getJson('/search?q='.urlencode((string) $short), $this->headers)->assertJsonPath('results.0.label', $policyNumber);
+    $withBranch = preg_replace('/^([A-Z]+-[A-Z0-9]+)-\d{4}-0*(\d+)$/', '$1-$2', $policyNumber); // typed as POL-HO-1 (fix F1)
+    actingAs($clerk)->getJson('/search?q='.urlencode((string) $withBranch), $this->headers)->assertJsonPath('results.0.label', $policyNumber);
     actingAs($clerk)->getJson('/search?q=rahima', $this->headers)->assertJsonFragment(['kind' => 'customer', 'label' => 'Rahima Akter']);
     actingAs($clerk)->getJson('/search?q='.urlencode($claimNumber), $this->headers)->assertJsonMissing(['kind' => 'claim']);
 

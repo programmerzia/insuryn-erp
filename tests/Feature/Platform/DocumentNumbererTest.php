@@ -131,3 +131,32 @@ it('leaves no unexplained gap: every allocated number exists and number rows can
             ->and(fn () => DB::table('document_numbers')->where('id', $first->id)->update(['status' => 'reserved']))->toThrow(QueryException::class, 'IMMUTABLE_DOCUMENT_NUMBER');
     });
 });
+
+it('numbers policies per entity and branch with the branch code: POL-<BRANCH>-<FY>-<seq> (fix F1)', function (): void {
+    asTenant($this->ctx['tenant_id'], function (): void {
+        DB::table('branches')->insert(['id' => $ctg = (string) Str::uuid7(), 'tenant_id' => $this->ctx['tenant_id'], 'entity_id' => $this->ctx['entity_id'], 'code' => 'CTG', 'name' => 'Chattogram', 'status' => 'active']);
+        $policy = fn (string $branchId): DocumentNumberScope => new DocumentNumberScope($this->ctx['entity_id'], $branchId, 'policy', 'POL', CarbonImmutable::parse('2026-09-15'));
+
+        expect(numberer()->reserve($policy($this->ctx['branch_id']), null)->number)->toBe('POL-HO-2026-000001')
+            ->and(numberer()->reserve($policy($this->ctx['branch_id']), null)->number)->toBe('POL-HO-2026-000002')
+            ->and(numberer()->reserve($policy($ctg), null)->number)->toBe('POL-CTG-2026-000001')
+            // Other documents keep their format.
+            ->and(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-2026-000001');
+    });
+});
+
+it('takes the number format from the numbering settings, and never renumbers what was issued (fix F1)', function (): void {
+    asTenant($this->ctx['tenant_id'], function (): void {
+        $policy = new DocumentNumberScope($this->ctx['entity_id'], $this->ctx['branch_id'], 'policy', 'POL', CarbonImmutable::parse('2026-09-15'));
+        $first = numberer()->reserve($policy, null);
+
+        config(['erp.numbering.formats.policy' => '{prefix}/{fy}/{branch}/{seq}']);
+        expect(numberer()->reserve($policy, null)->number)->toBe('POL/2026/HO/000002')
+            ->and(DB::table('document_numbers')->where('id', $first->id)->value('number'))->toBe('POL-HO-2026-000001');
+
+        // An entity-level sequence has no branch: the branch part is left out.
+        config(['erp.numbering.formats.policy' => '{prefix}-{branch}-{fy}-{seq}']);
+        $entityLevel = new DocumentNumberScope($this->ctx['entity_id'], null, 'policy', 'POL', CarbonImmutable::parse('2026-09-15'));
+        expect(numberer()->reserve($entityLevel, null)->number)->toBe('POL-2026-000001');
+    });
+});

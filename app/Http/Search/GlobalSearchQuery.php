@@ -174,13 +174,15 @@ final class GlobalSearchQuery
     }
 
     /**
-     * "POL-1042" or "pol 1042" → ['POL', '1042']: a document number typed without its year and zero padding (brief §4 example).
+     * "POL-1042", "pol 1042" or "POL-HO-1042" → ['POL', '1042'] / ['POL-HO', '1042']: a document number typed without its year and zero padding
+     * (brief §4 example; branch codes since fix F1).
      *
      * @return array{0: string, 1: string}|null
      */
     private static function shortNumber(string $query): ?array
     {
-        return preg_match('/^([A-Za-z]{2,4})[-\s]?(\d{1,6})$/', $query, $m) === 1 ? [strtoupper($m[1]), $m[2]] : null;
+        return preg_match('/^([A-Za-z]{2,4}(?:[-\s][A-Za-z][A-Za-z0-9]{0,7})?)[-\s]?(\d{1,6})$/', $query, $m) === 1
+            ? [strtoupper((string) preg_replace('/\s+/', '-', $m[1])), $m[2]] : null;
     }
 
     /**
@@ -193,7 +195,7 @@ final class GlobalSearchQuery
             return $query;
         }
 
-        return $query->orWhere(fn ($q) => $q->where($column, 'like', $number[0].'-%')->whereRaw("ltrim(split_part({$column}, '-', 3), '0') = ?", [ltrim($number[1], '0')]));
+        return $query->orWhere(fn ($q) => $q->where($column, 'like', $number[0].'-%')->whereRaw("ltrim(regexp_replace({$column}, '^.*[^0-9]', ''), '0') = ?", [ltrim($number[1], '0')]));
     }
 
     private static function word(string $status): string

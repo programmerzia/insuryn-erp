@@ -52,7 +52,11 @@ return [
         // statement date within this many days of the posting date. Anything ambiguous is left for manual matching.
         'auto_match_date_window_days' => 3,
     ],
-    'numbering' => ['reservation_ttl_minutes' => 15],
+    'numbering' => [
+        'reservation_ttl_minutes' => 15,
+        // Fix F1: number format per document type ({prefix}, {branch} code, {fy}, {seq}); others use {prefix}-{fy}-{seq}. New numbers only.
+        'formats' => ['policy' => env('ERP_POLICY_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}')],
+    ],
     'close' => ['suspense_max_age_days' => 30],
 
     /*

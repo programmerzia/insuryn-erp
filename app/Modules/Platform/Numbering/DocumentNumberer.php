@@ -39,7 +39,7 @@ final class DocumentNumberer
             $reserved = new ReservedNumber(
                 id: (string) Str::uuid7(),
                 sequenceId: $allocated->id,
-                number: sprintf('%s-%d-%06d', $allocated->prefix, $fiscalYear, (int) $allocated->allocated_no),
+                number: $this->format($scope, (string) $allocated->prefix, $fiscalYear, (int) $allocated->allocated_no),
             );
             DB::table('document_numbers')->insert([
                 'id' => $reserved->id, 'tenant_id' => TenantContext::id(), 'sequence_id' => $reserved->sequenceId,
@@ -125,6 +125,23 @@ final class DocumentNumberer
 
         /** @var list<object{no: int|string}> $rows */
         return array_map(fn (object $row): int => (int) $row->no, $rows);
+    }
+
+    /**
+     * Fix F1: the number format comes from the numbering settings (config erp.numbering.formats, per document type; default
+     * `{prefix}-{fy}-{seq}`). Tokens: {prefix}, {branch} (the branch code; left out with its separator for an entity-level sequence), {fy},
+     * {seq} (six digits). Only new numbers use it: issued numbers are stored and never rewritten.
+     */
+    private function format(DocumentNumberScope $scope, string $prefix, int $fiscalYear, int $sequenceNo): string
+    {
+        $formats = (array) config('erp.numbering.formats', []);
+        $format = is_string($formats[$scope->docType] ?? null) ? $formats[$scope->docType] : '{prefix}-{fy}-{seq}';
+        $branch = $scope->branchId === null ? null : DB::table('branches')->where('id', $scope->branchId)->value('code');
+        if (! is_string($branch) || $branch === '') {
+            $format = (string) preg_replace('/\{branch\}[^{]?|[^}]?\{branch\}/', '', $format, 1);
+        }
+
+        return strtr($format, ['{prefix}' => $prefix, '{branch}' => (string) $branch, '{fy}' => (string) $fiscalYear, '{seq}' => sprintf('%06d', $sequenceNo)]);
     }
 
     /** @return object{id: string, prefix: string, allocated_no: int|string}|null null when the sequence does not exist yet */

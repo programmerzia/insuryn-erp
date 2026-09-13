@@ -1666,3 +1666,14 @@ Scope: review only; only the critical finding was fixed.
   - A tenant without a company gets 404 on business pages until wizard step 1 is saved; the Home redirect normally prevents reaching them.
 - Final gate: 1,100 Pest tests and 269 Vitest tests green, PHPStan 0 errors, vue-tsc and production build green.
 - **Pending after onboarding:** 2.0c Playwright E2E happy path (now with the Part A demo as its data), 2.0d claim reserve property test, 2.1 design addendum v2; G1–G5 per the market cross-check.
+
+### F1 — Policy numbers carry the branch code — done
+- Closes the Part A gap "2. Policy number `POL-HO-2026-000123`". Policy sequences were already per entity + branch + fiscal year; the number now reads `POL-<BRANCH>-<FY>-<seq>`
+  (e.g. `POL-HO-2026-000001`).
+- The format lives in the numbering settings: `config/erp.php` `numbering.formats` per document type (`policy` → `{prefix}-{branch}-{fy}-{seq}`, env `ERP_POLICY_NUMBER_FORMAT`);
+  other documents keep `{prefix}-{fy}-{seq}`. `{branch}` is left out with its separator for an entity-level sequence. Only new numbers use the format: issued numbers are
+  stored and never rewritten (numbering INVARIANT unchanged), so existing policies keep theirs and a running sequence simply continues.
+- Global search and the command palette find `POL-HO-1042` and `POL-1042` typed without year and padding (the sequence part is the last digits of the number).
+- Test changes: `PolicyLifecycleTest` now expects exactly `POL-HO-2026-000001` (was a `POL-2026-` prefix); `GlobalSearchTest` derives the short form from the new format and also
+  searches the branch form.
+- Tests: `DocumentNumbererTest` (+2).

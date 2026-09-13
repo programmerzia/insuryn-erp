@@ -54,7 +54,7 @@ it('issues a quote with a number, tax split, installments and one POLICY_ISSUED 
         $policy = lifecycle()->issue($policyId, CarbonImmutable::parse('2026-08-25'), $world['admin']);
 
         expect($policy->status->value)->toBe('issued')
-            ->and($policy->number)->toStartWith('POL-2026-')
+            ->and($policy->number)->toBe('POL-HO-2026-000001')
             ->and($policy->gross_premium_minor)->toBe(12_000_000)
             ->and($policy->net_premium_minor)->toBe(10_434_783)
             ->and($policy->tax_minor)->toBe(1_565_217)
