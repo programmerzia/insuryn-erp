@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class JournalQuery
 {
-    public const PAGE_SIZE = 25;
+    /** UX brief §7: the journal table virtualises client-side; the server paginates only above 5,000 rows. */
+    public const PAGE_SIZE = 5000;
 
     /**
      * @param array{status?: string|null} $filters

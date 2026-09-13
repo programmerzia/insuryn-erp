@@ -12,6 +12,9 @@ use Illuminate\Validation\ValidationException;
 /** Small helpers shared by the Inertia operations screens: the acting user, the single entity of the MVP UI, and money typed in major units. */
 final class PageSupport
 {
+    /** UX brief §7: tables virtualise above 200 rows client-side; the server paginates only above 5,000. */
+    public const LIST_PAGE_SIZE = 5000;
+
     public static function actor(Request $request): string
     {
         return (string) $request->user()?->getAuthIdentifier();

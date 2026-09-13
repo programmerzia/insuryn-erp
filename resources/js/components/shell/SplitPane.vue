@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { savePreference, usePreferences } from '@/lib/preferences';
 
 /** Brief §3: list + inspector split with a draggable, remembered divider. The inspector shows while `open`. */
-const props = withDefaults(defineProps<{ id: string; open: boolean; defaultWidth?: number; min?: number }>(), { defaultWidth: 440, min: 320 });
+const props = withDefaults(defineProps<{ id: string; open: boolean; defaultWidth?: number; min?: number }>(), { defaultWidth: 400, min: 320 });
 const preferences = usePreferences();
 const container = ref<HTMLElement | null>(null);
 const dragging = ref(false);

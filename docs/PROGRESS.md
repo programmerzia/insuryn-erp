@@ -67,7 +67,7 @@ code and in the register below, configurable.
 | U1 | UX: theme tokens and design system | done | see git log |
 | U2 | UX: application shell | done | see git log |
 | U3 | UX: command palette and shortcuts registry | done | see git log |
-| U4 | UX: data table | pending | |
+| U4 | UX: data table | done | see git log |
 | U5 | UX: form system | pending | |
 | U6 | UX: role home queues and badges | pending | |
 | U7 | UX: rebuild existing screens | pending | |
@@ -963,3 +963,37 @@ Scope: review only; only the critical finding was fixed.
 - Not achievable now: customer search by phone (parties have no phone column); fuzzy matching of records is server-side substring/number
   matching, not fuzzy.
 - Result: 970 Pest tests, 153 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### U4 — UX: data table — done
+- `components/table/DataTable.vue` (+ `useDataTable.ts`, `DataTableToolbar.vue`, `types.ts`), on TanStack Table v8 (`@tanstack/vue-table` 8.21, pinned:
+  9.x changed the API) and `@tanstack/vue-virtual`:
+  - sticky header, column resize (drag the header edge, double-click resets), reorder (drag a header onto another), hide (Columns menu, reset),
+    multi-sort (click, Shift+click adds; sort order numbers shown), inline filter row (text contains; money `>1000`, `<=500`, `1000..5000`,
+    exact; dates by their shown form; statuses from a list), footer totals for money columns over the filtered rows;
+  - virtual scrolling above 200 rows (spacer rows keep native table layout); columns have fixed widths and the table does not stretch
+    numbers (`table-layout: fixed`, a filler column takes spare width);
+  - saved views per user (Views menu: save the current filters, sort and columns under a name, apply, delete), layout (order, hidden,
+    widths, sort) persisted per user in `tables.<id>`; filters and sort in the URL (`f.<column>=…`, `sort=-date,amount`, replace-state so Back
+    goes to the previous page and a reload restores them);
+  - selection with checkboxes, Space, Shift+↑↓ ranges; bulk-action toolbar replaces the view toolbar while rows are selected (count, Σ,
+    page-provided actions, clear); the status bar shows rows, selection count and the selection's Σ, and server pagination when present;
+  - keyboard: ↑↓ move (active row outlined), Enter opens (inspector), Space selects, Shift+↑↓ range, Home/End, `/` opens and focuses the
+    filter row, Esc closes the inspector then clears the selection, Ctrl+Enter left to the inspector; right-click menu (open, open as pinned
+    tab, select, copy the number) with shortcuts shown; CSV export of the filtered rows and visible columns;
+  - cells: money right-aligned tabular with negatives in parentheses and the currency once in the header ("Amount (BDT)"), dates `12 Sep 2026`,
+    status dot + word, links pin as tabs on Ctrl+click; loading shows skeleton rows; empty state with one sentence (and "Clear filters" when
+    filters hide everything).
+- `lib/money.ts` (BigInt minor units: parse "1,234.56", "(1,234.56)", "-…"; format with parentheses; sum), `lib/format.ts` (dates from the string,
+  no timezone drift), `lib/table-state.ts` (filter semantics, URL codec).
+- Backend (thin): list page size is now 5,000 (`PageSupport::LIST_PAGE_SIZE`, `JournalQuery::PAGE_SIZE`) for receipts and journals, per brief §7
+  (virtualise above 200, paginate on the server above 5,000); other lists follow in U7.
+- Journals and receipts lists run on the DataTable with the inspector (receipts selectable).
+- Tests first: `resources/js/tests/table-logic.test.ts` (money beyond Number precision, parentheses, dates, filter expressions, URL round trip);
+  `resources/js/tests/data-table.test.ts` (currency once, date and negative formatting, footer total; sort + Shift multi-sort in the URL; money
+  filter updates rows, totals and URL; ↓↓ Enter opens the right row, Space + Shift+↓ select a range with the Σ in the status bar and the bulk
+  bar, Esc clears; 1,000 rows render fewer than 200 rows with correct totals). A first run failed because the test file shared the preferences
+  store between tests (a saved sort leaked); the tests now reset it — the component was right.
+- Screenshots: `storage/ux-screenshots/U4/{receipts,receipts-filtered,receipts-selected,receipts-sorted,journals-columns,journals-inspector,
+  receipts-context}-{1366,1920}-{light,dark}.png`. Self-critique fixes: the whole-grid focus ring doubled the active-row outline (ring now only
+  when no row is active); date filter placeholder read like a value; inspector default width 400px so 1366 screens keep the amount column.
+- Result: 970 Pest tests, 172 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 183.7 KB gzip before route splitting).

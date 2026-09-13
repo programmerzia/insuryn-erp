@@ -40,7 +40,7 @@ final class CollectionsPageController
     {
         $this->authorize($request);
         $entity = PageSupport::entity();
-        $page = DB::table('receipts')->where('entity_id', $entity['id'])->orderByDesc('value_date')->orderByDesc('number')->paginate(25)->withQueryString();
+        $page = DB::table('receipts')->where('entity_id', $entity['id'])->orderByDesc('value_date')->orderByDesc('number')->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
         $rows = [];
         foreach ($page->items() as $r) {
             /** @var object{id: string, number: string, channel: string, amount_minor: int|string, currency: string, value_date: string, reference: string|null, status: string, collected_by_agent_id: string|null} $r */
