@@ -138,6 +138,11 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-67 | R3 | Which minimum premium wins when both the plan (a `minimum` step) and the product version (`min_premium_minor`) set one is not specified: the product's minimum is applied after the plan's premium steps and before rounding, so the higher of the two wins. | `RatingCalculator` (`ASSUMPTION` in the class docblock), `product_versions.min_premium_minor`. |
 | A-68 | R2 | How duties combine is not specified beyond "stamp (flat by class), VAT 15% on premium": VAT and levies are worked on the net premium (after minimum and rounding), never on stamp duty or other duties; duties not named by a plan step apply automatically in the order stamp, levy, vat. Duty values are placeholders flagged `verify` (design OPEN 1). | `DutyDefinition::amountFor`, `RatingCalculator` (R3), `duties` rows. |
 | A-69 | R2 | No §7.2 role template covers tariffs: `rating.manage_plans` (draft plans, new versions, duties) and `rating.approve_plans` (approve, activate, retire) both go to the Finance Manager and CFO templates; the SoD object rule (SOD7) stops anyone approving a plan they drafted or edited. Duties are recorded without a second approval (effective-dated, audited). Activating a plan that overlaps the active plan of its class is refused unless the caller asks to supersede it (the current plan then ends the day the new one starts, only if it started earlier). | `RoleTemplates`, `PermissionsSeeder::SOD`, migration `2026_09_20_000002`, `RatingPlanService::activate`, `DutyBook`. |
+| A-110 | R10a | How the tariff grid saves is not specified beyond "tables grid with effective dates": a rate table is saved whole — its rows become exactly the grid's rows (added, edited, removed) in one draft-only save, audited `rating_plan.rows_replaced` with the row counts before and after; the diff view shows row by row what changed between versions. | `RatingPlanService::replaceRows` (`ASSUMPTION:`), `RateTableGrid.vue`. |
+| A-111 | R10a | Units of band tables on screen are not specified (D-20 covers rate and flat tables): band bounds are the raw whole numbers the step compares (engine cc, years — or minor units when a band is on an amount) and are typed as whole numbers; a band's value is edited as a percentage (basis points, for `band_value()` in `pct()`); a band row that carries an amount instead keeps it unless a percentage is typed. | `resources/js/lib/rating.ts` (`ASSUMPTION:`), `RateTableGrid.vue`. |
+| A-112 | R10a | Which version the diff compares with by default is not specified beyond "the currently active/previous version": the active version of the same code, else the version the plan was copied from, else the latest earlier version, else the latest later one. A row is the same row in both versions when its keys (a band table: its band start) and its own start date match; two rows with the same identity are paired in order. | `RatingPlanDirectory::comparison` (`ASSUMPTION:`), `RatingPlanDiff`. |
+| A-113 | R10a | Which duties the plan page lists is not specified: the duties of the plan's class in force today or starting later (ended ones are not listed; the audit trail keeps them), marked "verify" while flagged. A duty recorded on the page defaults to `verify = true`. | `RatingPlanDirectory::duties` (`ASSUMPTION:`), `DutiesPageController`. |
+| A-114 | R10a | Who opens the tariff editor is not specified: holders of `rating.manage_plans` or `rating.approve_plans` (not report readers). Approve shows as disabled with the reason for anyone who drafted or edited the plan (created it or exercised `rating.manage_plans` on its audit trail — the SoD object rule); the server refuses regardless. | `TariffsPageController::AREA` (`ASSUMPTION:`), `RatingPlanDirectory::editors`, `navigation.ts` (Tariffs). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1912,3 +1917,40 @@ Scope: review only; only the critical finding was fixed.
   `RatingDemoSeedersTest` extended (active plans, verify flags, the demo motor product rates the golden quote).
 
 - Result: 1,168 Pest tests green, PHPStan 0 errors, Vitest (269) and vue-tsc green.
+
+### R10a — Rating: tariff editor with draft, approve, activate and diff view — done
+- Phase 3 design §6 "Tariff editor (plan → tables grid with effective dates, draft/approve/activate, diff view)" on the R2 backend (D-36). No migration, no new permission.
+- **Tariffs** (`/rating/plans`, sidebar secondary item gated by `rating.manage_plans` | `rating.approve_plans`, A-114): QueueView of every plan version — code, name, class,
+  version, from/until, status, source, verify flag — with list filters by class, status, source and verify; "New plan" (draft) and, in the inspector, "New version" (copy as
+  draft version + 1, optional new dates).
+- **Plan page** (`/rating/plans/{id}`), header strip with status, facts and lifecycle actions, "Placeholder values — verify before use" banner when flagged, tabs:
+  - Overview: what stops approval (`RatingPlanDefinition::problems`), the active plan the dates overlap (approved plans), lifecycle (drafted/approved/activated/retired by
+    whom and when, copied from), header form while draft (name, dates, source, verify, notes).
+  - Tables: each rate table as a grid (`components/rating/RateTableGrid.vue`) — dimension columns (band tables: from, below, label), the value in human units (‰ for `rate_pm`,
+    % for `rate_pct` and band rates, BDT for flat, D-20) right-aligned tabular, per-row dates; while draft every cell is an input (Tab along the row, Enter saves, "Add row"
+    focuses the new row, remove per row, discard), unreadable cells named before sending; add table (code, name, dimensions, value type) and remove table with confirmation.
+    A table is saved whole (A-110). Units convert on the digits in `resources/js/lib/rating.ts` (A-111).
+  - Steps: ordered list (order, code, kind, expression, condition, coverage, EN/BN label); add, edit and remove while draft; expression and condition errors from the server's
+    evaluator shown on the field.
+  - Duties: the class's duties in force today or later with basis, value, classes, dates and verify flag (A-113); plan managers record a duty (percent, flat, or sum insured
+    bands; verify defaults on) and end one from a date through DutyBook.
+  - Diff: compare with another version of the same code, by default the active / copied-from / previous version (A-112): plan field and date changes, per table rows added,
+    removed and changed (before → after in units), tables added/removed, step changes (`components/rating/PlanDiff.vue`).
+  - Timeline and Audit: ObjectHistory over `rating_plan` (deferred).
+- Lifecycle with `confirmAction` dialogs: Approve (disabled with "You drafted or edited this plan, so someone else approves it." for the drafter or an editor, and while
+  problems remain), Activate (when an active plan overlaps, the page names it and offers "Activate" — refused with the invariant message — and "Activate and supersede"), Retire,
+  Delete draft. Refusals (`RATING_PLAN_NOT_DRAFT`, `RATING_PLAN_SAME_APPROVER`, `SOD_CONFLICT`, `RATING_PLAN_OVERLAP`, `DUTY_OVERLAP`, `PERMISSION_DENIED`, …) come back as the
+  form error with the reason.
+- Backend: `Rating\Http\Controllers\TariffsPageController` and `DutiesPageController` (routes under `/rating`); `RatingPlanService::replaceRows` (`rating_plan.rows_replaced`) and
+  `updateStep` (`rating_plan.step_updated`, same checks as addStep); read-only `RatingPlanDirectory` (list, header with names, versions, default comparison, editors, overlapping
+  active plans, duties); pure `RatingPlanDiff::compare(from, to)`.
+- Placeholder values: none added (duty and plan placeholders stay as listed in R3; the page shows their verify flags).
+- Shared files: `routes/web.php` (rating group), `resources/js/lib/navigation.ts` (Tariffs), `docs/PROGRESS.md`, `docs/DECISIONS.md`.
+- Not done, and why: help panel text for tariffs (the "How this works" modules are written in English and Bangla per module; left for a docs pass); screenshots (workers
+  do not start servers); no importing of IDRA circulars (LATER in the design).
+- Tests: `tests/Feature/Insurance/TariffEditorTest.php` (9: queue and page props and permissions for manager, approver and neither; draft editing of header, rows with dates,
+  tables and steps with field errors; HTTP edits refused when not draft; approve refused for the drafter and an editor; activate invariant message and supersede; retire;
+  new version copy and diff against the active version; duties recorded and ended; draft deletion), `tests/Unit/Insurance/RatingPlanDiffTest.php` (4),
+  `resources/js/tests/rating.test.ts` (9: "2.25‰" ↔ 225, "10%" ↔ 1000, BDT ↔ minor units, refusals, exact integers, grid rows).
+
+- Result: 1,213 Pest tests green, PHPStan 0 errors, Vitest (292) and vue-tsc green.

@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound } from 'lucide-vue-next';
+import { Banknote, Calculator, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -43,6 +43,7 @@ export const navigation: NavItem[] = [
     { id: 'statement-run', page: 'distribution/statements/Index', label: 'Statement run', href: '/distribution/statements', icon: Receipt, any: ['commission.approve', 'commission.pay', reader], secondary: true },
     { id: 'targets', page: 'distribution/targets/Index', label: 'Targets', href: '/distribution/targets', icon: Target, any: ['agent.manage', 'commission.approve', reader], secondary: true },
     { id: 'agents', label: 'Agents', href: '/agents', icon: UserCheck, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
+    { id: 'tariffs', detail: 'rating/plans/Show', page: 'rating/plans/Index', label: 'Tariffs', href: '/rating/plans', icon: Calculator, any: ['rating.manage_plans', 'rating.approve_plans'], secondary: true },
     { id: 'products', label: 'Products', href: '/products', icon: Package, any: ['product.manage', 'policy.create', reader], secondary: true },
     { id: 'refunds', label: 'Refunds', href: '/refunds', icon: Undo2, any: collections, secondary: true },
     { id: 'agent-cash', label: 'Agent cash', href: '/agent-cash', icon: Wallet, any: collections, secondary: true },

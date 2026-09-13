@@ -75,6 +75,28 @@ Route::middleware('auth')->prefix('setup')->group(function (): void {
     Route::post('finish', [\App\Http\Setup\SetupPageController::class, 'finish']);
 });
 
+// Tariff editor (Phase 3 slice R10a): rating plans, their tables, rows and steps, and duties. RatingPlanService / DutyBook authorize every change.
+Route::middleware('auth')->prefix('rating')->group(function (): void {
+    $tariffs = \App\Modules\Insurance\Rating\Http\Controllers\TariffsPageController::class;
+    Route::get('plans', [$tariffs, 'index']);
+    Route::post('plans', [$tariffs, 'store']);
+    Route::get('plans/{plan}', [$tariffs, 'show'])->whereUuid('plan');
+    Route::put('plans/{plan}', [$tariffs, 'update'])->whereUuid('plan');
+    Route::delete('plans/{plan}', [$tariffs, 'destroy'])->whereUuid('plan');
+    Route::post('plans/{plan}/versions', [$tariffs, 'newVersion'])->whereUuid('plan');
+    Route::post('plans/{plan}/approve', [$tariffs, 'approve'])->whereUuid('plan');
+    Route::post('plans/{plan}/activate', [$tariffs, 'activate'])->whereUuid('plan');
+    Route::post('plans/{plan}/retire', [$tariffs, 'retire'])->whereUuid('plan');
+    Route::post('plans/{plan}/tables', [$tariffs, 'storeTable'])->whereUuid('plan');
+    Route::delete('plans/{plan}/tables/{table}', [$tariffs, 'destroyTable'])->whereUuid('plan')->where('table', '[a-z][a-z0-9_]{0,63}');
+    Route::put('plans/{plan}/tables/{table}/rows', [$tariffs, 'replaceRows'])->whereUuid('plan')->where('table', '[a-z][a-z0-9_]{0,63}');
+    Route::post('plans/{plan}/steps', [$tariffs, 'storeStep'])->whereUuid('plan');
+    Route::put('plans/{plan}/steps/{step}', [$tariffs, 'updateStep'])->whereUuid('plan')->where('step', '[a-z][a-z0-9_]{0,63}');
+    Route::delete('plans/{plan}/steps/{step}', [$tariffs, 'destroyStep'])->whereUuid('plan')->where('step', '[a-z][a-z0-9_]{0,63}');
+    Route::post('duties', [\App\Modules\Insurance\Rating\Http\Controllers\DutiesPageController::class, 'store']);
+    Route::post('duties/{duty}/end', [\App\Modules\Insurance\Rating\Http\Controllers\DutiesPageController::class, 'end'])->whereUuid('duty');
+});
+
 // Administration (phase 2.0): users need platform.manage_users, roles platform.manage_roles; the controllers authorize.
 Route::middleware('auth')->prefix('admin')->group(function (): void {
     Route::get('users', [UsersPageController::class, 'index']);

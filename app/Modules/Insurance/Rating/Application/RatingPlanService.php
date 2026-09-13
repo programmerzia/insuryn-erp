@@ -148,6 +148,31 @@ final class RatingPlanService
         });
     }
 
+    /**
+     * The tariff editor's grid (slice R10a): the table's rows become exactly $rows, in order — rows added, edited or removed in one save. Draft only.
+     * ASSUMPTION A-110: a table is saved whole (the audit records the row counts before and after; the plan's diff view shows row by row what changed).
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @throws BusinessRuleViolation RATING_PLAN_NOT_DRAFT, RATE_TABLE_UNKNOWN, RATING_PLAN_INVALID
+     */
+    public function replaceRows(string $planId, string $tableCode, array $rows, string $actorUserId): int
+    {
+        $this->permissions->authorize($actorUserId, self::MANAGE);
+        $parsed = array_map(fn (array $row): RateRow => RateRow::fromArray($row), $rows);
+
+        return DB::transaction(function () use ($planId, $tableCode, $parsed, $actorUserId): int {
+            $plan = $this->draft($planId);
+            $table = RateTable::query()->where('plan_id', $plan->id)->where('code', $tableCode)->first()
+                ?? throw new BusinessRuleViolation('RATE_TABLE_UNKNOWN', "The plan has no rate table {$tableCode}.");
+            $before = RateTableRow::query()->where('table_id', $table->id)->delete();
+            $this->insertRows($table, $parsed, 0);
+            $this->record('rating_plan.rows_replaced', $plan, ['table' => $tableCode, 'rows' => $before], ['table' => $tableCode, 'rows' => count($parsed)], $actorUserId);
+
+            return count($parsed);
+        });
+    }
+
     public function removeTable(string $planId, string $tableCode, string $actorUserId): void
     {
         $this->permissions->authorize($actorUserId, self::MANAGE);
@@ -182,6 +207,41 @@ final class RatingPlanService
             }
             $row = RatingStep::query()->create(['plan_id' => $plan->id, ...array_diff_key($definition->toArray(), ['kind' => true]), 'kind' => $definition->kind]);
             $this->record('rating_plan.step_added', $plan, null, $definition->toArray(), $actorUserId);
+
+            return $row;
+        });
+    }
+
+    /**
+     * Changes a draft's step (slice R10a): the same checks as adding one — expression and condition checked on entry, code and order number unique in the plan.
+     *
+     * @param array<string, mixed> $step order_no, code, kind, expression, condition?, applies_to?, label_en, label_bn
+     *
+     * @throws BusinessRuleViolation RATING_PLAN_NOT_DRAFT, RATING_STEP_UNKNOWN, RATING_PLAN_INVALID, RATING_EXPRESSION_INVALID
+     */
+    public function updateStep(string $planId, string $stepCode, array $step, string $actorUserId): RatingStep
+    {
+        $this->permissions->authorize($actorUserId, self::MANAGE);
+        $definition = RatingStepDefinition::fromArray($step);
+        $this->expressions->check($definition->expression);
+        if ($definition->condition !== null) {
+            $this->expressions->check($definition->condition);
+        }
+
+        return DB::transaction(function () use ($planId, $stepCode, $definition, $actorUserId): RatingStep {
+            $plan = $this->draft($planId);
+            $row = RatingStep::query()->where('plan_id', $plan->id)->where('code', $stepCode)->first()
+                ?? throw new BusinessRuleViolation('RATING_STEP_UNKNOWN', "The plan has no step {$stepCode}.");
+            if (RatingStep::query()->where('plan_id', $plan->id)->whereKeyNot($row->id)
+                ->where(fn ($q) => $q->where('code', $definition->code)->orWhere('order_no', $definition->orderNo))->exists()) {
+                throw PlanDefinitionInvalid::because("The plan already has a step {$definition->code} or a step at position {$definition->orderNo}.");
+            }
+            $before = (new RatingStepDefinition($row->order_no, $row->code, $row->kind, $row->expression, $row->condition, $row->applies_to, $row->label_en, $row->label_bn))->toArray();
+            $row->forceFill([...array_diff_key($definition->toArray(), ['kind' => true]), 'kind' => $definition->kind])->save();
+            $after = $definition->toArray();
+            $changed = array_keys(array_diff_assoc(array_map(fn (mixed $v): string => (string) $v, $after), array_map(fn (mixed $v): string => (string) $v, $before)));
+            $this->record('rating_plan.step_updated', $plan, ['step' => $stepCode, ...array_intersect_key($before, array_flip($changed))],
+                ['step' => $definition->code, ...array_intersect_key($after, array_flip($changed))], $actorUserId);
 
             return $row;
         });
