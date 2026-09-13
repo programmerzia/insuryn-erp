@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { tourAction, tourSteps } from '@/lib/tour';
+import { stepAccess, tourAction, tourSteps } from '@/lib/tour';
 
 /** Session S4 guided tour: the step wiring matches the words in resources/help, and moving through the tour is a pure state change. */
 describe('guided tour', () => {
@@ -8,6 +8,14 @@ describe('guided tour', () => {
         const ids = [...readFileSync('resources/help/tour.en.md', 'utf8').matchAll(/^## (\S+)$/gm)].map((m) => m[1]);
         expect(tourSteps.map((s) => s.id)).toEqual(ids);
         expect(tourSteps[0]).toMatchObject({ id: 'home', href: '/home' });
+    });
+
+    it('knows when a user can do a step, only look at it, or not open its page', () => {
+        const step = (id: string) => tourSteps.find((s) => s.id === id)!;
+        expect(stepAccess(step('home'), new Set())).toBe('act');
+        expect(stepAccess(step('issue-policy'), new Set(['policy.create', 'policy.issue']))).toBe('act');
+        expect(stepAccess(step('issue-policy'), new Set(['receipt.allocate']))).toBe('view');
+        expect(stepAccess(step('close'), new Set(['policy.issue']))).toBe('none');
     });
 
     it('starts, moves, dismisses, resumes and finishes', () => {

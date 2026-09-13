@@ -1598,9 +1598,11 @@ Scope: review only; only the critical finding was fixed.
   The card sits below or above the spotlight, or in the bottom-right corner when the spotlight fills the window.
 - State is the user preference `tour` (`active` | `dismissed` | `finished`, step), so it survives sign-out and devices. Home shows *Take the guided tour*, *Resume the tour (step n of 8)*
   or *Take the tour again*.
-- The tour explains each step; it does not create records or move money. A user without access to a step's page sees that page's refusal (see the End-of-session gaps).
+- The tour explains each step; it does not create records or move money. Steps follow segregation of duties, so no one person can do them all: each step names the permission
+  that does it and its role template; a user without it is told who does the step (and, in the `nonlife` demo company, which `<role>@nonlife.local` account to use), and a page the
+  user cannot open is not visited — the card stays where the user is.
 - Screenshots: `storage/ux-screenshots/s4-tour/` (every step on its page, plus the card on another page; 1366/1920, light/dark).
-- Tests: `tests/Feature/Help/GuidedTourTest.php` (2), `resources/js/tests/tour.test.ts` (2).
+- Tests: `tests/Feature/Help/GuidedTourTest.php` (2), `resources/js/tests/tour.test.ts` (3).
 
 ### S5 — Onboarding: plain captions on journal lines — done
 - `resources/help/roles.<en|bn>.md`: a table of every account role (all 28 in `AccountRolesSeeder`) with what a debit and a credit mean, e.g. premium_receivable debit

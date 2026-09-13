@@ -1,4 +1,5 @@
 import { requestJson } from '@/lib/http';
+import { navigation } from '@/lib/navigation';
 import type { TourState } from '@/lib/preferences';
 
 /**
@@ -9,7 +10,13 @@ export interface TourStep {
     id: string;
     href: string;
     target: string;
+    /** Sidebar item whose page the step is on (its area permissions decide whether the page opens). */
+    area: string;
+    /** Permission to do the step for real, and the §7.2 role template that holds it (steps follow segregation of duties, so no one person does them all). */
+    act: string | null;
+    role: string | null;
 }
+export type StepAccess = 'act' | 'view' | 'none';
 export interface TourText {
     id: string;
     title: string;
@@ -17,15 +24,24 @@ export interface TourText {
 }
 
 export const tourSteps: TourStep[] = [
-    { id: 'home', href: '/home', target: 'home-queues' },
-    { id: 'issue-policy', href: '/policies/create', target: 'policy-form' },
-    { id: 'receive', href: '/receipts/create', target: 'receipt-form' },
-    { id: 'suspense', href: '/suspense', target: 'suspense-queue' },
-    { id: 'bank', href: '/bank', target: 'bank-accounts' },
-    { id: 'register-claim', href: '/claims/create', target: 'claim-form' },
-    { id: 'settle-claim', href: '/claims', target: 'claims-queue' },
-    { id: 'close', href: '/close', target: 'close-periods' },
+    { id: 'home', href: '/home', target: 'home-queues', area: 'home', act: null, role: null },
+    { id: 'issue-policy', href: '/policies/create', target: 'policy-form', area: 'policies', act: 'policy.issue', role: 'branch_officer' },
+    { id: 'receive', href: '/receipts/create', target: 'receipt-form', area: 'receipts', act: 'receipt.create', role: 'branch_officer' },
+    { id: 'suspense', href: '/suspense', target: 'suspense-queue', area: 'suspense', act: 'receipt.allocate', role: 'accountant' },
+    { id: 'bank', href: '/bank', target: 'bank-accounts', area: 'bank', act: 'bank.import', role: 'accountant' },
+    { id: 'register-claim', href: '/claims/create', target: 'claim-form', area: 'claims', act: 'claim.register', role: 'claims_officer' },
+    { id: 'settle-claim', href: '/claims', target: 'claims-queue', area: 'claims', act: 'claim.reserve', role: 'claims_officer' },
+    { id: 'close', href: '/close', target: 'close-periods', area: 'close', act: 'periods.lock', role: 'finance_manager' },
 ];
+
+/** Whether the user can do a step, only look at its page, or not even open the page (then the tour stays put and says who does the step). */
+export function stepAccess(step: TourStep, held: ReadonlySet<string>): StepAccess {
+    const area = navigation.find((item) => item.id === step.area)?.any ?? [];
+    if (area.length > 0 && !area.some((permission) => held.has(permission))) return 'none';
+    return step.act === null || held.has(step.act) ? 'act' : 'view';
+}
+
+export const roleNames: Record<string, string> = { branch_officer: 'Branch Officer', accountant: 'Accountant', claims_officer: 'Claims Officer', finance_manager: 'Finance Manager' };
 
 export type TourMove = 'start' | 'next' | 'back' | 'dismiss' | 'resume';
 

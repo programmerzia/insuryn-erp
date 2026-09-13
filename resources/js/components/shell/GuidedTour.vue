@@ -2,14 +2,17 @@
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { savePreference, usePreferences } from '@/lib/preferences';
-import { loadTour, type TourMove, tourAction, tourSteps, type TourText } from '@/lib/tour';
+import { usePermissions } from '@/lib/permissions';
+import { loadTour, roleNames, stepAccess, type TourMove, tourAction, tourSteps, type TourText } from '@/lib/tour';
+import type { SharedProps } from '@/types/shared';
 
 /**
  * Session S4 guided tour (market cross-check Part A): a spotlight on one element of the step's page and a card with what to do and why, Back / Next,
  * and End tour. It never blocks the page — the user can do the step for real — and its state is a user preference, so ending it keeps the step
  * for resuming from Home. On another page, the card offers to go to the step's page.
  */
-const page = usePage();
+const page = usePage<SharedProps>();
+const held = computed(() => new Set(page.props.auth.permissions ?? []));
 const preferences = usePreferences();
 const texts = ref<TourText[]>([]);
 const rect = ref<{ top: number; left: number; width: number; height: number } | null>(null);
@@ -29,6 +32,14 @@ const step = computed(() => tourSteps[index.value]!);
 const text = computed(() => texts.value.find((t) => t.id === step.value.id));
 const path = computed(() => page.url.split('?')[0]);
 const here = computed(() => path.value === step.value.href);
+const access = computed(() => stepAccess(step.value, held.value));
+/** Who does a step this user cannot do; in the Part A demo company, which demo account to sign in with. */
+const roleHint = computed(() => {
+    const role = step.value.role;
+    if (!role || access.value === 'act') return null;
+    const demo = page.props.tenant?.slug === 'nonlife' ? ` In the demo company, sign in as ${role.replace('_', '.')}@nonlife.local to do it.` : '';
+    return `Your roles cannot do this step: it belongs to the ${roleNames[role]}.${demo}`;
+});
 
 watch(() => [active.value, preferences.locale] as const, async ([on, locale]) => {
     if (on) texts.value = await loadTour(locale).catch(() => []);
@@ -89,8 +100,9 @@ const cardStyle = computed(() => {
 function move(action: TourMove): void {
     const after = tourAction(state.value, action);
     savePreference('tour', after, 0);
-    const destination = tourSteps[after.step]!.href;
-    if (after.status === 'active' && destination !== path.value) router.visit(destination);
+    const destination = tourSteps[after.step]!;
+    // A page the user cannot open would replace the app with a refusal; the card stays here and says who does the step.
+    if (after.status === 'active' && destination.href !== path.value && stepAccess(destination, held.value) !== 'none') router.visit(destination.href);
 }
 function onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape' && active.value) move('dismiss');
@@ -119,11 +131,12 @@ function onKey(event: KeyboardEvent): void {
             <p class="text-dense text-ink-2">Guided tour · step {{ index + 1 }} of {{ tourSteps.length }}</p>
             <h2 id="tour-title" class="text-section font-semibold">{{ text?.title ?? '…' }}</h2>
             <!-- Server-rendered from resources/help/tour.<locale>.md with raw HTML escaped (App\Http\Help\HelpContent::tour). -->
-            <div v-if="here" class="tour-text text-body" v-html="text?.html ?? ''" />
+            <div v-if="here || access === 'none'" class="tour-text text-body" v-html="text?.html ?? ''" />
             <p v-else class="text-body">This step happens on another page.</p>
+            <p v-if="roleHint" class="border-l-2 border-warn pl-3 text-ui text-ink-2">{{ roleHint }}</p>
             <div class="mt-1 flex items-center gap-2">
-                <button v-if="index > 0 && here" type="button" class="inline-flex h-8 items-center rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="move('back')">Back</button>
-                <button v-if="here" ref="next" type="button" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="move('next')">
+                <button v-if="index > 0 && (here || access === 'none')" type="button" class="inline-flex h-8 items-center rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="move('back')">Back</button>
+                <button v-if="here || access === 'none'" ref="next" type="button" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="move('next')">
                     {{ index === tourSteps.length - 1 ? 'Finish the tour' : 'Next' }}
                 </button>
                 <button v-else ref="next" type="button" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="router.visit(step.href)">Go to this step</button>
