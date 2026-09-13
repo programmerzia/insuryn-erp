@@ -16,6 +16,8 @@ git log --oneline | head             # one commit per green slice: feat(<area>):
 ```
 
 Next slice to pick up: the first row below whose status is not `done`, in table order.
+Phase 1C ("make Phase 1 ready for Phase 2") closes spec §4/§11 Phase 1 gaps found after 1B: non-negotiable #9 commission payouts,
+spec §4 items outside the 1A/1B slice list, review hardening, and screens for daily operations. Same operating rules as 1A/1B.
 Rules for every slice: tests first; pest + phpstan green before commit; never weaken/skip/delete a test
 (record disputes below and stop the slice); OPEN questions → most conservative option, `ASSUMPTION:` in
 code and in the register below, configurable.
@@ -45,6 +47,18 @@ code and in the register below, configurable.
 | 1B.1 | Claims | done | see git log |
 | 1B.2 | Claims reconciler + close task 5 | done | see git log |
 | 1B.3 | Claims reports | done | see git log |
+| 1C.1 | Commission payouts (approve → pay, SoD) | pending | |
+| 1C.2 | Cheque register and bounce handling | pending | |
+| 1C.3 | Agent cash collection and deposit reconciliation | pending | |
+| 1C.4 | Dunning, grace and auto-lapse | pending | |
+| 1C.5 | Multi-payer policies | pending | |
+| 1C.6 | Hardening: posting/lock race, isolation on every tenant table | pending | |
+| 1C.7 | Account security page (2FA, password) | pending | |
+| 1C.8 | Operations UI: parties, products, policies | pending | |
+| 1C.9 | Operations UI: receipts, suspense, refunds, bank | pending | |
+| 1C.10 | Operations UI: claims and commission | pending | |
+| 1C.11 | Operations UI: month-end close and reports | pending | |
+| 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | pending | |
 
 ## ASSUMPTION register
 
