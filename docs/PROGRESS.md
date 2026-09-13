@@ -52,7 +52,7 @@ code and in the register below, configurable.
 | 1C.3 | Agent cash collection and deposit reconciliation | done | see git log |
 | 1C.4 | Dunning, grace and auto-lapse | done | see git log |
 | 1C.5 | Multi-payer policies | done | see git log |
-| 1C.6 | Hardening: posting/lock race, isolation on every tenant table | pending | |
+| 1C.6 | Hardening: posting/lock race, isolation on every tenant table | done | see git log |
 | 1C.7 | Account security page (2FA, password) | pending | |
 | 1C.8 | Operations UI: parties, products, policies | pending | |
 | 1C.9 | Operations UI: receipts, suspense, refunds, bank | pending | |
@@ -743,3 +743,18 @@ Scope: review only; only the critical finding was fixed.
 - Tests `tests/Feature/Insurance/MultiPayerTest.php`: share validation; split with rounding and single-payer default; increase split, shared credit on
   cancellation, payer statement totals and clean reconciliation over three month ends; API.
 - Result: 934 tests green, PHPStan 0 errors.
+
+### 1C.6 — Hardening: posting/lock race, isolation on every tenant table — done
+- Why: the two medium findings of the review pass.
+- Posting/lock race: `PostingContextLoader::period` now reads the fiscal period `FOR SHARE` (`sharedLock()`), held for the posting transaction
+  (engine, reversal, manual journal posting). A period lock holds the row `FOR UPDATE`, so a lock waits for postings in flight and postings wait for a
+  lock in progress; no posting can commit between the lock's reconciliation recompute and its commit. A posting that waits past `lock_timeout`
+  fails with SQLSTATE 55P03, which `TransientFailureDetector` already treats as retryable (the event stays queued).
+  Test `tests/Feature/Accounting/PostingLockRaceTest.php` holds the period row from a second connection: posting times out (55P03, event queued,
+  no journal), then posts once the row is released — it failed before the fix.
+- Isolation: `tests/Feature/Platform/TenantIsolationEveryTableTest.php` runs Phase 1 business through the application in two tenants (policy with
+  payers, earning, dunning, cheque and agent receipts, deposit, bank import and match, commission payout, claim with approval policy, payment and
+  recovery, manual journal, reversal request, reconciliation, close start, cancellation and refund) so every one of the 57 tenant tables holds rows;
+  as `erp_app`, tenant A sees no row of tenant B (and B none of A) in any of them and nothing without a tenant. A new tenant table fails the test
+  until it is populated there or listed in `TABLES_WITHOUT_SCENARIO_ROWS` with a reason (currently empty).
+- Result: 936 tests green, PHPStan 0 errors.

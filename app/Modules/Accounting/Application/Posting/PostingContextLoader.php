@@ -23,14 +23,17 @@ final class PostingContextLoader
 
     /**
      * The period that accepts a posting on the date. CONTEXT.md non-negotiable #3: locked rejects,
-     * soft_locked needs accounting.post_in_soft_locked (the caller resolves the permission).
+     * soft_locked needs accounting.post_in_soft_locked (the caller resolves the permission). Inside a transaction the period row stays
+     * share-locked until commit.
      *
      * @throws PostingFailedException PERIOD_MISSING, PERIOD_CLOSED, PERIOD_SOFT_LOCKED
      */
     public function period(string $entityId, string $bookId, CarbonImmutable $on, bool $actorMayPostSoftLocked): FiscalPeriod
     {
+        // FOR SHARE for the rest of the posting transaction: a period lock (FOR UPDATE, FiscalPeriodService) waits for postings in flight and
+        // postings wait for a lock in progress, so no posting commits into a period between the lock's reconciliation check and its commit.
         $period = FiscalPeriod::query()->where('entity_id', $entityId)->where('book_id', $bookId)
-            ->where('starts', '<=', $on->toDateString())->where('ends', '>=', $on->toDateString())->first();
+            ->where('starts', '<=', $on->toDateString())->where('ends', '>=', $on->toDateString())->sharedLock()->first();
         if ($period === null) {
             throw new PostingFailedException('PERIOD_MISSING', "No period for {$on->toDateString()} in book {$bookId}");
         }
