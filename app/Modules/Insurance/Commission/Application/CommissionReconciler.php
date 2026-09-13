@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Design §6.1 commission subledger → commission_payable: per agent, Σ (amount − withholding) of entries dated on or before the date and
- * not paid. Withholding is owed to the tax authority (commission_withholding_payable), not to the agent.
+ * not paid by then. Withholding is owed to the tax authority (commission_withholding_payable), not to the agent.
  *
- * ASSUMPTION: A-8 — "not paid" is the entry's current status (payouts, and so payout dates, are not built yet).
+ * ASSUMPTION: A-8 — subledger balances are rebuilt as of the date from dated rows; an entry stops counting on its paid_on (slice 1C.1).
  */
 final class CommissionReconciler implements SubledgerReconciler
 {
@@ -36,8 +36,10 @@ final class CommissionReconciler implements SubledgerReconciler
     /** @return list<array{object_type: string, object_id: string, amount_minor: int}> */
     public function itemsAt(string $entityId, CarbonImmutable $asOf): array
     {
-        return SubledgerItems::of('agent', DB::table('commission_entries')->where('entity_id', $entityId)->where('earned_on', '<=', $asOf->toDateString())
-            ->where('status', '<>', 'paid')->groupBy('agent_id')->orderBy('agent_id')
+        $day = $asOf->toDateString();
+
+        return SubledgerItems::of('agent', DB::table('commission_entries')->where('entity_id', $entityId)->where('earned_on', '<=', $day)
+            ->where(fn ($q) => $q->whereNull('paid_on')->orWhere('paid_on', '>', $day))->groupBy('agent_id')->orderBy('agent_id')
             ->selectRaw('agent_id as object_id, sum(amount_minor - withholding_minor) as amount')->get());
     }
 }

@@ -47,7 +47,7 @@ code and in the register below, configurable.
 | 1B.1 | Claims | done | see git log |
 | 1B.2 | Claims reconciler + close task 5 | done | see git log |
 | 1B.3 | Claims reports | done | see git log |
-| 1C.1 | Commission payouts (approve → pay, SoD) | pending | |
+| 1C.1 | Commission payouts (approve → pay, SoD) | done | see git log |
 | 1C.2 | Cheque register and bounce handling | pending | |
 | 1C.3 | Agent cash collection and deposit reconciliation | pending | |
 | 1C.4 | Dunning, grace and auto-lapse | pending | |
@@ -73,7 +73,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-5 | 1A.6 | Bank statement file format is not specified (no bank named; like OPEN #6): CSV with a header row, one signed amount column in major units (positive = money in), dates `Y-m-d`. Header names and date format are configurable. | `config/erp.php` `imports.bank_statement`, `imports.bank_statement_date_format` (`ASSUMPTION:` A-3/A-5 comment). |
 | A-6 | 1A.7 | Commission rules beyond a flat rate (tiers, term/year rules, hierarchy overrides — spec §4) are not specified: a plan is one `rate_bp` on premium received plus optional withholding (`withholding_jurisdiction` + `withholding_tax_type` → `tax_rates` with `withholding = true`; a missing rate refuses the allocation, never assumes 0). | `commission_plans` rows (`CommissionPlanService`); migration `2026_09_14_000007` (`ASSUMPTION:`). |
 | A-7 | 1A.7 | When both the product version and the agent name a commission plan, which wins is not specified: product version first, then agent. | `config/erp.php` `commission.plan_precedence` (`ASSUMPTION:`), `CommissionPlanResolver`. |
-| A-8 | 1A.8 | Subledger balances are computed as of the reconciliation date from dated business rows (`policy_transactions.accounting_date`, `receipt_allocations.posted_on`, `suspense_items.aged_since`, `commission_entries.earned_on`); commission entries count while their *current* status is not `paid` (no payout date exists yet — payouts are not built). Control accounts are those mapped to the subledger's `subledger_controls` roles on the date. | `Insurance\Collections\Application\Reconciliation\*Reconciler`, `Insurance\Commission\Application\CommissionReconciler`. |
+| A-8 | 1A.8, 1C.1 | Subledger balances are computed as of the reconciliation date from dated business rows (`policy_transactions.accounting_date`, `receipt_allocations.posted_on`, `suspense_items.aged_since`, `commission_entries.earned_on` / `paid_on` since 1C.1). Control accounts are those mapped to the subledger's `subledger_controls` roles on the date. | `Insurance\Collections\Application\Reconciliation\*Reconciler`, `Insurance\Commission\Application\CommissionReconciler`. |
 | A-9 | 1A.10 | Receivable ageing by installment uses each installment's *current* outstanding amount (payments and cancellation credits are not dated per installment); `as_of` sets days past due and buckets only. The premium subledger reconciliation (A-8) is dated, so control totals are unaffected. | `Insurance\Reports\Application\ReceivableAgeingQuery` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -651,3 +651,21 @@ Scope: review only; only the critical finding was fixed.
    its assertions are unchanged.
    Residual (medium): a posting committed concurrently with the lock transaction can still slip in (postings do not take the period row lock).
 - Result: 888 tests green, PHPStan 0 errors.
+
+### 1C.1 — Commission payouts (approve → pay, SoD) — done
+- Why: CONTEXT.md non-negotiable #9 (maker ≠ checker on commission payouts) and design §5.6 `accrued ─▶ approved ─▶ paid` were not built in 1A.7.
+- Migration `2026_09_16_000001_create_commission_statements` (tenant + RLS): `commission_statements` (number `CST-<FY>-nnnnnn` per entity, up_to,
+  gross/withholding/net, status approved|paid, net > 0) and `commission_entries.paid_on`.
+- New rule `COMMISSION_PAID.default` (DR commission_payable / CR bank_main `payload.amount`, dims branch + agent, key
+  `COMMISSION_PAID:{commission_statement_id}`) and golden fixture `05c_commission_paid.json`.
+- `Insurance\Commission\Application\CommissionPayoutService`: `approve(agent, upTo, actor, on)` (`commission.approve`; gathers accrued entries
+  earned ≤ upTo, clawbacks netted; `NOTHING_TO_PAY` when net ≤ 0; entries → approved + statement_id); `pay(statement, ?bankAccount, actor,
+  paidOn)` (`commission.pay`; SodGuard commission.approve ✕ commission.pay on the statement; `STATEMENT_NOT_APPROVED`; entries → paid with
+  paid_on; posts COMMISSION_PAID for the net, bank override when a bank account is named). Withholding stays in commission_withholding_payable
+  (remittance is not part of the payout).
+- Commission subledger and agent statement now dated by `paid_on` (A-8 updated): an entry is payable from earned_on until paid_on.
+- API: `POST /api/insurance/agents/{agent}/commission-statements {up_to, on}`, `POST /api/insurance/commission-statements/{id}/pay {paid_on, bank_account_id?}`.
+- Interpretations: no amount-threshold approval policy on payouts (§5.6 names only approve/pay); a statement covers one entity (the agent's branch's).
+- Tests `tests/Feature/Insurance/CommissionPayoutTest.php`: approve/pay amounts, statuses, event key/date, journal lines, remaining GL payable;
+  clawback netting and NOTHING_TO_PAY; permission, SoD, pay once; bank override and clean dated reconciliation before/after payment; API.
+- Result: 910 tests green, PHPStan 0 errors.

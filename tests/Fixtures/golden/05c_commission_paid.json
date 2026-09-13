@@ -1,0 +1,1 @@
+{ "event_type": "COMMISSION_PAID", "payload": {"amount":380000}, "dimensions": {"branch":"B1","product":"P1","product_code":"MOTOR","lob":"motor","channel":"agent","policy":"POL1","customer":"CU1","agent":"AG1","claim":"CL1"}, "expected": [["commission_payable","debit",380000],["bank_main","credit",380000]] }

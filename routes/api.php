@@ -58,6 +58,8 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund');
     Route::post('commission-plans', [CommissionController::class, 'storePlan']);
     Route::get('agents/{agent}/commission-statement', [CommissionController::class, 'statement'])->whereUuid('agent');
+    Route::post('agents/{agent}/commission-statements', [CommissionController::class, 'approvePayout'])->whereUuid('agent');
+    Route::post('commission-statements/{statement}/pay', [CommissionController::class, 'pay'])->whereUuid('statement');
     Route::post('claims', [ClaimController::class, 'store']);
     Route::get('claims/{claim}', [ClaimController::class, 'show'])->whereUuid('claim');
     foreach (['reserve', 'close', 'reject', 'reopen', 'recover'] as $action) {

@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $currency
  * @property CarbonImmutable $earned_on
  * @property string $status accrued|approved|paid|reversed
+ * @property string|null $statement_id
+ * @property CarbonImmutable|null $paid_on
  */
 final class CommissionEntry extends Model
 {
@@ -39,5 +41,5 @@ final class CommissionEntry extends Model
 
     protected $table = 'commission_entries';
     protected $guarded = [];
-    protected $casts = ['earned_on' => 'immutable_date', 'base_minor' => 'int', 'rate_bp' => 'int', 'amount_minor' => 'int', 'withholding_minor' => 'int'];
+    protected $casts = ['earned_on' => 'immutable_date', 'paid_on' => 'immutable_date', 'base_minor' => 'int', 'rate_bp' => 'int', 'amount_minor' => 'int', 'withholding_minor' => 'int'];
 }

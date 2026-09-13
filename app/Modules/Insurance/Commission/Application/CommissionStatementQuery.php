@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Agent commission statement (design §6 report "commission statement"): entries dated in the range with totals, and the payable
- * (Σ amount − withholding of entries not yet paid) before and at the end of the range.
+ * (Σ amount − withholding of entries not yet paid at that date) before and at the end of the range.
  */
 final class CommissionStatementQuery
 {
@@ -42,15 +42,17 @@ final class CommissionStatementQuery
         }
 
         return ['agent_id' => $agentId, 'from' => $from->toDateString(), 'to' => $to->toDateString(),
-            'opening_payable_minor' => $this->payable($agentId, fn (Builder $q) => $q->where('earned_on', '<', $from->toDateString())),
-            'closing_payable_minor' => $this->payable($agentId, fn (Builder $q) => $q->where('earned_on', '<=', $to->toDateString())),
+            'opening_payable_minor' => $this->payable($agentId, fn (Builder $q) => $q->where('earned_on', '<', $from->toDateString())
+                ->where(fn (Builder $paid) => $paid->whereNull('paid_on')->orWhere('paid_on', '>=', $from->toDateString()))),
+            'closing_payable_minor' => $this->payable($agentId, fn (Builder $q) => $q->where('earned_on', '<=', $to->toDateString())
+                ->where(fn (Builder $paid) => $paid->whereNull('paid_on')->orWhere('paid_on', '>', $to->toDateString()))),
             'entries' => $entries, 'totals' => $totals];
     }
 
     /** @param callable(Builder): Builder $dated */
     private function payable(string $agentId, callable $dated): int
     {
-        return (int) $dated(DB::table('commission_entries')->where('agent_id', $agentId)->where('status', '<>', 'paid'))
+        return (int) $dated(DB::table('commission_entries')->where('agent_id', $agentId))
             ->selectRaw('coalesce(sum(amount_minor - withholding_minor), 0) as payable')->value('payable');
     }
 }
