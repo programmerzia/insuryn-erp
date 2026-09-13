@@ -39,7 +39,8 @@ final class AuthenticationServiceProvider extends ServiceProvider
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
 
-        Fortify::loginView(static fn () => Inertia::render('auth/Login', ['canResetPassword' => true]));
+        Fortify::loginView(static fn () => Inertia::render('auth/Login', array_filter(['canResetPassword' => true, 'demoAccounts' => DemoAccounts::forSignIn()],
+            static fn (mixed $value): bool => $value !== null)));
         Fortify::requestPasswordResetLinkView(static fn () => Inertia::render('auth/ForgotPassword'));
         Fortify::resetPasswordView(static fn (Request $request) => Inertia::render('auth/ResetPassword', [
             'token' => (string) $request->route('token'), 'email' => (string) $request->query('email', ''),

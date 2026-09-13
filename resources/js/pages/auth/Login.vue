@@ -1,14 +1,28 @@
 <script setup lang="ts">
 import { Link, useForm } from '@inertiajs/vue3';
+import { defineAsyncComponent, nextTick, ref, useTemplateRef } from 'vue';
+import type { DemoAccount } from '@/components/auth/DemoAccountsDialog.vue';
 import FormError from '@/components/FormError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 
-defineProps<{ canResetPassword: boolean }>();
+/** `demoAccounts` is sent only in the local environment (DemoAccounts::forSignIn). */
+defineProps<{ canResetPassword: boolean; demoAccounts?: DemoAccount[] }>();
 
+const DemoAccountsDialog = defineAsyncComponent(() => import('@/components/auth/DemoAccountsDialog.vue'));
 const form = useForm({ email: '', password: '', remember: false });
+const demoOpen = ref(false);
+const signIn = useTemplateRef<{ $el: HTMLButtonElement }>('signIn');
+
+async function useAccount(account: DemoAccount): Promise<void> {
+    form.email = account.email;
+    form.password = account.password;
+    form.clearErrors();
+    await nextTick();
+    requestAnimationFrame(() => signIn.value?.$el.focus());
+}
 
 function submit(): void {
     form.post('/login', { onFinish: () => form.reset('password') });
@@ -35,7 +49,12 @@ function submit(): void {
                 <input id="remember" v-model="form.remember" type="checkbox" class="size-4 accent-brick" />
                 Keep me signed in
             </label>
-            <Button type="submit" :disabled="form.processing">Sign in</Button>
+            <Button ref="signIn" type="submit" :disabled="form.processing">Sign in</Button>
         </form>
+        <div v-if="demoAccounts" class="mt-6 flex items-center justify-between gap-3 border-t border-line pt-4">
+            <p class="text-dense text-ink-2">Local environment</p>
+            <Button variant="secondary" size="sm" @click="demoOpen = true">Use a demo account</Button>
+        </div>
+        <DemoAccountsDialog v-if="demoAccounts" v-model:open="demoOpen" :accounts="demoAccounts" @choose="useAccount" />
     </AuthLayout>
 </template>
