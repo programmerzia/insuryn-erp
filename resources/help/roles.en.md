@@ -1,0 +1,35 @@
+# What each journal line means
+
+One plain line per account role, shown under each line in *View accounting* and in the confirmation before money moves. The first column is the
+account role (do not translate it); the others say what a debit or a credit to that account means.
+
+| Role | Debit | Credit |
+|---|---|---|
+| bank_main | Money came into the bank | Money went out of the bank |
+| bank_clearing | Money is on its way to the bank through a payment gateway | Money left the clearing account for the bank |
+| suspense_receipts | Money in suspense was matched to a policy | Money arrived that is not yet matched to a policy |
+| premium_receivable | Customer owes us the premium | Customer paid, so owes us less |
+| unearned_premium | Cover has been provided, so this premium is no longer owed to the customer | Cover not yet provided — a liability until time passes |
+| premium_income | Premium income reduced | Premium earned as time passed |
+| premium_tax_payable | VAT no longer owed to the government | VAT we collect for the government |
+| customer_refund_payable | Refund paid to the customer | We owe the customer a refund |
+| agent_receivable | An agent holds customer cash not yet deposited | The agent deposited the cash they collected |
+| commission_expense | Commission cost of selling the policy | Commission cost reduced |
+| commission_payable | Commission paid or recovered | We owe the agent commission |
+| commission_withholding_payable | Tax withheld paid to the government | Tax withheld from commission, owed to the government |
+| producer_advances | Advance paid to a producer | Advance recovered from the producer's commission |
+| accounts_payable | Payable settled | We owe a supplier or producer |
+| dac_asset | Selling cost kept for later months | Kept selling cost charged to this month |
+| claims_outstanding | Reserve released or moved to payable | Money we expect to pay on a reported claim |
+| claims_expense | Cost of claims | Claims cost reduced as the reserve is released |
+| claims_payable | Claim payment made | Approved claim we must now pay |
+| claims_recovery_income | Recovery income reduced | Money recovered from salvage or a third party |
+| recovery_receivable | Recovery we expect to receive | Recovery received |
+| rounding_difference | Rounding difference | Rounding difference |
+| fx_gain_loss | Loss from exchange rates | Gain from exchange rates |
+| salary_expense | Salary cost | Salary cost reduced |
+| employer_pf_expense | Employer's provident fund cost | Employer's provident fund cost reduced |
+| salary_payable | Salary paid | Salary we owe staff |
+| employee_tax_payable | Employee tax paid to the government | Tax withheld from salaries, owed to the government |
+| pf_payable | Provident fund paid over | Provident fund we owe |
+| retained_earnings | Retained earnings reduced | Profit kept in the company, or a balance brought forward |

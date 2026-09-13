@@ -1601,3 +1601,14 @@ Scope: review only; only the critical finding was fixed.
 - The tour explains each step; it does not create records or move money. A user without access to a step's page sees that page's refusal (see the End-of-session gaps).
 - Screenshots: `storage/ux-screenshots/s4-tour/` (every step on its page, plus the card on another page; 1366/1920, light/dark).
 - Tests: `tests/Feature/Help/GuidedTourTest.php` (2), `resources/js/tests/tour.test.ts` (2).
+
+### S5 — Onboarding: plain captions on journal lines — done
+- `resources/help/roles.<en|bn>.md`: a table of every account role (all 28 in `AccountRolesSeeder`) with what a debit and a credit mean, e.g. premium_receivable debit
+  "Customer owes us the premium", unearned_premium credit "Cover not yet provided — a liability until time passes". Served by `GET /help/roles` (`HelpContent::roleCaptions`).
+- Journal lines sent to the screens now carry their account role (`role`): `ObjectHistory::accounting` (every object page's *View accounting* drawer and Accounting tab) and
+  `PreviewJournal` (the confirmation before money moves); a line without a role on it (manual journals) takes its account's current role mapping (`PageSupport::accountRoles`).
+- `AccountingList`, `JournalPreviewDialog` and the journal viewer show the caption under each line in the user's language (`lib/captions.ts`); an account with no role
+  (an ordinary expense account) has no caption.
+- Test change: the two exact line assertions in `JournalPreviewTest` and `ObjectPagesTest` now also expect `role`.
+- Screenshots: `storage/ux-screenshots/s5-captions/` (the *View accounting* drawer and the Accounting tab of the demo motor policy).
+- Tests: `tests/Feature/Help/AccountingCaptionsTest.php` (3), `resources/js/tests/captions.test.ts` (2).

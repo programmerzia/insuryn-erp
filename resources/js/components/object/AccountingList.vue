@@ -3,11 +3,13 @@ import { Link } from '@inertiajs/vue3';
 import type { AccountingJournal } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { drillFrom } from '@/lib/drill';
+import { captionFor, useLineCaptions } from '@/lib/captions';
 import { eventLabel } from '@/lib/events';
 import { formatDate, formatMoney } from '@/lib/format';
 
-/** Brief §1.5: the journals behind a business record, one click away, each linking to the journal viewer. */
+/** Brief §1.5: the journals behind a business record, one click away, each linking to the journal viewer. Each line says what it means (session S5). */
 defineProps<{ journals: AccountingJournal[]; currency: string; from: string }>();
+const captions = useLineCaptions();
 </script>
 
 <template>
@@ -23,10 +25,13 @@ defineProps<{ journals: AccountingJournal[]; currency: string; from: string }>()
                 <colgroup><col /><col style="width: 128px" /><col style="width: 128px" /></colgroup>
                 <thead class="sr-only"><tr><th>Account</th><th>Debit ({{ currency }})</th><th>Credit ({{ currency }})</th></tr></thead>
                 <tbody>
-                    <tr v-for="(line, index) in journal.lines" :key="index" class="h-7">
-                        <td class="truncate px-3" :class="line.credit ? 'pl-8' : ''"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</td>
-                        <td class="num px-3">{{ formatMoney(line.debit) }}</td>
-                        <td class="num px-3">{{ formatMoney(line.credit) }}</td>
+                    <tr v-for="(line, index) in journal.lines" :key="index" class="h-7 align-top">
+                        <td class="px-3 py-1" :class="line.credit ? 'pl-8' : ''">
+                            <span class="block truncate"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</span>
+                            <span v-if="captionFor(captions, line.role, line.debit ? 'debit' : 'credit')" class="block text-ink-2" data-caption>{{ captionFor(captions, line.role, line.debit ? 'debit' : 'credit') }}</span>
+                        </td>
+                        <td class="num px-3 py-1">{{ formatMoney(line.debit) }}</td>
+                        <td class="num px-3 py-1">{{ formatMoney(line.credit) }}</td>
                     </tr>
                 </tbody>
             </table>

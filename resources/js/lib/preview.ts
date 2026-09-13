@@ -6,6 +6,8 @@ export interface PreviewLine {
     name: string;
     debit: string | null;
     credit: string | null;
+    /** Account role of the line (session S5 captions). */
+    role?: string | null;
 }
 export interface PreviewJournal {
     event: string;

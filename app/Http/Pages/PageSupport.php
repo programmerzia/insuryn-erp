@@ -58,6 +58,22 @@ final class PageSupport
         return intdiv($basisPoints, 100).'.'.str_pad((string) ($basisPoints % 100), 2, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * The account role each account is mapped to, for journal lines that do not carry one (manual journals). Session S5 captions lines by role.
+     *
+     * @param list<string> $accountIds
+     * @return array<string, string> account id → role code
+     */
+    public static function accountRoles(array $accountIds): array
+    {
+        if ($accountIds === []) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('account_role_mappings')->whereIn('account_id', $accountIds)->whereNull('effective_to')
+            ->pluck('role_code', 'account_id')->mapWithKeys(fn (mixed $role, mixed $account): array => [(string) $account => (string) $role])->all();
+    }
+
     public static function money(int $minor, string $currency): string
     {
         return MinorUnits::format($minor, $currency);

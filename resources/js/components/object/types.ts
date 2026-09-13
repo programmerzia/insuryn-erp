@@ -9,7 +9,7 @@ export interface AccountingJournal {
     event: string | null;
     date: string;
     status: string;
-    lines: { account: string; name: string; debit: string | null; credit: string | null }[];
+    lines: { account: string; name: string; debit: string | null; credit: string | null; role?: string | null }[];
 }
 export interface AuditRow {
     action: string;

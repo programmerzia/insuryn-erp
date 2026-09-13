@@ -59,7 +59,7 @@ final class ObjectHistory
      * Journals touching the object, newest first, with their lines.
      *
      * @param list<string> $journalIds
-     * @return list<array{id: string, number: string|null, event: string|null, date: string, status: string, lines: list<array{account: string, name: string, debit: string|null, credit: string|null}>}>
+     * @return list<array{id: string, number: string|null, event: string|null, date: string, status: string, lines: list<array{account: string, name: string, debit: string|null, credit: string|null, role: string|null}>}>
      */
     public function accounting(array $journalIds): array
     {
@@ -69,13 +69,15 @@ final class ObjectHistory
         $journals = DB::table('journals as j')->leftJoin('accounting_events as e', 'e.id', '=', 'j.source_id')->whereIn('j.id', $journalIds)
             ->orderByDesc('j.posting_date')->orderByDesc('j.created_at')->get(['j.id', 'j.number', 'j.posting_date', 'j.status', 'j.currency', 'j.posting_rule_code', 'j.description']);
         $lines = DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')->whereIn('l.journal_id', $journalIds)->orderBy('l.line_no')
-            ->get(['l.journal_id', 'a.code', 'a.name', 'l.side', 'l.amount_minor'])->groupBy('journal_id');
+            ->get(['l.journal_id', 'l.account_id', 'l.role_code', 'a.code', 'a.name', 'l.side', 'l.amount_minor'])->groupBy('journal_id');
+        $roles = PageSupport::accountRoles(array_values(array_unique($lines->flatten(1)->whereNull('role_code')->pluck('account_id')->map(fn (mixed $id): string => (string) $id)->all())));
         $result = [];
         foreach ($journals as $journal) {
             $rows = [];
             foreach ($lines->get($journal->id, collect()) as $line) {
                 $amount = PageSupport::money((int) $line->amount_minor, (string) $journal->currency);
-                $rows[] = ['account' => (string) $line->code, 'name' => (string) $line->name, 'debit' => $line->side === 'debit' ? $amount : null, 'credit' => $line->side === 'credit' ? $amount : null];
+                $rows[] = ['account' => (string) $line->code, 'name' => (string) $line->name, 'debit' => $line->side === 'debit' ? $amount : null, 'credit' => $line->side === 'credit' ? $amount : null,
+                    'role' => $line->role_code === null ? ($roles[(string) $line->account_id] ?? null) : (string) $line->role_code];
             }
             $event = $journal->posting_rule_code === null ? null : explode('.', (string) $journal->posting_rule_code)[0];
             $result[] = ['id' => (string) $journal->id, 'number' => $journal->number === null ? null : (string) $journal->number, 'event' => $event ?? (string) $journal->description,

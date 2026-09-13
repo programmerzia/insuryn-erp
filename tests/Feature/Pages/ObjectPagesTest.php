@@ -62,7 +62,7 @@ it('tells a policy\'s story and lists what it posted', function (): void {
                 $byEvent = array_column((array) json_decode((string) json_encode($journals), true), null, 'event');
 
                 return isset($byEvent['POLICY_ENDORSED'], $byEvent['PREMIUM_RECEIVED'])
-                    && $byEvent['POLICY_ISSUED']['lines'][0] === ['account' => '1100', 'name' => 'Premium Receivable', 'debit' => '120,000.00', 'credit' => null];
+                    && $byEvent['POLICY_ISSUED']['lines'][0] === ['account' => '1100', 'name' => 'Premium Receivable', 'debit' => '120,000.00', 'credit' => null, 'role' => 'premium_receivable'];
             })
             ->where('audit.0.action', 'Policy endorsed')->where('audit.0.by', 'Rafiq Islam')->where('audit.0.reason', 'Extra driver')));
 });

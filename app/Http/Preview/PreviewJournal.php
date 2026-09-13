@@ -93,7 +93,7 @@ final class PreviewJournal
     }
 
     /**
-     * @return array{0: array{event: string, date: string, lines: list<array{account: string, name: string, debit: string|null, credit: string|null}>, totals: array{debit: string, credit: string}}|null, 1: array{event: string, reason: string}|null}
+     * @return array{0: array{event: string, date: string, lines: list<array{account: string, name: string, debit: string|null, credit: string|null, role: string|null}>, totals: array{debit: string, credit: string}}|null, 1: array{event: string, reason: string}|null}
      */
     private function post(string $eventId): array
     {
@@ -107,12 +107,13 @@ final class PreviewJournal
         $debit = 0;
         $credit = 0;
         $currency = (string) ($event->currency ?? '');
-        foreach (DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('l.journal_id', $journal->id)->orderBy('l.line_no')->get(['a.code', 'a.name', 'l.side', 'l.amount_minor']) as $line) {
+        foreach (DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('l.journal_id', $journal->id)->orderBy('l.line_no')->get(['a.code', 'a.name', 'l.side', 'l.amount_minor', 'l.role_code', 'l.account_id']) as $line) {
             $amount = (int) $line->amount_minor;
             $isDebit = $line->side === 'debit';
             $isDebit ? $debit += $amount : $credit += $amount;
             $lines[] = ['account' => (string) $line->code, 'name' => (string) $line->name,
-                'debit' => $isDebit ? PageSupport::money($amount, $currency) : null, 'credit' => $isDebit ? null : PageSupport::money($amount, $currency)];
+                'debit' => $isDebit ? PageSupport::money($amount, $currency) : null, 'credit' => $isDebit ? null : PageSupport::money($amount, $currency),
+                'role' => $line->role_code === null ? (PageSupport::accountRoles([(string) $line->account_id])[(string) $line->account_id] ?? null) : (string) $line->role_code];
         }
 
         return [['event' => (string) ($event->event_type ?? ''), 'date' => $journal->posting_date->toDateString(), 'lines' => $lines,

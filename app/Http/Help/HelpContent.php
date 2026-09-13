@@ -53,6 +53,27 @@ final class HelpContent
         return $steps;
     }
 
+    /**
+     * Session S5: the plain caption of a journal line by account role and side, from the table in resources/help/roles.<locale>.md.
+     *
+     * @return array<string, array{debit: string, credit: string}>
+     */
+    public function roleCaptions(string $locale): array
+    {
+        if (! in_array($locale, self::LOCALES, true)) {
+            throw new InvalidArgumentException("No captions in {$locale}.");
+        }
+        $captions = [];
+        foreach (file(resource_path("help/roles.{$locale}.md"), FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            $cells = array_map('trim', explode('|', trim($line, " |")));
+            if (count($cells) === 3 && preg_match('/^[a-z][a-z_]*$/', $cells[0]) === 1) {
+                $captions[$cells[0]] = ['debit' => $cells[1], 'credit' => $cells[2]];
+            }
+        }
+
+        return $captions;
+    }
+
     public function render(string $markdown): string
     {
         return Str::markdown($markdown, ['html_input' => 'escape', 'allow_unsafe_links' => false]);

@@ -36,7 +36,7 @@ it('previews the journal a policy issue posts, and changes nothing', function ()
 
     actingAs($this->admin)->postJson("/policies/{$this->policyId}/issue", ['on' => '2026-09-01'], $this->preview)->assertOk()
         ->assertJsonPath('journals.0.event', 'POLICY_ISSUED')
-        ->assertJsonPath('journals.0.lines.0', ['account' => '1100', 'name' => 'Premium Receivable', 'debit' => '120,000.00', 'credit' => null])
+        ->assertJsonPath('journals.0.lines.0', ['account' => '1100', 'name' => 'Premium Receivable', 'debit' => '120,000.00', 'credit' => null, 'role' => 'premium_receivable'])
         ->assertJsonPath('journals.0.totals', ['debit' => '120,000.00', 'credit' => '120,000.00'])
         ->assertJsonPath('failures', []);
 

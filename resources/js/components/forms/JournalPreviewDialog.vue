@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import Kbd from '@/components/ui/Kbd.vue';
+import { captionFor, useLineCaptions } from '@/lib/captions';
 import { eventLabel } from '@/lib/events';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { PreviewResult } from '@/lib/preview';
 
 /**
  * Brief §1.6 / §4: the deliberate stop before money moves — the exact journal lines (account, debit, credit) the action will post, and the
- * button says what happens. Ctrl+Enter confirms, Esc goes back to the form.
+ * button says what happens, and each line says what it means in plain words (session S5). Ctrl+Enter confirms, Esc goes back to the form.
  */
 defineProps<{ result: PreviewResult | null; title: string; confirmLabel: string; currency: string; processing?: boolean }>();
 const open = defineModel<boolean>('open', { default: false });
 const emit = defineEmits<{ confirm: [] }>();
+const captions = useLineCaptions();
 </script>
 
 <template>
@@ -42,10 +44,13 @@ const emit = defineEmits<{ confirm: [] }>();
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="(line, i) in journal.lines" :key="i" class="h-8">
-                                    <td class="truncate border-b border-line px-2" :class="line.credit ? 'pl-6' : ''"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</td>
-                                    <td class="num border-b border-line px-2">{{ formatMoney(line.debit) }}</td>
-                                    <td class="num border-b border-line px-2">{{ formatMoney(line.credit) }}</td>
+                                <tr v-for="(line, i) in journal.lines" :key="i" class="h-8 align-top">
+                                    <td class="border-b border-line px-2 py-1.5" :class="line.credit ? 'pl-6' : ''">
+                                        <span class="block truncate"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</span>
+                                        <span v-if="captionFor(captions, line.role, line.debit ? 'debit' : 'credit')" class="block text-ink-2">{{ captionFor(captions, line.role, line.debit ? 'debit' : 'credit') }}</span>
+                                    </td>
+                                    <td class="num border-b border-line px-2 py-1.5">{{ formatMoney(line.debit) }}</td>
+                                    <td class="num border-b border-line px-2 py-1.5">{{ formatMoney(line.credit) }}</td>
                                 </tr>
                             </tbody>
                             <tfoot>
