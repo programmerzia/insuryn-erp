@@ -60,6 +60,71 @@ final class GeneratedDocumentsController
         return redirect("/receipts/{$receipt}?tab=documents")->with('status', self::generatedMessage($generated));
     }
 
+    /** POST /quotations/{id}/generated-documents — print an issued quotation (Phase 3 §2 step 1 "save/print quotation"). */
+    public function quotation(Request $request, string $quotation): RedirectResponse
+    {
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeAny($actor, \App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::AREA);
+        abort_if(! DB::table('quotations')->where('id', $quotation)->exists(), 404);
+        /** @var array{locale: string} $data */
+        $data = $request->validate(['locale' => ['required', Rule::in(['en', 'bn'])]]);
+        $generated = $this->generator->generate(DocumentTemplateCode::Quotation, 'quotation', $quotation, $actor, $data['locale']);
+
+        return redirect("/quotations/{$quotation}")->with('status', self::generatedMessage($generated));
+    }
+
+    /** POST /cover-notes/{id}/generated-documents — print a cover note (Phase 3 §2 step 3). */
+    public function coverNote(Request $request, string $coverNote): RedirectResponse
+    {
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeAny($actor, \App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::AREA);
+        abort_if(! DB::table('cover_notes')->where('id', $coverNote)->exists(), 404);
+        /** @var array{locale: string} $data */
+        $data = $request->validate(['locale' => ['required', Rule::in(['en', 'bn'])]]);
+        $generated = $this->generator->generate(DocumentTemplateCode::CoverNote, 'cover_note', $coverNote, $actor, $data['locale']);
+
+        return redirect('/cover-notes')->with('status', self::generatedMessage($generated));
+    }
+
+    /** GET /quotations/{id}/documents/{document} — a printed quotation, audited as a download. */
+    public function quotationDocument(Request $request, \App\Http\Pages\ObjectDocuments $documents, string $quotation, string $document): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->permissions->authorizeAny(PageSupport::actor($request), \App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::AREA);
+
+        return $documents->download($request, 'quotation', $quotation, $document);
+    }
+
+    /** GET /cover-notes/{id}/documents/{document} — a printed cover note, audited as a download. */
+    public function coverNoteDocument(Request $request, \App\Http\Pages\ObjectDocuments $documents, string $coverNote, string $document): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->permissions->authorizeAny(PageSupport::actor($request), \App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::AREA);
+
+        return $documents->download($request, 'cover_note', $coverNote, $document);
+    }
+
+    /** @return array<string, mixed> the quotation workbench's print panel: printing once issued, and every version printed */
+    public function forQuotation(string $actor, string $quotation): array
+    {
+        $model = DB::table('quotations')->where('id', $quotation)->first(['id', 'entity_id', 'branch_id', 'number']);
+        if ($model === null) {
+            return self::panel(null, [], []);
+        }
+        $may = $model->number !== null && $this->permissions->has($actor, DocumentGenerator::PERMISSION, AuthorizationScope::branch((string) $model->entity_id, (string) $model->branch_id));
+
+        return self::panel("/quotations/{$quotation}/generated-documents", $may ? [['label' => 'Generate quotation', 'template_code' => DocumentTemplateCode::Quotation->value, 'object_id' => null]] : [],
+            array_map(fn (GeneratedDocument $g): array => self::row($g, "/quotations/{$quotation}"), $this->generator->history('quotation', $quotation)));
+    }
+
+    /**
+     * A cover note's printed versions for the cover notes queue, newest first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function forCoverNote(string $coverNote): array
+    {
+        return array_map(fn (GeneratedDocument $g): array => self::row($g, "/cover-notes/{$coverNote}"), $this->generator->history('cover_note', $coverNote));
+    }
+
     /**
      * The policy page's generation panel: what the user may generate (the schedule once issued, each endorsement) and every version generated.
      *

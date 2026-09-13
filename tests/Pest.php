@@ -220,8 +220,14 @@ function fakePdfRenderer(): ArrayObject
 {
     $pages = new ArrayObject();
     app()->instance(App\Modules\Platform\Documents\Rendering\PdfRenderer::class, new class($pages) implements App\Modules\Platform\Documents\Rendering\PdfRenderer {
+        /** @var ArrayObject<int, string> */
+        private readonly ArrayObject $pages;
+
         /** @param ArrayObject<int, string> $pages */
-        public function __construct(private readonly ArrayObject $pages) {}
+        public function __construct(ArrayObject $pages)
+        {
+            $this->pages = $pages;
+        }
 
         public function render(string $html): string
         {

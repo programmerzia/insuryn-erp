@@ -179,6 +179,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('quotations/{quotation}', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'show'])->whereUuid('quotation');
     Route::put('quotations/{quotation}', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'update'])->whereUuid('quotation');
     Route::post('quotations/{quotation}/issue', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'issue'])->whereUuid('quotation');
+    Route::post('quotations/{quotation}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'quotation'])->whereUuid('quotation');
+    Route::get('quotations/{quotation}/documents/{document}', [\App\Http\Documents\GeneratedDocumentsController::class, 'quotationDocument'])->whereUuid(['quotation', 'document']);
+    Route::post('cover-notes/{coverNote}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'coverNote'])->whereUuid('coverNote');
+    Route::get('cover-notes/{coverNote}/documents/{document}', [\App\Http\Documents\GeneratedDocumentsController::class, 'coverNoteDocument'])->whereUuid(['coverNote', 'document']);
     Route::post('quotations/{quotation}/decline', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'decline'])->whereUuid('quotation');
     // Phase 3 R5: proposals, KYC, documents, underwriting referrals.
     Route::post('quotations/{quotation}/proposal', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'store'])->whereUuid('quotation');

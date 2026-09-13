@@ -2195,3 +2195,16 @@ Scope: review only; only the critical finding was fixed.
   reason; queue order, expiring filter, proposal page props, cancel endpoint and role templates).
 
 - Result: 1,226 Pest tests green, PHPStan 0 errors, Vitest (296) and vue-tsc green.
+
+### R8b — Printing quotations and cover notes; quotes to follow up — done
+- Closes what R4, R6 and R8 left for the merge: `QuotationDocumentData` and `CoverNoteDocumentData` (tagged `DocumentDataProvider`s) print the quotation and the cover note from
+  their active templates. Both share `RatedRiskDocument`: risk details in the product version's own risk-schema labels (select options by label, money formatted, EN/BN), the
+  frozen premium (net premium, each duty, gross) and the rating explanation. The quotation adds "Valid until" and its proposed period; the cover note its temporary period, and its
+  status when it is no longer active. It prints the proposal's re-rated result when underwriting added a loading. A draft quotation is refused (`DOCUMENT_OBJECT_NOT_READY`).
+- HTTP: `POST /quotations/{id}/generated-documents` and `POST /cover-notes/{id}/generated-documents` (locale en|bn), downloads `GET /quotations/{id}/documents/{doc}` and
+  `GET /cover-notes/{id}/documents/{doc}`, all in `App\Http\Documents\GeneratedDocumentsController`. The quote workbench shows a "Printed quotation" panel (generate + versions);
+  the cover notes inspector prints in English or Bangla and lists printed versions.
+- Home "Quotes to follow up" now lists issued quotations still within their validity (newest price holding), next to Phase 1 policy quotes, opening the quotation; its
+  empty action is *New quote* on the quote workbench.
+- Test change: `tests/Pest.php` `fakePdfRenderer` declares its page list property explicitly (PHPStan generics).
+- Tests: `tests/Feature/Documents/QuotationAndCoverNoteDocumentsTest.php` (3), `tests/Feature/Pages/HomeQuotesQueueTest.php` (1).

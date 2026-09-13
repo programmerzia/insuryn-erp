@@ -93,7 +93,7 @@ final class WorkQueues
             'installments_due' => ['Installments due this week', '/receipts/create', 'No installments fall due in the next seven days.', ['Record a receipt', '/receipts/create']],
             'lapsing_policies' => ['Lapsing policies', '/dunning', 'No policy is close to lapsing.', ['See payment reminders', '/dunning']],
             'receipts_to_record' => ['Receipts to record', '/bank', 'Every credit on the bank statements has a receipt.', ['Import a bank statement', '/bank']],
-            'quotes' => ['Quotes to follow up', '/policies?status=quote', 'No open quotes.', ['New quote', '/policies/create']],
+            'quotes' => ['Quotes to follow up', '/quotations', 'No open quotes.', ['New quote', '/quotations/create']],
             'unallocated_receipts' => ['Unallocated receipts', '/suspense', 'No unallocated receipts.', ['Import a bank statement', '/bank']],
             'unmatched_bank_lines' => ['Unmatched bank lines', '/bank', 'Every statement line is matched or explained.', ['Import a bank statement', '/bank']],
             'journals_to_approve' => ['Journals awaiting my approval', '/accounting/journals?f.status=pending_approval', 'No journals are waiting for you.', ['Open journals', '/accounting/journals']],
@@ -150,8 +150,13 @@ final class WorkQueues
             'receipts_to_record', 'unmatched_bank_lines' => DB::table('bank_statement_lines as l')->join('bank_accounts as b', 'b.id', '=', 'l.bank_account_id')->where('l.match_status', 'unmatched')
                 ->when($key === 'receipts_to_record', fn (Builder $q) => $q->where('l.amount_minor', '>', 0))
                 ->orderBy('l.posted_on')->select(['l.id', 'l.bank_account_id', 'l.posted_on', 'l.reference', 'l.description', 'l.amount_minor', 'b.currency', 'b.bank_name']),
-            'quotes' => DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.status', 'quote')
-                ->orderBy('p.inception')->select(['p.id', 'h.display_name', 'p.inception', 'p.gross_premium_minor', 'p.currency']),
+            // Issued quotations still valid (Phase 3 quote workbench) and Phase 1 policy quotes, earliest cover start first.
+            'quotes' => DB::query()->fromSub(DB::table('quotations as q')->leftJoin('parties as h', 'h.id', '=', 'q.customer_party_id')->where('q.status', 'issued')
+                ->where('q.valid_until', '>=', $today->toDateString())
+                ->select([DB::raw("'quotation' as kind"), 'q.id', 'q.number', DB::raw("coalesce(h.display_name, '') as display_name"), 'q.inception', 'q.gross_premium_minor', 'q.currency'])
+                ->unionAll(DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.status', 'quote')
+                    ->select([DB::raw("'policy' as kind"), 'p.id', DB::raw('null as number'), 'h.display_name', 'p.inception', 'p.gross_premium_minor', 'p.currency'])), 'f')
+                ->orderBy('inception')->select(['kind', 'id', 'number', 'display_name', 'inception', 'gross_premium_minor', 'currency']),
             'unallocated_receipts' => DB::table('suspense_items as s')->join('receipts as r', 'r.id', '=', 's.receipt_id')->where('s.status', 'open')
                 ->orderBy('s.aged_since')->select(['s.id', 'r.id as receipt_id', 'r.number', 'r.reference', 's.aged_since', 'r.currency', DB::raw('s.amount_minor - s.allocated_minor as open_minor')]),
             'journals_to_approve' => DB::table('journals as j')->where('j.status', 'pending_approval')->where('j.created_by', '<>', $userId)
@@ -190,8 +195,9 @@ final class WorkQueues
                     'lapses' => CarbonImmutable::parse((string) $r->oldest_due)->addDays((int) config('erp.collections.grace_days', 30))->toDateString()]]],
             'receipts_to_record', 'unmatched_bank_lines' => [[$col('date', 'Date', 'date'), $col('bank', 'Bank'), $col('reference', 'Reference'), $col('amount', 'Amount', 'money')],
                 fn (\stdClass $r): array => ['href' => "/bank/{$r->bank_account_id}", 'cells' => ['date' => $r->posted_on, 'bank' => $r->bank_name, 'reference' => $r->reference ?? $r->description, 'amount' => $money($r, 'amount_minor')]]],
-            'quotes' => [[$col('holder', 'Policyholder'), $col('inception', 'Starts', 'date'), $col('premium', 'Premium', 'money')],
-                fn (\stdClass $r): array => ['href' => "/policies/{$r->id}", 'cells' => ['holder' => $r->display_name, 'inception' => $r->inception, 'premium' => $money($r, 'gross_premium_minor')]]],
+            'quotes' => [[$col('number', 'Quote'), $col('holder', 'Customer'), $col('inception', 'Starts', 'date'), $col('premium', 'Premium', 'money')],
+                fn (\stdClass $r): array => ['href' => $r->kind === 'quotation' ? "/quotations/{$r->id}" : "/policies/{$r->id}",
+                    'cells' => ['number' => $r->number ?? 'Policy quote', 'holder' => $r->display_name, 'inception' => $r->inception, 'premium' => $money($r, 'gross_premium_minor')]]],
             'unallocated_receipts' => [[$col('receipt', 'Receipt'), $col('reference', 'Reference'), $col('since', 'Waiting since', 'date'), $col('amount', 'Unallocated', 'money')],
                 fn (\stdClass $r): array => ['href' => "/receipts/{$r->receipt_id}", 'cells' => ['receipt' => $r->number, 'reference' => $r->reference, 'since' => $r->aged_since, 'amount' => $money($r, 'open_minor')]]],
             'journals_to_approve' => [[$col('description', 'Description'), $col('date', 'Date', 'date'), $col('amount', 'Amount', 'money')],

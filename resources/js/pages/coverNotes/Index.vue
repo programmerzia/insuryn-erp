@@ -17,6 +17,8 @@ import { formatDate } from '@/lib/format';
 interface CoverNoteRow {
     id: string; number: string; status: string; valid_from: string; valid_to: string; days_left: number | null; proposal_id: string; proposal_number: string;
     customer: string; product: string; issued_by: string; cancel_reason: string | null; can_cancel: boolean;
+    /** Printed versions of the cover note, newest first. */
+    documents: { id: string; version: number; locale: string; rendered_at: string; url: string }[];
 }
 const props = defineProps<{ coverNotes: CoverNoteRow[]; today: string; within: number | null; expiringDays: number }>();
 
@@ -27,6 +29,11 @@ const errors = computed(() => form.errors as Record<string, string>);
 const left = (n: CoverNoteRow) => (n.days_left === null ? '' : n.days_left < 0 ? 'Ended' : n.days_left === 0 ? 'Ends today' : `${n.days_left} days`);
 function filter(days: number | null): void {
     router.get('/cover-notes', days === null ? {} : { within: days }, { preserveState: true, preserveScroll: true });
+}
+const printing = useForm({ locale: 'en' });
+function print(note: CoverNoteRow, locale: 'en' | 'bn'): void {
+    printing.locale = locale;
+    printing.post(`/cover-notes/${note.id}/generated-documents`, { preserveScroll: true });
 }
 function cancel(): void {
     if (cancelling.value) form.post(`/cover-notes/${cancelling.value.id}/cancel`, { preserveScroll: true, onSuccess: () => (cancelling.value = null) });
@@ -79,6 +86,14 @@ const columns: DataColumn<CoverNoteRow>[] = [
                 <div class="mt-4 flex flex-wrap items-center gap-3">
                     <Link :href="`/proposals/${row.proposal_id}`" class="text-ui text-accent-text hover:underline">Open proposal {{ row.proposal_number }}</Link>
                     <Button v-if="row.can_cancel" variant="ghost" @click="cancelling = row; form.reset(); form.clearErrors()">Cancel cover note</Button>
+                </div>
+                <div class="mt-4 grid gap-2 border-t border-line pt-4 text-ui" aria-label="Printed cover note">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium">Print</span>
+                        <Button variant="secondary" size="sm" :disabled="printing.processing" @click="print(row, 'en')">English</Button>
+                        <Button variant="secondary" size="sm" :disabled="printing.processing" @click="print(row, 'bn')"><span lang="bn">বাংলা</span></Button>
+                    </div>
+                    <a v-for="d in row.documents" :key="d.id" :href="d.url" class="text-accent-text hover:underline">Version {{ d.version }} · {{ d.locale === 'bn' ? 'বাংলা' : 'English' }} · {{ formatDate(d.rendered_at) }}</a>
                 </div>
             </template>
         </QueueView>

@@ -180,6 +180,8 @@ final class QuotationPageController
             'branches' => DB::table('branches')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'products' => self::products(),
             'quotation' => $quotation === null ? null : $this->present($quotation),
+            // Printing the issued quotation (composed at the app layer with the document generator).
+            'generation' => $quotation === null ? null : app(\App\Http\Documents\GeneratedDocumentsController::class)->forQuotation($actor, $quotation->id),
             'can' => [
                 'edit' => ($status === null || $status === QuotationStatus::Draft) && $may(QuotationService::PERMISSION),
                 'issue' => ($status === null || $status === QuotationStatus::Draft) && $may(QuotationService::PERMISSION),

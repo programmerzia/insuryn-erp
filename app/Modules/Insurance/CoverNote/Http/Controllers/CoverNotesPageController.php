@@ -57,7 +57,7 @@ final class CoverNotesPageController
                 'id' => (string) $n->id, 'number' => (string) $n->number, 'status' => (string) $n->status, 'valid_from' => (string) $n->valid_from, 'valid_to' => (string) $n->valid_to,
                 'days_left' => $n->status === 'active' ? (int) $today->diffInDays(CarbonImmutable::parse((string) $n->valid_to), false) : null,
                 'proposal_id' => (string) $n->proposal_id, 'proposal_number' => (string) $n->proposal_number, 'customer' => (string) $n->customer, 'product' => (string) $n->product,
-                'issued_by' => (string) $n->issued_by, 'cancel_reason' => $n->cancel_reason === null ? null : (string) $n->cancel_reason,
+                'issued_by' => (string) $n->issued_by, 'documents' => app(\App\Http\Documents\GeneratedDocumentsController::class)->forCoverNote((string) $n->id), 'cancel_reason' => $n->cancel_reason === null ? null : (string) $n->cancel_reason,
                 'can_cancel' => $n->status === 'active' && $cancelAnywhere
                     && $this->permissions->has($actor, CoverNoteService::CANCEL, \App\Modules\Platform\Authorization\AuthorizationScope::branch((string) $n->entity_id, (string) $n->branch_id)),
             ])->values()->all(),

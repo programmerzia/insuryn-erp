@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import GeneratedDocuments from '@/components/object/GeneratedDocuments.vue';
+import type { DocumentGeneration } from '@/components/object/types';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -35,6 +37,8 @@ interface QuotationData {
 const props = defineProps<{
     quotation: QuotationData | null; products: Product[]; branches: { id: string; code: string; name: string }[]; currency: string; today: string; validDays: number;
     can: { edit: boolean; issue: boolean; decline: boolean; convert: boolean };
+    /** Printing the issued quotation (null before the quotation is saved). */
+    generation?: DocumentGeneration | null;
 }>();
 
 const page = usePage<SharedProps>();
@@ -233,6 +237,10 @@ const validUntil = computed(() => q?.valid_until ?? null);
                     </template>
                 </aside>
             </div>
+            <section v-if="generation && (generation.actions.length || generation.history.length)" class="mt-6 max-w-[920px]" aria-label="Printed quotation">
+                <h2 class="mb-2 text-section font-semibold">Printed quotation</h2>
+                <GeneratedDocuments :generation="generation" />
+            </section>
         </div>
 
         <Drawer v-model:open="declineOpen" :title="`Decline ${title}`">
