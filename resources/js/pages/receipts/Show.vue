@@ -1,65 +1,76 @@
 <script setup lang="ts">
-import { Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Link } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
-import FormBanner from '@/components/forms/FormBanner.vue';
-import PageHeader from '@/components/PageHeader.vue';
-import StatusBadge from '@/components/StatusBadge.vue';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import FormLayout from '@/components/forms/FormLayout.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import TextInput from '@/components/forms/TextInput.vue';
+import ObjectPage from '@/components/object/ObjectPage.vue';
+import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
+import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatDate, formatMoney } from '@/lib/format';
+import { useMoneyForm } from '@/lib/moneyForm';
 
 const props = defineProps<{
     receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null };
     allocations: { id: string; policy_number: string | null; amount: string; posted_on: string; reversed_on: string | null }[];
     suspense: { id: string; amount: string; open: string; status: string } | null;
     actions: { bounce: boolean };
+    timeline?: TimelineEntry[];
+    accounting?: AccountingJournal[];
+    audit?: AuditRow[];
 }>();
 
 const bouncing = ref(false);
-const bounceForm = useForm({ bounced_on: '', reason: '' });
+const bounce = useMoneyForm(() => `/receipts/${props.receipt.id}/bounce`, { bounced_on: '', reason: '' }, () => (bouncing.value = false));
+const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+const facts = computed(() => [
+    { label: 'Amount (BDT)', value: formatMoney(props.receipt.amount), num: true },
+    { label: 'Value date', value: formatDate(props.receipt.value_date) },
+    { label: 'In suspense', value: props.suspense ? formatMoney(props.suspense.open) : '0.00', num: true },
+    { label: 'Received by', value: words(props.receipt.channel) },
+]);
 </script>
 
 <template>
     <AppLayout :title="receipt.number">
-        <PageHeader :eyebrow="`${receipt.channel}${receipt.cheque_no ? ' · cheque ' + receipt.cheque_no + ' ' + receipt.cheque_bank : ''}`" :title="receipt.number" :description="`${receipt.amount} received ${receipt.value_date}${receipt.reference ? ' · ' + receipt.reference : ''}`">
-            <StatusBadge :status="receipt.status" />
-            <Link href="/receipts" class="text-ui text-accent-text hover:underline">All receipts</Link>
-        </PageHeader>
-        <FormBanner />
-        <p v-if="receipt.bounced_on" class="mb-4 text-ui text-danger">Bounced {{ receipt.bounced_on }}: {{ receipt.bounce_reason }}</p>
-        <div v-if="actions.bounce" class="mb-6">
-            <Button v-if="!bouncing" variant="ghost" @click="bouncing = true">Cheque bounced</Button>
-            <Card v-else class="max-w-md">
-                <form class="grid gap-3" @submit.prevent="bounceForm.post(`/receipts/${props.receipt.id}/bounce`)">
-                    <Field id="bounced_on" label="Bounced on" :error="bounceForm.errors.bounced_on"><Input id="bounced_on" v-model="bounceForm.bounced_on" type="date" /></Field>
-                    <Field id="bounce_reason" label="Bank's reason" :error="bounceForm.errors.reason"><Input id="bounce_reason" v-model="bounceForm.reason" /></Field>
-                    <Button type="submit" :disabled="bounceForm.processing" class="justify-self-start">Undo this receipt</Button>
-                </form>
-            </Card>
-        </div>
-        <div class="grid gap-6 lg:grid-cols-3">
-            <div class="lg:col-span-2">
-                <h2 class="mb-2 text-section font-semibold">Allocations</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead>Policy</TableHead><TableHead>Posted</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Reversed</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="allocation in allocations" :key="allocation.id">
-                            <TableCell class="">{{ allocation.policy_number }}</TableCell><TableCell>{{ allocation.posted_on }}</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ allocation.amount }}</TableCell><TableCell class="text-danger">{{ allocation.reversed_on }}</TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="allocations.length === 0" :colspan="4">Not allocated.</TableEmpty>
-                    </TableBody>
-                </Table>
-            </div>
-            <Card v-if="suspense">
-                <h2 class="text-section font-semibold">Suspense</h2>
-                <p class="mt-2 text-ui text-ink-2">Parked {{ suspense.amount }}, open <span class=" text-ink">{{ suspense.open }}</span></p>
-                <StatusBadge :status="suspense.status" class="mt-2" />
-                <Link href="/suspense" class="mt-3 block text-ui text-accent-text hover:underline">Allocate from suspense</Link>
-            </Card>
-        </div>
+        <ObjectPage
+            :title="receipt.number"
+            :subtitle="[receipt.reference, receipt.cheque_no ? `cheque ${receipt.cheque_no} ${receipt.cheque_bank}` : null, receipt.bounced_on ? `bounced ${formatDate(receipt.bounced_on)}: ${receipt.bounce_reason}` : null].filter(Boolean).join(' · ')"
+            :status="receipt.status"
+            :facts="facts"
+            :crumbs="[{ label: 'Receipts', href: '/receipts' }]"
+            currency="BDT"
+            :timeline="timeline"
+            :accounting="accounting"
+            :audit="audit"
+        >
+            <template #actions>
+                <button v-if="actions.bounce" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="bouncing = true">Cheque bounced</button>
+                <Link v-if="suspense && suspense.status === 'open'" :href="`/receipts/${receipt.id}/allocate`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Allocate {{ formatMoney(suspense.open) }}</Link>
+            </template>
+            <template #overview>
+                <h2 class="mb-2 text-ui font-medium">Allocations</h2>
+                <div class="max-w-[760px] overflow-x-auto border border-line">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Policy</th><th class="w-32 border-b border-line px-3 text-left font-medium">Posted</th><th class="w-36 border-b border-line px-3 text-right font-medium">Amount (BDT)</th><th class="w-32 border-b border-line px-3 text-left font-medium">Reversed</th></tr></thead>
+                        <tbody>
+                            <tr v-for="a in allocations" :key="a.id" class="h-(--row-h)"><td class="border-b border-line px-3">{{ a.policy_number }}</td><td class="border-b border-line px-3">{{ formatDate(a.posted_on) }}</td><td class="num border-b border-line px-3">{{ formatMoney(a.amount) }}</td><td class="border-b border-line px-3 text-danger">{{ formatDate(a.reversed_on) }}</td></tr>
+                            <tr v-if="allocations.length === 0"><td colspan="4" class="px-3 py-6 text-center text-ui text-ink-2">Not allocated yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+        </ObjectPage>
+        <Drawer v-model:open="bouncing" title="Record a bounced cheque">
+            <FormLayout submit-label="Review the reversal" :dirty="bounce.form.isDirty" :processing="bounce.form.processing" :error="(bounce.form.errors as Record<string, string>).form" @submit="bounce.review" @cancel="bouncing = false">
+                <p class="text-ui text-ink-2">Every allocation is reversed, the installments become unpaid again and the money leaves the bank account.</p>
+                <Field id="bounced_on" label="Bounced on" :error="bounce.form.errors.bounced_on"><DateInput v-model="bounce.form.bounced_on" /></Field>
+                <Field id="bounce_reason" label="Bank's reason" :error="bounce.form.errors.reason"><TextInput v-model="bounce.form.reason" /></Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-model:open="bounce.previewOpen.value" :result="bounce.preview.value" :title="`Reverse ${receipt.number}?`" confirm-label="Reverse the receipt" currency="BDT" :processing="bounce.form.processing" @confirm="bounce.post" />
     </AppLayout>
 </template>

@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
-import FormBanner from '@/components/forms/FormBanner.vue';
-import PageHeader from '@/components/PageHeader.vue';
+import FormLayout from '@/components/forms/FormLayout.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import MoneyInput from '@/components/forms/MoneyInput.vue';
+import TextInput from '@/components/forms/TextInput.vue';
+import ObjectPage from '@/components/object/ObjectPage.vue';
+import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { confirmAction } from '@/lib/confirm';
+import { formatDate, formatMoney } from '@/lib/format';
+import { useMoneyForm } from '@/lib/moneyForm';
 
 const props = defineProps<{
     policy: { id: string; number: string | null; status: string; version: number; inception: string; expiry: string; channel: string; currency: string; policyholder: string;
@@ -18,100 +23,119 @@ const props = defineProps<{
     installments: { id: string; no: number; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
     actions: { issue: boolean; endorse: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
+    timeline?: TimelineEntry[];
+    accounting?: AccountingJournal[];
+    audit?: AuditRow[];
 }>();
 
-const open = ref<string | null>(null);
 const base = `/policies/${props.policy.id}`;
-const issueForm = useForm({ on: props.policy.inception });
-const endorseForm = useForm({ effective_date: '', premium_delta: '', reason: '' });
-const cancelForm = useForm({ cancel_date: '', reason: '' });
-const transitionForm = useForm({ reason: '' });
+const drawer = ref<'issue' | 'endorse' | 'cancel' | 'lapse' | 'reinstate' | null>(null);
+const close = () => (drawer.value = null);
+const title = computed(() => props.policy.number ?? 'Quote');
+const issue = useMoneyForm(() => `${base}/issue`, { on: props.policy.inception }, close);
+const endorse = useMoneyForm(() => `${base}/endorse`, { effective_date: '', premium_delta: '', reason: '' }, close);
+const cancel = useMoneyForm(() => `${base}/cancel`, { cancel_date: '', reason: '' }, close);
+const transition = useForm({ reason: '' });
+const active = computed(() => (drawer.value === 'issue' ? issue : drawer.value === 'endorse' ? endorse : drawer.value === 'cancel' ? cancel : null));
+const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+const facts = computed(() => [
+    { label: `Gross premium (${props.policy.currency})`, value: formatMoney(props.policy.gross_premium), num: true },
+    { label: 'Net premium', value: formatMoney(props.policy.net_premium), num: true },
+    { label: 'Tax', value: formatMoney(props.policy.tax), num: true },
+    { label: 'Cover', value: `${formatDate(props.policy.inception)} to ${formatDate(props.policy.expiry)}` },
+]);
+const outstanding = computed(() => props.installments.reduce((sum, i) => sum + Number(i.outstanding !== '0.00'), 0));
+
+async function renew(): Promise<void> {
+    if (await confirmAction({ title: `Renew ${title.value}?`, body: 'A renewal quote is created for the next term with the same product, customer, agent and payers.', confirmLabel: 'Create renewal quote' })) {
+        router.post(`${base}/renew`, {}, { preserveScroll: true });
+    }
+}
 </script>
 
 <template>
-    <AppLayout :title="policy.number ?? 'Quote'">
-        <PageHeader :eyebrow="`${policy.product_code} · ${policy.channel}${policy.agent_code ? ' · ' + policy.agent_code : ''} · v${policy.version}`" :title="policy.number ?? 'Quote'"
-            :description="`${policy.policyholder} · cover ${policy.inception} – ${policy.expiry}${policy.cancel_date ? ' · cancelled from ' + policy.cancel_date : ''}`">
-            <StatusBadge :status="policy.status" />
-            <Link href="/policies" class="text-ui text-accent-text hover:underline">All policies</Link>
-        </PageHeader>
-        <FormBanner />
+    <AppLayout :title="title">
+        <ObjectPage
+            :title="title"
+            :subtitle="`${policy.policyholder} · ${policy.product_code}${policy.agent_code ? ` · agent ${policy.agent_code}` : ' · direct'} · version ${policy.version}${policy.cancel_date ? ` · cancelled from ${formatDate(policy.cancel_date)}` : ''}`"
+            :status="policy.status"
+            :facts="facts"
+            :crumbs="[{ label: 'Policies', href: '/policies' }]"
+            :currency="policy.currency"
+            :timeline="timeline"
+            :accounting="accounting"
+            :audit="audit"
+        >
+            <template #actions>
+                <button v-if="actions.endorse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'endorse'">Endorse</button>
+                <button v-if="actions.lapse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'lapse'">Lapse</button>
+                <button v-if="actions.reinstate" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reinstate'">Reinstate</button>
+                <button v-if="actions.renew" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="renew">Renew</button>
+                <button v-if="actions.cancel" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'cancel'">Cancel policy</button>
+                <button v-if="actions.issue" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'issue'">Issue policy</button>
+            </template>
+            <template #overview>
+                <h2 class="mb-2 text-ui font-medium">Installments <span class="font-normal text-ink-2">· {{ outstanding }} with money outstanding</span></h2>
+                <div class="mb-6 max-w-[1000px] overflow-x-auto border border-line">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                        <colgroup><col style="width: 48px" /><col /><col style="width: 112px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 120px" /></colgroup>
+                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)">
+                            <th class="border-b border-line px-3 text-left font-medium">No</th><th class="border-b border-line px-3 text-left font-medium">Payer</th><th class="border-b border-line px-3 text-left font-medium">Due</th>
+                            <th class="border-b border-line px-3 text-right font-medium">Amount</th><th class="border-b border-line px-3 text-right font-medium">Paid</th><th class="border-b border-line px-3 text-right font-medium">Credited</th>
+                            <th class="border-b border-line px-3 text-right font-medium">Outstanding</th><th class="border-b border-line px-3 text-left font-medium">Status</th>
+                        </tr></thead>
+                        <tbody>
+                            <tr v-for="i in installments" :key="i.id" class="h-(--row-h)">
+                                <td class="border-b border-line px-3 tabular-nums">{{ i.no }}</td><td class="truncate border-b border-line px-3">{{ i.payer }}</td><td class="border-b border-line px-3">{{ formatDate(i.due_date) }}</td>
+                                <td class="num border-b border-line px-3">{{ formatMoney(i.amount) }}</td><td class="num border-b border-line px-3">{{ formatMoney(i.paid) }}</td><td class="num border-b border-line px-3">{{ formatMoney(i.credited) }}</td>
+                                <td class="num border-b border-line px-3 font-medium">{{ formatMoney(i.outstanding) }}</td><td class="border-b border-line px-3"><StatusBadge :status="i.status" /></td>
+                            </tr>
+                            <tr v-if="installments.length === 0"><td colspan="8" class="px-3 py-6 text-center text-ui text-ink-2">Installments are created when the policy is issued.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <h2 class="mb-2 text-ui font-medium">Payers</h2>
+                <div class="max-w-[760px] overflow-x-auto border border-line">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Payer</th><th class="w-24 border-b border-line px-3 text-right font-medium">Share (%)</th><th class="w-32 border-b border-line px-3 text-right font-medium">Billed</th><th class="w-32 border-b border-line px-3 text-right font-medium">Paid</th><th class="w-32 border-b border-line px-3 text-right font-medium">Outstanding</th></tr></thead>
+                        <tbody><tr v-for="p in payers" :key="p.name" class="h-(--row-h)"><td class="border-b border-line px-3">{{ p.name }}</td><td class="num border-b border-line px-3">{{ p.share_percent }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.billed) }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.paid) }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.outstanding) }}</td></tr></tbody>
+                    </table>
+                </div>
+            </template>
+            <template #transactions>
+                <div class="max-w-[900px] overflow-x-auto border border-line">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="w-40 border-b border-line px-3 text-left font-medium">Transaction</th><th class="w-32 border-b border-line px-3 text-left font-medium">Effective</th><th class="w-40 border-b border-line px-3 text-right font-medium">Premium change ({{ policy.currency }})</th><th class="border-b border-line px-3 text-left font-medium">Reason</th></tr></thead>
+                        <tbody><tr v-for="t in transactions" :key="t.id" class="h-(--row-h)"><td class="border-b border-line px-3">{{ words(t.type) }}</td><td class="border-b border-line px-3">{{ formatDate(t.effective_date) }}</td><td class="num border-b border-line px-3">{{ formatMoney(t.premium_delta) }}</td><td class="truncate border-b border-line px-3 text-ink-2">{{ t.reason }}</td></tr></tbody>
+                    </table>
+                </div>
+            </template>
+        </ObjectPage>
 
-        <div class="mb-6 grid gap-4 sm:grid-cols-3">
-            <Card><p class="text-dense text-ink-2">Gross premium</p><p class="mt-1 text-title tabular-nums">{{ policy.gross_premium }}</p></Card>
-            <Card><p class="text-dense text-ink-2">Net premium</p><p class="mt-1 text-title tabular-nums">{{ policy.net_premium }}</p></Card>
-            <Card><p class="text-dense text-ink-2">Tax</p><p class="mt-1 text-title tabular-nums">{{ policy.tax }}</p></Card>
-        </div>
-
-        <div class="mb-6 flex flex-wrap gap-2">
-            <Button v-if="actions.issue" @click="open = 'issue'">Issue</Button>
-            <Button v-if="actions.endorse" variant="ghost" @click="open = 'endorse'">Endorse</Button>
-            <Button v-if="actions.cancel" variant="ghost" @click="open = 'cancel'">Cancel policy</Button>
-            <Button v-if="actions.lapse" variant="ghost" @click="open = 'lapse'">Lapse</Button>
-            <Button v-if="actions.reinstate" variant="ghost" @click="open = 'reinstate'">Reinstate</Button>
-            <Button v-if="actions.renew" variant="ghost" @click="transitionForm.post(`${base}/renew`)">Renew</Button>
-        </div>
-
-        <Card v-if="open" class="mb-6 max-w-xl">
-            <form v-if="open === 'issue'" class="grid gap-3" @submit.prevent="issueForm.post(`${base}/issue`, { onSuccess: () => (open = null) })">
-                <Field id="on" label="Issue date" :error="issueForm.errors.on"><Input id="on" v-model="issueForm.on" type="date" /></Field>
-                <Button type="submit" :disabled="issueForm.processing" class="justify-self-start">Issue policy</Button>
-            </form>
-            <form v-else-if="open === 'endorse'" class="grid gap-3" @submit.prevent="endorseForm.post(`${base}/endorse`, { onSuccess: () => { open = null; endorseForm.reset(); } })">
-                <Field id="effective_date" label="Effective date" :error="endorseForm.errors.effective_date"><Input id="effective_date" v-model="endorseForm.effective_date" type="date" /></Field>
-                <Field id="premium_delta" :label="`Premium change (${policy.currency})`" hint="Negative for a decrease, like -1,000.00" :error="endorseForm.errors.premium_delta"><Input id="premium_delta" v-model="endorseForm.premium_delta" inputmode="decimal" /></Field>
-                <Field id="endorse_reason" label="Reason" :error="endorseForm.errors.reason"><Input id="endorse_reason" v-model="endorseForm.reason" /></Field>
-                <Button type="submit" :disabled="endorseForm.processing" class="justify-self-start">Record endorsement</Button>
-            </form>
-            <form v-else-if="open === 'cancel'" class="grid gap-3" @submit.prevent="cancelForm.post(`${base}/cancel`, { onSuccess: () => (open = null) })">
-                <Field id="cancel_date" label="Cancellation date" :error="cancelForm.errors.cancel_date"><Input id="cancel_date" v-model="cancelForm.cancel_date" type="date" /></Field>
-                <Field id="cancel_reason" label="Reason" :error="cancelForm.errors.reason"><Input id="cancel_reason" v-model="cancelForm.reason" /></Field>
-                <Button type="submit" :disabled="cancelForm.processing" class="justify-self-start">Cancel policy</Button>
-            </form>
-            <form v-else class="grid gap-3" @submit.prevent="transitionForm.post(`${base}/${open}`, { onSuccess: () => (open = null) })">
-                <Field id="transition_reason" label="Reason" :error="transitionForm.errors.reason"><Input id="transition_reason" v-model="transitionForm.reason" /></Field>
-                <Button type="submit" :disabled="transitionForm.processing" class="justify-self-start">{{ open === 'lapse' ? 'Lapse policy' : 'Reinstate policy' }}</Button>
-            </form>
-        </Card>
-
-        <h2 class="mb-2 text-section font-semibold">Installments</h2>
-        <Table class="mb-6">
-            <TableHeader><TableRow><TableHead>No</TableHead><TableHead>Payer</TableHead><TableHead>Due</TableHead><TableHead class="text-right">Amount</TableHead><TableHead class="text-right">Paid</TableHead><TableHead class="text-right">Credited</TableHead><TableHead class="text-right">Outstanding</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>
-                <TableRow v-for="installment in installments" :key="installment.id">
-                    <TableCell>{{ installment.no }}</TableCell><TableCell>{{ installment.payer }}</TableCell><TableCell>{{ installment.due_date }}</TableCell>
-                    <TableCell class="text-right tabular-nums">{{ installment.amount }}</TableCell><TableCell class="text-right tabular-nums">{{ installment.paid }}</TableCell>
-                    <TableCell class="text-right tabular-nums">{{ installment.credited }}</TableCell><TableCell class="text-right tabular-nums">{{ installment.outstanding }}</TableCell>
-                    <TableCell><StatusBadge :status="installment.status" /></TableCell>
-                </TableRow>
-            </TableBody>
-        </Table>
-
-        <div class="grid gap-6 lg:grid-cols-2">
-            <div>
-                <h2 class="mb-2 text-section font-semibold">Payers</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead>Payer</TableHead><TableHead class="text-right">Share</TableHead><TableHead class="text-right">Billed</TableHead><TableHead class="text-right">Outstanding</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="payer in payers" :key="payer.name">
-                            <TableCell>{{ payer.name }}</TableCell><TableCell class="text-right">{{ payer.share_percent }}%</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ payer.billed }}</TableCell><TableCell class="text-right tabular-nums">{{ payer.outstanding }}</TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </div>
-            <div>
-                <h2 class="mb-2 text-section font-semibold">Transactions</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Effective</TableHead><TableHead class="text-right">Premium change</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="transaction in transactions" :key="transaction.id">
-                            <TableCell>{{ transaction.type }}</TableCell><TableCell>{{ transaction.effective_date }}</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ transaction.premium_delta }}</TableCell><TableCell class="text-ink-2">{{ transaction.reason }}</TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
+        <Drawer :open="drawer === 'issue'" :title="`Issue ${title}`" @update:open="(o) => !o && close()">
+            <FormLayout submit-label="Review and issue" :dirty="issue.form.isDirty" :processing="issue.form.processing" :error="(issue.form.errors as Record<string, string>).form" @submit="issue.review" @cancel="close">
+                <Field id="on" label="Issue date" :error="issue.form.errors.on"><DateInput v-model="issue.form.on" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'endorse'" :title="`Endorse ${title}`" @update:open="(o) => !o && close()">
+            <FormLayout submit-label="Review and post" :dirty="endorse.form.isDirty" :processing="endorse.form.processing" :error="(endorse.form.errors as Record<string, string>).form" @submit="endorse.review" @cancel="close">
+                <Field id="effective_date" label="Effective from" :error="endorse.form.errors.effective_date"><DateInput v-model="endorse.form.effective_date" /></Field>
+                <Field id="premium_delta" :label="`Premium change (${policy.currency})`" hint="Negative for a decrease, like -1,000.00." :error="endorse.form.errors.premium_delta"><MoneyInput v-model="endorse.form.premium_delta" allow-negative /></Field>
+                <Field id="reason" label="Reason" :error="endorse.form.errors.reason"><TextInput v-model="endorse.form.reason" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'cancel'" :title="`Cancel ${title}`" @update:open="(o) => !o && close()">
+            <FormLayout submit-label="Review cancellation" :dirty="cancel.form.isDirty" :processing="cancel.form.processing" :error="(cancel.form.errors as Record<string, string>).form" @submit="cancel.review" @cancel="close">
+                <Field id="cancel_date" label="Cancel from" hint="Earned premium up to this date stays; the rest is credited or refunded." :error="cancel.form.errors.cancel_date"><DateInput v-model="cancel.form.cancel_date" /></Field>
+                <Field id="cancel_reason" label="Reason" :error="cancel.form.errors.reason"><TextInput v-model="cancel.form.reason" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'lapse' || drawer === 'reinstate'" :title="drawer === 'lapse' ? `Lapse ${title}` : `Reinstate ${title}`" @update:open="(o) => !o && close()">
+            <FormLayout :submit-label="drawer === 'lapse' ? 'Lapse policy' : 'Reinstate policy'" :dirty="transition.isDirty" :processing="transition.processing" :error="(transition.errors as Record<string, string>).form" @submit="transition.post(`${base}/${drawer}`, { onSuccess: close })" @cancel="close">
+                <Field id="transition_reason" label="Reason" :error="transition.errors.reason"><TextInput v-model="transition.reason" /></Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-if="active" v-model:open="active.previewOpen.value" :result="active.preview.value" :title="drawer === 'issue' ? `Issue ${title}?` : drawer === 'endorse' ? `Post the endorsement of ${title}?` : `Cancel ${title}?`"
+            :confirm-label="drawer === 'issue' ? 'Issue and post' : drawer === 'endorse' ? 'Post endorsement' : 'Cancel and post'" :currency="policy.currency" :processing="active.form.processing" @confirm="active.post" />
     </AppLayout>
 </template>

@@ -71,7 +71,7 @@ code and in the register below, configurable.
 | U5 | UX: form system | done | see git log |
 | U6 | UX: role home queues and badges | done | see git log |
 | U7 | UX: rebuild existing screens | done | see git log |
-| U8 | UX: object pages with timeline | pending | |
+| U8 | UX: object pages with timeline | done | see git log |
 | U9 | UX: feedback, states, accessibility | pending | |
 | U10 | UX: performance | pending | |
 
@@ -1109,3 +1109,30 @@ Scope: review only; only the critical finding was fixed.
 - Screenshots: `storage/ux-screenshots/U7/{allocate,bank-matching,close-run,close-periods,trial-balance,account-activity,journal,journals,commission,
   policies,claims,suspense,reports,imports,policy-create}-{1366,1920}-{light,dark}.png` (finance.manager@demo.local).
 - Result: 994 Pest tests, 201 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 206.8 KB gzip before route splitting).
+
+### U8 — UX: object pages with timeline — done
+- `App\Http\Pages\ObjectHistory` (read-only): `timeline` turns audit events of the object and its children (claim payments; the receipt's suspense
+  item) into plain sentences, newest first — "Quoted at 120,000.00 by …", "Endorsed: premium up by 1,000.00 (Extra driver) by …", "Reserve increased to
+  350,000.00 (Surveyor report) by …", "Payment of 100,000.00 approved by …", "Recorded 130,000.00 by …: 120,000.00 allocated, 10,000.00 held in suspense",
+  "Cheque bounced on …"; system actions say "by the system"; a payment below every approval limit reads as approved once (its internal "approval
+  requested" step is not shown). `accounting` lists the journals touching the object (policy and claim by their dimension, a receipt by its own and
+  its allocations' events) with lines; `audit` gives who/what/when/why and every field before and after.
+- `App\Http\Pages\ObjectPageController` composes `policies/Show`, `claims/Show`, `receipts/Show` from the module pages plus `timeline` and, as
+  Inertia deferred props (group `history`), `accounting` and `audit`, so the page paints first and those tabs fill in with skeleton rows.
+- `components/object/ObjectPage.vue` (brief §6.2): header strip (breadcrumb, number, status dot + word, key amounts, "View accounting" and the actions
+  the user may take), tabs Overview · Transactions (policy transactions; claim reserve history) · Timeline · Accounting · Documents · Audit, open tab
+  in the URL; "View accounting" opens the journals in a side panel (brief §1.5); `Timeline`, `AccountingList` (journal links drill), `AuditList`,
+  `SkeletonRows`.
+- Actions moved into drawers on the form system; money actions use the journal preview (`lib/moneyForm.ts`): policy issue, endorse (negative
+  allowed), cancel; claim reserve, payment approval, recovery, payment release, close; cheque bounce. Lapse, reinstate, reject and reopen take a reason;
+  renew asks first. The receipt page links to the allocation workbench while money is in suspense.
+- Tests first: `tests/Feature/Pages/ObjectPagesTest.php` — policy, claim and receipt timelines as exact sentences; accounting and audit absent on
+  first load and present after loading the deferred group (issued journal lines, endorsement audit row with actor and reason). My first expectations
+  were wrong twice (policy accounting also holds the receipt and claim journals on its dimension; the policy audit tab lists only policy events) —
+  corrected; while running it I found two code bugs and fixed them: the quoted premium was read as an amount when the audit stores gross/net/tax,
+  and every claim payment read as both "sent for approval" and "approved".
+- Not achieved: the Documents tab has nothing to show — attachments are not built (exit checklist §4); it says so and what to do instead.
+- Screenshots: `storage/ux-screenshots/U8/{claim,claim-timeline,claim-accounting-panel,claim-audit}-{1366,1920}-{light,dark}.png` (claims.manager),
+  `{policy,policy-timeline,policy-accounting,receipt}-…png` (finance.manager). Self-critique fix: the accounting side panel was 440px and truncated account
+  names (now 680px; the drawer takes a width).
+- Result: 997 Pest tests, 208 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.

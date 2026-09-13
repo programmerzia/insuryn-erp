@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
-import FormBanner from '@/components/forms/FormBanner.vue';
+import FormLayout from '@/components/forms/FormLayout.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
-import PageHeader from '@/components/PageHeader.vue';
+import TextInput from '@/components/forms/TextInput.vue';
+import ObjectPage from '@/components/object/ObjectPage.vue';
+import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatDate, formatMoney } from '@/lib/format';
+import { useMoneyForm } from '@/lib/moneyForm';
 
 const props = defineProps<{
     claim: { id: string; number: string; status: string; loss_date: string; reported_on: string; description: string; reserve: string; currency: string; status_reason: string | null; policy: { id: string; number: string | null; policyholder: string } };
@@ -20,102 +24,143 @@ const props = defineProps<{
     parties: { id: string; display_name: string }[];
     bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
     actions: { reserve: boolean; approve: boolean; recover: boolean; close: boolean; reject: boolean; reopen: boolean };
+    timeline?: TimelineEntry[];
+    accounting?: AccountingJournal[];
+    audit?: AuditRow[];
 }>();
 
+type DrawerName = 'reserve' | 'payment' | 'recover' | 'close' | 'reject' | 'reopen' | 'release';
 const base = `/claims/${props.claim.id}`;
-const open = ref<string | null>(null);
-const reserveForm = useForm({ reserve: '', reason: '', on: '' });
-const paymentForm = useForm({ amount: '', payee_party_id: '', on: '' });
-const recoverForm = useForm({ type: 'salvage', amount: '', received_on: '', reference: '', bank_account_id: '' });
-const decisionForm = useForm({ reason: '', on: '' });
-const releaseForm = useForm({ paid_on: '', bank_account_id: '' });
+const drawer = ref<DrawerName | null>(null);
+const releasing = ref<string | null>(null);
+const done = () => (drawer.value = null);
+const reserve = useMoneyForm(() => `${base}/reserve`, { reserve: '', reason: '', on: '' }, done);
+const payment = useMoneyForm(() => `${base}/payments`, { amount: '', payee_party_id: '', on: '' }, done);
+const recover = useMoneyForm(() => `${base}/recover`, { type: 'salvage', amount: '', received_on: '', reference: '', bank_account_id: '' }, done);
+const closing = useMoneyForm(() => `${base}/close`, { reason: '', on: '' }, done);
+const release = useMoneyForm(() => `/claim-payments/${releasing.value}/release`, { paid_on: '', bank_account_id: '' }, done);
+const decision = useForm({ reason: '', on: '' });
+const money = computed(() => ({ reserve, payment, recover, close: closing, release })[drawer.value as 'reserve'] ?? null);
+const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+const paid = computed(() => props.payments.filter((p) => p.status === 'paid').length);
+const facts = computed(() => [
+    { label: `Case reserve (${props.claim.currency})`, value: formatMoney(props.claim.reserve), num: true },
+    { label: 'Payments', value: `${props.payments.length} (${paid.value} paid)` },
+    { label: 'Date of loss', value: formatDate(props.claim.loss_date) },
+    { label: 'Reported', value: formatDate(props.claim.reported_on) },
+]);
+const previewTitle = computed(() => ({ reserve: 'Post the new reserve?', payment: 'Approve this payment?', recover: 'Post the recovery?', close: `Close ${props.claim.number}?`, release: 'Pay the claim?' })[drawer.value as 'reserve'] ?? '');
+
+function requestRelease(id: string): void {
+    router.post(`/claim-payments/${id}/request-release`, {}, { preserveScroll: true });
+}
+function openRelease(id: string): void {
+    releasing.value = id;
+    drawer.value = 'release';
+}
 </script>
 
 <template>
     <AppLayout :title="claim.number">
-        <PageHeader :eyebrow="`Policy ${claim.policy.number} · ${claim.policy.policyholder}`" :title="claim.number" :description="`Loss ${claim.loss_date}, reported ${claim.reported_on}. ${claim.description}`">
-            <StatusBadge :status="claim.status" />
-            <Link href="/claims" class="text-ui text-accent-text hover:underline">All claims</Link>
-        </PageHeader>
-        <FormBanner />
-        <div class="mb-6 flex flex-wrap items-center gap-2">
-            <span class="mr-4 text-ui text-ink-2">Case reserve <span class=" text-section text-ink tabular-nums">{{ claim.reserve }}</span></span>
-            <Button v-if="actions.reserve" variant="ghost" @click="open = 'reserve'">Set reserve</Button>
-            <Button v-if="actions.approve" variant="ghost" @click="open = 'payment'">Approve payment</Button>
-            <Button v-if="actions.recover" variant="ghost" @click="open = 'recover'">Record recovery</Button>
-            <Button v-if="actions.close" variant="ghost" @click="open = 'close'">Close</Button>
-            <Button v-if="actions.reject" variant="ghost" @click="open = 'reject'">Reject</Button>
-            <Button v-if="actions.reopen" variant="ghost" @click="open = 'reopen'">Reopen</Button>
-        </div>
-        <Card v-if="open" class="mb-6 max-w-xl">
-            <form v-if="open === 'reserve'" class="grid gap-3" @submit.prevent="reserveForm.post(`${base}/reserve`, { onSuccess: () => (open = null) })">
-                <Field id="reserve" :label="`New total reserve (${claim.currency})`" :error="reserveForm.errors.reserve"><Input id="reserve" v-model="reserveForm.reserve" inputmode="decimal" /></Field>
-                <Field id="reserve_reason" label="Reason" :error="reserveForm.errors.reason"><Input id="reserve_reason" v-model="reserveForm.reason" /></Field>
-                <Field id="reserve_on" label="Date" :error="reserveForm.errors.on"><Input id="reserve_on" v-model="reserveForm.on" type="date" /></Field>
-                <Button type="submit" :disabled="reserveForm.processing" class="justify-self-start">Save reserve</Button>
-            </form>
-            <form v-else-if="open === 'payment'" class="grid gap-3" @submit.prevent="paymentForm.post(`${base}/payments`, { onSuccess: () => (open = null) })">
-                <Field id="payment_amount" :label="`Amount (${claim.currency})`" :error="paymentForm.errors.amount"><Input id="payment_amount" v-model="paymentForm.amount" inputmode="decimal" /></Field>
-                <Field id="payee_party_id" label="Payee" :error="paymentForm.errors.payee_party_id"><SelectInput id="payee_party_id" v-model="paymentForm.payee_party_id" placeholder="Choose a payee" :options="parties.map((p) => ({ value: p.id, label: p.display_name }))" /></Field>
-                <Field id="payment_on" label="Approval date" :error="paymentForm.errors.on"><Input id="payment_on" v-model="paymentForm.on" type="date" /></Field>
-                <Button type="submit" :disabled="paymentForm.processing" class="justify-self-start">Approve payment</Button>
-            </form>
-            <form v-else-if="open === 'recover'" class="grid gap-3" @submit.prevent="recoverForm.post(`${base}/recover`, { onSuccess: () => (open = null) })">
-                <Field id="recovery_type" label="Type" :error="recoverForm.errors.type"><SelectInput id="recovery_type" v-model="recoverForm.type" :options="['salvage', 'subrogation', 'third_party'].map((t) => ({ value: t, label: t.replace('_', ' ') }))" /></Field>
-                <Field id="recovery_amount" :label="`Amount (${claim.currency})`" :error="recoverForm.errors.amount"><Input id="recovery_amount" v-model="recoverForm.amount" inputmode="decimal" /></Field>
-                <Field id="received_on" label="Received on" :error="recoverForm.errors.received_on"><Input id="received_on" v-model="recoverForm.received_on" type="date" /></Field>
-                <Field id="recovery_reference" label="Reference" :error="recoverForm.errors.reference"><Input id="recovery_reference" v-model="recoverForm.reference" /></Field>
-                <Button type="submit" :disabled="recoverForm.processing" class="justify-self-start">Record recovery</Button>
-            </form>
-            <form v-else class="grid gap-3" @submit.prevent="decisionForm.post(`${base}/${open}`, { onSuccess: () => (open = null) })">
-                <Field id="decision_reason" label="Reason" :error="decisionForm.errors.reason"><Input id="decision_reason" v-model="decisionForm.reason" /></Field>
-                <Field id="decision_on" label="Date" :error="decisionForm.errors.on"><Input id="decision_on" v-model="decisionForm.on" type="date" /></Field>
-                <Button type="submit" :disabled="decisionForm.processing" class="justify-self-start">{{ open === 'close' ? 'Close claim' : open === 'reject' ? 'Reject claim' : 'Reopen claim' }}</Button>
-            </form>
-        </Card>
-        <div class="grid gap-6 lg:grid-cols-2">
-            <div>
-                <h2 class="mb-2 text-section font-semibold">Payments</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead>Approved</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="payment in payments" :key="payment.id">
-                            <TableCell>{{ payment.approved_on }}</TableCell><TableCell class="text-right tabular-nums">{{ payment.amount }}</TableCell>
-                            <TableCell><StatusBadge :status="payment.status" /><span v-if="payment.paid_on" class="ml-2 text-dense text-ink-2">paid {{ payment.paid_on }}</span></TableCell>
-                            <TableCell class="text-right">
-                                <Button v-if="payment.can_request_release" variant="ghost" @click="releaseForm.post(`/claim-payments/${payment.id}/request-release`)">Request release</Button>
-                                <span v-if="payment.can_release" class="flex items-center justify-end gap-2">
-                                    <Input v-model="releaseForm.paid_on" type="date" class="w-40" aria-label="Paid on" />
-                                    <Button @click="releaseForm.post(`/claim-payments/${payment.id}/release`)">Release</Button>
+        <ObjectPage
+            :title="claim.number"
+            :subtitle="`${claim.description} · policy ${claim.policy.number} · ${claim.policy.policyholder}${claim.status_reason ? ` · ${claim.status_reason}` : ''}`"
+            :status="claim.status"
+            :facts="facts"
+            :crumbs="[{ label: 'Claims', href: '/claims' }]"
+            :currency="claim.currency"
+            :timeline="timeline"
+            :accounting="accounting"
+            :audit="audit"
+            transactions-label="Reserves and payments"
+        >
+            <template #actions>
+                <button v-if="actions.recover" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'recover'">Record recovery</button>
+                <button v-if="actions.reopen" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reopen'">Reopen</button>
+                <button v-if="actions.reject" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'reject'">Reject</button>
+                <button v-if="actions.close" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'close'">Close claim</button>
+                <button v-if="actions.approve" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'payment'">Approve payment</button>
+                <button v-if="actions.reserve" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'reserve'">Set reserve</button>
+            </template>
+            <template #overview>
+                <div class="grid max-w-[1100px] gap-6 lg:grid-cols-2">
+                    <section>
+                        <h2 class="mb-2 text-ui font-medium">Payments</h2>
+                        <ul class="border border-line">
+                            <li v-for="p in payments" :key="p.id" class="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2 text-ui last:border-b-0">
+                                <span class="w-32 tabular-nums font-medium">{{ formatMoney(p.amount) }}</span>
+                                <StatusBadge :status="p.status" />
+                                <span class="text-ink-2">approved {{ formatDate(p.approved_on) }}<template v-if="p.paid_on">, paid {{ formatDate(p.paid_on) }}</template></span>
+                                <span class="ml-auto flex gap-2">
+                                    <button v-if="p.can_request_release" type="button" class="h-7 rounded-control border border-line-control px-2 hover:bg-surface-2" @click="requestRelease(p.id)">Request release</button>
+                                    <button v-if="p.can_release" type="button" class="h-7 rounded-control bg-accent px-2 font-medium text-accent-ink hover:bg-accent-hover" @click="openRelease(p.id)">Pay</button>
                                 </span>
-                            </TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="payments.length === 0" :colspan="4">No payments.</TableEmpty>
-                    </TableBody>
-                </Table>
-                <h2 class="mt-6 mb-2 text-section font-semibold">Recoveries</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead>Received</TableHead><TableHead>Type</TableHead><TableHead class="text-right">Amount</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="(recovery, index) in recoveries" :key="index"><TableCell>{{ recovery.received_on }}</TableCell><TableCell>{{ recovery.type }}</TableCell><TableCell class="text-right tabular-nums">{{ recovery.amount }}</TableCell></TableRow>
-                        <TableEmpty v-if="recoveries.length === 0" :colspan="3">No recoveries.</TableEmpty>
-                    </TableBody>
-                </Table>
-            </div>
-            <div>
-                <h2 class="mb-2 text-section font-semibold">Reserve history</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead>v</TableHead><TableHead>Date</TableHead><TableHead class="text-right">Reserve</TableHead><TableHead class="text-right">Change</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="reserve in reserves" :key="reserve.version">
-                            <TableCell class="">{{ reserve.version }}</TableCell><TableCell>{{ reserve.recorded_on }}</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ reserve.reserve }}</TableCell><TableCell class="text-right tabular-nums">{{ reserve.delta }}</TableCell>
-                            <TableCell class="text-ink-2">{{ reserve.reason }}</TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="reserves.length === 0" :colspan="5">No reserve yet.</TableEmpty>
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
+                            </li>
+                            <li v-if="payments.length === 0" class="px-3 py-4 text-ui text-ink-2">No payments yet.</li>
+                        </ul>
+                    </section>
+                    <section>
+                        <h2 class="mb-2 text-ui font-medium">Recoveries</h2>
+                        <ul class="border border-line">
+                            <li v-for="(r, index) in recoveries" :key="index" class="flex items-center gap-3 border-b border-line px-3 py-2 text-ui last:border-b-0">
+                                <span class="w-32 tabular-nums font-medium">{{ formatMoney(r.amount) }}</span><span>{{ words(r.type) }}</span><span class="text-ink-2">{{ formatDate(r.received_on) }}</span><span class="ml-auto text-ink-2">{{ r.reference }}</span>
+                            </li>
+                            <li v-if="recoveries.length === 0" class="px-3 py-4 text-ui text-ink-2">No recoveries.</li>
+                        </ul>
+                    </section>
+                </div>
+            </template>
+            <template #transactions>
+                <h2 class="mb-2 text-ui font-medium">Reserve history</h2>
+                <div class="max-w-[900px] overflow-x-auto border border-line">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="w-12 border-b border-line px-3 text-left font-medium">Version</th><th class="w-32 border-b border-line px-3 text-left font-medium">Recorded</th><th class="w-36 border-b border-line px-3 text-right font-medium">Reserve ({{ claim.currency }})</th><th class="w-36 border-b border-line px-3 text-right font-medium">Change</th><th class="w-32 border-b border-line px-3 text-left font-medium">Kind</th><th class="border-b border-line px-3 text-left font-medium">Reason</th></tr></thead>
+                        <tbody><tr v-for="r in reserves" :key="r.version" class="h-(--row-h)"><td class="border-b border-line px-3 tabular-nums">{{ r.version }}</td><td class="border-b border-line px-3">{{ formatDate(r.recorded_on) }}</td><td class="num border-b border-line px-3">{{ formatMoney(r.reserve) }}</td><td class="num border-b border-line px-3">{{ formatMoney(r.delta) }}</td><td class="border-b border-line px-3">{{ words(r.kind) }}</td><td class="truncate border-b border-line px-3 text-ink-2">{{ r.reason }}</td></tr></tbody>
+                    </table>
+                </div>
+            </template>
+        </ObjectPage>
+
+        <Drawer :open="drawer === 'reserve'" title="Set the case reserve" @update:open="(o) => !o && done()">
+            <FormLayout submit-label="Review and post" :dirty="reserve.form.isDirty" :processing="reserve.form.processing" :error="(reserve.form.errors as Record<string, string>).form" @submit="reserve.review" @cancel="done">
+                <Field id="reserve" :label="`New total reserve (${claim.currency})`" :hint="`Currently ${formatMoney(claim.reserve)}. The change posts as an increase or release.`" :error="reserve.form.errors.reserve"><MoneyInput v-model="reserve.form.reserve" /></Field>
+                <Field id="reserve_reason" label="Reason" :error="reserve.form.errors.reason"><TextInput v-model="reserve.form.reason" /></Field>
+                <Field id="reserve_on" label="Date" :error="reserve.form.errors.on"><DateInput v-model="reserve.form.on" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'payment'" title="Approve a payment" @update:open="(o) => !o && done()">
+            <FormLayout submit-label="Review and approve" :dirty="payment.form.isDirty" :processing="payment.form.processing" :error="(payment.form.errors as Record<string, string>).form" @submit="payment.review" @cancel="done">
+                <Field id="payment_amount" :label="`Amount (${claim.currency})`" :error="payment.form.errors.amount"><MoneyInput v-model="payment.form.amount" /></Field>
+                <Field id="payee_party_id" label="Payee" :error="payment.form.errors.payee_party_id"><SelectInput id="payee_party_id" v-model="payment.form.payee_party_id" placeholder="Choose a payee" :options="parties.map((p) => ({ value: p.id, label: p.display_name }))" /></Field>
+                <Field id="payment_on" label="Approval date" :error="payment.form.errors.on"><DateInput v-model="payment.form.on" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'recover'" title="Record a recovery" @update:open="(o) => !o && done()">
+            <FormLayout submit-label="Review and post" :dirty="recover.form.isDirty" :processing="recover.form.processing" :error="(recover.form.errors as Record<string, string>).form" @submit="recover.review" @cancel="done">
+                <Field id="recovery_type" label="Type" :error="recover.form.errors.type"><SelectInput id="recovery_type" v-model="recover.form.type" :options="['salvage', 'subrogation', 'third_party'].map((t) => ({ value: t, label: words(t) }))" /></Field>
+                <Field id="recovery_amount" :label="`Amount (${claim.currency})`" :error="recover.form.errors.amount"><MoneyInput v-model="recover.form.amount" /></Field>
+                <Field id="received_on" label="Received on" :error="recover.form.errors.received_on"><DateInput v-model="recover.form.received_on" /></Field>
+                <Field id="recovery_reference" label="Reference" optional :error="recover.form.errors.reference"><TextInput v-model="recover.form.reference" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'release'" title="Pay the claim" @update:open="(o) => !o && done()">
+            <FormLayout submit-label="Review and pay" :dirty="release.form.isDirty" :processing="release.form.processing" :error="(release.form.errors as Record<string, string>).form" @submit="release.review" @cancel="done">
+                <Field id="paid_on" label="Paid on" hint="The person who requested the release cannot pay it." :error="release.form.errors.paid_on"><DateInput v-model="release.form.paid_on" /></Field>
+                <Field id="release_bank" label="Pay from" optional><SelectInput id="release_bank" v-model="release.form.bank_account_id" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'close'" :title="`Close ${claim.number}`" @update:open="(o) => !o && done()">
+            <FormLayout submit-label="Review and close" :dirty="closing.form.isDirty" :processing="closing.form.processing" :error="(closing.form.errors as Record<string, string>).form" @submit="closing.review" @cancel="done">
+                <Field id="close_reason" label="Reason" :error="closing.form.errors.reason"><TextInput v-model="closing.form.reason" /></Field>
+                <Field id="close_on" label="Date" hint="Any reserve left is released." :error="closing.form.errors.on"><DateInput v-model="closing.form.on" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="drawer === 'reject' || drawer === 'reopen'" :title="drawer === 'reject' ? `Reject ${claim.number}` : `Reopen ${claim.number}`" @update:open="(o) => !o && done()">
+            <FormLayout :submit-label="drawer === 'reject' ? 'Reject claim' : 'Reopen claim'" :dirty="decision.isDirty" :processing="decision.processing" :error="(decision.errors as Record<string, string>).form" @submit="decision.post(`${base}/${drawer}`, { preserveScroll: true, onSuccess: done })" @cancel="done">
+                <Field id="decision_reason" label="Reason" :error="decision.errors.reason"><TextInput v-model="decision.reason" /></Field>
+                <Field id="decision_on" label="Date" :error="decision.errors.on"><DateInput v-model="decision.on" /></Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-if="money" v-model:open="money.previewOpen.value" :result="money.preview.value" :title="previewTitle" confirm-label="Confirm and post" :currency="claim.currency" :processing="money.form.processing" @confirm="money.post" />
     </AppLayout>
 </template>
