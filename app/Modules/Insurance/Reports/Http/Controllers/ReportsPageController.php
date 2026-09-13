@@ -11,6 +11,7 @@ use App\Modules\Insurance\Reports\Application\LossRatioQuery;
 use App\Modules\Insurance\Reports\Application\OutstandingClaimsQuery;
 use App\Modules\Insurance\Reports\Application\PremiumRegisterQuery;
 use App\Modules\Insurance\Reports\Application\ReceivableAgeingQuery;
+use App\Modules\Insurance\Reports\Application\UnearnedPremiumQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -19,12 +20,14 @@ use Inertia\Response;
 
 /**
  * Report screens (reports.financial). Every report renders through one table page: columns, rows (each optionally linking to account activity or
- * its journal) and totals, so figures always drill down to the journals behind them.
+ * its journal, and cells such as a policy number to their record) and totals, so figures always drill down to the journals behind them. Summary
+ * tables under the rows give subtotals (by class, branch or product) and reconciliations to a control account.
  */
 final class ReportsPageController
 {
     private const CATALOGUE = [
-        ['key' => 'premium-register', 'title' => 'Premium register', 'description' => 'Written premium per policy transaction.', 'filter' => 'range'],
+        ['key' => 'premium-register', 'title' => 'Premium register', 'description' => 'Written premium per policy transaction, with totals by class and branch.', 'filter' => 'range'],
+        ['key' => 'unearned-premium', 'title' => 'Unearned premium', 'description' => 'Unearned premium per policy at a date, by class and product, reconciled to the ledger.', 'filter' => 'as_of'],
         ['key' => 'receivable-ageing', 'title' => 'Receivable ageing', 'description' => 'Unpaid installments by days past due.', 'filter' => 'as_of'],
         ['key' => 'outstanding-claims', 'title' => 'Outstanding claims', 'description' => 'Open reserves and approved-unpaid amounts per claim.', 'filter' => 'as_of'],
         ['key' => 'claims-paid', 'title' => 'Claims paid', 'description' => 'Claim payments released in a period.', 'filter' => 'range'],
@@ -59,6 +62,7 @@ final class ReportsPageController
 
         $page = match ($report) {
             'premium-register' => $this->premiumRegister($entity['id'], $from, $to, $money),
+            'unearned-premium' => $this->unearnedPremium($entity['id'], $asOf, $money),
             'receivable-ageing' => $this->receivableAgeing($entity['id'], $asOf, $money),
             'outstanding-claims' => $this->outstandingClaims($entity['id'], $asOf, $money),
             'claims-paid' => $this->claimsPaid($entity['id'], $from, $to, $money),
@@ -80,10 +84,42 @@ final class ReportsPageController
     {
         $result = app(PremiumRegisterQuery::class)->register($entityId, $from, $to);
 
-        return self::table('Premium register', 'range', [['accounting_date', 'Date'], ['policy_number', 'Policy'], ['type', 'Transaction'], ['product_code', 'Product'], ['gross', 'Gross', 'right'], ['net', 'Net', 'right'], ['tax', 'Tax', 'right']],
+        $summary = fn (string $title, string $label, array $groups): array => self::summary($title, [['group', $label], ['gross', 'Gross'], ['net', 'Net'], ['tax', 'Tax']],
+            array_map(fn (array $g): array => ['cells' => ['group' => $g['group'], 'gross' => $money($g['gross_minor']), 'net' => $money($g['net_minor']), 'tax' => $money($g['tax_minor'])], 'link' => null], $groups));
+
+        return self::table('Premium register', 'range', [['accounting_date', 'Date'], ['policy_number', 'Policy'], ['type', 'Transaction'], ['product_code', 'Product'], ['class', 'Class'], ['branch_code', 'Branch'],
+            ['gross', 'Gross', 'right'], ['net', 'Net', 'right'], ['tax', 'Tax', 'right']],
             array_map(fn (array $r): array => ['cells' => ['accounting_date' => $r['accounting_date'], 'policy_number' => $r['policy_number'], 'type' => $r['type'], 'product_code' => $r['product_code'],
-                'gross' => $money($r['gross_minor']), 'net' => $money($r['net_minor']), 'tax' => $money($r['tax_minor'])], 'link' => $r['journals'][0]['url'] ?? null], $result['rows']),
-            ['gross' => $money($result['totals']['gross_minor']), 'net' => $money($result['totals']['net_minor']), 'tax' => $money($result['totals']['tax_minor'])]);
+                'class' => $r['class'], 'branch_code' => $r['branch_code'], 'gross' => $money($r['gross_minor']), 'net' => $money($r['net_minor']), 'tax' => $money($r['tax_minor'])],
+                'link' => $r['journals'][0]['url'] ?? null, 'links' => ['policy_number' => "/policies/{$r['policy_id']}"]], $result['rows']),
+            ['gross' => $money($result['totals']['gross_minor']), 'net' => $money($result['totals']['net_minor']), 'tax' => $money($result['totals']['tax_minor'])],
+            [$summary('Totals by class', 'Class', $result['by_class']), $summary('Totals by branch', 'Branch', $result['by_branch'])]);
+    }
+
+    /**
+     * @param callable(int): string $money
+     * @return array<string, mixed>
+     */
+    private function unearnedPremium(string $entityId, CarbonImmutable $asOf, callable $money): array
+    {
+        $result = app(UnearnedPremiumQuery::class)->unearned($entityId, $asOf);
+        $summary = fn (string $title, string $label, array $groups): array => self::summary($title, [['group', $label], ['policies', 'Policies'], ['net', 'Net premium'], ['earned', 'Earned to date'], ['unearned', 'Unearned']],
+            array_map(fn (array $g): array => ['cells' => ['group' => $g['group'], 'policies' => $g['policies'], 'net' => $money($g['net_premium_minor']),
+                'earned' => $money($g['earned_minor']), 'unearned' => $money($g['unearned_minor'])], 'link' => null], $groups));
+        $recon = $result['reconciliation'];
+        $glLink = count($recon['account_ids']) === 1 ? '/reports/account-activity?'.http_build_query(['account_id' => $recon['account_ids'][0], 'to' => $result['as_of']]) : null;
+
+        return self::table('Unearned premium', 'as_of', [['policy_number', 'Policy'], ['product_code', 'Product'], ['class', 'Class'], ['branch_code', 'Branch'],
+            ['net', 'Net premium', 'right'], ['earned', 'Earned to date', 'right'], ['unearned', 'Unearned', 'right']],
+            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'product_code' => $r['product_code'], 'class' => $r['class'], 'branch_code' => $r['branch_code'],
+                'net' => $money($r['net_premium_minor']), 'earned' => $money($r['earned_minor']), 'unearned' => $money($r['unearned_minor'])], 'link' => "/policies/{$r['policy_id']}"], $result['rows']),
+            ['net' => $money($result['totals']['net_premium_minor']), 'earned' => $money($result['totals']['earned_minor']), 'unearned' => $money($result['totals']['unearned_minor'])],
+            [$summary('Totals by class', 'Class', $result['by_class']), $summary('Totals by product', 'Product', $result['by_product']),
+                self::summary('Reconciliation to the unearned premium control', [['item', 'Item'], ['amount', 'Amount']], [
+                    ['cells' => ['item' => 'Unearned premium in this register', 'amount' => $money($recon['register_minor'])], 'link' => null],
+                    ['cells' => ['item' => 'Unearned premium reserve in the ledger', 'amount' => $money($recon['gl_minor'])], 'link' => $glLink],
+                    ['cells' => ['item' => 'Variance', 'amount' => $money($recon['variance_minor'])], 'link' => null],
+                ])]);
     }
 
     /**
@@ -202,14 +238,27 @@ final class ReportsPageController
 
     /**
      * @param list<array{0: string, 1: string, 2?: string}> $columns
-     * @param list<array{cells: array<string, mixed>, link: string|null}> $rows
+     * @param list<array{cells: array<string, mixed>, link: string|null, links?: array<string, string>}> $rows
      * @param array<string, string> $totals
+     * @param list<array{title: string, columns: list<array{key: string, label: string}>, rows: list<array{cells: array<string, mixed>, link: string|null}>}> $summaries
      * @return array<string, mixed>
      */
-    private static function table(string $title, string $filter, array $columns, array $rows, array $totals): array
+    private static function table(string $title, string $filter, array $columns, array $rows, array $totals, array $summaries = []): array
     {
         return ['title' => $title, 'filter' => $filter, 'columns' => array_map(fn (array $c): array => ['key' => $c[0], 'label' => $c[1], 'align' => $c[2] ?? 'left'], $columns),
-            'rows' => $rows, 'totals' => $totals];
+            'rows' => $rows, 'totals' => $totals, 'summaries' => $summaries];
+    }
+
+    /**
+     * A subtotal or reconciliation table shown under the report rows: the first column labels the row, the others are figures.
+     *
+     * @param list<array{0: string, 1: string}> $columns
+     * @param array<int, array{cells: array<string, mixed>, link: string|null}> $rows
+     * @return array{title: string, columns: list<array{key: string, label: string}>, rows: list<array{cells: array<string, mixed>, link: string|null}>}
+     */
+    private static function summary(string $title, array $columns, array $rows): array
+    {
+        return ['title' => $title, 'columns' => array_map(fn (array $c): array => ['key' => $c[0], 'label' => $c[1]], $columns), 'rows' => array_values($rows)];
     }
 
     /** API drill URL → the account activity report page with the same filters. */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -10,16 +10,21 @@ import { drillFrom } from '@/lib/drill';
 import { eventLabel } from '@/lib/events';
 import { formatMoney } from '@/lib/format';
 
-/** One report on the shared table: period filter, drill links on rows (brief §6.6), totals under the table, the drill path above it. */
-interface Row { cells: Record<string, string | number | null>; link: string | null; __key: string }
+/**
+ * One report on the shared table: period filter, drill links on rows and on cells such as a policy number (brief §6.6), totals under the table,
+ * summary tables (subtotals, a reconciliation to the ledger) below them, the drill path above it.
+ */
+interface Row { cells: Record<string, string | number | null>; link: string | null; links?: Record<string, string>; __key: string }
+interface Summary { title: string; columns: { key: string; label: string }[]; rows: { cells: Record<string, string | number | null>; link: string | null }[] }
 const props = defineProps<{
     report: string;
     title: string;
     filter: 'range' | 'as_of' | 'range_by';
     filters: { from: string; to: string; as_of: string; by: string };
     columns: { key: string; label: string; align: 'left' | 'right' }[];
-    rows: { cells: Record<string, string | number | null>; link: string | null }[];
+    rows: { cells: Record<string, string | number | null>; link: string | null; links?: Record<string, string> }[];
     totals: Record<string, string>;
+    summaries?: Summary[];
 }>();
 
 // A report opened without a start date covers everything before `to`; show that instead of a default start that was not applied.
@@ -31,7 +36,7 @@ const columns = computed<DataColumn<Row>[]>(() =>
     props.columns.map((column, index) => {
         const sample = props.rows.find((r) => r.cells[column.key] !== null)?.cells[column.key];
         const type = column.align === 'right' ? (isMoney(sample) ? 'money' : 'number') : /date|as_of|on$/.test(column.key) ? 'date' : 'text';
-        return { id: column.key, header: column.label, type, value: (row: Row) => { const v = row.cells[column.key]; return typeof v === 'string' && /^[A-Z][A-Z_]+$/.test(v) ? eventLabel(v) : v; }, href: index === 0 ? (row: Row) => row.link : undefined, width: type === 'text' ? 220 : 140 };
+        return { id: column.key, header: column.label, type, value: (row: Row) => { const v = row.cells[column.key]; return typeof v === 'string' && /^[A-Z][A-Z_]+$/.test(v) ? eventLabel(v) : v; }, href: index === 0 ? (row: Row) => row.link : row => row.links?.[column.key] ?? null, width: type === 'text' ? 220 : 140 };
     }),
 );
 
@@ -75,5 +80,25 @@ function open(row: Row): void {
                 <dd class="tabular-nums font-medium">{{ formatMoney(amount) }}</dd>
             </div>
         </dl>
+        <div v-if="summaries?.length" class="flex max-h-[40vh] flex-wrap gap-x-8 gap-y-3 overflow-auto border-t border-line px-4 py-3" @click.capture="(e) => (e.target as HTMLElement).closest('a[href]') && drillFrom(title)">
+            <section v-for="summary in summaries" :key="summary.title" class="min-w-0">
+                <h2 class="mb-1 text-ui font-medium text-ink">{{ summary.title }}</h2>
+                <table class="text-ui">
+                    <thead>
+                        <tr class="border-b border-line text-ink-2">
+                            <th v-for="(column, index) in summary.columns" :key="column.key" scope="col" class="py-1 pr-6 font-normal" :class="index === 0 ? 'text-left' : 'text-right'">{{ column.label }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, rowIndex) in summary.rows" :key="rowIndex" class="border-b border-line last:border-b-0">
+                            <td v-for="(column, index) in summary.columns" :key="column.key" class="py-1 pr-6" :class="index === 0 ? 'text-left' : 'text-right tabular-nums'">
+                                <Link v-if="index === 0 && row.link" :href="row.link" class="text-accent-text hover:underline">{{ row.cells[column.key] }}</Link>
+                                <template v-else>{{ isMoney(row.cells[column.key]) ? formatMoney(String(row.cells[column.key])) : row.cells[column.key] }}</template>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
     </AppLayout>
 </template>

@@ -106,10 +106,7 @@ final class FinancialStatementsQuery
     public function roleMovementByDimension(string $entityId, string $roleCode, CarbonImmutable $from, CarbonImmutable $to, string $dimension): array
     {
         $column = self::dimensionColumn($dimension);
-        $accountIds = array_values(DB::table('account_role_mappings as m')->join('books as b', 'b.id', '=', 'm.book_id')->where('b.is_primary', true)
-            ->where('m.entity_id', $entityId)->where('m.role_code', $roleCode)->where('m.effective_from', '<=', $to->toDateString())
-            ->where(fn ($q) => $q->whereNull('m.effective_to')->orWhere('m.effective_to', '>', $to->toDateString()))
-            ->pluck('m.account_id')->map(fn ($id): string => (string) $id)->all());
+        $accountIds = $this->roleAccounts($entityId, $roleCode, $to);
         $rows = $this->lines($entityId)->join('accounts as a', 'a.id', '=', 'l.account_id')->whereIn('l.account_id', $accountIds)
             ->whereBetween('j.posting_date', [$from->toDateString(), $to->toDateString()])
             ->groupBy($column)->selectRaw("{$column}::text as dimension_value, sum(case when l.side = a.normal_side then l.amount_minor else -l.amount_minor end) as movement")->get();
@@ -119,6 +116,38 @@ final class FinancialStatementsQuery
         }
 
         return ['account_ids' => $accountIds, 'by_dimension' => $byDimension];
+    }
+
+    /**
+     * Balance at the end of $asOf of the accounts mapped to $roleCode (primary book, on $asOf), on their normal side, split by a column dimension
+     * (key '' = lines without it). Used to reconcile a report built from business rows to its control account, e.g. unearned premium.
+     *
+     * @return array{account_ids: list<string>, balance_minor: int, by_dimension: array<string, int>}
+     *
+     * @throws \InvalidArgumentException for a dimension without its own journal_lines column
+     */
+    public function roleBalanceByDimension(string $entityId, string $roleCode, CarbonImmutable $asOf, string $dimension): array
+    {
+        $column = self::dimensionColumn($dimension);
+        $accountIds = $this->roleAccounts($entityId, $roleCode, $asOf);
+        $rows = $this->lines($entityId)->join('accounts as a', 'a.id', '=', 'l.account_id')->whereIn('l.account_id', $accountIds)
+            ->where('j.posting_date', '<=', $asOf->toDateString())
+            ->groupBy($column)->selectRaw("{$column}::text as dimension_value, sum(case when l.side = a.normal_side then l.amount_minor else -l.amount_minor end) as balance")->get();
+        $byDimension = [];
+        foreach ($rows as $row) {
+            $byDimension[(string) ($row->dimension_value ?? '')] = (int) $row->balance;
+        }
+
+        return ['account_ids' => $accountIds, 'balance_minor' => array_sum($byDimension), 'by_dimension' => $byDimension];
+    }
+
+    /** @return list<string> accounts mapped to the role in the primary book on the date */
+    private function roleAccounts(string $entityId, string $roleCode, CarbonImmutable $on): array
+    {
+        return array_values(DB::table('account_role_mappings as m')->join('books as b', 'b.id', '=', 'm.book_id')->where('b.is_primary', true)
+            ->where('m.entity_id', $entityId)->where('m.role_code', $roleCode)->where('m.effective_from', '<=', $on->toDateString())
+            ->where(fn ($q) => $q->whereNull('m.effective_to')->orWhere('m.effective_to', '>', $on->toDateString()))
+            ->pluck('m.account_id')->map(fn ($id): string => (string) $id)->all());
     }
 
     /** @return literal-string */

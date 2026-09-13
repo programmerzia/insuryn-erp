@@ -127,6 +127,9 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-52 | F2 | Upload limit and accepted document types are not specified: 10 MB per file; PDF, JPG/JPEG, PNG, DOC/DOCX, XLS/XLSX. The file type is judged by its extension and served with that extension's content type, always as a download. PHP `upload_max_filesize` / `post_max_size` must be at least the limit. | `config/erp.php` `documents.max_upload_kb`, `documents.allowed_extensions` (`ASSUMPTION:`), `DocumentStore`; hint text in `DocumentList.vue`. |
 | A-53 | F2 | Who may attach documents is not specified: claims `claim.register`, `claim.reserve` or `claim.approve`; receipts `receipt.create` or `receipt.allocate`; policies `policy.create`, `policy.issue` or `policy.endorse` — for the object's branch. Listing and downloading follow the page's own area permissions (whoever can open the object page). No one can remove or replace a document. | `ATTACH_DOCUMENTS` in `ClaimPageController`, `CollectionsPageController`, `PolicyPageController` (`ASSUMPTION:`). |
 
+| A-60 | F5 | "Class" in the unearned premium report and the premium register totals is not defined: the product's line of business (`products.lob`: motor, fire, marine, …), not `products.insurance_class` (life / non-life), which would put all non-life business in one group. | `UnearnedPremiumQuery` (`ASSUMPTION:` docblock), `PremiumRegisterQuery`. |
+| A-61 | F5 | How unearned premium is dated is not specified: as the ledger posts it (A-8) — net written premium on the issue or endorsement accounting date, each earning row on its posting date (a scheduled row on its period end, a cancellation catch-up on the cancellation date), the released remainder on the cancellation date. Postings to the control from anywhere else (a manual journal, a reversal) are not in the register and show as the reconciliation variance. | `UnearnedPremiumQuery`. |
+
 ## Catalogue extensions and interpretations (not OPEN items)
 
 - Permissions added to the §7.1 "MVP subset" for configuration/CRUD the catalogue does not name: `party.manage` (branch_officer+),
@@ -1701,3 +1704,16 @@ Scope: review only; only the critical finding was fixed.
   the Phase 3 generated PDFs will reuse `DocumentStore` (docs/rating-quotation-documents-design.md §3, `generated_documents.pdf_document_id`).
 - Tests: `tests/Feature/Documents/ObjectDocumentsTest.php` (11: attach with hash, file and audit; page list and download; permissions; validation; append-only;
   tenant isolation; receipts and policies; one file per hash on the real local disk), `resources/js/tests/documents.test.ts` (3).
+
+### F5 — Reports: unearned premium and premium register totals — done
+- New report *Unearned premium* (`/reports/unearned-premium?as_of=`, API `GET /api/reports/unearned-premium?entity_id=&as_of=`, `reports.financial`): one row per policy
+  with unearned premium at the date (policy → policy page, product, class, branch, net premium, earned to date, unearned), totals by class and by product, and a reconciliation:
+  unearned in the register, the `unearned_premium` role's ledger balance at the date (→ account activity) and the variance. `UnearnedPremiumQuery` rebuilds each policy's
+  balance from dated business rows the way the posting rules move the control (A-61), so the variance is zero while only policy, earning and cancellation events post to it;
+  the ledger side is `FinancialStatementsQuery::roleBalanceByDimension`.
+- *Premium register*: new columns class and branch, summary tables *Totals by class* and *Totals by branch* (also `by_class` / `by_branch` in the API), and the policy number
+  links to the policy page (the row still drills to its journal).
+- `reports/Show` takes optional `links` per row (a link per cell) and `summaries` (small tables under the totals). Both reports are in the reports index.
+- ASSUMPTIONS A-60, A-61.
+- Tests: `tests/Feature/Reports/UnearnedPremiumReportTest.php` (4: zero variance on twelve dates through issue, endorsement, monthly earning and a mid-month cancellation with a
+  negative catch-up; a stray posting shows as variance; register totals by class and branch; pages, drill links, API and permission refusal).
