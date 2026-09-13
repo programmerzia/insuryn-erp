@@ -31,14 +31,14 @@ const payForm = useForm({ paid_on: '', bank_account_id: '' });
         <div class="grid gap-6 lg:grid-cols-3">
             <div class="grid gap-6 lg:col-span-2">
                 <div>
-                    <h2 class="mb-2 text-lg font-semibold">Payout statements</h2>
+                    <h2 class="mb-2 text-section font-semibold">Payout statements</h2>
                     <Table>
                         <TableHeader><TableRow><TableHead>Statement</TableHead><TableHead>Agent</TableHead><TableHead>Up to</TableHead><TableHead class="text-right">Net</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
                         <TableBody>
                             <TableRow v-for="statement in statements" :key="statement.id">
-                                <TableCell class="font-mono">{{ statement.number }}</TableCell>
-                                <TableCell><Link :href="`/commission/agents/${statement.agent_id}`" class="font-mono text-blueprint hover:underline">{{ statement.agent_code }}</Link></TableCell>
-                                <TableCell>{{ statement.up_to }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ statement.net }}</TableCell>
+                                <TableCell class="">{{ statement.number }}</TableCell>
+                                <TableCell><Link :href="`/commission/agents/${statement.agent_id}`" class=" text-accent-text hover:underline">{{ statement.agent_code }}</Link></TableCell>
+                                <TableCell>{{ statement.up_to }}</TableCell><TableCell class="text-right tabular-nums">{{ statement.net }}</TableCell>
                                 <TableCell><StatusBadge :status="statement.status" /></TableCell>
                                 <TableCell class="text-right">
                                     <span v-if="statement.status === 'approved' && can.pay" class="flex items-center justify-end gap-2">
@@ -52,11 +52,11 @@ const payForm = useForm({ paid_on: '', bank_account_id: '' });
                     </Table>
                 </div>
                 <div>
-                    <h2 class="mb-2 text-lg font-semibold">Plans</h2>
+                    <h2 class="mb-2 text-section font-semibold">Plans</h2>
                     <Table>
                         <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Name</TableHead><TableHead class="text-right">Rate</TableHead><TableHead>Withholding</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            <TableRow v-for="plan in plans" :key="plan.id"><TableCell class="font-mono">{{ plan.code }}</TableCell><TableCell>{{ plan.name }}</TableCell><TableCell class="text-right">{{ plan.rate_percent }}%</TableCell><TableCell class="text-ivory-dim">{{ plan.withholding ?? 'none' }}</TableCell></TableRow>
+                            <TableRow v-for="plan in plans" :key="plan.id"><TableCell class="">{{ plan.code }}</TableCell><TableCell>{{ plan.name }}</TableCell><TableCell class="text-right">{{ plan.rate_percent }}%</TableCell><TableCell class="text-ink-2">{{ plan.withholding ?? 'none' }}</TableCell></TableRow>
                             <TableEmpty v-if="plans.length === 0" :colspan="4">No plans yet.</TableEmpty>
                         </TableBody>
                     </Table>
@@ -64,7 +64,7 @@ const payForm = useForm({ paid_on: '', bank_account_id: '' });
             </div>
             <div class="grid content-start gap-6">
                 <Card v-if="can.approve">
-                    <h2 class="text-lg font-semibold">Approve a payout</h2>
+                    <h2 class="text-section font-semibold">Approve a payout</h2>
                     <form class="mt-4 grid gap-3" @submit.prevent="approveForm.post('/commission/statements', { onSuccess: () => approveForm.reset() })">
                         <Field id="approve_agent" label="Agent" :error="approveForm.errors.agent_id"><SelectInput id="approve_agent" v-model="approveForm.agent_id" placeholder="Choose an agent" :options="agents.map((a) => ({ value: a.id, label: a.code }))" /></Field>
                         <Field id="up_to" label="Commission earned up to" :error="approveForm.errors.up_to"><Input id="up_to" v-model="approveForm.up_to" type="date" /></Field>
@@ -73,7 +73,7 @@ const payForm = useForm({ paid_on: '', bank_account_id: '' });
                     </form>
                 </Card>
                 <Card v-if="can.plans">
-                    <h2 class="text-lg font-semibold">New plan</h2>
+                    <h2 class="text-section font-semibold">New plan</h2>
                     <form class="mt-4 grid gap-3" @submit.prevent="planForm.post('/commission/plans', { onSuccess: () => planForm.reset() })">
                         <Field id="plan_code" label="Code" :error="planForm.errors.code"><Input id="plan_code" v-model="planForm.code" /></Field>
                         <Field id="plan_name" label="Name" :error="planForm.errors.name"><Input id="plan_name" v-model="planForm.name" /></Field>

@@ -3,19 +3,22 @@ import type { HTMLAttributes } from 'vue';
 import { computed } from 'vue';
 import { cn } from '@/lib/utils';
 
-const props = withDefaults(defineProps<{ variant?: 'default' | 'ghost'; type?: 'button' | 'submit'; disabled?: boolean; class?: HTMLAttributes['class'] }>(), {
-    variant: 'default',
-    type: 'button',
-    disabled: false,
-    class: undefined,
-});
+/** Brief §2: 32px controls on the 4px grid, 4px radius, one accent. `primary` is the one action a view leads with; `danger` only where money or data is destroyed. */
+const props = withDefaults(
+    defineProps<{ variant?: 'primary' | 'default' | 'secondary' | 'ghost' | 'danger'; size?: 'md' | 'sm' | 'icon'; type?: 'button' | 'submit'; disabled?: boolean; class?: HTMLAttributes['class'] }>(),
+    { variant: 'primary', size: 'md', type: 'button', disabled: false, class: undefined },
+);
 
 const variants = {
-    default: 'bg-brick text-ivory hover:bg-brick-hover',
-    ghost: 'text-ivory-dim hover:bg-surface-raised hover:text-ivory',
+    primary: 'bg-accent text-accent-ink hover:bg-accent-hover',
+    default: 'bg-accent text-accent-ink hover:bg-accent-hover',
+    secondary: 'border border-line-control bg-surface text-ink hover:bg-surface-2',
+    ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
+    danger: 'border border-danger bg-surface text-danger hover:bg-surface-2',
 };
+const sizes = { md: 'h-8 px-3', sm: 'h-7 px-2', icon: 'size-8 px-0' };
 const classes = computed(() =>
-    cn('inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50', variants[props.variant], props.class),
+    cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control text-ui font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50', variants[props.variant], sizes[props.size], props.class),
 );
 </script>
 

@@ -7,7 +7,7 @@ defineProps<{ colspan: number }>();
 
 <template>
     <TableRow class="hover:bg-transparent">
-        <TableCell :colspan="colspan" class="py-10 text-center text-ivory-dim">
+        <TableCell :colspan="colspan" class="py-10 text-center text-ink-2">
             <slot />
         </TableCell>
     </TableRow>

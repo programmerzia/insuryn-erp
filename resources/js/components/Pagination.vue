@@ -12,12 +12,12 @@ function go(to: number): void {
 </script>
 
 <template>
-    <div v-if="props.page.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-ivory-dim">
+    <div v-if="props.page.last_page > 1" class="mt-4 flex items-center justify-between text-ui text-ink-2">
         <span>{{ props.page.total }} in total</span>
         <div class="flex gap-2">
-            <button type="button" class="rounded px-2 py-1 hover:bg-surface-raised disabled:opacity-40" :disabled="props.page.current_page <= 1" @click="go(props.page.current_page - 1)">Previous</button>
+            <button type="button" class="rounded-control px-2 py-1 hover:bg-surface-2 disabled:opacity-40" :disabled="props.page.current_page <= 1" @click="go(props.page.current_page - 1)">Previous</button>
             <span>Page {{ props.page.current_page }} of {{ props.page.last_page }}</span>
-            <button type="button" class="rounded px-2 py-1 hover:bg-surface-raised disabled:opacity-40" :disabled="props.page.current_page >= props.page.last_page" @click="go(props.page.current_page + 1)">Next</button>
+            <button type="button" class="rounded-control px-2 py-1 hover:bg-surface-2 disabled:opacity-40" :disabled="props.page.current_page >= props.page.last_page" @click="go(props.page.current_page + 1)">Next</button>
         </div>
     </div>
 </template>

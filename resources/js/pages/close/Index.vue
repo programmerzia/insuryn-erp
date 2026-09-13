@@ -22,10 +22,10 @@ const reopenForm = useForm({ reason: '' });
             <TableHeader><TableRow><TableHead>Period</TableHead><TableHead>Dates</TableHead><TableHead>Status</TableHead><TableHead>Close</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="period in periods" :key="period.id">
-                    <TableCell class="font-mono">{{ period.label }}</TableCell>
-                    <TableCell class="text-ivory-dim">{{ period.starts }} – {{ period.ends }}</TableCell>
+                    <TableCell class="">{{ period.label }}</TableCell>
+                    <TableCell class="text-ink-2">{{ period.starts }} – {{ period.ends }}</TableCell>
                     <TableCell><StatusBadge :status="period.status" /></TableCell>
-                    <TableCell><Link v-if="period.run" :href="`/close/runs/${period.run.id}`" class="text-blueprint hover:underline">{{ period.run.status }}</Link><span v-else class="text-ivory-dim">not started</span></TableCell>
+                    <TableCell><Link v-if="period.run" :href="`/close/runs/${period.run.id}`" class="text-accent-text hover:underline">{{ period.run.status }}</Link><span v-else class="text-ink-2">not started</span></TableCell>
                     <TableCell class="text-right">
                         <Button v-if="can.start && period.status !== 'locked' && (!period.run || period.run.status === 'reopened')" variant="ghost" @click="router.post(`/close/periods/${period.id}`)">Start close</Button>
                         <template v-if="can.reopen && period.status !== 'open'">

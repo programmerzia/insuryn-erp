@@ -25,7 +25,7 @@ const form = useForm({ policy_id: '', loss_date: '', reported_on: '', descriptio
                 <Field id="loss_date" label="Date of loss" :error="form.errors.loss_date"><Input id="loss_date" v-model="form.loss_date" type="date" /></Field>
                 <Field id="reported_on" label="Reported on" :error="form.errors.reported_on"><Input id="reported_on" v-model="form.reported_on" type="date" /></Field>
                 <Field id="description" label="What happened" :error="form.errors.description">
-                    <textarea id="description" v-model="form.description" rows="4" class="rounded-md border border-line-control bg-surface px-3 py-2 text-sm text-ivory" />
+                    <textarea id="description" v-model="form.description" rows="4" class="rounded-control border border-line-control bg-surface px-3 py-2 text-ui text-ink" />
                 </Field>
                 <Button type="submit" :disabled="form.processing" class="justify-self-start">Register claim</Button>
             </form>

@@ -6,7 +6,7 @@ const props = defineProps<{ class?: HTMLAttributes['class'] }>();
 </script>
 
 <template>
-    <th :class="cn('h-10 px-3 text-left align-middle text-xs font-semibold uppercase tracking-wider text-blueprint', props.class)">
+    <th :class="cn('sticky top-0 h-(--row-h) border-b border-line bg-surface-2 px-3 text-left align-middle text-dense font-medium whitespace-nowrap text-ink-2', props.class)">
         <slot />
     </th>
 </template>

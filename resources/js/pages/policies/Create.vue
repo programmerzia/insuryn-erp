@@ -38,7 +38,7 @@ const partyOptions = props.parties.map((p) => ({ value: p.id, label: p.display_n
                 <Field id="premium" :label="`Premium (${entity.currency})`" :error="form.errors.premium"><Input id="premium" v-model="form.premium" inputmode="decimal" placeholder="120,000.00" /></Field>
                 <Field id="installment_count" label="Installments" :error="form.errors.installment_count"><Input id="installment_count" v-model.number="form.installment_count" type="number" min="1" max="12" /></Field>
                 <fieldset class="grid gap-2 sm:col-span-2">
-                    <legend class="text-sm font-medium">Payers <span class="text-ivory-dim">(leave empty when the policyholder pays everything)</span></legend>
+                    <legend class="text-ui font-medium">Payers <span class="text-ink-2">(leave empty when the policyholder pays everything)</span></legend>
                     <div v-for="(payer, index) in form.payers" :key="index" class="flex gap-2">
                         <SelectInput v-model="payer.party_id" placeholder="Choose a party" :options="partyOptions" :aria-label="`Payer ${index + 1}`" />
                         <Input v-model="payer.share_percent" inputmode="decimal" placeholder="%" class="w-24" :aria-label="`Share ${index + 1} in percent`" />

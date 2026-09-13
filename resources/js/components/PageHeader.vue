@@ -1,13 +1,13 @@
 <script setup lang="ts">
-defineProps<{ title: string; eyebrow?: string; description?: string }>();
+/** Page title row. Brief §2: 20px title, sentence case, no eyebrow labels (the `eyebrow` prop is accepted and not shown). */
+defineProps<{ title: string; description?: string; eyebrow?: string }>();
 </script>
 
 <template>
-    <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-            <p v-if="eyebrow" class="text-xs font-semibold tracking-wider text-blueprint uppercase">{{ eyebrow }}</p>
-            <h1 class="mt-1 text-3xl font-bold">{{ title }}</h1>
-            <p v-if="description" class="mt-1 text-sm text-ivory-dim">{{ description }}</p>
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div class="min-w-0">
+            <h1 class="text-title font-semibold">{{ title }}</h1>
+            <p v-if="description" class="text-ui text-ink-2">{{ description }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2"><slot /></div>
     </div>

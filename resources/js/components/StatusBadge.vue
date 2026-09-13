@@ -1,32 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { cn } from '@/lib/utils';
+import { statusTone, statusWord } from '@/lib/status';
 
+/** Brief §4: status as a small dot and a word, never a coloured pill. The word carries the meaning; the dot only helps scanning. */
 const props = defineProps<{ status: string }>();
-
-/** Journal status → chip tone. Blueprint = settled, amber = in progress, brick = stopped (CoreBari status colours). */
-const tone = computed(() => {
-    switch (props.status) {
-        case 'posted':
-            return 'border-green/40 bg-green/10 text-green';
-        case 'reversed':
-        case 'cancelled':
-        case 'failed':
-            return 'border-brick-soft/50 bg-brick/15 text-brick-soft';
-        case 'draft':
-        case 'pending_approval':
-        case 'approved':
-        case 'queued':
-        case 'posting':
-            return 'border-amber/40 bg-amber/10 text-amber';
-        default:
-            return 'border-line-control text-ivory-dim';
-    }
-});
+const tone = computed(() => statusTone(props.status));
 </script>
 
 <template>
-    <span :class="cn('inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium whitespace-nowrap', tone)">
-        {{ status.replace('_', ' ') }}
+    <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <span class="size-1.5 shrink-0 rounded-full" :class="{ 'bg-ok': tone === 'ok', 'bg-warn': tone === 'warn', 'bg-danger': tone === 'danger', 'bg-ink-2': tone === 'neutral' }" aria-hidden="true" />
+        {{ statusWord(status) }}
     </span>
 </template>

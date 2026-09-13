@@ -31,16 +31,16 @@ const form = useForm({ installment_id: '', amount: '', on: props.asOf });
         </PageHeader>
         <FormBanner />
         <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Card v-for="(amount, bucket) in ageing.buckets" :key="bucket"><p class="text-xs text-ivory-dim uppercase">{{ bucket }} days</p><p class="mt-1 font-mono text-lg tabular-nums">{{ amount }}</p></Card>
+            <Card v-for="(amount, bucket) in ageing.buckets" :key="bucket"><p class="text-dense text-ink-2">{{ bucket }} days</p><p class="mt-1 text-section tabular-nums">{{ amount }}</p></Card>
         </div>
         <Table>
             <TableHeader><TableRow><TableHead>Receipt</TableHead><TableHead>Reference</TableHead><TableHead>Since</TableHead><TableHead>Days</TableHead><TableHead class="text-right">Open</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>
                 <template v-for="item in ageing.items" :key="item.id">
                     <TableRow>
-                        <TableCell><Link :href="`/receipts/${item.receipt_id}`" class="font-mono text-blueprint hover:underline">{{ item.receipt_number }}</Link></TableCell>
-                        <TableCell class="text-ivory-dim">{{ item.reference }}</TableCell><TableCell>{{ item.aged_since }}</TableCell><TableCell>{{ item.days }}</TableCell>
-                        <TableCell class="text-right font-mono tabular-nums">{{ item.open }}</TableCell>
+                        <TableCell><Link :href="`/receipts/${item.receipt_id}`" class=" text-accent-text hover:underline">{{ item.receipt_number }}</Link></TableCell>
+                        <TableCell class="text-ink-2">{{ item.reference }}</TableCell><TableCell>{{ item.aged_since }}</TableCell><TableCell>{{ item.days }}</TableCell>
+                        <TableCell class="text-right tabular-nums">{{ item.open }}</TableCell>
                         <TableCell class="text-right"><Button variant="ghost" @click="allocating = allocating === item.id ? null : item.id">Allocate</Button></TableCell>
                     </TableRow>
                     <TableRow v-if="allocating === item.id">

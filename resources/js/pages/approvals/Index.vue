@@ -24,9 +24,9 @@ function decide(id: string, decision: 'approved' | 'rejected'): void {
             <TableHeader><TableRow><TableHead>Request</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Requested by</TableHead><TableHead>Step</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="approval in approvals" :key="approval.id">
-                    <TableCell><Link v-if="approval.link" :href="approval.link" class="text-blueprint hover:underline">{{ approval.title }}</Link><span v-else>{{ approval.title }}</span></TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ approval.amount }}</TableCell>
-                    <TableCell>{{ approval.requested_by }} <span class="text-xs text-ivory-dim">{{ approval.requested_at }}</span></TableCell>
+                    <TableCell><Link v-if="approval.link" :href="approval.link" class="text-accent-text hover:underline">{{ approval.title }}</Link><span v-else>{{ approval.title }}</span></TableCell>
+                    <TableCell class="text-right tabular-nums">{{ approval.amount }}</TableCell>
+                    <TableCell>{{ approval.requested_by }} <span class="text-dense text-ink-2">{{ approval.requested_at }}</span></TableCell>
                     <TableCell>{{ approval.step }}</TableCell>
                     <TableCell>
                         <span class="flex items-center justify-end gap-2">

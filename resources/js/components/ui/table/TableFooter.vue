@@ -6,7 +6,7 @@ const props = defineProps<{ class?: HTMLAttributes['class'] }>();
 </script>
 
 <template>
-    <tfoot :class="cn('border-t border-line-control bg-surface-raised font-medium', props.class)">
+    <tfoot :class="cn('border-t border-line-control bg-surface-2 font-medium', props.class)">
         <slot />
     </tfoot>
 </template>

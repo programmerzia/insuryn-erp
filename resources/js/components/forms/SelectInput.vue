@@ -3,11 +3,11 @@ import type { HTMLAttributes } from 'vue';
 import { cn } from '@/lib/utils';
 
 const props = defineProps<{ options: { value: string; label: string }[]; placeholder?: string; class?: HTMLAttributes['class'] }>();
-const model = defineModel<string | null>({ default: '' });
+const model = defineModel<string>();
 </script>
 
 <template>
-    <select v-model="model" :class="cn('h-9 w-full rounded-md border border-line-control bg-surface px-2 text-sm text-ivory', props.class)">
+    <select v-model="model" :class="cn('h-8 w-full rounded-control border border-line-control bg-surface px-2 text-body text-ink', props.class)">
         <option v-if="placeholder !== undefined" value="">{{ placeholder }}</option>
         <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
     </select>

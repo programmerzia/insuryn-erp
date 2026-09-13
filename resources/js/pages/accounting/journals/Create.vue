@@ -39,9 +39,9 @@ const hint = computed(() => (form.kind === 'adjustment' ? 'Adjustments to contro
                 </div>
                 <div class="grid gap-2">
                     <div v-for="(line, index) in form.lines" :key="index" class="grid gap-2 sm:grid-cols-12">
-                        <div class="sm:col-span-4"><SelectInput v-model="line.account_id" placeholder="Account" :options="accountOptions" :aria-label="`Account ${index + 1}`" /><p v-if="errorFor(index, 'account_id')" class="text-xs text-brick-soft">{{ errorFor(index, 'account_id') }}</p></div>
+                        <div class="sm:col-span-4"><SelectInput v-model="line.account_id" placeholder="Account" :options="accountOptions" :aria-label="`Account ${index + 1}`" /><p v-if="errorFor(index, 'account_id')" class="text-dense text-danger">{{ errorFor(index, 'account_id') }}</p></div>
                         <div class="sm:col-span-2"><SelectInput v-model="line.side" :options="[{ value: 'debit', label: 'Debit' }, { value: 'credit', label: 'Credit' }]" :aria-label="`Side ${index + 1}`" /></div>
-                        <div class="sm:col-span-2"><Input v-model="line.amount" inputmode="decimal" placeholder="Amount" :aria-label="`Amount ${index + 1}`" /><p v-if="errorFor(index, 'amount')" class="text-xs text-brick-soft">{{ errorFor(index, 'amount') }}</p></div>
+                        <div class="sm:col-span-2"><Input v-model="line.amount" inputmode="decimal" placeholder="Amount" :aria-label="`Amount ${index + 1}`" /><p v-if="errorFor(index, 'amount')" class="text-dense text-danger">{{ errorFor(index, 'amount') }}</p></div>
                         <div class="sm:col-span-2"><SelectInput v-model="line.branch_id" placeholder="No branch" :options="branches.map((b) => ({ value: b.id, label: b.code }))" :aria-label="`Branch ${index + 1}`" /></div>
                         <div class="flex gap-1 sm:col-span-2"><Input v-model="line.memo" placeholder="Memo" :aria-label="`Memo ${index + 1}`" /><Button v-if="form.lines.length > 2" variant="ghost" @click="form.lines.splice(index, 1)">×</Button></div>
                     </div>

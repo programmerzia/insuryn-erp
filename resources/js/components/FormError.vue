@@ -3,5 +3,5 @@ defineProps<{ message?: string }>();
 </script>
 
 <template>
-    <p v-if="message" class="text-sm text-brick-soft" role="alert">{{ message }}</p>
+    <p v-if="message" class="text-ui text-danger" role="alert">{{ message }}</p>
 </template>

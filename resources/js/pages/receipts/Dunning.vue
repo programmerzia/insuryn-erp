@@ -23,9 +23,9 @@ const range = reactive({ from: props.from, to: props.to });
             <TableBody>
                 <TableRow v-for="notice in notices" :key="notice.id">
                     <TableCell>{{ notice.issued_on }}</TableCell>
-                    <TableCell><Link :href="`/policies/${notice.policy_id}`" class="font-mono text-blueprint hover:underline">{{ notice.policy_number }}</Link></TableCell>
+                    <TableCell><Link :href="`/policies/${notice.policy_id}`" class=" text-accent-text hover:underline">{{ notice.policy_number }}</Link></TableCell>
                     <TableCell>{{ notice.payer }}</TableCell><TableCell>Level {{ notice.level }}</TableCell><TableCell>{{ notice.days_overdue }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ notice.outstanding }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ notice.outstanding }}</TableCell>
                 </TableRow>
                 <TableEmpty v-if="notices.length === 0" :colspan="6">No reminders in this period.</TableEmpty>
             </TableBody>

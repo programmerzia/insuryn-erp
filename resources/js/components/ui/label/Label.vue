@@ -6,5 +6,5 @@ const props = defineProps<{ for?: string; class?: HTMLAttributes['class'] }>();
 </script>
 
 <template>
-    <label :for="props.for" :class="cn('text-sm font-medium text-ivory', props.class)"><slot /></label>
+    <label :for="props.for" :class="cn('text-ui font-medium text-ink', props.class)"><slot /></label>
 </template>

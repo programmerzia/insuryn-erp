@@ -18,7 +18,7 @@ const form = useForm({ email: '' });
                 <FormError :message="form.errors.email" />
             </div>
             <Button type="submit" :disabled="form.processing">Email reset link</Button>
-            <Link href="/login" class="text-center text-sm text-blueprint hover:underline">Back to sign in</Link>
+            <Link href="/login" class="text-center text-ui text-accent-text hover:underline">Back to sign in</Link>
         </form>
     </AuthLayout>
 </template>

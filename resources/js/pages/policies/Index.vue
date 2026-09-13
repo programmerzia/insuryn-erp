@@ -32,11 +32,11 @@ const filters = reactive({ ...props.filters });
             </TableHeader>
             <TableBody>
                 <TableRow v-for="policy in policies.data" :key="policy.id">
-                    <TableCell><Link :href="`/policies/${policy.id}`" class="font-mono text-blueprint hover:underline">{{ policy.number ?? 'Quote' }}</Link></TableCell>
+                    <TableCell><Link :href="`/policies/${policy.id}`" class=" text-accent-text hover:underline">{{ policy.number ?? 'Quote' }}</Link></TableCell>
                     <TableCell>{{ policy.policyholder }}</TableCell>
-                    <TableCell class="font-mono">{{ policy.product_code }}</TableCell>
-                    <TableCell class="text-ivory-dim">{{ policy.inception }} – {{ policy.expiry }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ policy.gross_premium }}</TableCell>
+                    <TableCell class="">{{ policy.product_code }}</TableCell>
+                    <TableCell class="text-ink-2">{{ policy.inception }} – {{ policy.expiry }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ policy.gross_premium }}</TableCell>
                     <TableCell><StatusBadge :status="policy.status" /></TableCell>
                 </TableRow>
                 <TableEmpty v-if="policies.data.length === 0" :colspan="6">No policies match.</TableEmpty>

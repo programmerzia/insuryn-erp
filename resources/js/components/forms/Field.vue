@@ -9,7 +9,7 @@ defineProps<{ id: string; label: string; error?: string; hint?: string }>();
     <div class="grid gap-1.5">
         <Label :for="id">{{ label }}</Label>
         <slot />
-        <p v-if="hint" class="text-xs text-ivory-dim">{{ hint }}</p>
+        <p v-if="hint" class="text-dense text-ink-2">{{ hint }}</p>
         <FormError :message="error" />
     </div>
 </template>

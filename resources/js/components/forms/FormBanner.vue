@@ -8,5 +8,5 @@ const error = computed(() => page.props.errors.form);
 </script>
 
 <template>
-    <p v-if="error" class="mb-4 rounded-md border border-brick-soft/50 bg-brick/15 px-3 py-2 text-sm text-brick-soft" role="alert">{{ error }}</p>
+    <p v-if="error" class="mb-4 rounded-control border border-danger/50 bg-accent/15 px-3 py-2 text-ui text-danger" role="alert">{{ error }}</p>
 </template>

@@ -13,8 +13,8 @@ defineProps<{ reports: { key: string | null; title: string; description: string;
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Link v-for="report in reports" :key="report.title" :href="report.href ?? `/reports/${report.key}`">
                 <Card class="h-full hover:border-line-control">
-                    <h2 class="font-semibold text-ivory">{{ report.title }}</h2>
-                    <p class="mt-1 text-sm text-ivory-dim">{{ report.description }}</p>
+                    <h2 class="font-semibold text-ink">{{ report.title }}</h2>
+                    <p class="mt-1 text-ui text-ink-2">{{ report.description }}</p>
                 </Card>
             </Link>
         </div>

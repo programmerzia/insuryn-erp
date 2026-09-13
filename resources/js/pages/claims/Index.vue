@@ -26,9 +26,9 @@ const filters = reactive({ ...props.filters });
             <TableHeader><TableRow><TableHead>Claim</TableHead><TableHead>Policy</TableHead><TableHead>Policyholder</TableHead><TableHead>Loss</TableHead><TableHead class="text-right">Reserve</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="claim in claims.data" :key="claim.id">
-                    <TableCell><Link :href="`/claims/${claim.id}`" class="font-mono text-blueprint hover:underline">{{ claim.number }}</Link></TableCell>
-                    <TableCell class="font-mono">{{ claim.policy_number }}</TableCell><TableCell>{{ claim.policyholder }}</TableCell><TableCell>{{ claim.loss_date }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ claim.reserve }}</TableCell><TableCell><StatusBadge :status="claim.status" /></TableCell>
+                    <TableCell><Link :href="`/claims/${claim.id}`" class=" text-accent-text hover:underline">{{ claim.number }}</Link></TableCell>
+                    <TableCell class="">{{ claim.policy_number }}</TableCell><TableCell>{{ claim.policyholder }}</TableCell><TableCell>{{ claim.loss_date }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ claim.reserve }}</TableCell><TableCell><StatusBadge :status="claim.status" /></TableCell>
                 </TableRow>
                 <TableEmpty v-if="claims.data.length === 0" :colspan="6">No claims match.</TableEmpty>
             </TableBody>

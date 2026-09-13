@@ -13,18 +13,18 @@ defineProps<{ receipts: { data: { id: string; number: string; channel: string; a
 <template>
     <AppLayout title="Receipts">
         <PageHeader eyebrow="Collections" title="Receipts" description="Money received, newest first.">
-            <Link href="/cheques" class="text-sm text-blueprint hover:underline">Cheque register</Link>
+            <Link href="/cheques" class="text-ui text-accent-text hover:underline">Cheque register</Link>
             <Link href="/receipts/create"><Button>Record receipt</Button></Link>
         </PageHeader>
         <Table>
             <TableHeader><TableRow><TableHead>Number</TableHead><TableHead>Date</TableHead><TableHead>Channel</TableHead><TableHead>Reference</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="receipt in receipts.data" :key="receipt.id">
-                    <TableCell><Link :href="`/receipts/${receipt.id}`" class="font-mono text-blueprint hover:underline">{{ receipt.number }}</Link></TableCell>
+                    <TableCell><Link :href="`/receipts/${receipt.id}`" class=" text-accent-text hover:underline">{{ receipt.number }}</Link></TableCell>
                     <TableCell>{{ receipt.value_date }}</TableCell>
-                    <TableCell>{{ receipt.channel }}<span v-if="receipt.agent_collection" class="text-ivory-dim"> · agent</span></TableCell>
-                    <TableCell class="text-ivory-dim">{{ receipt.reference }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ receipt.amount }}</TableCell>
+                    <TableCell>{{ receipt.channel }}<span v-if="receipt.agent_collection" class="text-ink-2"> · agent</span></TableCell>
+                    <TableCell class="text-ink-2">{{ receipt.reference }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ receipt.amount }}</TableCell>
                     <TableCell><StatusBadge :status="receipt.status" /></TableCell>
                 </TableRow>
                 <TableEmpty v-if="receipts.data.length === 0" :colspan="6">No receipts yet.</TableEmpty>

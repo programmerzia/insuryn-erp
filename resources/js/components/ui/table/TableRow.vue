@@ -6,7 +6,7 @@ const props = defineProps<{ class?: HTMLAttributes['class'] }>();
 </script>
 
 <template>
-    <tr :class="cn('border-b border-line transition-colors hover:bg-surface-raised', props.class)">
+    <tr :class="cn('h-(--row-h) border-b border-line hover:bg-surface-2', props.class)">
         <slot />
     </tr>
 </template>

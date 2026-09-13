@@ -35,11 +35,11 @@ const releaseForm = useForm({ paid_on: '', bank_account_id: '' });
     <AppLayout :title="claim.number">
         <PageHeader :eyebrow="`Policy ${claim.policy.number} · ${claim.policy.policyholder}`" :title="claim.number" :description="`Loss ${claim.loss_date}, reported ${claim.reported_on}. ${claim.description}`">
             <StatusBadge :status="claim.status" />
-            <Link href="/claims" class="text-sm text-blueprint hover:underline">All claims</Link>
+            <Link href="/claims" class="text-ui text-accent-text hover:underline">All claims</Link>
         </PageHeader>
         <FormBanner />
         <div class="mb-6 flex flex-wrap items-center gap-2">
-            <span class="mr-4 text-sm text-ivory-dim">Case reserve <span class="font-mono text-lg text-ivory tabular-nums">{{ claim.reserve }}</span></span>
+            <span class="mr-4 text-ui text-ink-2">Case reserve <span class=" text-section text-ink tabular-nums">{{ claim.reserve }}</span></span>
             <Button v-if="actions.reserve" variant="ghost" @click="open = 'reserve'">Set reserve</Button>
             <Button v-if="actions.approve" variant="ghost" @click="open = 'payment'">Approve payment</Button>
             <Button v-if="actions.recover" variant="ghost" @click="open = 'recover'">Record recovery</Button>
@@ -75,13 +75,13 @@ const releaseForm = useForm({ paid_on: '', bank_account_id: '' });
         </Card>
         <div class="grid gap-6 lg:grid-cols-2">
             <div>
-                <h2 class="mb-2 text-lg font-semibold">Payments</h2>
+                <h2 class="mb-2 text-section font-semibold">Payments</h2>
                 <Table>
                     <TableHeader><TableRow><TableHead>Approved</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="payment in payments" :key="payment.id">
-                            <TableCell>{{ payment.approved_on }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ payment.amount }}</TableCell>
-                            <TableCell><StatusBadge :status="payment.status" /><span v-if="payment.paid_on" class="ml-2 text-xs text-ivory-dim">paid {{ payment.paid_on }}</span></TableCell>
+                            <TableCell>{{ payment.approved_on }}</TableCell><TableCell class="text-right tabular-nums">{{ payment.amount }}</TableCell>
+                            <TableCell><StatusBadge :status="payment.status" /><span v-if="payment.paid_on" class="ml-2 text-dense text-ink-2">paid {{ payment.paid_on }}</span></TableCell>
                             <TableCell class="text-right">
                                 <Button v-if="payment.can_request_release" variant="ghost" @click="releaseForm.post(`/claim-payments/${payment.id}/request-release`)">Request release</Button>
                                 <span v-if="payment.can_release" class="flex items-center justify-end gap-2">
@@ -93,24 +93,24 @@ const releaseForm = useForm({ paid_on: '', bank_account_id: '' });
                         <TableEmpty v-if="payments.length === 0" :colspan="4">No payments.</TableEmpty>
                     </TableBody>
                 </Table>
-                <h2 class="mt-6 mb-2 text-lg font-semibold">Recoveries</h2>
+                <h2 class="mt-6 mb-2 text-section font-semibold">Recoveries</h2>
                 <Table>
                     <TableHeader><TableRow><TableHead>Received</TableHead><TableHead>Type</TableHead><TableHead class="text-right">Amount</TableHead></TableRow></TableHeader>
                     <TableBody>
-                        <TableRow v-for="(recovery, index) in recoveries" :key="index"><TableCell>{{ recovery.received_on }}</TableCell><TableCell>{{ recovery.type }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ recovery.amount }}</TableCell></TableRow>
+                        <TableRow v-for="(recovery, index) in recoveries" :key="index"><TableCell>{{ recovery.received_on }}</TableCell><TableCell>{{ recovery.type }}</TableCell><TableCell class="text-right tabular-nums">{{ recovery.amount }}</TableCell></TableRow>
                         <TableEmpty v-if="recoveries.length === 0" :colspan="3">No recoveries.</TableEmpty>
                     </TableBody>
                 </Table>
             </div>
             <div>
-                <h2 class="mb-2 text-lg font-semibold">Reserve history</h2>
+                <h2 class="mb-2 text-section font-semibold">Reserve history</h2>
                 <Table>
                     <TableHeader><TableRow><TableHead>v</TableHead><TableHead>Date</TableHead><TableHead class="text-right">Reserve</TableHead><TableHead class="text-right">Change</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="reserve in reserves" :key="reserve.version">
-                            <TableCell class="font-mono">{{ reserve.version }}</TableCell><TableCell>{{ reserve.recorded_on }}</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums">{{ reserve.reserve }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ reserve.delta }}</TableCell>
-                            <TableCell class="text-ivory-dim">{{ reserve.reason }}</TableCell>
+                            <TableCell class="">{{ reserve.version }}</TableCell><TableCell>{{ reserve.recorded_on }}</TableCell>
+                            <TableCell class="text-right tabular-nums">{{ reserve.reserve }}</TableCell><TableCell class="text-right tabular-nums">{{ reserve.delta }}</TableCell>
+                            <TableCell class="text-ink-2">{{ reserve.reason }}</TableCell>
                         </TableRow>
                         <TableEmpty v-if="reserves.length === 0" :colspan="5">No reserve yet.</TableEmpty>
                     </TableBody>

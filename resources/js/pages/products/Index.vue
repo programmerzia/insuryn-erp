@@ -30,14 +30,14 @@ const versionForm = useForm({ effective_from: '', effective_to: '', term_months:
             <div class="grid gap-4 lg:col-span-2">
                 <Card v-for="product in products" :key="product.id">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 class="text-lg font-semibold"><span class="font-mono text-blueprint">{{ product.code }}</span> {{ product.name }}</h2>
-                        <span class="text-xs text-ivory-dim uppercase">{{ product.lob }}</span>
+                        <h2 class="text-section font-semibold"><span class=" text-accent-text">{{ product.code }}</span> {{ product.name }}</h2>
+                        <span class="text-dense text-ink-2">{{ product.lob }}</span>
                     </div>
-                    <table class="mt-3 w-full text-sm">
-                        <thead class="text-left text-xs text-ivory-dim"><tr><th class="py-1">v</th><th>Effective</th><th>Term</th><th>Earning</th><th>Tax</th></tr></thead>
+                    <table class="mt-3 w-full text-ui">
+                        <thead class="text-left text-dense text-ink-2"><tr><th class="py-1">v</th><th>Effective</th><th>Term</th><th>Earning</th><th>Tax</th></tr></thead>
                         <tbody>
                             <tr v-for="version in product.versions" :key="version.id" class="border-t border-line">
-                                <td class="py-1.5 font-mono">{{ version.version }}</td>
+                                <td class="py-1.5">{{ version.version }}</td>
                                 <td>{{ version.effective_from }} – {{ version.effective_to ?? 'open' }}</td>
                                 <td>{{ version.term_months }} months</td>
                                 <td>{{ version.earning_method }}</td>
@@ -58,7 +58,7 @@ const versionForm = useForm({ effective_from: '', effective_to: '', term_months:
                         <Field id="commission_plan_id" label="Commission plan" :error="versionForm.errors.commission_plan_id">
                             <SelectInput id="commission_plan_id" v-model="versionForm.commission_plan_id" placeholder="None" :options="commissionPlans.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))" />
                         </Field>
-                        <div class="grid content-end gap-2 text-sm text-ivory-dim">
+                        <div class="grid content-end gap-2 text-ui text-ink-2">
                             <label class="flex items-center gap-2"><input v-model="versionForm.inclusive" type="checkbox" class="size-4 accent-brick" /> Premium includes tax</label>
                             <label class="flex items-center gap-2"><input v-model="versionForm.refund_tax_on_cancellation" type="checkbox" class="size-4 accent-brick" /> Refund tax on cancellation</label>
                         </div>
@@ -67,7 +67,7 @@ const versionForm = useForm({ effective_from: '', effective_to: '', term_months:
                 </Card>
             </div>
             <Card>
-                <h2 class="text-lg font-semibold">New product</h2>
+                <h2 class="text-section font-semibold">New product</h2>
                 <form class="mt-4 grid gap-4" @submit.prevent="productForm.post('/products', { onSuccess: () => productForm.reset() })">
                     <Field id="code" label="Code" :error="productForm.errors.code"><Input id="code" v-model="productForm.code" /></Field>
                     <Field id="name" label="Name" :error="productForm.errors.name"><Input id="name" v-model="productForm.name" /></Field>

@@ -32,8 +32,8 @@ const rejectForm = useForm({ reason: '' });
                     <TableHeader><TableRow><TableHead>Policy</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="refund in refunds" :key="refund.id">
-                            <TableCell class="font-mono">{{ refund.policy_number }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ refund.amount }}</TableCell>
-                            <TableCell class="text-ivory-dim">{{ refund.reason }}</TableCell><TableCell><StatusBadge :status="refund.status" /></TableCell>
+                            <TableCell class="">{{ refund.policy_number }}</TableCell><TableCell class="text-right tabular-nums">{{ refund.amount }}</TableCell>
+                            <TableCell class="text-ink-2">{{ refund.reason }}</TableCell><TableCell><StatusBadge :status="refund.status" /></TableCell>
                             <TableCell>
                                 <div v-if="refund.status === 'requested' && can.release" class="flex flex-wrap items-center gap-2">
                                     <Input v-model="releaseForm.paid_on" type="date" class="w-40" aria-label="Paid on" />
@@ -48,7 +48,7 @@ const rejectForm = useForm({ reason: '' });
                 </Table>
             </div>
             <Card v-if="can.request">
-                <h2 class="text-lg font-semibold">Request a refund</h2>
+                <h2 class="text-section font-semibold">Request a refund</h2>
                 <form class="mt-4 grid gap-4" @submit.prevent="requestForm.post('/refunds', { onSuccess: () => requestForm.reset() })">
                     <Field id="policy_id" label="Cancelled policy" :error="requestForm.errors.policy_id">
                         <SelectInput id="policy_id" v-model="requestForm.policy_id" placeholder="Choose a policy" :options="props.refundable.map((r) => ({ value: r.policy_id, label: `${r.policy_number} · ${r.policyholder} · ${r.available} due` }))" />

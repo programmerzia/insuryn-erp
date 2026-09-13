@@ -36,18 +36,18 @@ const form = useForm({ agent_id: '', amount: '', deposited_on: '', bank_account_
                     <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead class="text-right">Collected</TableHead><TableHead class="text-right">Deposited</TableHead><TableHead class="text-right">Undeposited</TableHead><TableHead class="text-right">Ledger</TableHead><TableHead class="text-right">Difference</TableHead><TableHead>Oldest held</TableHead></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="row in position.rows" :key="row.agent_id">
-                            <TableCell class="font-mono">{{ row.agent_code }}</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums">{{ row.collected }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ row.deposited }}</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums">{{ row.undeposited }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ row.gl }}</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums" :class="row.difference !== '0.00' ? 'text-brick-soft' : 'text-green'">{{ row.difference }}</TableCell>
-                            <TableCell class="text-ivory-dim">{{ row.oldest_undeposited_on ? `${row.oldest_undeposited_on} (${row.days_undeposited} days)` : '—' }}</TableCell>
+                            <TableCell class="">{{ row.agent_code }}</TableCell>
+                            <TableCell class="text-right tabular-nums">{{ row.collected }}</TableCell><TableCell class="text-right tabular-nums">{{ row.deposited }}</TableCell>
+                            <TableCell class="text-right tabular-nums">{{ row.undeposited }}</TableCell><TableCell class="text-right tabular-nums">{{ row.gl }}</TableCell>
+                            <TableCell class="text-right tabular-nums" :class="row.difference !== '0.00' ? 'text-danger' : 'text-ok'">{{ row.difference }}</TableCell>
+                            <TableCell class="text-ink-2">{{ row.oldest_undeposited_on ? `${row.oldest_undeposited_on} (${row.days_undeposited} days)` : '—' }}</TableCell>
                         </TableRow>
                         <TableEmpty v-if="position.rows.length === 0" :colspan="7">No agent collections.</TableEmpty>
                     </TableBody>
                 </Table>
             </div>
             <Card>
-                <h2 class="text-lg font-semibold">Record a deposit</h2>
+                <h2 class="text-section font-semibold">Record a deposit</h2>
                 <form class="mt-4 grid gap-4" @submit.prevent="form.post('/agent-cash/deposits', { onSuccess: () => form.reset('amount', 'reference') })">
                     <Field id="deposit_agent" label="Agent" :error="form.errors.agent_id"><SelectInput id="deposit_agent" v-model="form.agent_id" placeholder="Choose an agent" :options="agents.map((a) => ({ value: a.id, label: a.code }))" /></Field>
                     <Field id="deposit_amount" label="Amount" :error="form.errors.amount"><Input id="deposit_amount" v-model="form.amount" inputmode="decimal" /></Field>

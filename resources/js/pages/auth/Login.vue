@@ -26,12 +26,12 @@ function submit(): void {
             <div class="grid gap-1.5">
                 <div class="flex items-center justify-between">
                     <Label for="password">Password</Label>
-                    <Link v-if="canResetPassword" href="/forgot-password" class="text-xs text-blueprint hover:underline">Forgot password?</Link>
+                    <Link v-if="canResetPassword" href="/forgot-password" class="text-dense text-accent-text hover:underline">Forgot password?</Link>
                 </div>
                 <Input id="password" v-model="form.password" type="password" autocomplete="current-password" required />
                 <FormError :message="form.errors.password" />
             </div>
-            <label class="flex items-center gap-2 text-sm text-ivory-dim" for="remember">
+            <label class="flex items-center gap-2 text-ui text-ink-2" for="remember">
                 <input id="remember" v-model="form.remember" type="checkbox" class="size-4 accent-brick" />
                 Keep me signed in
             </label>

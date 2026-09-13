@@ -31,9 +31,9 @@ const form = useForm({ party_id: '', code: '', branch_id: props.branches[0]?.id 
                     <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Name</TableHead><TableHead>Plan</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="agent in agents" :key="agent.id">
-                            <TableCell class="font-mono">{{ agent.code }}</TableCell>
+                            <TableCell class="">{{ agent.code }}</TableCell>
                             <TableCell>{{ agent.name }}</TableCell>
-                            <TableCell class="text-ivory-dim">{{ commissionPlans.find((p) => p.id === agent.commission_plan_id)?.code ?? '—' }}</TableCell>
+                            <TableCell class="text-ink-2">{{ commissionPlans.find((p) => p.id === agent.commission_plan_id)?.code ?? '—' }}</TableCell>
                             <TableCell><StatusBadge :status="agent.status" /></TableCell>
                         </TableRow>
                         <TableEmpty v-if="agents.length === 0" :colspan="4">No agents yet.</TableEmpty>
@@ -41,7 +41,7 @@ const form = useForm({ party_id: '', code: '', branch_id: props.branches[0]?.id 
                 </Table>
             </div>
             <Card>
-                <h2 class="text-lg font-semibold">New agent</h2>
+                <h2 class="text-section font-semibold">New agent</h2>
                 <FormBanner />
                 <form class="mt-4 grid gap-4" @submit.prevent="form.post('/agents', { onSuccess: () => form.reset('code', 'party_id') })">
                     <Field id="party_id" label="Party" :error="form.errors.party_id">

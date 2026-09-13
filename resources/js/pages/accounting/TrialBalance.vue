@@ -23,16 +23,16 @@ function reload(): void {
     <AppLayout title="Trial balance">
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-wider text-blueprint">{{ entity.code }} · {{ entity.currency }} · LOCAL book</p>
-                <h1 class="mt-1 text-3xl font-bold">Trial balance</h1>
-                <p class="mt-1 text-sm text-ivory-dim">Posted journal lines up to and including {{ asOf }}.</p>
+                <p class="text-ui font-medium text-ink-2">{{ entity.code }} · {{ entity.currency }} · LOCAL book</p>
+                <h1 class="mt-1 text-title font-semibold">Trial balance</h1>
+                <p class="mt-1 text-ui text-ink-2">Posted journal lines up to and including {{ asOf }}.</p>
             </div>
             <form class="flex items-end gap-2" @submit.prevent="reload">
-                <label class="grid gap-1 text-xs text-ivory-dim" for="as-of">
+                <label class="grid gap-1 text-dense text-ink-2" for="as-of">
                     As of
-                    <input id="as-of" v-model="asOf" type="date" class="rounded border border-line-control bg-surface px-2 py-1.5 text-sm text-ivory" />
+                    <input id="as-of" v-model="asOf" type="date" class="rounded-control border border-line-control bg-surface px-2 py-1.5 text-ui text-ink" />
                 </label>
-                <button type="submit" class="rounded bg-brick px-3 py-1.5 text-sm font-medium text-ivory hover:bg-brick-hover">Show</button>
+                <button type="submit" class="rounded-control bg-accent px-3 py-1.5 text-ui font-medium text-ink hover:bg-accent-hover">Show</button>
             </form>
         </div>
 
@@ -47,10 +47,10 @@ function reload(): void {
             </TableHeader>
             <TableBody>
                 <TableRow v-for="row in rows" :key="row.accountId">
-                    <TableCell class="font-mono text-ivory-dim">{{ row.code }}</TableCell>
-                    <TableCell>{{ row.name }} <span class="ml-1 text-xs text-ivory-dim">{{ row.type }}</span></TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ row.debit }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ row.credit }}</TableCell>
+                    <TableCell class=" text-ink-2">{{ row.code }}</TableCell>
+                    <TableCell>{{ row.name }} <span class="ml-1 text-dense text-ink-2">{{ row.type }}</span></TableCell>
+                    <TableCell class="text-right tabular-nums">{{ row.debit }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ row.credit }}</TableCell>
                 </TableRow>
                 <TableEmpty v-if="rows.length === 0" :colspan="4">No posted journals up to {{ asOf }}.</TableEmpty>
             </TableBody>
@@ -58,11 +58,11 @@ function reload(): void {
                 <TableRow class="hover:bg-transparent">
                     <TableCell colspan="2">
                         Totals
-                        <span v-if="totals.balanced" class="ml-2 text-xs text-green">balanced</span>
-                        <span v-else class="ml-2 text-xs text-brick-soft">out of balance</span>
+                        <span v-if="totals.balanced" class="ml-2 text-dense text-ok">balanced</span>
+                        <span v-else class="ml-2 text-dense text-danger">out of balance</span>
                     </TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ totals.debit }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ totals.credit }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ totals.debit }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ totals.credit }}</TableCell>
                 </TableRow>
             </TableFooter>
         </Table>

@@ -1,0 +1,87 @@
+/*
+ * CoreBari theme — semantic tokens named as in docs/ux-design-brief.md §2.
+ *
+ * THE ONLY FILE IN THIS REPOSITORY THAT MAY CONTAIN A COLOUR VALUE (resources/js/tests/theme.test.ts).
+ * Components use the utilities these tokens generate (bg-surface, text-ink-2, border-line, …).
+ * Source palette: corebari/src/styles/globals.css (Navy, Brick, Blueprint, Ivory). Mapping and contrast
+ * ratios: docs/theme.md. A customer theme is a second file with the same token names, imported instead.
+ *
+ * Three states: an explicit choice stamps data-theme on <html>; "system" stamps nothing and the media
+ * query decides. The light palette is complete on :root; the dark blocks only redefine tokens.
+ */
+:root {
+    color-scheme: light;
+
+    --surface: #ffffff;
+    --surface-2: #f4f5f8;
+    --line: #dde1e8;
+    --line-control: #7c8599;
+    --ink: #0b1330;
+    --ink-2: #4b5270;
+
+    --accent: #a8462a;
+    --accent-hover: #8f3b23;
+    --accent-ink: #f4f1e9;
+    --accent-text: #a8462a;
+    --accent-soft: #f6edea;
+    --focus: #1f6fa8;
+
+    --ok: #1e7f4f;
+    --warn: #94600f;
+    --danger: #b42318;
+
+    --shadow-float: 0 12px 32px -8px rgb(11 19 48 / 0.28);
+    --scrim: rgb(11 19 48 / 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+
+        --surface: #0b1330;
+        --surface-2: #101a3d;
+        --line: rgb(143 211 255 / 0.16);
+        --line-control: rgb(143 211 255 / 0.5);
+        --ink: #f4f1e9;
+        --ink-2: #b6b2ce;
+
+        --accent: #a8462a;
+        --accent-hover: #b04e2e;
+        --accent-ink: #f4f1e9;
+        --accent-text: #d97e5c;
+        --accent-soft: #2e1e2f;
+        --focus: #8fd3ff;
+
+        --ok: #4fbf95;
+        --warn: #e8b04b;
+        --danger: #f47067;
+
+        --shadow-float: 0 18px 40px -12px rgb(3 6 20 / 0.75);
+        --scrim: rgb(3 6 20 / 0.6);
+    }
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --surface: #0b1330;
+    --surface-2: #101a3d;
+    --line: rgb(143 211 255 / 0.16);
+    --line-control: rgb(143 211 255 / 0.5);
+    --ink: #f4f1e9;
+    --ink-2: #b6b2ce;
+
+    --accent: #a8462a;
+    --accent-hover: #b04e2e;
+    --accent-ink: #f4f1e9;
+    --accent-text: #d97e5c;
+    --accent-soft: #2e1e2f;
+    --focus: #8fd3ff;
+
+    --ok: #4fbf95;
+    --warn: #e8b04b;
+    --danger: #f47067;
+
+    --shadow-float: 0 18px 40px -12px rgb(3 6 20 / 0.75);
+    --scrim: rgb(3 6 20 / 0.6);
+}

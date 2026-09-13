@@ -23,10 +23,10 @@ const range = reactive({ from: props.from, to: props.to });
             <TableHeader><TableRow><TableHead>Cheque</TableHead><TableHead>Bank</TableHead><TableHead>Received</TableHead><TableHead>Receipt</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>State</TableHead></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="row in register.rows" :key="row.receipt_id">
-                    <TableCell class="font-mono">{{ row.cheque_no }}</TableCell><TableCell>{{ row.cheque_bank }}</TableCell><TableCell>{{ row.value_date }}</TableCell>
-                    <TableCell><Link :href="`/receipts/${row.receipt_id}`" class="font-mono text-blueprint hover:underline">{{ row.receipt_number }}</Link></TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ row.amount }}</TableCell>
-                    <TableCell><StatusBadge :status="row.state" /><span v-if="row.bounced_on" class="ml-2 text-xs text-ivory-dim">{{ row.bounced_on }} · {{ row.bounce_reason }}</span></TableCell>
+                    <TableCell class="">{{ row.cheque_no }}</TableCell><TableCell>{{ row.cheque_bank }}</TableCell><TableCell>{{ row.value_date }}</TableCell>
+                    <TableCell><Link :href="`/receipts/${row.receipt_id}`" class=" text-accent-text hover:underline">{{ row.receipt_number }}</Link></TableCell>
+                    <TableCell class="text-right tabular-nums">{{ row.amount }}</TableCell>
+                    <TableCell><StatusBadge :status="row.state" /><span v-if="row.bounced_on" class="ml-2 text-dense text-ink-2">{{ row.bounced_on }} · {{ row.bounce_reason }}</span></TableCell>
                 </TableRow>
                 <TableEmpty v-if="register.rows.length === 0" :colspan="6">No cheques in this period.</TableEmpty>
             </TableBody>

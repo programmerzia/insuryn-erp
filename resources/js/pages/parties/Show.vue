@@ -21,35 +21,35 @@ const form = useForm({ bank_name: '', account_number: '', is_default: false });
 <template>
     <AppLayout :title="party.display_name">
         <PageHeader :eyebrow="`${party.kind} · ${party.roles.join(', ')}`" :title="party.display_name" :description="party.tax_id ? `Tax ID ${party.tax_id}` : undefined">
-            <Link href="/parties" class="text-sm text-blueprint hover:underline">All parties</Link>
+            <Link href="/parties" class="text-ui text-accent-text hover:underline">All parties</Link>
         </PageHeader>
         <div class="grid gap-6 lg:grid-cols-2">
             <Card>
-                <h2 class="text-lg font-semibold">Bank accounts</h2>
-                <ul class="mt-3 grid gap-2 text-sm">
+                <h2 class="text-section font-semibold">Bank accounts</h2>
+                <ul class="mt-3 grid gap-2 text-ui">
                     <li v-for="account in bankAccounts" :key="account.id" class="flex justify-between">
-                        <span>{{ account.bank_name }} <span class="font-mono text-ivory-dim">{{ account.account_no_masked }}</span></span>
-                        <span v-if="account.is_default" class="text-xs text-green">default</span>
+                        <span>{{ account.bank_name }} <span class=" text-ink-2">{{ account.account_no_masked }}</span></span>
+                        <span v-if="account.is_default" class="text-dense text-ok">default</span>
                     </li>
-                    <li v-if="bankAccounts.length === 0" class="text-ivory-dim">No bank accounts.</li>
+                    <li v-if="bankAccounts.length === 0" class="text-ink-2">No bank accounts.</li>
                 </ul>
                 <FormBanner />
                 <form class="mt-4 grid gap-3" @submit.prevent="form.post(`/parties/${props.party.id}/bank-accounts`, { onSuccess: () => form.reset() })">
                     <Field id="bank_name" label="Bank" :error="form.errors.bank_name"><Input id="bank_name" v-model="form.bank_name" /></Field>
                     <Field id="account_number" label="Account number" :error="form.errors.account_number"><Input id="account_number" v-model="form.account_number" /></Field>
-                    <label class="flex items-center gap-2 text-sm text-ivory-dim"><input v-model="form.is_default" type="checkbox" class="size-4 accent-brick" /> Default account</label>
+                    <label class="flex items-center gap-2 text-ui text-ink-2"><input v-model="form.is_default" type="checkbox" class="size-4 accent-brick" /> Default account</label>
                     <Button type="submit" :disabled="form.processing" class="justify-self-start">Add bank account</Button>
                 </form>
             </Card>
             <Card>
-                <h2 class="text-lg font-semibold">Policies held</h2>
-                <ul class="mt-3 grid gap-2 text-sm">
+                <h2 class="text-section font-semibold">Policies held</h2>
+                <ul class="mt-3 grid gap-2 text-ui">
                     <li v-for="policy in policies" :key="policy.id" class="flex items-center justify-between">
-                        <Link :href="`/policies/${policy.id}`" class="text-blueprint hover:underline">{{ policy.number ?? 'Quote' }}</Link>
-                        <span class="text-ivory-dim">{{ policy.inception }} – {{ policy.expiry }}</span>
+                        <Link :href="`/policies/${policy.id}`" class="text-accent-text hover:underline">{{ policy.number ?? 'Quote' }}</Link>
+                        <span class="text-ink-2">{{ policy.inception }} – {{ policy.expiry }}</span>
                         <StatusBadge :status="policy.status" />
                     </li>
-                    <li v-if="policies.length === 0" class="text-ivory-dim">No policies.</li>
+                    <li v-if="policies.length === 0" class="text-ink-2">No policies.</li>
                 </ul>
             </Card>
         </div>

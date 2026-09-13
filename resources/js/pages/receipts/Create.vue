@@ -46,7 +46,7 @@ const installmentOptions = props.installments.map((i) => ({ value: i.id, label: 
                     <SelectInput id="collected_by_agent_id" v-model="form.collected_by_agent_id" placeholder="Received by the company" :options="agents.map((a) => ({ value: a.id, label: a.code }))" />
                 </Field>
                 <fieldset class="grid gap-2 sm:col-span-2">
-                    <legend class="text-sm font-medium">Allocations</legend>
+                    <legend class="text-ui font-medium">Allocations</legend>
                     <div v-for="(line, index) in form.allocations" :key="index" class="flex gap-2">
                         <SelectInput v-model="line.installment_id" placeholder="Choose an installment" :options="installmentOptions" :aria-label="`Installment ${index + 1}`" />
                         <Input v-model="line.amount" inputmode="decimal" placeholder="Amount" class="w-36" :aria-label="`Amount ${index + 1}`" />

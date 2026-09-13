@@ -33,14 +33,14 @@ const transitionForm = useForm({ reason: '' });
         <PageHeader :eyebrow="`${policy.product_code} · ${policy.channel}${policy.agent_code ? ' · ' + policy.agent_code : ''} · v${policy.version}`" :title="policy.number ?? 'Quote'"
             :description="`${policy.policyholder} · cover ${policy.inception} – ${policy.expiry}${policy.cancel_date ? ' · cancelled from ' + policy.cancel_date : ''}`">
             <StatusBadge :status="policy.status" />
-            <Link href="/policies" class="text-sm text-blueprint hover:underline">All policies</Link>
+            <Link href="/policies" class="text-ui text-accent-text hover:underline">All policies</Link>
         </PageHeader>
         <FormBanner />
 
         <div class="mb-6 grid gap-4 sm:grid-cols-3">
-            <Card><p class="text-xs text-ivory-dim uppercase">Gross premium</p><p class="mt-1 font-mono text-xl tabular-nums">{{ policy.gross_premium }}</p></Card>
-            <Card><p class="text-xs text-ivory-dim uppercase">Net premium</p><p class="mt-1 font-mono text-xl tabular-nums">{{ policy.net_premium }}</p></Card>
-            <Card><p class="text-xs text-ivory-dim uppercase">Tax</p><p class="mt-1 font-mono text-xl tabular-nums">{{ policy.tax }}</p></Card>
+            <Card><p class="text-dense text-ink-2">Gross premium</p><p class="mt-1 text-title tabular-nums">{{ policy.gross_premium }}</p></Card>
+            <Card><p class="text-dense text-ink-2">Net premium</p><p class="mt-1 text-title tabular-nums">{{ policy.net_premium }}</p></Card>
+            <Card><p class="text-dense text-ink-2">Tax</p><p class="mt-1 text-title tabular-nums">{{ policy.tax }}</p></Card>
         </div>
 
         <div class="mb-6 flex flex-wrap gap-2">
@@ -74,14 +74,14 @@ const transitionForm = useForm({ reason: '' });
             </form>
         </Card>
 
-        <h2 class="mb-2 text-lg font-semibold">Installments</h2>
+        <h2 class="mb-2 text-section font-semibold">Installments</h2>
         <Table class="mb-6">
             <TableHeader><TableRow><TableHead>No</TableHead><TableHead>Payer</TableHead><TableHead>Due</TableHead><TableHead class="text-right">Amount</TableHead><TableHead class="text-right">Paid</TableHead><TableHead class="text-right">Credited</TableHead><TableHead class="text-right">Outstanding</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="installment in installments" :key="installment.id">
                     <TableCell>{{ installment.no }}</TableCell><TableCell>{{ installment.payer }}</TableCell><TableCell>{{ installment.due_date }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ installment.amount }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ installment.paid }}</TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ installment.credited }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ installment.outstanding }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ installment.amount }}</TableCell><TableCell class="text-right tabular-nums">{{ installment.paid }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ installment.credited }}</TableCell><TableCell class="text-right tabular-nums">{{ installment.outstanding }}</TableCell>
                     <TableCell><StatusBadge :status="installment.status" /></TableCell>
                 </TableRow>
             </TableBody>
@@ -89,25 +89,25 @@ const transitionForm = useForm({ reason: '' });
 
         <div class="grid gap-6 lg:grid-cols-2">
             <div>
-                <h2 class="mb-2 text-lg font-semibold">Payers</h2>
+                <h2 class="mb-2 text-section font-semibold">Payers</h2>
                 <Table>
                     <TableHeader><TableRow><TableHead>Payer</TableHead><TableHead class="text-right">Share</TableHead><TableHead class="text-right">Billed</TableHead><TableHead class="text-right">Outstanding</TableHead></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="payer in payers" :key="payer.name">
                             <TableCell>{{ payer.name }}</TableCell><TableCell class="text-right">{{ payer.share_percent }}%</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums">{{ payer.billed }}</TableCell><TableCell class="text-right font-mono tabular-nums">{{ payer.outstanding }}</TableCell>
+                            <TableCell class="text-right tabular-nums">{{ payer.billed }}</TableCell><TableCell class="text-right tabular-nums">{{ payer.outstanding }}</TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>
             </div>
             <div>
-                <h2 class="mb-2 text-lg font-semibold">Transactions</h2>
+                <h2 class="mb-2 text-section font-semibold">Transactions</h2>
                 <Table>
                     <TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Effective</TableHead><TableHead class="text-right">Premium change</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="transaction in transactions" :key="transaction.id">
                             <TableCell>{{ transaction.type }}</TableCell><TableCell>{{ transaction.effective_date }}</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums">{{ transaction.premium_delta }}</TableCell><TableCell class="text-ivory-dim">{{ transaction.reason }}</TableCell>
+                            <TableCell class="text-right tabular-nums">{{ transaction.premium_delta }}</TableCell><TableCell class="text-ink-2">{{ transaction.reason }}</TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>

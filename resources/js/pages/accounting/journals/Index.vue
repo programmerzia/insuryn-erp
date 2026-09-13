@@ -25,15 +25,15 @@ function goToPage(page: number): void {
     <AppLayout title="Journals">
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-wider text-blueprint">{{ entity.code }} · {{ journals.total }} journals</p>
-                <h1 class="mt-1 text-3xl font-bold">Journals</h1>
-                <Link href="/accounting/journals/create" class="mt-2 inline-block text-sm text-blueprint hover:underline">New manual journal</Link>
+                <p class="text-ui font-medium text-ink-2">{{ entity.code }} · {{ journals.total }} journals</p>
+                <h1 class="mt-1 text-title font-semibold">Journals</h1>
+                <Link href="/accounting/journals/create" class="mt-2 inline-block text-ui text-accent-text hover:underline">New manual journal</Link>
             </div>
-            <label class="grid gap-1 text-xs text-ivory-dim" for="status-filter">
+            <label class="grid gap-1 text-dense text-ink-2" for="status-filter">
                 Status
                 <select
                     id="status-filter"
-                    class="rounded border border-line-control bg-surface px-2 py-1.5 text-sm text-ivory"
+                    class="rounded-control border border-line-control bg-surface px-2 py-1.5 text-ui text-ink"
                     :value="filters.status ?? ''"
                     @change="filter(($event.target as HTMLSelectElement).value)"
                 >
@@ -56,23 +56,23 @@ function goToPage(page: number): void {
             </TableHeader>
             <TableBody>
                 <TableRow v-for="journal in journals.data" :key="journal.id">
-                    <TableCell class="font-mono">
-                        <Link :href="`/accounting/journals/${journal.id}`" class="text-blueprint hover:underline">{{ journal.number ?? 'unnumbered draft' }}</Link>
+                    <TableCell class="">
+                        <Link :href="`/accounting/journals/${journal.id}`" class="text-accent-text hover:underline">{{ journal.number ?? 'unnumbered draft' }}</Link>
                     </TableCell>
-                    <TableCell class="font-mono tabular-nums text-ivory-dim">{{ journal.postingDate }}</TableCell>
+                    <TableCell class=" tabular-nums text-ink-2">{{ journal.postingDate }}</TableCell>
                     <TableCell>{{ journal.kind }}</TableCell>
-                    <TableCell class="max-w-72 truncate text-ivory-dim">{{ journal.description }}</TableCell>
+                    <TableCell class="max-w-72 truncate text-ink-2">{{ journal.description }}</TableCell>
                     <TableCell><StatusBadge :status="journal.status" /></TableCell>
-                    <TableCell class="text-right font-mono tabular-nums">{{ journal.total }}</TableCell>
+                    <TableCell class="text-right tabular-nums">{{ journal.total }}</TableCell>
                 </TableRow>
                 <TableEmpty v-if="journals.data.length === 0" :colspan="6">No journals match this filter.</TableEmpty>
             </TableBody>
         </Table>
 
-        <nav v-if="journals.lastPage > 1" class="mt-4 flex items-center justify-end gap-3 text-sm" aria-label="Pages">
-            <button type="button" class="text-blueprint disabled:text-ivory-dim" :disabled="journals.currentPage <= 1" @click="goToPage(journals.currentPage - 1)">Previous</button>
-            <span class="text-ivory-dim">Page {{ journals.currentPage }} of {{ journals.lastPage }}</span>
-            <button type="button" class="text-blueprint disabled:text-ivory-dim" :disabled="journals.currentPage >= journals.lastPage" @click="goToPage(journals.currentPage + 1)">Next</button>
+        <nav v-if="journals.lastPage > 1" class="mt-4 flex items-center justify-end gap-3 text-ui" aria-label="Pages">
+            <button type="button" class="text-accent-text disabled:text-ink-2" :disabled="journals.currentPage <= 1" @click="goToPage(journals.currentPage - 1)">Previous</button>
+            <span class="text-ink-2">Page {{ journals.currentPage }} of {{ journals.lastPage }}</span>
+            <button type="button" class="text-accent-text disabled:text-ink-2" :disabled="journals.currentPage >= journals.lastPage" @click="goToPage(journals.currentPage + 1)">Next</button>
         </nav>
     </AppLayout>
 </template>

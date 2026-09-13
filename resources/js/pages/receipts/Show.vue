@@ -26,10 +26,10 @@ const bounceForm = useForm({ bounced_on: '', reason: '' });
     <AppLayout :title="receipt.number">
         <PageHeader :eyebrow="`${receipt.channel}${receipt.cheque_no ? ' · cheque ' + receipt.cheque_no + ' ' + receipt.cheque_bank : ''}`" :title="receipt.number" :description="`${receipt.amount} received ${receipt.value_date}${receipt.reference ? ' · ' + receipt.reference : ''}`">
             <StatusBadge :status="receipt.status" />
-            <Link href="/receipts" class="text-sm text-blueprint hover:underline">All receipts</Link>
+            <Link href="/receipts" class="text-ui text-accent-text hover:underline">All receipts</Link>
         </PageHeader>
         <FormBanner />
-        <p v-if="receipt.bounced_on" class="mb-4 text-sm text-brick-soft">Bounced {{ receipt.bounced_on }}: {{ receipt.bounce_reason }}</p>
+        <p v-if="receipt.bounced_on" class="mb-4 text-ui text-danger">Bounced {{ receipt.bounced_on }}: {{ receipt.bounce_reason }}</p>
         <div v-if="actions.bounce" class="mb-6">
             <Button v-if="!bouncing" variant="ghost" @click="bouncing = true">Cheque bounced</Button>
             <Card v-else class="max-w-md">
@@ -42,23 +42,23 @@ const bounceForm = useForm({ bounced_on: '', reason: '' });
         </div>
         <div class="grid gap-6 lg:grid-cols-3">
             <div class="lg:col-span-2">
-                <h2 class="mb-2 text-lg font-semibold">Allocations</h2>
+                <h2 class="mb-2 text-section font-semibold">Allocations</h2>
                 <Table>
                     <TableHeader><TableRow><TableHead>Policy</TableHead><TableHead>Posted</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Reversed</TableHead></TableRow></TableHeader>
                     <TableBody>
                         <TableRow v-for="allocation in allocations" :key="allocation.id">
-                            <TableCell class="font-mono">{{ allocation.policy_number }}</TableCell><TableCell>{{ allocation.posted_on }}</TableCell>
-                            <TableCell class="text-right font-mono tabular-nums">{{ allocation.amount }}</TableCell><TableCell class="text-brick-soft">{{ allocation.reversed_on }}</TableCell>
+                            <TableCell class="">{{ allocation.policy_number }}</TableCell><TableCell>{{ allocation.posted_on }}</TableCell>
+                            <TableCell class="text-right tabular-nums">{{ allocation.amount }}</TableCell><TableCell class="text-danger">{{ allocation.reversed_on }}</TableCell>
                         </TableRow>
                         <TableEmpty v-if="allocations.length === 0" :colspan="4">Not allocated.</TableEmpty>
                     </TableBody>
                 </Table>
             </div>
             <Card v-if="suspense">
-                <h2 class="text-lg font-semibold">Suspense</h2>
-                <p class="mt-2 text-sm text-ivory-dim">Parked {{ suspense.amount }}, open <span class="font-mono text-ivory">{{ suspense.open }}</span></p>
+                <h2 class="text-section font-semibold">Suspense</h2>
+                <p class="mt-2 text-ui text-ink-2">Parked {{ suspense.amount }}, open <span class=" text-ink">{{ suspense.open }}</span></p>
                 <StatusBadge :status="suspense.status" class="mt-2" />
-                <Link href="/suspense" class="mt-3 block text-sm text-blueprint hover:underline">Allocate from suspense</Link>
+                <Link href="/suspense" class="mt-3 block text-ui text-accent-text hover:underline">Allocate from suspense</Link>
             </Card>
         </div>
     </AppLayout>

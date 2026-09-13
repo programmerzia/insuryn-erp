@@ -17,6 +17,10 @@ git log --oneline | head             # one commit per green slice: feat(<area>):
 
 Next slice to pick up: the first row below whose status is not `done`, in table order. All Phase 1 rows are done;
 Phase 2 starts from `docs/phase-2/kickoff.md` (slice 2.0 carry-over, then 2.1 design addendum).
+UX rebuild U1–U10 (docs/ux-design-brief.md is the authority for everything visual and interactive): frontend only, backend added thinly
+where a screen needs it; existing tests unchanged. Per slice: screenshots with `node scripts/ux-shots.mjs <slice> name=/path …` at 1366×768
+and 1920×1080, light and dark, into `storage/ux-screenshots/<slice>/` (gitignored), against a local database seeded with
+`php artisan migrate:fresh --database=pgsql_migrations --seed && php artisan db:seed --class=DemoBusinessSeeder`. Frontend tests: `npm test` (Vitest).
 Phase 1C ("make Phase 1 ready for Phase 2") closes spec §4/§11 Phase 1 gaps found after 1B: non-negotiable #9 commission payouts,
 spec §4 items outside the 1A/1B slice list, review hardening, and screens for daily operations. Same operating rules as 1A/1B.
 Rules for every slice: tests first; pest + phpstan green before commit; never weaken/skip/delete a test
@@ -60,6 +64,16 @@ code and in the register below, configurable.
 | 1C.10 | Operations UI: claims and commission | done | see git log |
 | 1C.11 | Operations UI: month-end close and reports | done | see git log |
 | 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | done | see git log |
+| U1 | UX: theme tokens and design system | done | see git log |
+| U2 | UX: application shell | pending | |
+| U3 | UX: command palette and shortcuts registry | pending | |
+| U4 | UX: data table | pending | |
+| U5 | UX: form system | pending | |
+| U6 | UX: role home queues and badges | pending | |
+| U7 | UX: rebuild existing screens | pending | |
+| U8 | UX: object pages with timeline | pending | |
+| U9 | UX: feedback, states, accessibility | pending | |
+| U10 | UX: performance | pending | |
 
 ## ASSUMPTION register
 
@@ -865,3 +879,30 @@ Scope: review only; only the critical finding was fixed.
 - `docs/phase-2/kickoff.md`: entry conditions, what Phase 1 gives Phase 2, design addendum outline (spec §12 nine deliverables for Finance +
   People), Phase 2 open questions, draft slice list 2.0–2.17 (2.0 carries the Phase 1 engineering gaps).
 - No code or test changes beyond the UI fix. Result: 956 tests green on PHP 8.5 and 8.4, PHPStan 0 errors, vue-tsc and build green.
+
+### U1 — UX: theme tokens and design system — done
+- Brief §2 tokens (`surface`, `surface-2`, `line`, `ink`, `ink-2`, `accent`, `accent-soft`, `ok`, `warn`, `danger`) plus six companions needed for AA
+  (`accent-text`, `accent-hover`, `accent-ink`, `line-control`, `focus`, `shadow-float`/`scrim`) in `resources/css/theme/corebari.css`, light on
+  `:root`, dark under both the system media query and `data-theme="dark"`. Tailwind utilities map to them in `resources/css/app.css`.
+  Mapping, ratios and how to add a customer theme: `docs/theme.md`.
+- Deviations from the brief, by user instruction or for AA (recorded in docs/theme.md): accent is CoreBari Brick, not `#1F5F8B` (user: keep
+  the CoreBari accent); dark mode uses CoreBari navy; light `warn` is `#94600F` because the brief's `#B7791F` is 3.64:1 on white; IBM Plex
+  Sans Condensed and Plex Mono dropped (brief: no second face, no monospace body).
+- Fonts self-hosted and subset (`@fontsource` IBM Plex Sans Latin 400/500/600, Noto Sans Bengali Bengali 400/500/600); the Google Fonts link is
+  gone. Plex Sans figures are tabular by default (measured in Chrome: "1111" and "0000" have equal width), so no separate numeric face.
+- Type scale utilities `text-dense/ui/body/section/title` (12/13/14/16/20), weights 400/500/600, radius `rounded-control` 4px / `rounded-panel` 6px,
+  0 on tables, row height `--row-h` 32/40 by `data-density`. Reduced motion respected globally.
+- Components on tokens: Button (primary/secondary/ghost/danger, 32px), Input, Select, Label, Card (panel, no shadow), Table (square, sticky
+  surface-2 header, row height), StatusBadge now a dot and a sentence-case word (`lib/status.ts`: danger only for failed/unbalanced/variance/
+  bounced), PageHeader (20px title, eyebrow no longer shown), CoreBari mark (`components/Logo.vue`) in both layouts. Every existing class
+  migrated from the retired palette (ivory, blueprint, brick, amber, green) and eyebrow/all-caps labels removed.
+- Tests first (Vitest, new): `resources/js/tests/theme.test.ts` — all ten brief tokens in both modes; system and explicit dark blocks identical;
+  21 text/control/focus pairings clear AA in light and dark; every `.vue/.ts/.css` file free of colour literals, retired palette names, all-caps,
+  monospace, off-scale text sizes, off-rule radii and extra shadows. `resources/js/tests/status.test.ts`.
+- Tooling: `database/seeders/DemoBusinessSeeder.php` (local only; users per §7.2 role `<role>@demo.local`, 3 products, 16 customers, 3 agents,
+  36 policies, receipts by channel, suspense, a bank statement, 6 claims at different stages, July/August earning, a manual journal awaiting
+  approval — all through the application services); `scripts/ux-shots.mjs`; devDependencies vitest, @vue/test-utils, happy-dom, playwright-core;
+  dependencies @tanstack/vue-table, @tanstack/vue-virtual, lucide-vue-next, reka-ui, @fontsource fonts.
+- Screenshots: `storage/ux-screenshots/U1/{policies,journals,receipt-create,tb}-{1366,1920}-{light,dark}.png`. Self-critique: tokens and contrast hold in
+  both modes; the old top-bar shell, ISO dates, pill-less but unsorted tables and card-wrapped forms remain until U2, U4, U5 and U7.
+- Result: 956 Pest tests, 121 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 96.9 KB gzip).

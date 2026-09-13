@@ -43,24 +43,24 @@ function apply(): void {
                 <SelectInput v-if="filter === 'range_by'" v-model="filters.by" :options="['product', 'branch', 'agent'].map((b) => ({ value: b, label: `by ${b}` }))" class="w-36" aria-label="Group by" />
                 <Button type="submit" variant="ghost">Show</Button>
             </form>
-            <Link href="/reports" class="text-sm text-blueprint hover:underline">All reports</Link>
+            <Link href="/reports" class="text-ui text-accent-text hover:underline">All reports</Link>
         </PageHeader>
         <Table>
             <TableHeader><TableRow><TableHead v-for="column in columns" :key="column.key" :class="column.align === 'right' ? 'text-right' : ''">{{ column.label }}</TableHead></TableRow></TableHeader>
             <TableBody>
                 <TableRow v-for="(row, index) in rows" :key="index">
-                    <TableCell v-for="(column, position) in columns" :key="column.key" :class="column.align === 'right' ? 'text-right font-mono tabular-nums' : ''">
-                        <Link v-if="position === 0 && row.link" :href="row.link" class="text-blueprint hover:underline">{{ row.cells[column.key] }}</Link>
+                    <TableCell v-for="(column, position) in columns" :key="column.key" :class="column.align === 'right' ? 'text-right tabular-nums' : ''">
+                        <Link v-if="position === 0 && row.link" :href="row.link" class="text-accent-text hover:underline">{{ row.cells[column.key] }}</Link>
                         <template v-else>{{ row.cells[column.key] }}</template>
                     </TableCell>
                 </TableRow>
                 <TableEmpty v-if="rows.length === 0" :colspan="columns.length">Nothing to report for these dates.</TableEmpty>
             </TableBody>
         </Table>
-        <dl v-if="Object.keys(totals).length" class="mt-4 flex flex-wrap justify-end gap-x-8 gap-y-2 text-sm">
+        <dl v-if="Object.keys(totals).length" class="mt-4 flex flex-wrap justify-end gap-x-8 gap-y-2 text-ui">
             <div v-for="(value, key) in totals" :key="key" class="text-right">
-                <dt class="text-xs text-ivory-dim uppercase">{{ String(key).replace(/_/g, ' ') }}</dt>
-                <dd class="font-mono tabular-nums">{{ value }}</dd>
+                <dt class="text-dense text-ink-2">{{ String(key).replace(/_/g, ' ') }}</dt>
+                <dd class=" tabular-nums">{{ value }}</dd>
             </div>
         </dl>
     </AppLayout>

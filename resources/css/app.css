@@ -1,43 +1,104 @@
 @import 'tailwindcss';
+@import './theme/corebari.css';
+
+/* Self-hosted, subset fonts (brief §2, §7): IBM Plex Sans for Latin, Noto Sans Bengali in the same stack. Weights 400/500/600 only. */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/noto-sans-bengali/bengali-400.css';
+@import '@fontsource/noto-sans-bengali/bengali-500.css';
+@import '@fontsource/noto-sans-bengali/bengali-600.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../js/**/*.vue';
+@source '../js/**/*.ts';
 
-/*
- * CoreBari design tokens (source of truth: corebari/src/styles/globals.css; brand/COLOURS.md for
- * contrast ratios). Dark-first. This is the only file in this repo allowed to contain hex colours:
- * components use the semantic utilities (bg-surface, text-ivory-dim, border-line, …).
- * Brick is a background colour; warm text on dark uses brick-soft.
- */
+
+/* Tailwind utilities over the theme tokens: bg-surface, text-ink-2, border-line, ring-focus, … */
+@theme inline {
+    --color-surface: var(--surface);
+    --color-surface-2: var(--surface-2);
+    --color-line: var(--line);
+    --color-line-control: var(--line-control);
+    --color-ink: var(--ink);
+    --color-ink-2: var(--ink-2);
+    --color-accent: var(--accent);
+    --color-accent-hover: var(--accent-hover);
+    --color-accent-ink: var(--accent-ink);
+    --color-accent-text: var(--accent-text);
+    --color-accent-soft: var(--accent-soft);
+    --color-focus: var(--focus);
+    --color-ok: var(--ok);
+    --color-warn: var(--warn);
+    --color-danger: var(--danger);
+    --color-scrim: var(--scrim);
+    --shadow-float: var(--shadow-float);
+}
+
 @theme {
-    --color-bg: #0b1330;
-    --color-bg-deep: #070c22;
-    --color-surface: #101a3d;
-    --color-surface-raised: #152048;
-    --color-ivory: #f4f1e9;
-    --color-ivory-dim: #b6b2ce;
-    --color-blueprint: #8fd3ff;
-    --color-brick: #a8462a;
-    --color-brick-soft: #c96a48;
-    --color-brick-hover: #b04e2e;
-    --color-amber: #e8b04b;
-    --color-green: #4fbf95;
-    --color-line: rgb(143 211 255 / 0.16);
-    --color-line-control: rgb(143 211 255 / 0.5);
+    --font-sans: 'IBM Plex Sans', 'Noto Sans Bengali', ui-sans-serif, system-ui, sans-serif;
 
-    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-    --font-display: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* Brief §2 type scale: 12 dense table · 13 default UI · 14 inputs and body · 16 section title · 20 page title. */
+    --text-dense: 12px;
+    --text-dense--line-height: 16px;
+    --text-ui: 13px;
+    --text-ui--line-height: 20px;
+    --text-body: 14px;
+    --text-body--line-height: 20px;
+    --text-section: 16px;
+    --text-section--line-height: 24px;
+    --text-title: 20px;
+    --text-title--line-height: 28px;
+
+    /* 4px controls, 6px panels, 0 on tables. */
+    --radius-control: 4px;
+    --radius-panel: 6px;
 }
 
 @layer base {
-    h1, h2, h3 {
-        font-family: var(--font-display);
+    :root {
+        --row-h: 32px;
+        --topbar-h: 44px;
+        --statusbar-h: 28px;
+    }
+    :root[data-density='comfortable'] {
+        --row-h: 40px;
+    }
+    html,
+    body {
+        background: var(--surface);
+        color: var(--ink);
+    }
+    body {
+        font-family: var(--font-sans);
+        font-size: var(--text-ui);
+        line-height: var(--text-ui--line-height);
+        -webkit-font-smoothing: antialiased;
+    }
+    h1,
+    h2,
+    h3 {
         text-wrap: balance;
+        font-weight: 600;
     }
     :focus-visible {
-        outline: 2px solid var(--color-blueprint);
-        outline-offset: 2px;
+        outline: 2px solid var(--focus);
+        outline-offset: 1px;
+    }
+    /* Numbers are sacred (brief §1.7): tabular figures wherever a number is laid out for comparison. */
+    .num {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        white-space: nowrap;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
     }
 }
