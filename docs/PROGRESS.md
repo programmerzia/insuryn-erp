@@ -1628,3 +1628,41 @@ Scope: review only; only the critical finding was fixed.
   action: the action is already beside them.
 - Screenshots: `storage/ux-screenshots/s6-empty/` (a tenant with company, periods and chart of accounts but no products: Home, policies, products, receipts, claims).
 - Tests: `tests/Feature/Help/EmptyStatesTest.php` (2), `resources/js/tests/empty-states.test.ts` (one per queue screen, parsed from the templates).
+
+### Onboarding (S1–S6) — end state
+- Goal (market cross-check G9): a first-time user can run the Part A "week in a non-life insurer" without help. Done in six slices, one commit each, plus one fix
+  (the tour names who does a step). No business rules were added: onboarding calls the existing services (D-17). ASSUMPTIONS A-27, A-28.
+- **Try it:**
+  - `php artisan erp:tenant acme "Acme General Insurance"`, then sign in at `http://acme.localhost:8000` as `admin@acme.local`: the setup wizard opens.
+  - `php artisan erp:demo`, then sign in at `http://nonlife.localhost:8000` as any `<role>@nonlife.local` (the login page lists them): Home → *Take the guided tour*.
+- **Screenshots** (1366 and 1920 wide, light and dark), in `storage/ux-screenshots/`:
+  - `s1-wizard/`: wizard steps;
+  - `s3-help/`: "How this works" in English and Bangla;
+  - `s4-tour/`: every tour step, the card on another page, a role hint, and a step the user cannot open;
+  - `s5-captions/`: captioned accounting;
+  - `s6-empty/`: empty states of a tenant without products.
+- **Part A steps that cannot be completed in the UI (product gaps to report back):**
+
+  | Part A step | What is missing | Gap |
+  |---|---|---|
+  | 1. New policy | No vehicle or risk details and no sum insured on the policy; the premium is typed in, not rated. | G1 |
+  | 1. VAT and stamp duty added automatically | VAT only: a product version has one tax type, so stamp duty is neither calculated nor posted (the wizard says so). | new (tax engine) |
+  | 2. Policy number `POL-HO-2026-000123` | Numbers have no branch code (`POL-2026-000001`). | minor |
+  | 3. Receipt number printed for the customer | No printable receipt; there are no documents or PDFs (schedule, cover note, receipt). | G2 |
+  | 5. Register the claim with documents | Documents cannot be attached; the Documents tab says so. | G2 / new |
+  | 7. Approve within their limit, otherwise it routes up | Approval limits exist in the engine (`approval_policies`), but no screen sets them; a new tenant has none, so every approval is within limit. | new (admin screen) |
+  | 10. Vendor bills (AP) and salaries | Neither module exists; only a manual journal can record an office expense. | G6 / Phase 2 |
+  | 14. Regulatory returns | Premium register (per transaction, not totalled by class), outstanding claims and loss ratio are in Reports. There is no unearned premium reserve report or IDRA form. The agency register export (A-16) exists only as an API, with no screen. | G5 |
+  | All steps, one person | By design (§7.3 segregation of duties) no single role does the whole week. The local admin cannot issue policies, record receipts or register claims. The tour says which role, or demo account, does each step. | by design |
+
+- **Found and fixed along the way:**
+  - no role template could maintain the chart of accounts (A-28);
+  - a chart imported by file never registered its control accounts with their subledgers (the wizard now does);
+  - the posting preview and accounting panels did not carry account roles.
+- **Not done, and why:**
+  - The help text is plain Markdown served as escaped HTML; there is no in-app editor.
+  - Bangla covers the help panel, the tour and the line captions only; the rest of the interface is English (brief §8 localisation is LATER).
+  - The Part A walk-through was checked against the screens, the feature tests and the seeded story, not by a browser test clicking through every step; that is 2.0c (Playwright), still pending.
+  - A tenant without a company gets 404 on business pages until wizard step 1 is saved; the Home redirect normally prevents reaching them.
+- Final gate: 1,100 Pest tests and 269 Vitest tests green, PHPStan 0 errors, vue-tsc and production build green.
+- **Pending after onboarding:** 2.0c Playwright E2E happy path (now with the Part A demo as its data), 2.0d claim reserve property test, 2.1 design addendum v2; G1–G5 per the market cross-check.
