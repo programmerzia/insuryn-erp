@@ -44,6 +44,12 @@ return [
     'quotations' => [
         'valid_days' => (int) env('ERP_QUOTATION_VALID_DAYS', 15),
     ],
+    // Phase 3 slice R6 cover notes. ASSUMPTION: A-93 — design OPEN 2: the longest cover note per product class in days, both ends included (default 30, verify).
+    'cover_notes' => [
+        'max_days' => ['default' => 30, 'motor' => 30, 'fire' => 30, 'marine_cargo' => 30, 'misc' => 30],
+        // The cover notes queue's "ending soon" filter.
+        'expiring_within_days' => 7,
+    ],
     'underwriting' => [
         // ASSUMPTION: A-88 — the risk fields that identify a risk for the duplicate check (design §5), per product class. Verify with underwriting.
         'duplicate_keys' => [

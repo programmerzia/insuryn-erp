@@ -31,6 +31,8 @@ final class PermissionsSeeder extends Seeder
         'quotation.create',
         // Phase 3 underwriting (slice R5, A-86, A-87)
         'underwriting.decide','underwriting.manage_limits',
+        // Phase 3 cover notes (slice R6, A-94)
+        'cover_note.issue','cover_note.cancel',
     ];
 
     /**

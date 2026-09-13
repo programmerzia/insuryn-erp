@@ -187,6 +187,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('proposals/{proposal}/submit', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'submit'])->whereUuid('proposal');
     Route::post('proposals/{proposal}/documents', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'attachDocument'])->whereUuid('proposal');
     Route::get('proposals/{proposal}/documents/{document}', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'downloadDocument'])->whereUuid(['proposal', 'document']);
+    // Phase 3 R6: cover notes.
+    Route::post('proposals/{proposal}/cover-notes', [\App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::class, 'store'])->whereUuid('proposal');
+    Route::get('cover-notes', [\App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::class, 'index']);
+    Route::post('cover-notes/{coverNote}/cancel', [\App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::class, 'cancel'])->whereUuid('coverNote');
     Route::get('underwriting/referrals', [\App\Modules\Insurance\Underwriting\Http\Controllers\ReferralsPageController::class, 'index']);
     Route::post('underwriting/referrals/{proposal}/decide', [\App\Modules\Insurance\Underwriting\Http\Controllers\ReferralsPageController::class, 'decide'])->whereUuid('proposal');
 

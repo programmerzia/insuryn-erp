@@ -69,7 +69,15 @@ final class ProposalPageController
                 'waive_kyc' => $draft && $model->kyc_status === KycStatus::Pending && $can(UnderwritingDecisions::PERMISSION),
                 'submit' => $draft && $can(QuotationService::PERMISSION),
                 'decide' => $model->status === ProposalStatus::Submitted && $can(UnderwritingDecisions::PERMISSION),
+                // Slice R6: a cover note for an approved proposal without an active one.
+                'issue_cover_note' => $model->status === ProposalStatus::Approved && $can(\App\Modules\Insurance\CoverNote\Application\CoverNoteService::ISSUE)
+                    && ! DB::table('cover_notes')->where('proposal_id', $model->id)->where('status', 'active')->exists(),
             ],
+            'today' => \Carbon\CarbonImmutable::today()->toDateString(),
+            'coverNoteMaxDays' => \App\Modules\Insurance\CoverNote\Application\CoverNoteService::maxDays($model->class_code),
+            'coverNotes' => DB::table('cover_notes')->where('proposal_id', $model->id)->orderByDesc('issued_at')->get(['id', 'number', 'status', 'valid_from', 'valid_to', 'cancel_reason'])
+                ->map(fn (object $n): array => ['id' => (string) $n->id, 'number' => (string) $n->number, 'status' => (string) $n->status, 'valid_from' => (string) $n->valid_from,
+                    'valid_to' => (string) $n->valid_to, 'cancel_reason' => $n->cancel_reason === null ? null : (string) $n->cancel_reason])->values()->all(),
             'timeline' => $history->timeline($subjects),
             'accounting' => Inertia::defer(fn (): array => [], 'history'),
             'audit' => Inertia::defer(fn (): array => $history->audit($subjects), 'history'),

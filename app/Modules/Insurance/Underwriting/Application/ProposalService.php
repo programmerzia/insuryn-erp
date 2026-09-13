@@ -161,7 +161,9 @@ final class ProposalService
 
         return new ApprovedProposal($proposal->id, $proposal->number, $proposal->quotation_id, $proposal->entity_id, $proposal->branch_id, $proposal->product_id,
             $proposal->product_version_id, $proposal->class_code, $proposal->customer_party_id, $proposal->producer_id, $proposal->inception, $proposal->currency,
-            $result->riskInputs, $proposal->sum_insured_minor, $result, $proposal->manual_loading_bp, $proposal->manual_loading_reason, null);
+            $result->riskInputs, $proposal->sum_insured_minor, $result, $proposal->manual_loading_bp, $proposal->manual_loading_reason,
+            // Slice R6: the proposal's active cover note, which R7 supersedes with the policy (CoverNoteService::supersedeForProposal).
+            ($note = DB::table('cover_notes')->where('proposal_id', $proposal->id)->where('status', 'active')->value('id')) === null ? null : (string) $note);
     }
 
     /**

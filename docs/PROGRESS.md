@@ -164,6 +164,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-90 | R5 | Underwriting limits are unknown (design §5): placeholder defaults, seeded only in the demo tenants with `verify = true` — branch officer motor 2,000,000.00 / fire 5,000,000.00 / marine cargo 2,000,000.00 / misc 1,000,000.00; branch manager 10,000,000.00 / 25,000,000.00 / 10,000,000.00 / 5,000,000.00; finance manager 50,000,000.00 each; CFO 250,000,000.00 each. No limits in a new tenant, so every proposal is referred until they are set. | `UnderwritingLimits::DEFAULTS`, `acceptDefaults`, `DemoBusinessSeeder`, `PartADemoSeeder`. |
 | A-91 | R5 | The form of a "manual loading" is not specified: a percentage loading only (no manual discount), 0.01 % to 100.00 %, with a reason; applied after the plan's premium steps and the product minimum, before rounding and duties, on the quotation's rating and plan version. | `ManualLoading`, `RatingCalculator`, `RatingEngine::rerate`. |
 | A-92 | R5 | KYC on a proposal is not specified: an officer (`quotation.create`) records the identity document type (NID, passport, birth certificate, trade licence, TIN) and number, or an underwriter (`underwriting.decide`) waives it with a reason; only while the proposal is a draft; pending KYC refers the proposal, verified or waived passes. Proposal documents may be attached by `quotation.create` or `underwriting.decide` holders on the branch. | `config/erp.php` `underwriting.kyc_id_types` (`ASSUMPTION:`), `ProposalService::verifyKyc` / `waiveKyc`, `ProposalPageController::ATTACH_DOCUMENTS`. |
+| A-93 | R6 | Design OPEN 2 (cover note maximum validity per class) is unanswered: 30 days for every class (placeholder, verify), counted with both ends included (from 20 Sep, the last day is 19 Oct); a cover note starts today or later (`COVER_NOTE_BACKDATED`); one active cover note per proposal; an expired note can still be superseded by the policy. | `config/erp.php` `cover_notes.max_days` (`ASSUMPTION:`), `CoverNoteService::maxDays` / `issue`, partial unique index `cover_notes_one_active_per_proposal`. |
+| A-94 | R6 | No §7.2 template covers cover notes: `cover_note.issue` for the Branch Officer template (so also the Branch Manager), `cover_note.cancel` for the Branch Manager; the cover notes queue opens for either or `quotation.create`. | `RoleTemplates`, `PermissionsSeeder`, migration `2026_09_24_000003`, `CoverNotesPageController::AREA`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -2162,3 +2164,34 @@ Scope: review only; only the critical finding was fixed.
   `tests/Feature/Insurance/RatingRerateTest.php` (3: identical re-rate after a tariff change; loading worked by hand, gross 34,006.05; refusals).
 
 - Result: 1,220 Pest tests green, PHPStan 0 errors, Vitest (294) and vue-tsc green.
+
+### R6 — Cover note — done
+- Phase 3 design §2 step 3 and §6 "Cover notes queue (expiring)". Module `App\Modules\Insurance\CoverNote`. Migration `2026_09_24_000003_create_cover_notes`:
+  - `cover_notes` (tenant, forced RLS): entity/branch, proposal (FK), number (unique), class, `valid_from`, `valid_to` (inclusive), status `active|superseded|cancelled|expired`,
+    issued by/at, `superseded_by_policy_id` / at, cancelled by/at with reason, expired at. CHECKs: status list, `valid_to >= valid_from`, cancelled has a reason, superseded has a
+    policy; partial unique index: one active cover note per proposal.
+  - Permissions `cover_note.issue` (branch officer, branch manager) and `cover_note.cancel` (branch manager) for existing tenants (A-94).
+- `CoverNoteService`: `issue(proposal, from, to, actor)` — approved proposal only (`PROPOSAL_NOT_APPROVED`), product `recognise_at = cover_note` refused
+  (`RECOGNITION_AT_COVER_NOTE_NOT_SUPPORTED`, D-33 gap), from today or later (`COVER_NOTE_BACKDATED`), dates in order (`COVER_NOTE_DATES_INVALID`), at most
+  `erp.cover_notes.max_days` of the class including both ends (`COVER_NOTE_TOO_LONG`, message names the last allowed day; A-93), one active per proposal
+  (`COVER_NOTE_ALREADY_ACTIVE`); number `CVN-<branch>-<fy>-<seq>` reserved before and used inside the transaction; audited `cover_note.issued`. **No accounting event.**
+  `cancel(note, reason, actor)` (`REASON_REQUIRED`, `COVER_NOTE_NOT_ACTIVE`), `expireDue(today)` (system actor; `CoverNoteExpiryJob` nightly at 00:20, and before the queue is
+  read), and the **R7 hooks** `supersede(coverNoteId, policyId, actor)` / `supersedeForProposal(proposalId, policyId, actor)` — inside the policy issue transaction
+  (LogicException otherwise), active or expired → superseded, audited with permission `policy.issue`. `maxDays(class)`.
+- `ProposalService::approvedForIssue` now returns the proposal's active cover note id (`ApprovedProposal::activeCoverNoteId`); R7 should call
+  `ProposalService::markIssued` and `CoverNoteService::supersedeForProposal` in the policy issue transaction.
+- HTTP: `POST /proposals/{id}/cover-notes` (issue, back to the proposal), `GET /cover-notes?within=N` (queue; active notes ending within N days), `POST /cover-notes/{id}/cancel`.
+- UI: sidebar **Cover notes** (primary, after Referrals; `cover_note.issue | cover_note.cancel | quotation.create`). `pages/coverNotes/Index.vue` (QueueView sorted active first
+  by last day; days left; All / Ending within 7 days toggle — `erp.cover_notes.expiring_within_days`; inspector with the proposal link and *Cancel cover note* drawer with a reason).
+  The proposal page shows its cover notes and *Issue cover note* (drawer: from the cover start or today, until the last allowed day by default; "Nothing is posted to the accounts").
+- Shared file changes: `config/erp.php` (`cover_notes`), `RoleTemplates`, `PermissionsSeeder`, `routes/web.php`, `routes/console.php`, `lib/navigation.ts`, `ProposalPageController`
+  and `proposals/Show.vue`, `ProposalService`, `TenantIsolationEveryTableTest` (a cover note row).
+- Test changes: `RoleAdministrationTest` expects `cover_note.issue` in the Branch Officer template; `UserAdministrationTest`'s auditor refusal now names `cover_note.issue` (the first write permission of the Branch Officer template in alphabetical order, same assertion); `ProposalUnderwritingTest` expects the new `can.issue_cover_note` flag.
+- Placeholder values to verify: cover note maximum 30 days per class (A-93, OPEN 2); `recognise_at` stays `policy` by default (OPEN 3).
+- Not done, and why: premium recognition at cover note (D-33 gap: needs its own posting design); no printed cover note (R8 documents); policy issue from a proposal and superseding
+  on issue are R7.
+- Tests: `tests/Feature/CoverNotes/CoverNotesTest.php` (6: numbering and no accounting events, outbox or journals; validity cap per class, backdating, dates, unapproved proposal, no
+  reserved number left behind; `recognise_at = cover_note` refused; supersede inside a transaction including an expired note; nightly expiry and cancel with permission and
+  reason; queue order, expiring filter, proposal page props, cancel endpoint and role templates).
+
+- Result: 1,226 Pest tests green, PHPStan 0 errors, Vitest (296) and vue-tsc green.

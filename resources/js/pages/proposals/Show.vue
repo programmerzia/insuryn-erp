@@ -9,6 +9,7 @@ import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import DateInput from '@/components/forms/DateInput.vue';
 import DetailList from '@/components/table/DetailList.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -23,7 +24,8 @@ import type { ProposalData } from '@/lib/proposals';
  */
 const props = defineProps<{
     proposal: ProposalData; risk: { label_en: string; label_bn: string; value: string }[]; kycIdTypes: { value: string; label: string }[];
-    can: { verify_kyc: boolean; waive_kyc: boolean; submit: boolean; decide: boolean };
+    can: { verify_kyc: boolean; waive_kyc: boolean; submit: boolean; decide: boolean; issue_cover_note: boolean };
+    today: string; coverNoteMaxDays: number; coverNotes: { id: string; number: string; status: string; valid_from: string; valid_to: string; cancel_reason: string | null }[];
     documentUpload: string | null; timeline?: TimelineEntry[]; accounting?: AccountingJournal[]; audit?: AuditRow[]; documents?: StoredDocumentRow[];
 }>();
 
@@ -41,6 +43,14 @@ async function submit(): Promise<void> {
     if (await confirmAction({ title: `Submit ${p.value.number}?`, body: `The underwriting rules decide whether it is approved now or referred to an underwriter.${pending}`, confirmLabel: 'Submit proposal' })) {
         router.post(`${base}/submit`, {}, { preserveScroll: true });
     }
+}
+// Slice R6: a cover note from the cover start (or today), for at most the class's number of days including both ends.
+const addDays = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+const coverOpen = ref(false);
+const coverStart = props.proposal.inception > props.today ? props.proposal.inception : props.today;
+const cover = useForm({ valid_from: coverStart, valid_to: addDays(coverStart, props.coverNoteMaxDays - 1) });
+function issueCoverNote(): void {
+    cover.post(`${base}/cover-notes`, { preserveScroll: true, onSuccess: () => (coverOpen.value = false) });
 }
 const words = (v: string) => v.toLowerCase().replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 const facts = computed(() => [
@@ -70,6 +80,7 @@ const facts = computed(() => [
                 <button v-if="can.verify_kyc" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="kycOpen = 'verify'">Verify identity</button>
                 <button v-if="can.waive_kyc" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="kycOpen = 'waive'">Waive KYC</button>
                 <Link v-if="can.decide" href="/underwriting/referrals" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Open referrals</Link>
+                <button v-if="can.issue_cover_note" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="coverOpen = true">Issue cover note</button>
                 <button v-if="can.submit" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="submit">Submit to underwriting</button>
             </template>
             <template #overview>
@@ -88,6 +99,16 @@ const facts = computed(() => [
                                 <p v-if="proposal.decided_by" class="text-ui"><StatusBadge :status="proposal.underwriting_status" /> by {{ proposal.decided_by }}<template v-if="proposal.decision_reason">: {{ proposal.decision_reason }}</template></p>
                             </template>
                             <p v-if="proposal.manual_loading" class="mt-2 text-ui">Special terms: loading {{ proposal.manual_loading }}% — {{ proposal.manual_loading_reason }}</p>
+                        </section>
+                        <section v-if="coverNotes.length">
+                            <h2 class="mb-2 text-ui font-medium">Cover notes</h2>
+                            <ul class="grid gap-1 text-ui">
+                                <li v-for="note in coverNotes" :key="note.id" class="flex flex-wrap items-center gap-2">
+                                    <span class="font-medium">{{ note.number }}</span><StatusBadge :status="note.status" />
+                                    <span class="text-ink-2">{{ formatDate(note.valid_from) }} to {{ formatDate(note.valid_to) }}</span>
+                                    <span v-if="note.cancel_reason" class="text-ink-2">· {{ note.cancel_reason }}</span>
+                                </li>
+                            </ul>
                         </section>
                         <section>
                             <h2 class="mb-2 text-ui font-medium">Know your customer</h2>
@@ -115,6 +136,13 @@ const facts = computed(() => [
             </template>
         </ObjectPage>
 
+        <Drawer v-model:open="coverOpen" :title="`Issue a cover note for ${proposal.number}`">
+            <p class="mb-4 text-ui text-ink-2">Temporary evidence of cover until the policy is issued, for at most {{ coverNoteMaxDays }} days. Nothing is posted to the accounts.</p>
+            <FormLayout submit-label="Issue cover note" :dirty="cover.isDirty" :processing="cover.processing" :error="(cover.errors as Record<string, string>).form" @submit="issueCoverNote" @cancel="coverOpen = false">
+                <Field id="valid_from" label="Cover from" :error="cover.errors.valid_from"><DateInput id="valid_from" v-model="cover.valid_from" /></Field>
+                <Field id="valid_to" label="Cover until" :hint="`Included. At most ${coverNoteMaxDays} days.`" :error="cover.errors.valid_to"><DateInput id="valid_to" v-model="cover.valid_to" /></Field>
+            </FormLayout>
+        </Drawer>
         <Drawer :open="kycOpen !== null" :title="kycOpen === 'waive' ? 'Waive KYC' : 'Verify identity'" @update:open="(o) => !o && (kycOpen = null)">
             <FormLayout :submit-label="kycOpen === 'waive' ? 'Waive KYC' : 'Record verification'" :dirty="kyc.isDirty" :processing="kyc.processing" :error="(kyc.errors as Record<string, string>).form" @submit="saveKyc" @cancel="kycOpen = null">
                 <template v-if="kycOpen === 'verify'">

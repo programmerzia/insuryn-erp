@@ -23,7 +23,9 @@ final class RoleTemplates
         // ASSUMPTION A-101 (slice R8): whoever quotes, issues and records receipts at the branch prints the schedule, endorsement and receipt for the customer.
         'document.generate',
         // ASSUMPTION A-83 (slice R4): whoever quotes policies today rates and issues quotations (branch officer, and the branch manager through "+").
-        'quotation.create'];
+        'quotation.create',
+        // ASSUMPTION A-94 (slice R6): the officer who prepares a proposal issues its cover note.
+        'cover_note.issue'];
     private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
@@ -47,7 +49,9 @@ final class RoleTemplates
             'branch_officer' => ['name' => 'Branch Officer', 'permissions' => self::BRANCH_OFFICER],
             'branch_manager' => ['name' => 'Branch Manager', 'permissions' => [...self::BRANCH_OFFICER, 'policy.cancel', 'receipt.allocate', 'claim.register', 'agent.manage',
                 // ASSUMPTION A-86 (slice R5): the branch manager decides underwriting referrals within their limit, never on a proposal they prepared (SoD).
-                'underwriting.decide']],
+                'underwriting.decide',
+                // ASSUMPTION A-94 (slice R6): cancelling evidence of cover is a branch manager's decision.
+                'cover_note.cancel']],
             'claims_officer' => ['name' => 'Claims Officer', 'permissions' => self::CLAIMS_OFFICER],
             'claims_manager' => ['name' => 'Claims Manager', 'permissions' => [...self::CLAIMS_OFFICER, 'claim.approve', 'claim.pay_request', 'claim.close']],
             'accountant' => ['name' => 'Accountant', 'permissions' => self::ACCOUNTANT],

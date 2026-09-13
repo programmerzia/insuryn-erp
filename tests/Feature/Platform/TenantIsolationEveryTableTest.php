@@ -155,11 +155,14 @@ function populateEveryTenantTable(array $ctx): void
         DB::table('quotations')->insert(['id' => $quotationId = (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // Phase 3 R4
             'product_id' => $world['product_id'], 'product_version_id' => $world['product_version_id'], 'inception' => '2026-09-15', 'risk_inputs' => '{}', 'coverages' => '[]',
             'currency' => 'BDT', 'status' => 'draft', 'created_by' => $world['admin'], 'created_at' => now(), 'updated_at' => now()]);
-        DB::table('proposals')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // Phase 3 R5
+        DB::table('proposals')->insert(['id' => $proposalId = (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // Phase 3 R5
             'quotation_id' => $quotationId, 'number' => 'PRP-ISOLATION', 'product_id' => $world['product_id'], 'product_version_id' => $world['product_version_id'], 'class_code' => 'motor',
             'customer_party_id' => $world['policyholder_id'], 'inception' => '2026-09-15', 'risk_inputs' => '{}', 'risk_keys' => '[]', 'rating_result' => '{}', 'rating_plan_code' => 'MOTOR-ISOLATION',
             'rating_plan_version' => 1, 'currency' => 'BDT', 'sum_insured_minor' => 1, 'net_premium_minor' => 1, 'duties_minor' => 0, 'gross_premium_minor' => 1,
             'created_by' => $world['admin'], 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('cover_notes')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // Phase 3 R6
+            'proposal_id' => $proposalId, 'number' => 'CVN-ISOLATION', 'class_code' => 'motor', 'valid_from' => '2026-09-15', 'valid_to' => '2026-09-30', 'status' => 'active',
+            'issued_by' => $world['admin'], 'issued_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
     });
     activeRatingPlan($ctx['tenant_id'], ['code' => 'MOTOR-ISOLATION', 'name' => 'Isolation plan', 'class_code' => 'motor', 'effective_from' => '2026-01-01', // Phase 3 R2
