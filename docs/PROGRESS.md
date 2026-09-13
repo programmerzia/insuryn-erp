@@ -1564,3 +1564,17 @@ Scope: review only; only the critical finding was fixed.
 - Test setup change: `TenantIsolationEveryTableTest` records a setup step so `setup_progress` has rows.
 - Screenshots: `storage/ux-screenshots/s1-wizard/` (company, chart of accounts, product, users, done; 1366/1920, light/dark).
 - Tests: `tests/Feature/Setup/SetupWizardTest.php` (9).
+
+### S2 — Onboarding: Part A demo story (`php artisan erp:demo`) — done
+- `php artisan erp:demo [--tenant=nonlife]` (local, staging and testing only) seeds the market cross-check Part A week in its own tenant, Padma General Insurance, through the
+  application services, acted by one user per role (`<role>@nonlife.local`, admin password; sign in at `http://nonlife.localhost:8000`). `PartADemoSeeder`:
+  - 3 non-life products (motor, fire, marine; VAT 15% included, monthly earning), 5 customers, 2 producers: agent AG-001 Jamal Uddin on a 10% plan and salaried BDO-001 Nasima Akter
+    with none (the zero-commission case: the plan sits on the agent, not the product);
+  - August: bank balance brought forward (manual journal, maker/checker), four policies issued, three paid by bank transfer, a motor claim reserved at 200,000, approved at 180,000,
+    released by finance and closed (20,000 released), the August statement imported and matched, every close task run and the month locked;
+  - September (open): a paid policy, a payment without reference allocated from suspense by the accountant, 8,500 still in suspense, an unpaid policy, a quote, the fire policy
+    cancelled, a marine claim reserved at 150,000, and the September statement imported unmatched: three lines with suggestions and two exceptions (bank charges, unknown transfer).
+    The CSV is also written to `storage/app/demo/city-bank-2026-09.csv`.
+- Idempotent: a tenant that already has policies is left unchanged ("already has the Part A story"). The story is one transaction, so a failure leaves nothing; inside it
+  the demo posts queued accounting events itself after each step that needs them (bank matching, each close task), because the after-commit dispatch waits for the commit.
+- Tests: `tests/Feature/Setup/PartADemoTest.php` (3).

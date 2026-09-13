@@ -43,3 +43,22 @@ Illuminate\Support\Facades\Artisan::command('erp:tenant {slug : subdomain, lette
 
     return 0;
 })->purpose('Create a blank tenant whose first sign-in opens the setup wizard');
+
+// Session S2: the market cross-check Part A story ("a week in a non-life insurer") in its own tenant, for demos and the guided tour. Local and staging only.
+Illuminate\Support\Facades\Artisan::command('erp:demo {--tenant=nonlife : slug of the demo tenant}', function (): int {
+    if (! app()->environment(['local', 'staging', 'testing'])) {
+        $this->error('erp:demo seeds demonstration data and runs in local or staging only.');
+
+        return 1;
+    }
+    $slug = is_string($this->option('tenant')) ? $this->option('tenant') : 'nonlife';
+    if (! (new Database\Seeders\PartADemoSeeder())->run($slug)) {
+        $this->info("Tenant {$slug} already has the Part A story; nothing changed.");
+
+        return 0;
+    }
+    $this->info("Seeded the Part A story in tenant {$slug}. Sign in at http://{$slug}.localhost:8000 as admin@{$slug}.local or <role>@{$slug}.local (for example accountant@{$slug}.local).");
+    $this->line('September bank statement: '.storage_path(Database\Seeders\PartADemoSeeder::STATEMENT_FILE));
+
+    return 0;
+})->purpose('Seed the Part A demo story (3 products, 8 policies, suspense, bank exceptions, 2 claims, August closed)');
