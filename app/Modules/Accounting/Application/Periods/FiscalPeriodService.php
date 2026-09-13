@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application\Periods;
 
+use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Domain\Enums\PeriodStatus;
 use App\Modules\Accounting\Exceptions\PeriodTransitionException;
 use App\Modules\Platform\Approvals\ApprovalFacts;
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\DB;
  *   open ─soft_lock─▶ soft_locked ─lock─▶ locked;  soft_locked | locked ─reopen(reason)─▶ open.
  * Each transition runs under the period's row lock, requires its periods.* permission, is audited and
  * announced through the outbox (PeriodLocked, PeriodReopened). §5.7 INVARIANT: lock refuses while close
- * tasks are open or a reconciliation shows a variance.
+ * tasks are open or a reconciliation shows a variance — a recorded variance run, or a variance recomputed under the
+ * period's row lock (postings made after the reconciliation tasks, e.g. while soft-locked, are never trusted as clean).
  */
 final class FiscalPeriodService
 {
@@ -30,6 +32,7 @@ final class FiscalPeriodService
         private readonly Audit $audit,
         private readonly Outbox $outbox,
         private readonly ApprovalService $approvals,
+        private readonly ReconciliationService $reconciliation,
     ) {}
 
     public function softLock(string $periodId, string $actorUserId): void
@@ -151,6 +154,11 @@ final class FiscalPeriodService
         }
         if (DB::table('reconciliation_runs')->where('period_id', $periodId)->where('status', 'variance')->exists()) {
             throw new PeriodTransitionException('RECONCILIATION_VARIANCE', "Period {$periodId} has an unresolved reconciliation variance.");
+        }
+        $variances = $this->reconciliation->currentVariances($periodId);
+        if ($variances !== []) {
+            $listed = implode(', ', array_map(fn (string $subledger, int $variance): string => "{$subledger} {$variance}", array_keys($variances), $variances));
+            throw new PeriodTransitionException('RECONCILIATION_VARIANCE', "Period {$periodId} does not reconcile as the ledger stands (subledger − GL: {$listed}). Rerun the reconciliation tasks.");
         }
     }
 

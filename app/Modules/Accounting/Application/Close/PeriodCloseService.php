@@ -8,6 +8,7 @@ use App\Modules\Accounting\Application\Contracts\CloseCheckResult;
 use App\Modules\Accounting\Application\Periods\FiscalPeriodService;
 use App\Modules\Accounting\Application\Queries\FiscalPeriodQuery;
 use App\Modules\Accounting\Application\Queries\FiscalPeriodView;
+use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Exceptions\AccountingException;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
@@ -32,6 +33,7 @@ final class PeriodCloseService
         private readonly CloseTaskExecutor $executor,
         private readonly FiscalPeriodQuery $periodQuery,
         private readonly FiscalPeriodService $periods,
+        private readonly ReconciliationService $reconciliation,
         private readonly PermissionChecker $permissions,
         private readonly Audit $audit,
     ) {}
@@ -124,9 +126,15 @@ final class PeriodCloseService
         }
     }
 
-    /** Task 16: the task is marked done and the period locked in one transaction, so FiscalPeriodService's open-task guard sees it done. */
+    /**
+     * Task 16: every subledger is reconciled again and the run recorded first (committed, so a refusal leaves its variance and exceptions to
+     * drill into), then the task is marked done and the period locked in one transaction, so FiscalPeriodService's open-task guard sees it
+     * done and its variance guard judges the ledger as it stands.
+     */
     private function lockPeriod(string $taskId, string $closeRunId, FiscalPeriodView $period, string $actorUserId): string
     {
+        $this->reconciliation->runAll($period->id);
+
         return DB::transaction(function () use ($taskId, $closeRunId, $period, $actorUserId): string {
             $this->record($taskId, 'done', ['summary' => 'Period locked.', 'details' => ['period_id' => $period->id]], $this->catalogue->find('period_lock'), $actorUserId, null);
             $this->periods->lock($period->id, $actorUserId);

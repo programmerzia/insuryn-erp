@@ -81,7 +81,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 
 ## Disputed tests
 
-None. (Slice 1B.2 extended — never weakened — three expectations of 1A.8/1A.9 tests because it adds the claims subledger and close task 5; see 1B.2.)
+None. (Review pass: `ReversalApprovalTest` reopen case moved from September to August because the fixed lock guard correctly refuses its unreconciled September — see "Review pass". Slice 1B.2 extended — never weakened — three expectations of 1A.8/1A.9 tests because it adds the claims subledger and close task 5; see 1B.2.)
 
 ## Blocked slices
 
@@ -98,7 +98,7 @@ bank statement format (A-5); commission tiers/term-year rules/hierarchy override
 commission payouts and per-installment payments/credits (A-8, A-9). For the customer: which commission payout workflow (`commission.approve`
 / `commission.pay`) and claims reopen/limits policies to configure.
 
-State at end of run: all slices 0.0 → 1B.3 done; nothing partial or blocked; 886 tests green on PHP 8.5 and PHP 8.4, PHPStan level 8 clean, vue-tsc and
+State at end of run: all slices 0.0 → 1B.3 done; nothing partial or blocked; 886 tests green on PHP 8.5 and PHP 8.4 (888 after the review pass), PHPStan level 8 clean, vue-tsc and
 vite build green.
 
 ## Slice details
@@ -614,3 +614,26 @@ balances with reversed journals, double reversal, numbering race, tenant resolut
   product and branch, invalid dimension refused, filtered account activity equals the claims expense movement; paid register rows, journals,
   empty range; API 403/200 and 422 for an unsupported dimension.
 - Result: 886 tests green, PHPStan 0 errors.
+
+### Review pass (after 1B.3) — tenancy, write paths, floats, rules/fixtures, close variance
+Scope: review only; only the critical finding was fixed.
+1. Tenant tables: all 53 tables with `tenant_id` have forced RLS and the `tenant_isolation` policy (USING + WITH CHECK). Only 24 are in the
+   0003 migration's `TENANT_TABLES` constant; the rest are enabled through `RowLevelSecurity::enable` (D-08 / slice migrations) and asserted
+   structurally by `SchemaInvariantsTest`. `TenantIsolationTest` exercises 15 tables behaviourally (medium: extend it to every tenant table).
+2. Accounting-table writes: no business module (Insurance, Finance) writes accounting tables; they submit events through
+   `SubmitAccountingEvent` only. Journals are written only by `JournalWriter`, used by `PostingEngine`, `ReversalService` and — the documented
+   exception (design §5.2, D-11, arch test) — `ManualJournalService`.
+3. Floats: none in `app/` or `resources/js` (one `round(` is in a comment in `EarningSchedule`). All money division is `intdiv` half-even.
+4. Rules/fixtures: every emitted event type (16) has exactly one rule. `POLICY_ENDORSED` has two fixtures (increase 01b, decrease 01c);
+   `PAYROLL_POSTED` has a rule and fixture but is not emitted yet (Phase 2).
+5. **Critical, fixed:** the §5.7 close with a variance injected *after* the reconciliation tasks passed (a control-account adjustment posted
+   under `accounting.post_in_soft_locked` between tasks 13 and 16) locked the period: `FiscalPeriodService::lock` trusted recorded runs only.
+   Fix: `ReconciliationService::currentVariances(period)` recomputes every subledger under the period row lock without recording, and the
+   lock refuses `RECONCILIATION_VARIANCE` listing them; the close's task 16 first records a fresh `runAll` so a refusal leaves variance
+   runs and exceptions. Tests: `tests/Feature/Close/LockRefusesUnreconciledPeriodTest.php` (close task 16 and a direct lock both refused, then
+   lock after correcting). A variance injected *before* the reconciliation tasks was already refused (task blocked → `CLOSE_TASKS_OPEN`).
+   Adjusted test (recorded, not weakened): `tests/Feature/Accounting/ReversalApprovalTest.php` "reopens a period through approval…" locked
+   September, whose fixture receipt has no subledger counterpart — a real variance the fixed guard now refuses. It now locks and reopens August;
+   its assertions are unchanged.
+   Residual (medium): a posting committed concurrently with the lock transaction can still slip in (postings do not take the period row lock).
+- Result: 888 tests green, PHPStan 0 errors.

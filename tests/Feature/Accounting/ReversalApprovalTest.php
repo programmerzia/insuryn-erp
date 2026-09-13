@@ -108,19 +108,20 @@ it('reopens a period through approval when a reopen policy matches', function ()
     $cfo = userWithPermissions($this->ctx['tenant_id'], ['accounting.post_to_control']);
 
     asTenant($this->ctx['tenant_id'], function () use ($closer, $cfo): void {
-        $september = (string) DB::table('fiscal_periods')->where('period', 3)->value('id');
+        // August: the September fixture receipt has no subledger counterpart, so September cannot be locked (§5.7 variance guard).
+        $august = (string) DB::table('fiscal_periods')->where('period', 2)->value('id');
         $periods = app(FiscalPeriodService::class);
-        $periods->softLock($september, $closer);
-        $periods->lock($september, $closer);
+        $periods->softLock($august, $closer);
+        $periods->lock($august, $closer);
 
-        $approvalId = $periods->reopen($september, $closer, 'late supplier invoice');
+        $approvalId = $periods->reopen($august, $closer, 'late supplier invoice');
 
         expect($approvalId)->toBeString()
-            ->and(DB::table('fiscal_periods')->where('id', $september)->value('status'))->toBe('locked');
+            ->and(DB::table('fiscal_periods')->where('id', $august)->value('status'))->toBe('locked');
 
         app(App\Modules\Platform\Approvals\ApprovalService::class)->decide((string) $approvalId, $cfo, App\Modules\Platform\Approvals\Decision::Approved, null);
 
-        expect(DB::table('fiscal_periods')->where('id', $september)->value('status'))->toBe('open')
-            ->and(DB::table('audit_events')->where('object_id', $september)->where('action', 'period.reopened')->value('reason'))->toBe('late supplier invoice');
+        expect(DB::table('fiscal_periods')->where('id', $august)->value('status'))->toBe('open')
+            ->and(DB::table('audit_events')->where('object_id', $august)->where('action', 'period.reopened')->value('reason'))->toBe('late supplier invoice');
     });
 });

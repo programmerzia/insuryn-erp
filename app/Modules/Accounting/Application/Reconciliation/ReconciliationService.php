@@ -44,19 +44,37 @@ final class ReconciliationService
         return $runIds;
     }
 
+    /**
+     * Every registered subledger's variance (subledger − GL) as the ledger stands now, as of the period end, without recording a run. Used by
+     * the period lock, which must not trust runs recorded before later postings.
+     *
+     * @return array<string, int> subledger → non-zero variance
+     */
+    public function currentVariances(string $periodId): array
+    {
+        $period = FiscalPeriod::query()->findOrFail($periodId);
+        $asOf = CarbonImmutable::parse($period->ends);
+        $variances = [];
+        foreach ($this->reconcilers as $reconciler) {
+            $measured = $this->measure($reconciler, $period, $asOf);
+            if ($measured !== null && $measured['variance'] !== 0) {
+                $variances[$reconciler->subledger()] = $measured['variance'];
+            }
+        }
+
+        return $variances;
+    }
+
     /** @return string|null the run id, or null when the entity maps no control account to the subledger */
     public function run(SubledgerReconciler $reconciler, string $periodId, ?CarbonImmutable $asOf = null): ?string
     {
         $period = FiscalPeriod::query()->findOrFail($periodId);
         $asOf ??= CarbonImmutable::parse($period->ends);
-        $accountIds = $this->controlAccounts($period, $reconciler->subledger(), $asOf);
-        if ($accountIds === []) {
+        $measured = $this->measure($reconciler, $period, $asOf);
+        if ($measured === null) {
             return null;
         }
-
-        $subledger = $reconciler->balanceAt($period->entity_id, $asOf)->getMinorAmount()->toInt();
-        $gl = $this->ledger->normalBalanceByDimension($accountIds, $period->book_id, $asOf, $reconciler->itemDimension());
-        $variance = $subledger - $gl['total'];
+        ['subledger' => $subledger, 'gl' => $gl, 'variance' => $variance] = $measured;
 
         return DB::transaction(function () use ($reconciler, $period, $asOf, $subledger, $gl, $variance): string {
             $runId = (string) Str::uuid7();
@@ -73,6 +91,19 @@ final class ReconciliationService
 
             return $runId;
         });
+    }
+
+    /** @return array{subledger: int, gl: array{total: int, by_dimension: array<string, int>, unattributed_by_journal: array<string, int>}, variance: int}|null null without control accounts */
+    private function measure(SubledgerReconciler $reconciler, FiscalPeriod $period, CarbonImmutable $asOf): ?array
+    {
+        $accountIds = $this->controlAccounts($period, $reconciler->subledger(), $asOf);
+        if ($accountIds === []) {
+            return null;
+        }
+        $subledger = $reconciler->balanceAt($period->entity_id, $asOf)->getMinorAmount()->toInt();
+        $gl = $this->ledger->normalBalanceByDimension($accountIds, $period->book_id, $asOf, $reconciler->itemDimension());
+
+        return ['subledger' => $subledger, 'gl' => $gl, 'variance' => $subledger - $gl['total']];
     }
 
     /** @param array{total: int, by_dimension: array<string, int>, unattributed_by_journal: array<string, int>} $gl */
