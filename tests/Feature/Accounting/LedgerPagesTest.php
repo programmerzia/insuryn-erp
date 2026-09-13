@@ -24,7 +24,7 @@ use function Pest\Laravel\get;
 beforeEach(function (): void {
     Queue::fake();
     $this->ctx = seedDemoTenant();
-    $this->viewer = asTenant($this->ctx['tenant_id'], fn (): User => User::query()->findOrFail(userWithPermissions($this->ctx['tenant_id'], ['accounting.view_journals'])));
+    $this->viewer = asTenant($this->ctx['tenant_id'], fn (): User => User::query()->findOrFail(userWithPermissions($this->ctx['tenant_id'], ['accounting.view_journals', 'reports.financial'])));
 
     [$this->first, $this->reversal] = asTenant($this->ctx['tenant_id'], function (): array {
         $post = function (string $key, int $amount): Journal {
@@ -120,7 +120,7 @@ it('lists draft manual journals but keeps them out of the trial balance', functi
 });
 
 it('requires accounting.view_journals and a signed-in user', function (): void {
-    get('/accounting/journals', $this->headers)->assertUnauthorized(); // no login page yet (OIDC login is not in the slice list)
+    get('/accounting/journals', $this->headers)->assertRedirect('/login'); // Fortify sign-in (Zitadel OIDC is LATER)
 
     $stranger = asTenant($this->ctx['tenant_id'], fn (): User => User::factory()->create());
     actingAs($stranger)->get('/accounting/journals', $this->headers)->assertForbidden();

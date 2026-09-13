@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import type { SharedProps } from '@/types/shared';
 
 defineProps<{ title: string }>();
 
-const page = usePage<{ auth: { user: { id: string; name: string } | null } }>();
+const page = usePage<SharedProps>();
 const user = computed(() => page.props.auth.user);
+const tenant = computed(() => page.props.tenant);
 
 const nav = [
     { label: 'Journals', href: '/accounting/journals' },
@@ -34,7 +36,19 @@ const nav = [
                         {{ item.label }}
                     </Link>
                 </nav>
-                <span v-if="user" class="ml-auto text-sm text-ivory-dim">{{ user.name }}</span>
+                <div class="ml-auto flex items-center gap-4 text-sm">
+                    <span v-if="tenant" class="text-xs font-semibold uppercase tracking-wider text-blueprint" title="Organisation">{{ tenant.name }}</span>
+                    <span v-if="user" class="text-ivory-dim" :title="user.email">{{ user.name }}</span>
+                    <Link
+                        v-if="user"
+                        href="/logout"
+                        method="post"
+                        as="button"
+                        class="rounded-md px-2 py-1 text-ivory-dim hover:bg-surface-raised hover:text-ivory"
+                    >
+                        Sign out
+                    </Link>
+                </div>
             </div>
         </header>
         <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">

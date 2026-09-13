@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Fortify\TwoFactorAuthenticatable;
 
 /**
  * Platform user (design §2.1 users): tenant-scoped (RLS + TenantScope), UUIDv7 key. Loading a user
@@ -24,7 +25,7 @@ use Illuminate\Notifications\Notifiable;
  * @property string $status
  */
 #[Fillable(['name', 'email', 'password', 'oidc_subject', 'status'])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
     use BelongsToTenant;
@@ -32,12 +33,23 @@ class User extends Authenticatable
     use HasFactory;
     use HasUuid7;
     use Notifiable;
+    use TwoFactorAuthenticatable;
+
+    /**
+     * Key of the password reset token row. password_reset_tokens is a platform table keyed by email, and the same email may exist in
+     * several tenants, so the key carries the tenant: a token issued in one tenant can never reset a user of another.
+     */
+    public function getEmailForPasswordReset(): string
+    {
+        return $this->tenant_id.'|'.$this->email;
+    }
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             'password' => 'hashed',
+            'two_factor_confirmed_at' => 'immutable_datetime',
         ];
     }
 }

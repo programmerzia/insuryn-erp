@@ -23,7 +23,9 @@ final class RoleTemplates
     private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
-        'commission.approve', 'claim.pay_release', 'receipt.refund_release', 'product.manage', 'bank.manage_accounts', 'commission.manage_plans'];
+        'commission.approve', 'claim.pay_release', 'receipt.refund_release', 'product.manage', 'bank.manage_accounts', 'commission.manage_plans',
+        // Interpretation: the finance manager signs off financial statements in the close (§5.7 tasks 14–15), so holds reports.financial.
+        'reports.financial'];
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */
@@ -44,14 +46,14 @@ final class RoleTemplates
         ];
     }
 
-    /** Creates the template roles in the current tenant. */
+    /** Creates the template roles in the current tenant; roles and permissions that already exist are left as they are (safe to rerun). */
     public static function seedCurrentTenant(): void
     {
         $tenantId = TenantContext::id();
         foreach (self::all() as $code => $template) {
-            $roleId = (string) Str::uuid7();
-            DB::table('roles')->insert(['id' => $roleId, 'tenant_id' => $tenantId, 'code' => $code, 'name' => $template['name'], 'created_at' => now(), 'updated_at' => now()]);
-            DB::table('role_permissions')->insert(array_map(
+            DB::table('roles')->insertOrIgnore(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'code' => $code, 'name' => $template['name'], 'created_at' => now(), 'updated_at' => now()]);
+            $roleId = (string) DB::table('roles')->where('code', $code)->value('id');
+            DB::table('role_permissions')->insertOrIgnore(array_map(
                 fn (string $permission): array => ['tenant_id' => $tenantId, 'role_id' => $roleId, 'permission_code' => $permission],
                 array_values(array_unique($template['permissions'])),
             ));

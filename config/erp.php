@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'seed' => [
+        // Password of the per-tenant admin created by AdminUserSeeder (local and single-install use). Change it after first sign-in.
+        'admin_password' => env('ERP_ADMIN_PASSWORD', 'ChangeMe123!'),
+    ],
     'tenancy' => [
         // Tenant used when no header, session or subdomain names one (local browsing, single-install deployments). Empty = none.
         'default_slug' => env('ERP_DEFAULT_TENANT', 'demo'),

@@ -16,6 +16,14 @@ Read `docs/design-package-v1.md` before writing code. `docs/spec-v2.md` is produ
 9. Maker ≠ checker (SoD) on refunds, claim payments, manual journals, commission payouts.
 10. Dependency direction: Platform ← Accounting ← (Insurance | Finance | People | Compliance). `App\Modules\Accounting` must not reference Policy/Claim/Commission/Employee.
 
+## Authentication
+- Now: Laravel Fortify for local and single-install use — email + password, password reset, two-factor (TOTP); registration disabled.
+  The tenant is resolved before authentication (`ResolveTenant`), the email is looked up within that tenant only, and sign-in binds the
+  session to the user's tenant. Password reset tokens are keyed by tenant + email. Seed: `RolesSeeder` (§7.2 templates) and
+  `AdminUserSeeder` (`admin@<tenant slug>.local`, password `ERP_ADMIN_PASSWORD`).
+- LATER: Zitadel OIDC as the identity provider (design §0/§8.6.1) — org claim → tenant, `users.oidc_subject` → user, Socialite driver,
+  sign-out via the IdP; Fortify stays only as the local fallback. Not implemented; do not build it without a slice.
+
 ## Deployment constraints
 - Deploy with direct connections or session-mode pooling only; transaction-mode PgBouncer is unsupported until SET LOCAL per request is implemented (LATER). (D-02: the tenant id is a session-level Postgres setting.)
 

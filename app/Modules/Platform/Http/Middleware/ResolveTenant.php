@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Http\Middleware;
 
+use App\Models\User;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -30,10 +32,23 @@ final class ResolveTenant
             abort(400, 'Tenant could not be resolved.');
         }
         TenantContext::set($tenantId);
+        $this->forgetUserOfAnotherTenant($tenantId);
         try {
             return $next($request);
         } finally {
             TenantContext::clear();
+        }
+    }
+
+    /**
+     * A guard that already holds a user (long-running workers, tests) must not carry it into another tenant: forget it, so authentication
+     * reloads the session's user within this tenant — where it does not exist — and the request is treated as a guest.
+     */
+    private function forgetUserOfAnotherTenant(string $tenantId): void
+    {
+        $guard = Auth::guard();
+        if ($guard->hasUser() && $guard->user() instanceof User && $guard->user()->tenant_id !== $tenantId) {
+            $guard->forgetUser();
         }
     }
 
