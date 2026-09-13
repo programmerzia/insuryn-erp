@@ -25,6 +25,7 @@ return [
     'views' => true,
     'features' => [
         Features::resetPasswords(),
+        Features::updatePasswords(),
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,

@@ -53,7 +53,7 @@ code and in the register below, configurable.
 | 1C.4 | Dunning, grace and auto-lapse | done | see git log |
 | 1C.5 | Multi-payer policies | done | see git log |
 | 1C.6 | Hardening: posting/lock race, isolation on every tenant table | done | see git log |
-| 1C.7 | Account security page (2FA, password) | pending | |
+| 1C.7 | Account security page (2FA, password) | done | see git log |
 | 1C.8 | Operations UI: parties, products, policies | pending | |
 | 1C.9 | Operations UI: receipts, suspense, refunds, bank | pending | |
 | 1C.10 | Operations UI: claims and commission | pending | |
@@ -758,3 +758,14 @@ Scope: review only; only the critical finding was fixed.
   as `erp_app`, tenant A sees no row of tenant B (and B none of A) in any of them and nothing without a tenant. A new tenant table fails the test
   until it is populated there or listed in `TABLES_WITHOUT_SCENARIO_ROWS` with a reason (currently empty).
 - Result: 936 tests green, PHPStan 0 errors.
+
+### 1C.7 — Account security page (2FA, password) — done
+- Why: Fortify's two-factor endpoints were enabled but there was no screen to turn two-factor on, and no password change.
+- `config/fortify.php` adds `Features::updatePasswords()`; `Platform\Authentication\Actions\UpdateUserPassword` (current password required, error bag
+  `updatePassword`), registered in `AuthenticationServiceProvider`.
+- `GET /account/security` (`auth`) → `Platform\Authentication\Http\SecurityPageController` → Inertia `account/Security`: change password; two-factor
+  turn on (Fortify asks for password confirmation first), QR code, confirm with a 6-digit code, recovery codes, turn off. The user name in the top bar
+  links to it.
+- Tests `tests/Feature/Platform/AccountSecurityTest.php`: page for signed-in users only with 2FA state; password change refused with a wrong current
+  password and applied with the right one; 2FA requires password confirmation, a wrong code is refused, a valid TOTP confirms, 8 recovery codes, turn off.
+- Result: 939 tests green, PHPStan 0 errors, vue-tsc and build green.

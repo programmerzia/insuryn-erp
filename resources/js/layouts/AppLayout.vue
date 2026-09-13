@@ -38,7 +38,7 @@ const nav = [
                 </nav>
                 <div class="ml-auto flex items-center gap-4 text-sm">
                     <span v-if="tenant" class="text-xs font-semibold uppercase tracking-wider text-blueprint" title="Organisation">{{ tenant.name }}</span>
-                    <span v-if="user" class="text-ivory-dim" :title="user.email">{{ user.name }}</span>
+                    <Link v-if="user" href="/account/security" class="text-ivory-dim hover:text-ivory" :title="`${user.email} · security settings`">{{ user.name }}</Link>
                     <Link
                         v-if="user"
                         href="/logout"

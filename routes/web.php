@@ -5,9 +5,12 @@ declare(strict_types=1);
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
+use App\Modules\Platform\Authentication\Http\SecurityPageController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/accounting/journals');
+
+Route::middleware('auth')->get('account/security', SecurityPageController::class)->name('account.security');
 
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);
 // sign-in, sign-out, password reset and two-factor routes come from Fortify (config/fortify.php).

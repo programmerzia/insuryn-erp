@@ -6,6 +6,7 @@ namespace App\Modules\Platform\Authentication;
 
 use App\Models\User;
 use App\Modules\Platform\Authentication\Actions\ResetUserPassword;
+use App\Modules\Platform\Authentication\Actions\UpdateUserPassword;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -36,6 +37,7 @@ final class AuthenticationServiceProvider extends ServiceProvider
             return $user !== null && Hash::check((string) $request->input('password'), (string) $user->getAuthPassword()) ? $user : null;
         });
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
+        Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
 
         Fortify::loginView(static fn () => Inertia::render('auth/Login', ['canResetPassword' => true]));
         Fortify::requestPasswordResetLinkView(static fn () => Inertia::render('auth/ForgotPassword'));
