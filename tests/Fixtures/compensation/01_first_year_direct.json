@@ -1,0 +1,17 @@
+{
+  "description": "Life agency, policy year 1: the selling FA earns the first-year direct rate on premium received; 5% withholding. The renewal rule and the UM above (no override rule) pay nothing.",
+  "scheme": { "mode": "commission", "compliance_profile": { "allowed_producer_types": ["agent"], "caps": [{ "policy_year_from": 1, "policy_year_to": 1, "max_total_bp": 3500 }] }, "withholding_bp": 500 },
+  "producers": [
+    { "key": "FA1", "type": "agent", "status": "active", "level": "FA", "licensed": true },
+    { "key": "UM1", "type": "agent", "status": "active", "level": "UM", "licensed": true }
+  ],
+  "rules": [
+    { "key": "FIRST", "producer_type": "agent", "level_code": "FA", "basis": "premium_received", "policy_year_from": 1, "policy_year_to": 1, "rate_bp": 2500 },
+    { "key": "RENEWAL", "producer_type": "agent", "level_code": "FA", "basis": "premium_received", "policy_year_from": 2, "policy_year_to": 99, "rate_bp": 500 }
+  ],
+  "trigger": { "basis": "premium_received", "base": 1000000, "policy_year": 1, "product": "LIFE", "product_class": "life" },
+  "expected": {
+    "lines": [["FA1", "direct", "FA", "FIRST", 2500, 250000, 12500, false]],
+    "issues": []
+  }
+}

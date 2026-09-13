@@ -85,7 +85,7 @@ code and in the register below, configurable.
 | D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | done | see git log |
 | D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | done | see git log |
 | D4 | Distribution: compensation schemes, rules, compliance profile | done | see git log |
-| D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | todo | |
+| D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | done | see git log |
 | D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | todo | |
 | D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | todo | |
 | D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | todo | |
@@ -114,6 +114,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-17 | D2 | Products had no life / non-life class: `products.insurance_class`; a product whose line of business is listed as life is life, everything else non-life, unless given when the product is created. Existing products backfilled the same way. | `config/erp.php` `products.life_lobs` (`ASSUMPTION:`), `ProductCatalogue::createProduct`, migration `2026_09_18_000002`. |
 | A-18 | D4 | Design note OPEN 1 (IDRA caps and the non-life zero-commission circular) is unanswered: commission on non-life products is disabled until a scheme's compliance profile sets `non_life_commission_allowed`; caps are whatever the profile lists (none by default). | `ComplianceProfile` (`ASSUMPTION:`), `compensation_schemes.compliance_profile`. |
 | A-19 | D4 | Design note OPEN 3 (renewal commission after termination) is unanswered: rule flag `pays_after_termination`, default false. Rule flag `renewal_requires_valid_licence` defaults to true (design note §3). Both applied in D5. | `compensation_rules` columns, `CompensationRuleRequest`. |
+| A-20 | D5 | Phase 1 commission plans predate compensation schemes: a product version without a scheme falls back to its plan (A-7 precedence), treated as a flat scheme (one direct rate on premium received, every product, type and year, no overrides or caps); non-life commission is allowed for plan terms because attaching a plan was an explicit configuration. Producers still need to be active and licensed. | `FlatCommissionTerms`, `CommissionAccrual` (`ASSUMPTION:`). |
+| A-21 | D5 | Policy year is not defined beyond "1..1 = first year, 2..99 = renewal": 1 + renewals in the policy's renewal chain + whole years from inception to the premium's installment due date (inception for written premium). | `Insurance\Policy\Application\PolicyYear`. |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1381,4 +1383,30 @@ Scope: review only; only the critical finding was fixed.
 - Test setup changes: `HierarchyTest` and `TenantIsolationEveryTableTest` create real schemes for their levels (the new foreign key); the isolation scenario also adds a rule.
 - Tests: `tests/Feature/Distribution/CompensationSchemesTest.php` (6).
 - Result: 1,038 Pest tests green, PHPStan 0 errors.
+
+### D5 — Distribution: compensation calculation engine — done
+- The Phase 1A calculator is replaced by one engine (D-14):
+  - `Distribution\Domain\Compensation\CompensationCalculator`, a pure function of scheme terms, rules in force, the hierarchy snapshot (`Beneficiary` per level) and a `Trigger`;
+  - `Distribution\Application\Compensation\CompensationEngine`, which loads those on the trigger's day, records `compliance_exceptions` (once per trigger, producer and reason) and returns `CommissionAward`s.
+- Calculation (design note §2):
+  - no commission when the mode pays none;
+  - non-life needs the profile switch;
+  - the seller must be active (or terminated with `pays_after_termination` in a renewal year), licensed for the class that day (renewal years may skip it when the rule's `renewal_requires_valid_licence` is off), and of an allowed type;
+  - an ineligible seller means nothing for anyone on the trigger;
+  - direct commission comes from the most specific rule (product > type > level) and each level above is paid once by its most specific override rule;
+  - an ineligible manager is skipped and reported, two equally specific rules block and report, and a rule with minimum persistency produces a conditional line.
+- INVARIANT Σ commission rates on a trigger ≤ the compliance cap for the product and policy year: a breach blocks the calculation (no entries, `COMPLIANCE_CAP_EXCEEDED`), never the policy.
+- Commission subledger (`Insurance\Commission\Application\CommissionAccrual`): one entry per beneficiary with `scheme_id`, `rule_id`, `beneficiary_role`
+  (direct | override), `level_code` and `hierarchy_snapshot` (INVARIANT: later tree changes never change a payout), COMMISSION_EARNED per unconditional entry.
+  Triggers: allocation (`premium_received`, policy year from the installment due date, A-21) and issue (`premium_written` on gross, `net_premium` on net).
+- Clawback on cancellation per beneficiary via `ClawbackCalculator` (half-even share of unearned); conditional entries are reversed instead. A bounced allocation claws back
+  every beneficiary's entry. Replay guards per beneficiary: unique (allocation, beneficiary), (policy transaction, beneficiary, rule), (reversed allocation, beneficiary).
+- Golden fixtures `tests/Fixtures/compensation`, run by `CompensationGoldenTest`:
+  - `01_first_year_direct`, `02_renewal_direct`, `03_two_level_override`;
+  - `04_cap_hit`, `05_ineligible_producer`, `06_clawback_split`.
+- Phase 1 plans keep working as flat terms (A-20). All existing commission, payout, cheque bounce, reconciliation and page tests are unchanged and green.
+  The demo database, rebuilt, gives 16 commission entries for 2 agents and no exceptions.
+- Test setup change: `TenantIsolationEveryTableTest` runs the engine once on a non-life trigger so `compliance_exceptions` has rows.
+- Tests: `CompensationGoldenTest` (6), `CompensationEngineTest` (7).
+- Result: 1,051 Pest tests green, PHPStan 0 errors.
 

@@ -1,0 +1,17 @@
+{
+  "description": "The seller's life licence is not valid on the day the premium is received: no commission for anyone on this premium, one compliance exception; the UM's override is not paid either.",
+  "scheme": { "mode": "commission", "compliance_profile": { "allowed_producer_types": ["agent"] }, "withholding_bp": 500 },
+  "producers": [
+    { "key": "FA1", "type": "agent", "status": "active", "level": "FA", "licensed": false },
+    { "key": "UM1", "type": "agent", "status": "active", "level": "UM", "licensed": true }
+  ],
+  "rules": [
+    { "key": "FIRST", "producer_type": "agent", "level_code": "FA", "basis": "premium_received", "policy_year_from": 1, "policy_year_to": 1, "rate_bp": 2500 },
+    { "key": "UM-OVERRIDE", "level_code": "UM", "basis": "premium_received", "policy_year_from": 1, "policy_year_to": 1, "override_rate_bp": 500 }
+  ],
+  "trigger": { "basis": "premium_received", "base": 1000000, "policy_year": 1, "product": "LIFE", "product_class": "life" },
+  "expected": {
+    "lines": [],
+    "issues": [["FA1", "LICENCE_INVALID"]]
+  }
+}

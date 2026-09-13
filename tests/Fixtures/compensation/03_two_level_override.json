@@ -1,0 +1,23 @@
+{
+  "description": "FA sells under UM under BM: FA earns direct, the UM and the BM above each earn their level's override on the same premium.",
+  "scheme": { "mode": "commission", "compliance_profile": { "allowed_producer_types": ["agent"], "caps": [{ "policy_year_from": 1, "policy_year_to": 1, "max_total_bp": 3500 }] }, "withholding_bp": 500 },
+  "producers": [
+    { "key": "FA1", "type": "agent", "status": "active", "level": "FA", "licensed": true },
+    { "key": "UM1", "type": "agent", "status": "active", "level": "UM", "licensed": true },
+    { "key": "BM1", "type": "agent", "status": "active", "level": "BM", "licensed": true }
+  ],
+  "rules": [
+    { "key": "FIRST", "producer_type": "agent", "level_code": "FA", "basis": "premium_received", "policy_year_from": 1, "policy_year_to": 1, "rate_bp": 2500 },
+    { "key": "UM-OVERRIDE", "level_code": "UM", "basis": "premium_received", "policy_year_from": 1, "policy_year_to": 1, "override_rate_bp": 500 },
+    { "key": "BM-OVERRIDE", "level_code": "BM", "basis": "premium_received", "policy_year_from": 1, "policy_year_to": 1, "override_rate_bp": 200 }
+  ],
+  "trigger": { "basis": "premium_received", "base": 1000000, "policy_year": 1, "product": "LIFE", "product_class": "life" },
+  "expected": {
+    "lines": [
+      ["FA1", "direct", "FA", "FIRST", 2500, 250000, 12500, false],
+      ["UM1", "override", "UM", "UM-OVERRIDE", 500, 50000, 2500, false],
+      ["BM1", "override", "BM", "BM-OVERRIDE", 200, 20000, 1000, false]
+    ],
+    "issues": []
+  }
+}

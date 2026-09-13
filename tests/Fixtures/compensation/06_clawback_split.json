@@ -1,0 +1,11 @@
+{
+  "description": "Cancellation with 600,000 of 1,000,000 net premium unearned: each beneficiary gives back 60% of what it earned on the policy — base, commission and withholding prorated half-even, per beneficiary.",
+  "clawback": {
+    "entries": [["FA1", 1000000, 250000, 12500], ["UM1", 1000000, 50000, 2500], ["BM1", 1000000, 20000, 1000]],
+    "unearned_remaining": 600000,
+    "net_premium": 1000000
+  },
+  "expected": {
+    "clawbacks": [["FA1", -600000, -150000, -7500], ["UM1", -600000, -30000, -1500], ["BM1", -600000, -12000, -600]]
+  }
+}

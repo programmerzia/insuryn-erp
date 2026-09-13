@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Design §2.4 commission_entries, states §5.6. Clawbacks are negative entries (amount and withholding), netted on the statement.
- * Net payable to the agent = amount − withholding.
+ * Net payable to the beneficiary = amount − withholding. One trigger yields one entry per beneficiary (seller and overrides, slice D5).
  *
  * @property string $id
  * @property string $entity_id
@@ -21,6 +21,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $receipt_allocation_id
  * @property string|null $policy_transaction_id
  * @property string|null $commission_plan_id
+ * @property string|null $scheme_id
+ * @property string|null $rule_id
+ * @property string $beneficiary_role direct|override
+ * @property string|null $level_code
  * @property string $kind earned|clawback|bonus
  * @property int $base_minor
  * @property int|null $rate_bp
@@ -28,7 +32,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $withholding_minor
  * @property string $currency
  * @property CarbonImmutable $earned_on
- * @property string $status accrued|approved|paid|reversed
+ * @property string $status conditional|accrued|approved|paid|reversed
  * @property string|null $statement_id
  * @property CarbonImmutable|null $paid_on
  */

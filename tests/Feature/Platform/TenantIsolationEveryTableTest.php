@@ -10,6 +10,8 @@ use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Application\Reversals\ReversalRequestService;
 use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\Side;
+use App\Modules\Distribution\Application\Compensation\CompensationEngine;
+use App\Modules\Distribution\Application\Compensation\CompensationRequest;
 use App\Modules\Distribution\Application\Compensation\CompensationRuleRequest;
 use App\Modules\Distribution\Application\Compensation\CompensationSchemeService;
 use App\Modules\Distribution\Application\Hierarchy\HierarchyService;
@@ -125,6 +127,8 @@ function populateEveryTenantTable(array $ctx): void
         app(HierarchyService::class)->defineLevels($scheme, [['code' => 'FA', 'rank' => 1, 'label' => 'Financial associate']], $world['admin']); // slice D3
         app(CompensationSchemeService::class)->addRule($scheme, CompensationRuleRequest::fromArray(['basis' => 'premium_received', 'policy_year_from' => 1, 'policy_year_to' => 1,
             'effective_from' => '2026-01-01', 'producer_type' => 'agent', 'rate_bp' => 1000]), $world['admin']);
+        app(CompensationEngine::class)->calculate(new CompensationRequest($policy->id, $world['product_id'], 'non_life', $world['agent_id'], 'premium_received', 100_000, 1,
+            $d('2026-09-30'), 'isolation', (string) Str::uuid7(), $scheme)); // slice D5: records a compliance exception (non-life commission disabled)
     });
 }
 

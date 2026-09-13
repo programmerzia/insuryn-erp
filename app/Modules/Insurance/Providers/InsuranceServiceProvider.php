@@ -20,6 +20,8 @@ use App\Modules\Insurance\Commission\Application\ClawBackCommissionOnReversal;
 use App\Modules\Insurance\Commission\Application\CommissionReconciler;
 use App\Modules\Insurance\Commission\Application\ClawBackCommissionOnCancellation;
 use App\Modules\Insurance\Commission\Application\EarnCommissionOnAllocation;
+use App\Modules\Insurance\Commission\Application\EarnCommissionOnIssue;
+use App\Modules\Insurance\Policy\Domain\Events\PolicyIssued;
 use App\Modules\Insurance\Policy\Application\PremiumEarning\CatchUpEarningOnCancellation;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyCancelled;
 use App\Modules\Platform\Approvals\ApprovalHandlerRegistry;
@@ -43,6 +45,7 @@ final class InsuranceServiceProvider extends ServiceProvider
         Event::listen(PolicyCancelled::class, [CatchUpEarningOnCancellation::class, 'handle']);
         Event::listen(PolicyCancelled::class, [ClawBackCommissionOnCancellation::class, 'handle']);
         Event::listen(ReceiptAllocated::class, [EarnCommissionOnAllocation::class, 'handle']);
+        Event::listen(PolicyIssued::class, [EarnCommissionOnIssue::class, 'handle']);
         Event::listen(ReceiptAllocationReversed::class, [ClawBackCommissionOnReversal::class, 'handle']);
     }
 }
