@@ -29,6 +29,30 @@ final class HelpContent
         return ['title' => trim($title[1] ?? $module), 'html' => $this->render((string) preg_replace('/^#\s+.+$/m', '', $markdown, 1))];
     }
 
+    /**
+     * Session S4 guided tour: resources/help/tour.<locale>.md, one `## <step id>` section per step with a `### title` and its text.
+     *
+     * @return list<array{id: string, title: string, html: string}>
+     */
+    public function tour(string $locale): array
+    {
+        if (! in_array($locale, self::LOCALES, true)) {
+            throw new InvalidArgumentException("No tour in {$locale}.");
+        }
+        $markdown = (string) file_get_contents(resource_path("help/tour.{$locale}.md"));
+        $steps = [];
+        foreach (preg_split('/^## /m', $markdown) ?: [] as $index => $section) {
+            if ($index === 0) {
+                continue; // the tour's own title
+            }
+            [$id, $rest] = array_pad(explode("\n", $section, 2), 2, '');
+            preg_match('/^###\s+(.+)$/m', $rest, $title);
+            $steps[] = ['id' => trim($id), 'title' => trim($title[1] ?? ''), 'html' => $this->render((string) preg_replace('/^###\s+.+$/m', '', $rest, 1))];
+        }
+
+        return $steps;
+    }
+
     public function render(string $markdown): string
     {
         return Str::markdown($markdown, ['html_input' => 'escape', 'allow_unsafe_links' => false]);

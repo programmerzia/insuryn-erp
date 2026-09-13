@@ -2,6 +2,7 @@
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, defineAsyncComponent, onBeforeUnmount, watch } from 'vue';
 import ConfirmHost from '@/components/shell/ConfirmHost.vue';
+import GuidedTour from '@/components/shell/GuidedTour.vue';
 import HelpPanel from '@/components/shell/HelpPanel.vue';
 import Sidebar from '@/components/shell/Sidebar.vue';
 import StatusBar from '@/components/shell/StatusBar.vue';
@@ -62,5 +63,6 @@ watch(() => page.props.errors?.form, (message) => message && toast(message, { to
         <Toaster />
         <CommandPalette v-if="paletteOpen" />
         <ConfirmHost />
+        <GuidedTour v-if="preferences.tour?.status === 'active'" />
     </div>
 </template>

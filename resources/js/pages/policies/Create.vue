@@ -86,7 +86,7 @@ function saveDraft(): void {
 <template>
     <AppLayout help="policies" title="New quote">
         <h1 class="mb-4 text-title font-semibold">New quote</h1>
-        <Stepper :steps="steps" :current="step" @go="step = $event">
+        <Stepper data-tour="policy-form" :steps="steps" :current="step" @go="step = $event">
             <FormLayout :submit-label="step < steps.length - 1 ? 'Continue' : 'Create quote'" cancel-href="/policies" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" drafts @submit="next" @save-draft="saveDraft">
                 <template v-if="step === 0">
                     <Field id="policyholder_party_id" label="Policyholder" :error="form.errors.policyholder_party_id" hint="Name or tax ID. Ctrl+N adds a new customer.">

@@ -26,7 +26,7 @@ void props;
 
 <template>
     <AppLayout help="receipts" title="Suspense" fill>
-        <QueueView
+        <QueueView data-tour="suspense-queue"
             id="suspense"
             v-model:active="active"
             title="Suspense"

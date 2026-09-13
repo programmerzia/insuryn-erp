@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { ArrowRight } from 'lucide-vue-next';
+import { ArrowRight, Route } from 'lucide-vue-next';
 import { computed } from 'vue';
 import PinLink from '@/components/shell/PinLink.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatMinor, parseMoney } from '@/lib/money';
+import { savePreference, usePreferences } from '@/lib/preferences';
+import { tourAction, tourSteps } from '@/lib/tour';
 import type { SharedProps } from '@/types/shared';
 import { Link } from '@inertiajs/vue3';
 
@@ -26,6 +28,13 @@ interface Queue {
 const props = defineProps<{ queues: Queue[] }>();
 const page = usePage<SharedProps>();
 const currency = computed(() => page.props.shell?.entity?.currency ?? 'BDT');
+const preferences = usePreferences();
+// Session S4: start the guided tour, or resume it where it was ended.
+const tourLabel = computed(() => preferences.tour?.status === 'dismissed' ? `Resume the tour (step ${preferences.tour.step + 1} of ${tourSteps.length})`
+    : preferences.tour?.status === 'finished' ? 'Take the tour again' : 'Take the guided tour');
+function startTour(): void {
+    savePreference('tour', tourAction(preferences.tour, preferences.tour?.status === 'dismissed' ? 'resume' : 'start'), 0);
+}
 const waiting = computed(() => props.queues.reduce((sum, q) => sum + (q.cash ? 0 : q.count), 0));
 
 function cell(type: string, value: string | null | undefined): string {
@@ -47,9 +56,12 @@ function bars(days: { date: string; net: string }[]): { date: string; net: strin
 
 <template>
     <AppLayout title="Home">
-        <div class="grid max-w-[1040px] gap-5">
-            <header>
+        <div class="grid max-w-[1040px] gap-5" data-tour="home-queues">
+            <header class="grid grid-cols-[1fr_auto] items-start gap-x-4">
                 <h1 class="text-title font-semibold">Home</h1>
+                <button v-if="preferences.tour?.status !== 'active'" type="button" class="row-span-2 inline-flex h-8 items-center gap-1.5 rounded-control border border-line-control px-3 text-ui text-ink hover:bg-surface-2" @click="startTour">
+                    <Route :size="16" :stroke-width="1.5" aria-hidden="true" />{{ tourLabel }}
+                </button>
                 <p class="text-ui text-ink-2">
                     <template v-if="queues.length === 0">Nothing is assigned to your roles here. Use Ctrl+K to find a record or a page.</template>
                     <template v-else-if="waiting === 0">Nothing needs your action right now.</template>

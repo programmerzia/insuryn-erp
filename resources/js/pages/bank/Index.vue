@@ -31,7 +31,7 @@ const columns: DataColumn<Account>[] = [
 
 <template>
     <AppLayout help="bank" title="Bank" fill>
-        <QueueView
+        <QueueView data-tour="bank-accounts"
             id="bank-accounts"
             v-model:active="active"
             title="Bank accounts"

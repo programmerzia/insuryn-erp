@@ -1588,3 +1588,16 @@ Scope: review only; only the critical finding was fixed.
   English / বাংলা switch. Open or closed and the language are user preferences (`help_open`, `locale`; `tour` is added for S4).
 - Screenshots: `storage/ux-screenshots/s3-help/` (policies and receipts in English, claims in Bangla).
 - Tests: `tests/Feature/Help/HowThisWorksTest.php` (4: files and sentence counts, endpoint and language, escaping, every module screen opens its help).
+
+### S4 — Onboarding: guided tour of the Part A flow — done
+- Eight steps from Home: work queues → issue a policy → receive the premium → allocate suspense → import the bank statement → register a claim → reserve, approve and pay it →
+  run the month-end close. Words in `resources/help/tour.<en|bn>.md` (`## <step id>`, `### title`, text), served by `GET /help/tour`; the wiring (page and `data-tour` anchor of
+  each step) is `resources/js/lib/tour.ts`, and a Vitest check keeps the two in the same order.
+- `GuidedTour` (in `AppLayout` while the tour is active): an accent ring and scrim around the step's element that never blocks the page, so the user can do the step for real,
+  and a card with the step number, what to do and what the accounting does, Back / Next / End tour (Esc). On another page the card offers *Go to this step*.
+  The card sits below or above the spotlight, or in the bottom-right corner when the spotlight fills the window.
+- State is the user preference `tour` (`active` | `dismissed` | `finished`, step), so it survives sign-out and devices. Home shows *Take the guided tour*, *Resume the tour (step n of 8)*
+  or *Take the tour again*.
+- The tour explains each step; it does not create records or move money. A user without access to a step's page sees that page's refusal (see the End-of-session gaps).
+- Screenshots: `storage/ux-screenshots/s4-tour/` (every step on its page, plus the card on another page; 1366/1920, light/dark).
+- Tests: `tests/Feature/Help/GuidedTourTest.php` (2), `resources/js/tests/tour.test.ts` (2).

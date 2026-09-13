@@ -37,7 +37,7 @@ async function reopen(p: Period): Promise<void> {
 
 <template>
     <AppLayout help="close" title="Month-end close" fill>
-        <QueueView
+        <QueueView data-tour="close-periods"
             id="close-periods"
             v-model:active="active"
             title="Month-end close"

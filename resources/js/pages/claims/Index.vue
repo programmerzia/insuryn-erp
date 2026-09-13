@@ -27,7 +27,7 @@ const columns: DataColumn<ClaimRow>[] = [
 
 <template>
     <AppLayout help="claims" title="Claims" fill>
-        <QueueView
+        <QueueView data-tour="claims-queue"
             id="claims"
             v-model:active="active"
             title="Claims"

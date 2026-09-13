@@ -57,7 +57,7 @@ function post(): void {
     <AppLayout help="receipts" title="Record a receipt">
         <h1 class="text-title font-semibold">Record a receipt</h1>
         <p class="mb-5 text-ui text-ink-2">Allocate the money to installments now; anything left over is held in suspense.</p>
-        <FormLayout submit-label="Review and post" cancel-href="/receipts" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review">
+        <FormLayout data-tour="receipt-form" submit-label="Review and post" cancel-href="/receipts" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review">
             <Field id="amount" :label="`Amount received (${entity.currency})`" :error="form.errors.amount" hint="↑ and ↓ add or take away 1,000.">
                 <MoneyInput v-model="form.amount" />
             </Field>
