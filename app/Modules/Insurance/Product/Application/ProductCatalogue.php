@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Product\Application;
 
+use App\Modules\Distribution\Application\Compensation\CompensationSchemeDirectory;
 use App\Modules\Insurance\Product\Domain\Models\Product;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Platform\Audit\Actor;
@@ -49,7 +50,7 @@ final class ProductCatalogue
     /**
      * @param array{effective_from: string, effective_to?: string|null, term_months: int, earning_method: string, short_rate_table?: array<int, mixed>|null,
      *   tax_profile: array{tax_type?: string|null, jurisdiction?: string|null, inclusive?: bool, refund_tax_on_cancellation?: bool},
-     *   commission_plan_id?: string|null, posting_rule_set?: string|null, coverages?: list<array<string, mixed>>} $terms
+     *   commission_plan_id?: string|null, compensation_scheme_id?: string|null, posting_rule_set?: string|null, coverages?: list<array<string, mixed>>} $terms
      */
     public function addVersion(string $productId, array $terms, string $actorUserId): ProductVersion
     {
@@ -57,6 +58,9 @@ final class ProductCatalogue
 
         return DB::transaction(function () use ($productId, $terms, $actorUserId): ProductVersion {
             $product = Product::query()->whereKey($productId)->lockForUpdate()->firstOrFail();
+            if (($terms['compensation_scheme_id'] ?? null) !== null && ! app(CompensationSchemeDirectory::class)->exists($terms['compensation_scheme_id'])) {
+                throw new BusinessRuleViolation('COMPENSATION_SCHEME_UNKNOWN', "Compensation scheme {$terms['compensation_scheme_id']} does not exist.");
+            }
             $this->assertNoOverlap($product->id, $terms['effective_from'], $terms['effective_to'] ?? null, null);
             $version = ProductVersion::query()->create([
                 'product_id' => $product->id,
@@ -72,7 +76,7 @@ final class ProductCatalogue
                     // default keeps the design's POLICY_CANCELLED line 2 (refund the tax). Set false per product version.
                     'refund_tax_on_cancellation' => (bool) ($terms['tax_profile']['refund_tax_on_cancellation'] ?? true),
                 ],
-                'commission_plan_id' => $terms['commission_plan_id'] ?? null, 'posting_rule_set' => $terms['posting_rule_set'] ?? null,
+                'commission_plan_id' => $terms['commission_plan_id'] ?? null, 'compensation_scheme_id' => $terms['compensation_scheme_id'] ?? null, 'posting_rule_set' => $terms['posting_rule_set'] ?? null,
                 'coverages' => $terms['coverages'] ?? [],
             ]);
             $this->audit->record('product_version.created', AuditSubject::of('product', $product->id), null,

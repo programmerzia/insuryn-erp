@@ -84,7 +84,7 @@ code and in the register below, configurable.
 | D1 | Distribution: agents → producers with channels | done | see git log |
 | D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | done | see git log |
 | D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | done | see git log |
-| D4 | Distribution: compensation schemes, rules, compliance profile | todo | |
+| D4 | Distribution: compensation schemes, rules, compliance profile | done | see git log |
 | D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | todo | |
 | D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | todo | |
 | D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | todo | |
@@ -112,6 +112,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-14 | D2 | Which producer types need a licence to write new business is not specified: every type (agent, agency_org, bdo, broker, partner); a producer that is not active writes no new business. Checked when a quote is issued, on the issue date; renewals are not checked (not new business). | `config/erp.php` `distribution.licence_required_types` (`ASSUMPTION:`), `LicenceRegistry`. |
 | A-16 | D2 | IDRA's register file format is not specified: CSV with a header row, one row per licence, status as of the chosen date (valid, expired, not_yet_valid, suspended, revoked). | `config/erp.php` `distribution.idra_register_columns` (`ASSUMPTION:`), `IdraRegisterExport`. |
 | A-17 | D2 | Products had no life / non-life class: `products.insurance_class`; a product whose line of business is listed as life is life, everything else non-life, unless given when the product is created. Existing products backfilled the same way. | `config/erp.php` `products.life_lobs` (`ASSUMPTION:`), `ProductCatalogue::createProduct`, migration `2026_09_18_000002`. |
+| A-18 | D4 | Design note OPEN 1 (IDRA caps and the non-life zero-commission circular) is unanswered: commission on non-life products is disabled until a scheme's compliance profile sets `non_life_commission_allowed`; caps are whatever the profile lists (none by default). | `ComplianceProfile` (`ASSUMPTION:`), `compensation_schemes.compliance_profile`. |
+| A-19 | D4 | Design note OPEN 3 (renewal commission after termination) is unanswered: rule flag `pays_after_termination`, default false. Rule flag `renewal_requires_valid_licence` defaults to true (design note §3). Both applied in D5. | `compensation_rules` columns, `CompensationRuleRequest`. |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1354,4 +1356,29 @@ Scope: review only; only the critical finding was fixed.
 - Test changes, not weakened: `ProducersTest` (D1) reads the copied parent from the hierarchy instead of the dropped column (same facts asserted);
   `TenantIsolationEveryTableTest` defines one level set so `hierarchy_levels` has rows.
 - Tests: `tests/Feature/Distribution/HierarchyTest.php` (6). Local database migrated: 3 positions, no parents (the demo agents had none).
+- Result: 1,032 Pest tests green, PHPStan 0 errors.
+
+### D4 — Distribution: compensation schemes, rules, compliance profile — done
+- Tables `compensation_schemes` (code, name, mode commission | salary_incentive | hybrid | none, effective dates, `compliance_profile` jsonb, withholding
+  jurisdiction and tax type) and `compensation_rules` (product or every product, producer type or every type, level, basis premium_received | premium_written |
+  net_premium, policy years 1–99, rate and override rate in basis points, rule cap, minimum persistency, `renewal_requires_valid_licence` default true,
+  `pays_after_termination` default false, effective dates). RLS; CHECK constraints on modes, bases, years and rates. `hierarchy_levels.scheme_id` now references a
+  scheme; `product_versions.compensation_scheme_id` names the scheme a version's policies are paid under.
+- `ComplianceProfile` (domain value object): allowed producer types (null = all), `non_life_commission_allowed` (A-18, default false), caps
+  (product or all, policy years, `max_total_bp` = Σ direct and overrides); the lowest matching cap applies.
+- `CompensationSchemeService` checks every rule when written, in this order:
+  - basis, years and rates are valid;
+  - the mode pays commission (`COMMISSION_NOT_ALLOWED_BY_MODE`);
+  - the producer type is allowed;
+  - an override names a level, and the level is defined in the scheme;
+  - rates stay within the rule's own cap;
+  - non-life products need the profile switch (`NON_LIFE_COMMISSION_DISABLED`);
+  - worst case per policy year (highest direct rate plus the highest override of each level among overlapping rules) stays within the cap (`COMPLIANCE_CAP_EXCEEDED`).
+- A compliance profile change re-checks every rule and is refused when one breaks. Rules are ended, never edited (`endRule`).
+- API under `/api/distribution/schemes`: list, create, describe, `PUT compliance-profile`, `PUT levels`, `POST rules` (`commission.manage_plans`; reads also
+  `commission.approve`, `reports.financial`).
+- ASSUMPTIONS A-18, A-19.
+- Test setup changes: `HierarchyTest` and `TenantIsolationEveryTableTest` create real schemes for their levels (the new foreign key); the isolation scenario also adds a rule.
+- Tests: `tests/Feature/Distribution/CompensationSchemesTest.php` (6).
+- Result: 1,038 Pest tests green, PHPStan 0 errors.
 

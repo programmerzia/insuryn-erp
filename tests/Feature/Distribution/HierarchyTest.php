@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Distribution\Application\Compensation\CompensationSchemeService;
 use App\Modules\Distribution\Application\CreateProducer;
 use App\Modules\Distribution\Application\Hierarchy\HierarchyQuery;
 use App\Modules\Distribution\Application\Hierarchy\HierarchyService;
@@ -21,7 +22,9 @@ beforeEach(function (): void {
     $this->ctx = seedDemoTenant();
     $this->world = seedInsuranceWorld($this->ctx, 'monthly');
     $this->in = fn (callable $fn): mixed => asTenant($this->ctx['tenant_id'], $fn);
-    $this->scheme = (string) Str::uuid7();
+    $this->newScheme = fn (string $code): string => ($this->in)(fn (): string => app(CompensationSchemeService::class)->createScheme($code, $code, 'commission',
+        CarbonImmutable::parse('2026-01-01'), null, [], $this->world['admin']));
+    $this->scheme = ($this->newScheme)('LIFE');
     ($this->in)(fn () => app(HierarchyService::class)->defineLevels($this->scheme, [
         ['code' => 'FA', 'rank' => 1, 'label' => 'Financial associate'], ['code' => 'UM', 'rank' => 2, 'label' => 'Unit manager'], ['code' => 'BM', 'rank' => 3, 'label' => 'Branch manager'],
     ], $this->world['admin']));
@@ -92,7 +95,7 @@ it('keeps a parent above its children in the scheme levels, and knows only defin
 
 it('defines levels per scheme and refuses ambiguous ranks or removing a level in use', function (): void {
     $service = app(HierarchyService::class);
-    $other = (string) Str::uuid7();
+    $other = ($this->newScheme)('OTHER');
     ($this->in)(fn () => $service->defineLevels($other, [['code' => 'BDO', 'rank' => 1, 'label' => 'Business development officer'], ['code' => 'FA', 'rank' => 2, 'label' => 'Same code, other scheme']], $this->world['admin']));
 
     expect(thrownBy(fn () => ($this->in)(fn () => $service->defineLevels($other, [['code' => 'A', 'rank' => 1, 'label' => 'A'], ['code' => 'B', 'rank' => 1, 'label' => 'B']], $this->world['admin'])), BusinessRuleViolation::class)->reasonCode)

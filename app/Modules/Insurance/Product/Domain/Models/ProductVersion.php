@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property array<int, mixed>|null $short_rate_table
  * @property array{tax_type: string|null, jurisdiction: string|null, inclusive: bool, refund_tax_on_cancellation: bool} $tax_profile
  * @property string|null $commission_plan_id
+ * @property string|null $compensation_scheme_id Distribution scheme its policies are paid under (slice D4)
  * @property string|null $posting_rule_set
  * @property list<array<string, mixed>> $coverages
  */

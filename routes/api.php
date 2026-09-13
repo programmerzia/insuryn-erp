@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Http\Controllers\FinancialReportController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\PeriodCloseController;
+use App\Modules\Distribution\Http\Controllers\CompensationSchemeController;
 use App\Modules\Distribution\Http\Controllers\LicenceController;
 use App\Modules\Finance\Bank\Http\Controllers\BankController;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimController;
@@ -34,6 +35,12 @@ Route::middleware('auth')->prefix('distribution')->group(function (): void {
     Route::post('producers/{producer}/licences', [LicenceController::class, 'store'])->whereUuid('producer');
     Route::post('licences/{licence}/{action}', [LicenceController::class, 'changeStatus'])->whereUuid('licence')->whereIn('action', ['suspend', 'revoke', 'reinstate']);
     Route::get('licences/register', [LicenceController::class, 'register']);
+    Route::get('schemes', [CompensationSchemeController::class, 'index']);
+    Route::post('schemes', [CompensationSchemeController::class, 'store']);
+    Route::get('schemes/{scheme}', [CompensationSchemeController::class, 'show'])->whereUuid('scheme');
+    Route::put('schemes/{scheme}/compliance-profile', [CompensationSchemeController::class, 'updateProfile'])->whereUuid('scheme');
+    Route::put('schemes/{scheme}/levels', [CompensationSchemeController::class, 'defineLevels'])->whereUuid('scheme');
+    Route::post('schemes/{scheme}/rules', [CompensationSchemeController::class, 'storeRule'])->whereUuid('scheme');
 });
 
 Route::middleware('auth')->prefix('insurance')->group(function (): void {

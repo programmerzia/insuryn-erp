@@ -65,6 +65,9 @@ final class HierarchyService
 
         DB::transaction(function () use ($schemeId, $levels, $codes, $actorUserId): void {
             $this->lockTenantHierarchy();
+            if (! DB::table('compensation_schemes')->where('id', $schemeId)->exists()) {
+                throw new BusinessRuleViolation('COMPENSATION_SCHEME_UNKNOWN', "Compensation scheme {$schemeId} does not exist.");
+            }
             $removed = DB::table('hierarchy_levels')->where('scheme_id', $schemeId)->whereNotIn('level_code', $codes)->pluck('level_code')->all();
             foreach ($removed as $code) {
                 $definedElsewhere = DB::table('hierarchy_levels')->where('scheme_id', '<>', $schemeId)->where('level_code', $code)->exists();
