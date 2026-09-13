@@ -158,9 +158,31 @@ final class PolicyLifecycle
         return $this->simpleTransition($policyId, [PolicyStatus::Active], PolicyStatus::Lapsed, 'lapse', 'policy.cancel', $reason, $actorUserId);
     }
 
+    /** Reinstatement starts a fresh grace period for automatic lapse (dunning, A-10). */
     public function reinstate(string $policyId, string $reason, string $actorUserId): Policy
     {
-        return $this->simpleTransition($policyId, [PolicyStatus::Lapsed], PolicyStatus::Active, 'reinstate', 'policy.issue', $reason, $actorUserId);
+        $policy = $this->simpleTransition($policyId, [PolicyStatus::Lapsed], PolicyStatus::Active, 'reinstate', 'policy.issue', $reason, $actorUserId);
+        $policy->forceFill(['reinstated_on' => CarbonImmutable::today()->toDateString()])->save();
+
+        return $policy;
+    }
+
+    /**
+     * Automatic lapse for non-payment by the dunning run (spec §4 auto-lapse): the system acts, so no user permission applies; audited with the
+     * reason. Returns false when the policy is no longer active.
+     */
+    public function lapseForNonPayment(string $policyId, string $reason): bool
+    {
+        return DB::transaction(function () use ($policyId, $reason): bool {
+            $policy = Policy::query()->whereKey($policyId)->lockForUpdate()->firstOrFail();
+            if ($policy->status !== PolicyStatus::Active) {
+                return false;
+            }
+            $policy->forceFill(['status' => PolicyStatus::Lapsed->value])->save();
+            $this->audit->record('policy.lapsed', AuditSubject::of('policy', $policy->id), ['status' => 'active'], ['status' => 'lapsed'], $reason, null, Actor::system());
+
+            return true;
+        });
     }
 
     /** Marks the policy renewed and creates the renewal as a new quote from the day after expiry (it is issued separately). */

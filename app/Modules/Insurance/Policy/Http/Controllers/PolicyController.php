@@ -102,6 +102,20 @@ final class PolicyController
         return $data;
     }
 
+    public function dunningNotices(Request $request, \App\Modules\Platform\Authorization\PermissionChecker $permissions): JsonResponse
+    {
+        /** @var array{entity_id: string, from: string, to: string} $data */
+        $data = $request->validate(['entity_id' => ['required', 'uuid'], 'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from']]);
+        $permissions->authorize(self::actor($request), 'receipt.allocate', \App\Modules\Platform\Authorization\AuthorizationScope::entity($data['entity_id']));
+        $notices = DB::table('dunning_notices as n')->join('policies as p', 'p.id', '=', 'n.policy_id')->where('n.entity_id', $data['entity_id'])
+            ->whereBetween('n.issued_on', [$data['from'], $data['to']])->orderBy('n.issued_on')->orderBy('n.level')
+            ->get(['n.id', 'n.policy_id', 'p.number as policy_number', 'n.installment_id', 'n.level', 'n.days_overdue', 'n.outstanding_minor', 'n.issued_on'])
+            ->map(fn (object $n): array => ['id' => (string) $n->id, 'policy_id' => (string) $n->policy_id, 'policy_number' => $n->policy_number, 'installment_id' => (string) $n->installment_id,
+                'level' => (int) $n->level, 'days_overdue' => (int) $n->days_overdue, 'outstanding_minor' => (int) $n->outstanding_minor, 'issued_on' => (string) $n->issued_on])->values()->all();
+
+        return response()->json(['data' => $notices]);
+    }
+
     private static function date(?string $value): CarbonImmutable
     {
         return $value === null ? CarbonImmutable::today() : CarbonImmutable::parse($value);

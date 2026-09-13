@@ -50,7 +50,7 @@ code and in the register below, configurable.
 | 1C.1 | Commission payouts (approve → pay, SoD) | done | see git log |
 | 1C.2 | Cheque register and bounce handling | done | see git log |
 | 1C.3 | Agent cash collection and deposit reconciliation | done | see git log |
-| 1C.4 | Dunning, grace and auto-lapse | pending | |
+| 1C.4 | Dunning, grace and auto-lapse | done | see git log |
 | 1C.5 | Multi-payer policies | pending | |
 | 1C.6 | Hardening: posting/lock race, isolation on every tenant table | pending | |
 | 1C.7 | Account security page (2FA, password) | pending | |
@@ -75,6 +75,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-7 | 1A.7 | When both the product version and the agent name a commission plan, which wins is not specified: product version first, then agent. | `config/erp.php` `commission.plan_precedence` (`ASSUMPTION:`), `CommissionPlanResolver`. |
 | A-8 | 1A.8, 1C.1 | Subledger balances are computed as of the reconciliation date from dated business rows (`policy_transactions.accounting_date`, `receipt_allocations.posted_on`, `suspense_items.aged_since`, `commission_entries.earned_on` / `paid_on` since 1C.1). Control accounts are those mapped to the subledger's `subledger_controls` roles on the date. | `Insurance\Collections\Application\Reconciliation\*Reconciler`, `Insurance\Commission\Application\CommissionReconciler`. |
 | A-9 | 1A.10 | Receivable ageing by installment uses each installment's *current* outstanding amount (payments and cancellation credits are not dated per installment); `as_of` sets days past due and buckets only. The premium subledger reconciliation (A-8) is dated, so control totals are unaffected. | `Insurance\Reports\Application\ReceivableAgeingQuery` (`ASSUMPTION:`). |
+| A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -711,3 +712,17 @@ Scope: review only; only the critical finding was fixed.
 - Tests `tests/Feature/Insurance/AgentCashTest.php`: collection journal (no bank line), refusals, deposit limit and journal with bank override, dated
   position and totals, clean reconciliations; API permissions.
 - Result: 924 tests green, PHPStan 0 errors.
+
+### 1C.4 — Dunning, grace and auto-lapse — done
+- Why: spec §4 "Installments, dunning, grace, auto-lapse" was outside the 1A slice list.
+- Migration `2026_09_16_000004_create_dunning_notices`: `dunning_notices` (tenant + RLS, unique installment + level) and `policies.reinstated_on`.
+- `Insurance\Policy\Application\Dunning\DunningRun::run(entity, asOf)` (A-10, `config/erp.php` `collections.*`): for unpaid installments of issued/active
+  policies past due, records each reminder level whose day threshold is reached (once; queued as outbox `DunningNoticeDue`), and lapses active
+  policies with an installment unpaid beyond the grace period when auto-lapse is on. Returns notices issued and policies lapsed. Reruns are no-ops.
+- `PolicyLifecycle::lapseForNonPayment(policy, reason)`: system lapse (no user permission; audited with `Actor::system()` and the reason);
+  `reinstate` now stamps `reinstated_on`, which restarts the grace period.
+- `DunningJob` (queue `batch`, daily 01:30 in `routes/console.php`, after the 01:00 earning job activates due policies): per tenant and entity.
+- API: `GET /api/insurance/dunning-notices?entity_id&from&to` (`receipt.allocate`, interpretation).
+- Tests `tests/Feature/Insurance/DunningTest.php`: levels and idempotency with outbox messages; paid installments; lapse only beyond grace, only with
+  auto-lapse, as the system with reason; fresh grace after reinstatement; nightly job; API.
+- Result: 930 tests green, PHPStan 0 errors.

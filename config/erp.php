@@ -21,6 +21,12 @@ return [
         // ASSUMPTION: A-7 — whose commission plan applies when both the product version and the agent name one is not specified.
         'plan_precedence' => ['product_version', 'agent'],
     ],
+    'collections' => [
+        // ASSUMPTION: A-10 — dunning schedule and grace period are not specified (spec §4 names the feature only).
+        'dunning_notice_days' => [7, 21],
+        'grace_days' => 30,
+        'auto_lapse' => true,
+    ],
     'bank' => [
         // Auto-match (slice 1A.6): same amount, the journal's reference or receipt number in the statement text, and the
         // statement date within this many days of the posting date. Anything ambiguous is left for manual matching.

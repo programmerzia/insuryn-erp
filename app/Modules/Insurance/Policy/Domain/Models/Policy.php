@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $cancel_reason
  * @property int $version
  * @property string|null $renewal_of_policy_id
+ * @property CarbonImmutable|null $reinstated_on
  */
 final class Policy extends Model
 {
@@ -46,7 +47,7 @@ final class Policy extends Model
     protected $table = 'policies';
     protected $guarded = [];
     protected $casts = [
-        'status' => PolicyStatus::class, 'inception' => 'immutable_date', 'expiry' => 'immutable_date', 'cancel_date' => 'immutable_date',
+        'status' => PolicyStatus::class, 'inception' => 'immutable_date', 'expiry' => 'immutable_date', 'cancel_date' => 'immutable_date', 'reinstated_on' => 'immutable_date',
         'issued_at' => 'immutable_datetime', 'cancelled_at' => 'immutable_datetime',
         'gross_premium_minor' => 'int', 'tax_minor' => 'int', 'net_premium_minor' => 'int', 'installment_count' => 'int', 'version' => 'int',
     ];
