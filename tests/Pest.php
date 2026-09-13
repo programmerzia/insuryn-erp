@@ -122,6 +122,25 @@ function seedInsuranceWorld(array $ctx, string $earningMethod = 'monthly', bool 
 }
 
 /**
+ * A rating plan (Phase 3 slice R2) drafted from $definition by one user, then approved and activated by another. Returns the plan id.
+ *
+ * @param array<string, mixed> $definition the shape of RatingPlanDefinition::toArray()
+ */
+function activeRatingPlan(string $tenantId, array $definition, bool $supersede = false): string
+{
+    $maker = userWithPermissions($tenantId, ['rating.manage_plans']);
+    $checker = userWithPermissions($tenantId, ['rating.approve_plans']);
+
+    return asTenant($tenantId, function () use ($definition, $maker, $checker, $supersede): string {
+        $plans = app(App\Modules\Insurance\Rating\Application\RatingPlanService::class);
+        $plan = $plans->createFromDefinition($definition, $maker);
+        $plans->approve($plan->id, $checker);
+
+        return $plans->activate($plan->id, $checker, $supersede)->id;
+    });
+}
+
+/**
  * The exception of $type thrown by $operation, for asserting on its details. Fails the test when
  * nothing is thrown; any other exception propagates unchanged.
  *

@@ -147,7 +147,12 @@ function populateEveryTenantTable(array $ctx): void
         app(App\Modules\Platform\Setup\SetupProgress::class)->complete('company', $world['admin']); // session S1 setup wizard
         Illuminate\Support\Facades\Storage::fake('documents'); // fix F2: a document attached to the claim
         app(App\Modules\Platform\Documents\DocumentStore::class)->attach('claim', $claim->id, new App\Modules\Platform\Documents\DocumentContents('survey.pdf', '%PDF isolation'), $officer);
+        app(App\Modules\Insurance\Rating\Application\DutyBook::class)->record(['code' => 'vat', 'basis' => 'pct_of_premium', 'rate_bp' => 1500, 'class_codes' => ['motor'], // Phase 3 R2
+            'effective_from' => '2026-01-01', 'label_en' => 'VAT', 'label_bn' => 'মূসক'], $world['admin']);
     });
+    activeRatingPlan($ctx['tenant_id'], ['code' => 'MOTOR-ISOLATION', 'name' => 'Isolation plan', 'class_code' => 'motor', 'effective_from' => '2026-01-01', // Phase 3 R2
+        'tables' => [['code' => 'rates', 'name' => 'Rates', 'dimensions' => ['vehicle_type'], 'value_type' => 'rate_pct', 'rows' => [['keys' => ['vehicle_type' => 'private'], 'value_bp' => 250]]]],
+        'steps' => [['order_no' => 1, 'code' => 'base', 'kind' => 'base', 'expression' => "pct(sum_insured, lookup('rates', risk.vehicle_type))", 'label_en' => 'Base', 'label_bn' => 'মূল']]]);
 }
 
 it('shows the runtime role none of another tenant\'s rows in any tenant table', function (): void {

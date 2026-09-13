@@ -23,6 +23,8 @@ final class PermissionsSeeder extends Seeder
         'party.manage','agent.manage','product.manage','bank.manage_accounts','commission.manage_plans','claim.close',
         // Fix F3 (A-54): approval limits
         'platform.manage_approvals',
+        // Phase 3 rating (slice R2): draft plans and duties / approve, activate and retire plans (A-69)
+        'rating.manage_plans','rating.approve_plans',
     ];
 
     /**
@@ -36,6 +38,7 @@ final class PermissionsSeeder extends Seeder
         ['accounting.create_manual_journal', 'accounting.approve_journal', 'object'],
         ['commission.approve', 'commission.pay', 'user'],
         ['platform.manage_roles', 'accounting.*', 'user'],
+        ['rating.manage_plans', 'rating.approve_plans', 'object'], // slice R2: whoever drafted or edited a rating plan does not approve it
     ];
 
     public function run(): void

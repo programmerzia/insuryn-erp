@@ -60,7 +60,7 @@ final class ProductCatalogue
      *   tax_profile: array{tax_type?: string|null, jurisdiction?: string|null, inclusive?: bool, refund_tax_on_cancellation?: bool},
      *   commission_plan_id?: string|null, compensation_scheme_id?: string|null, posting_rule_set?: string|null, coverages?: list<array<string, mixed>>,
      *   class_code?: string|null, risk_schema?: list<array<string, mixed>>|null, duty_profile?: array<string, mixed>|null, document_set_id?: string|null,
-     *   allow_short_period?: bool, min_premium_minor?: int|null, recognise_at?: string, allow_credit_issue?: bool,
+     *   allow_short_period?: bool, min_premium_minor?: int|null, recognise_at?: string, allow_credit_issue?: bool, rating_plan_id?: string|null,
      *   coverage_definitions?: list<array<string, mixed>>} $terms Phase 3 keys (slice R1) are optional; see configureRating() and addCoverage()
      */
     public function addVersion(string $productId, array $terms, string $actorUserId): ProductVersion
@@ -105,7 +105,7 @@ final class ProductCatalogue
      * Sets the Phase 3 rating fields of a version that no policy uses yet (a version in use is immutable: add a new version instead).
      *
      * @param array<string, mixed> $fields any of class_code, risk_schema, duty_profile, document_set_id, allow_short_period, min_premium_minor,
-     *   recognise_at, allow_credit_issue; only the given keys change
+     *   recognise_at, allow_credit_issue, rating_plan_id; only the given keys change
      *
      * @throws BusinessRuleViolation PRODUCT_VERSION_IN_USE, PRODUCT_CLASS_UNKNOWN, PRODUCT_CLASS_NOT_AVAILABLE, PRODUCT_CLASS_MISMATCH, RISK_SCHEMA_INVALID, DUTY_PROFILE_INVALID
      */
@@ -117,7 +117,7 @@ final class ProductCatalogue
             $version = ProductVersion::query()->whereKey($versionId)->lockForUpdate()->firstOrFail();
             $this->assertNotInUse($version);
             $product = Product::query()->findOrFail($version->product_id);
-            $changes = array_intersect_key($this->ratingTerms($product, $fields), $fields);
+            $changes = array_intersect_key($this->ratingTerms($product, ['class_code' => $version->class_code, 'rating_plan_id' => $version->rating_plan_id, ...$fields]), $fields);
             $before = $this->auditable($version->only(array_keys($changes)));
             $version->forceFill($changes)->save();
             $this->audit->record('product_version.rating_configured', AuditSubject::of('product', $product->id), $before,
@@ -182,7 +182,7 @@ final class ProductCatalogue
      *
      * @param array<string, mixed> $terms
      * @return array{class_code: string|null, risk_schema: list<array<string, mixed>>|null, duty_profile: array{exclude: list<string>}|null, document_set_id: string|null,
-     *   allow_short_period: bool, min_premium_minor: int|null, recognise_at: string, allow_credit_issue: bool}
+     *   allow_short_period: bool, min_premium_minor: int|null, recognise_at: string, allow_credit_issue: bool, rating_plan_id: string|null}
      */
     private function ratingTerms(Product $product, array $terms): array
     {
@@ -217,6 +217,17 @@ final class ProductCatalogue
             throw new BusinessRuleViolation('RECOGNISE_AT_INVALID', 'recognise_at is policy or cover_note.');
         }
         $documentSet = $terms['document_set_id'] ?? null;
+        $planId = $terms['rating_plan_id'] ?? null;
+        if ($planId !== null) {
+            // Slice R2: a version may name its rating plan; the plan must exist and be for the version's class (read as a table: rating depends on products, not the reverse).
+            $planClass = is_string($planId) ? DB::table('rating_plans')->where('id', $planId)->value('class_code') : null;
+            if ($planClass === null) {
+                throw new BusinessRuleViolation('RATING_PLAN_UNKNOWN', 'The rating plan does not exist.');
+            }
+            if ($planClass !== $classCode) {
+                throw new BusinessRuleViolation('RATING_PLAN_CLASS_MISMATCH', "The rating plan is for class {$planClass}, not ".(is_string($classCode) ? $classCode : 'no class').'.');
+            }
+        }
 
         return [
             'class_code' => is_string($classCode) ? $classCode : null,
@@ -227,6 +238,7 @@ final class ProductCatalogue
             'min_premium_minor' => $minPremium,
             'recognise_at' => $recogniseAt->value,
             'allow_credit_issue' => (bool) ($terms['allow_credit_issue'] ?? false),
+            'rating_plan_id' => is_string($planId) ? $planId : null,
         ];
     }
 

@@ -135,6 +135,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-57 | F4 | "Roles used by active posting rules" = the line roles and the rounding residual role of every rule in force on the day that posts to the book. Overridable roles (`bank_main`) still need a mapping, because events without an override fall back to it. | `AccountRoleMappingService::rolesUsedByRules`, `unmappedRoles` (`ASSUMPTION:`). |
 | A-65 | R1 | Rating design OPEN 3 (is premium recognised at the cover note?) and OPEN 4 (credit issuance rules) are unanswered: every product version has `recognise_at = policy` and `allow_credit_issue = false` unless set. Stored now; the quotation flow (R5–R7) reads them. | `product_versions.recognise_at` / `allow_credit_issue` (`ProductCatalogue::ratingTerms`, `ASSUMPTION:`), `PremiumRecognition`. |
 | A-66 | R1 | Which duties apply to a product is not specified beyond "stamp (flat by class), VAT on premium": every duty in force for the product's class applies unless the version's `duty_profile` excludes it (`{"exclude": ["levy"]}`), so a product never silently goes without VAT or stamp duty. | `DutyProfile` (`ASSUMPTION:`). |
+| A-68 | R2 | How duties combine is not specified beyond "stamp (flat by class), VAT 15% on premium": VAT and levies are worked on the net premium (after minimum and rounding), never on stamp duty or other duties; duties not named by a plan step apply automatically in the order stamp, levy, vat. Duty values are placeholders flagged `verify` (design OPEN 1). | `DutyDefinition::amountFor`, `RatingCalculator` (R3), `duties` rows. |
+| A-69 | R2 | No §7.2 role template covers tariffs: `rating.manage_plans` (draft plans, new versions, duties) and `rating.approve_plans` (approve, activate, retire) both go to the Finance Manager and CFO templates; the SoD object rule (SOD7) stops anyone approving a plan they drafted or edited. Duties are recorded without a second approval (effective-dated, audited). Activating a plan that overlaps the active plan of its class is refused unless the caller asks to supersede it (the current plan then ends the day the new one starts, only if it started earlier). | `RoleTemplates`, `PermissionsSeeder::SOD`, migration `2026_09_20_000002`, `RatingPlanService::activate`, `DutyBook`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1816,3 +1818,39 @@ Scope: review only; only the critical finding was fixed.
   `TenantIsolationEveryTableTest` adds a coverage; `DistributionDemoSeederTest` also checks FIRE-SME's class.
 - Tests: `tests/Unit/Insurance/RiskSchemaTest.php` (18), `tests/Feature/Insurance/ProductRatingTermsTest.php` (6), `tests/Feature/Insurance/RatingDemoSeedersTest.php` (1).
 - Result: 1,127 Pest tests green, PHPStan 0 errors, Vitest and vue-tsc green.
+
+### R2 — Rating: plans, rate tables, steps, duties and the rating evaluator — done
+- Module `App\Modules\Insurance\Rating` (D-20). Migration `2026_09_20_000002_create_rating_plans` (all tenant tables, forced RLS):
+  - `rating_plans` (code, name, class, version, currency, effective dates, status `draft`|`approved`|`active`|`retired`, source `idra_tariff`|`company`, `verify`, notes,
+    copied_from, created/approved/activated/retired by and at). CHECKs: range, `approved_by <> created_by`, approved plans have an approver.
+    **INVARIANT** one active plan per class per date: `rating_plans_one_active_per_class` EXCLUDE USING gist (tenant, class, daterange) WHERE status = 'active'.
+  - `rate_tables` (code, name, dimensions jsonb, value_type `rate_pm`|`rate_pct`|`flat`|`band`), `rate_table_rows` (keys jsonb, `value_minor` bigint | `value_bp` int,
+    `band_from`/`band_to` bigint with `band_label`, optional effective dates, position), `rating_steps` (order_no, code, kind, expression, condition, applies_to, EN/BN labels).
+  - Immutability triggers: an approved, active or retired plan cannot be edited or deleted, nor its tables, rows or steps (`RATING_PLAN_IMMUTABLE`); status only moves forward
+    (`RATING_PLAN_TRANSITION`); from active only retiring and shortening `effective_to` (superseding) are allowed.
+  - `duties` (code vat|stamp|levy, basis `pct_of_premium` (rate_bp) | `flat_per_policy` (amount_minor) | `per_sum_insured_band` (bands jsonb), class_codes jsonb, effective dates,
+    EN/BN labels, `verify` default true, `source`); a CHECK ties the value columns to the basis.
+  - `product_versions.rating_plan_id` (FK): a version may pin a plan of its own class (`ProductCatalogue` refuses `RATING_PLAN_UNKNOWN`, `RATING_PLAN_CLASS_MISMATCH`).
+  - Permissions `rating.manage_plans`, `rating.approve_plans` (A-69), inserted by the migration, added to existing tenants' finance_manager and cfo roles, with the SoD object rule.
+- Units (D-20): `rate_pct` rows hold basis points of a percent (1500 = 15.00 %); `rate_pm` rows hold hundredths of a per mille (250 = 2.50 ‰); flat rows minor units; bands are
+  half-open [from, to).
+- `RatingPlanService` (D-21): `createDraft`, `createFromDefinition`, `updateDraft`, `addTable`, `addRows`, `removeTable`, `addStep` (expression checked on entry), `removeStep`,
+  `deleteDraft` (all draft-only, `RATING_PLAN_NOT_DRAFT`), `newVersion` (copy of any plan as a draft, version + 1), `approve` (checker ≠ drafter: `RATING_PLAN_SAME_APPROVER`,
+  SoD on the plan's audit trail, and the plan must be valid — `RATING_PLAN_INVALID` lists every problem), `activate(plan, supersede: false)` (`RATING_PLAN_NOT_APPROVED`,
+  `RATING_PLAN_OVERLAP`, exclusion race mapped to the same reason), `retire`. Every change audited on `rating_plan`. `RatingPlanRepository`: `activeFor(class, date)`,
+  `definition(plan)`. `DutyBook`: `record` (`DUTY_OVERLAP` for the same duty and class on overlapping dates), `end`, `inForce(class, date)`.
+- Pure domain: `RatingPlanDefinition` / `RateTableDefinition` / `RateRow` / `RatingStepDefinition` / `DutyDefinition` (from/to arrays; `problems()` checks at least one base
+  step, phase order — premium steps, then rounding, then duties/taxes — unique codes, row keys = dimensions, value columns by type, overlapping rows or bands, coverage steps
+  naming a coverage, and every table an expression names exists with the right kind).
+- Evaluator (`RatingExpressions`, `RatingFunctions`, `RatingScope`, `RatingContext`): its own Symfony ExpressionLanguage instance (posting rules untouched), evaluate-only.
+  Variables `risk`, `coverage`, `sum_insured`, `running`, `steps`. Functions `lookup('table', keys…)`, `band(value, 'table')`, `band_value(value, 'table')`, `pct(base, bp)`,
+  `per_mille(base, rate)`, `div(a, b)`, `round_to` / `ceil_to` / `floor_to(value, unit)`, `duty('code')`, `min`, `max`. Refused when parsed: `/`, `%`, `**`, `~`, bit and regex
+  operators, decimal constants, method calls and indexing, other functions (e.g. `constant`), unknown variables, a table not named in quotes. Amounts must be integers
+  (`RATING_EXPRESSION_NOT_INTEGER`, catches overflow into float), conditions booleans. `RatingMath` does half-even division and refuses overflow. Failures are `RatingFailed`
+  with reasons such as `RATE_NOT_FOUND` (names table and keys), `RATE_AMBIGUOUS`, `BAND_NOT_FOUND`, `RATE_TABLE_UNKNOWN`, `RATE_TABLE_TYPE`, `RISK_INPUT_MISSING`.
+- Arch test: no `floatval`, `round`, `number_format`, `fdiv`, `ceil`, `floor` in `App\Modules\Insurance\Rating`.
+- Shared file changes: `PermissionsSeeder` (2 permissions, SOD row 7), `RoleTemplates` (A-69), `tests/Pest.php` (`activeRatingPlan` helper), `TenantIsolationEveryTableTest`
+  (a duty and an active plan with a table, row and step), `DependencyTest`, `ProductCatalogue` (`rating_plan_id`).
+- Tests: `tests/Unit/Insurance/RatingExpressionsTest.php` (22), `tests/Feature/Insurance/RatingPlanLifecycleTest.php` (6), `tests/Feature/Insurance/DutyBookTest.php` (2).
+
+- Result: 1,158 Pest tests green, PHPStan 0 errors, Vitest (269) and vue-tsc green.

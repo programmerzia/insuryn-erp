@@ -58,3 +58,5 @@ arch('other contexts do not use the distribution domain')->expect(['App\Modules\
 
 arch('strict types everywhere')->expect('App')->toUseStrictTypes();
 arch('no floats in accounting')->expect('App\Modules\Accounting')->not->toUse(['floatval', 'round', 'number_format']);
+/** Phase 3 design INVARIANT "no floats" in rating (slice R2): integer minor units and basis points, half-even division in RatingMath. */
+arch('no floats in rating')->expect('App\Modules\Insurance\Rating')->not->toUse(['floatval', 'round', 'number_format', 'fdiv', 'ceil', 'floor']);

@@ -27,7 +27,9 @@ final class RoleTemplates
         // Interpretation: the finance manager signs off financial statements in the close (§5.7 tasks 14–15), so holds reports.financial.
         'reports.financial',
         // Interpretation (A-28, session S1): no template could maintain the chart of accounts; the finance manager owns it (setup wizard, COA import).
-        'accounting.manage_coa'];
+        'accounting.manage_coa',
+        // ASSUMPTION A-69 (slice R2): no §7.2 template covers tariffs; the finance manager (and CFO) draft and approve rating plans — never the same plan (SoD object rule).
+        'rating.manage_plans', 'rating.approve_plans'];
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */

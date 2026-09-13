@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $min_premium_minor product minimum premium (applied with the plan's minimum, the higher wins, A-67)
  * @property PremiumRecognition $recognise_at OPEN 3, A-65
  * @property bool $allow_credit_issue OPEN 4, A-65
+ * @property string|null $rating_plan_id the rating plan this version is pinned to; null = the active plan for its class (slice R2)
  */
 final class ProductVersion extends Model
 {
