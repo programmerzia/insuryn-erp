@@ -10,4 +10,5 @@ enum SuspenseStatus: string
     case Allocated = 'allocated';
     case Refunded = 'refunded';
     case WrittenOff = 'written_off';
+    case Bounced = 'bounced';
 }

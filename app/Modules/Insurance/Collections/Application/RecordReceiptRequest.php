@@ -21,6 +21,7 @@ final readonly class RecordReceiptRequest
         public ?string $bankAccountId,
         public ?string $reference,
         public array $allocations,
+        public ?ChequeDetails $cheque = null,
     ) {}
 
     public function allocatedMinor(): int

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Design §6.1 premium subledger → premium_receivable: per policy, premium billed (issue and endorsement deltas) less receivable credited on
- * cancellation less premium allocated, each counted from the date its accounting event posts on. Equals Σ(installment amount − paid −
+ * cancellation less premium allocated (added back from the date an allocation is reversed), each counted from the date its accounting event posts on. Equals Σ(installment amount − paid −
  * cancelled) once every dated movement has happened.
  *
  * ASSUMPTION: A-8 — subledger balances are rebuilt as of the date from dated business rows (accounting_date, posted_on).
@@ -44,8 +44,11 @@ final class PremiumReconciler implements SubledgerReconciler
         $allocated = DB::table('receipt_allocations as a')->join('receipts as r', 'r.id', '=', 'a.receipt_id')
             ->where('r.entity_id', $entityId)->where('a.target_type', 'installment')->where('a.posted_on', '<=', $day)
             ->selectRaw('a.policy_id as object_id, -a.amount_minor as amount');
+        $reversed = DB::table('receipt_allocations as a')->join('receipts as r', 'r.id', '=', 'a.receipt_id')
+            ->where('r.entity_id', $entityId)->where('a.target_type', 'installment')->where('a.reversed_on', '<=', $day)
+            ->selectRaw('a.policy_id as object_id, a.amount_minor as amount');
 
-        return SubledgerItems::of('policy', DB::query()->fromSub($billed->unionAll($allocated), 'm')
+        return SubledgerItems::of('policy', DB::query()->fromSub($billed->unionAll($allocated)->unionAll($reversed), 'm')
             ->groupBy('object_id')->orderBy('object_id')->selectRaw('object_id, sum(amount) as amount')->get());
     }
 }

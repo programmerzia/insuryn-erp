@@ -48,7 +48,7 @@ code and in the register below, configurable.
 | 1B.2 | Claims reconciler + close task 5 | done | see git log |
 | 1B.3 | Claims reports | done | see git log |
 | 1C.1 | Commission payouts (approve → pay, SoD) | done | see git log |
-| 1C.2 | Cheque register and bounce handling | pending | |
+| 1C.2 | Cheque register and bounce handling | done | see git log |
 | 1C.3 | Agent cash collection and deposit reconciliation | pending | |
 | 1C.4 | Dunning, grace and auto-lapse | pending | |
 | 1C.5 | Multi-payer policies | pending | |
@@ -669,3 +669,26 @@ Scope: review only; only the critical finding was fixed.
 - Tests `tests/Feature/Insurance/CommissionPayoutTest.php`: approve/pay amounts, statuses, event key/date, journal lines, remaining GL payable;
   clawback netting and NOTHING_TO_PAY; permission, SoD, pay once; bank override and clean dated reconciliation before/after payment; API.
 - Result: 910 tests green, PHPStan 0 errors.
+
+### 1C.2 — Cheque register and bounce handling — done
+- Why: spec §4 "cheque (with cheque register and bounce handling) [ADDED]" was outside the 1A slice list.
+- Migration `2026_09_16_000002_cheque_register_and_bounce`: `receipts.cheque_no/cheque_bank/cheque_date/bounced_on/bounce_reason` (CHECK: cheque receipts carry
+  the details; partial unique index — a cheque is presented once per bank unless it bounced), `receipt_allocations.reversed_on`,
+  `suspense_items.bounced_on` + status `bounced`, one bounce clawback per allocation.
+- New rules + golden fixtures: `PREMIUM_RECEIPT_REVERSED` (DR premium_receivable / CR bank_main, key {receipt_allocation_id}, `02b`),
+  `RECEIPT_ALLOCATION_REVERSED` (DR premium_receivable / CR suspense_receipts, `09b`), `RECEIPT_BOUNCED` (DR suspense_receipts / CR bank_main,
+  key {receipt_id}, `09c`).
+- `ReceiptService::record` takes optional `ChequeDetails` (`CHEQUE_DETAILS_REQUIRED`, `DUPLICATE_CHEQUE`).
+- `ChequeBounceService::bounce(receipt, reason, actor, bouncedOn)` (`receipt.allocate`, interpretation): in one transaction each live allocation is
+  reversed (installment unpaid, `reversed_on`, event per origin, domain event `ReceiptAllocationReversed`), the suspense item bounces for its full
+  amount (`RECEIPT_BOUNCED`), receipt `bounced`. Refusals: `REASON_REQUIRED`, `NOT_A_CHEQUE`, `ALREADY_BOUNCED`, `BOUNCE_BEFORE_RECEIPT`,
+  `BOUNCE_AFTER_CANCELLATION` (conservative: a cancelled policy's refund/credit assumed the money arrived — handle manually).
+- Commission: `ClawBackCommissionOnReversal` claws back the full commission earned on a reversed allocation (dated the bounce); the cancellation
+  clawback now nets those so commission is never clawed back twice.
+- Reconcilers: premium adds reversed allocations back from `reversed_on`; suspense adds reversed suspense allocations and removes a bounced item
+  from `bounced_on` — both still reconcile as of any date.
+- `ChequeRegisterQuery::register(entity, from, to)` (presented/bounced, totals). API: receipt `cheque_no/cheque_bank/cheque_date`,
+  `POST /api/insurance/receipts/{id}/bounce {bounced_on, reason}`, `GET /api/insurance/cheques?entity_id&from&to` (`receipt.create`).
+- Tests `tests/Feature/Insurance/ChequeBounceTest.php`: details and duplicate/re-present; full undo (statuses, installments, three journals, bank and
+  suspense GL 0, clean reconciliation before and after the bounce date); commission clawback without double count at cancellation; refusals; register + API.
+- Result: 918 tests green, PHPStan 0 errors.

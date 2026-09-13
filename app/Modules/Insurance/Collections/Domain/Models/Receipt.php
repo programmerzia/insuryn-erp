@@ -27,6 +27,11 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $reference
  * @property ReceiptStatus $status
  * @property string|null $created_by
+ * @property string|null $cheque_no
+ * @property string|null $cheque_bank
+ * @property CarbonImmutable|null $cheque_date
+ * @property CarbonImmutable|null $bounced_on
+ * @property string|null $bounce_reason
  */
 final class Receipt extends Model
 {
@@ -35,5 +40,5 @@ final class Receipt extends Model
 
     protected $table = 'receipts';
     protected $guarded = [];
-    protected $casts = ['status' => ReceiptStatus::class, 'value_date' => 'immutable_date', 'received_at' => 'immutable_datetime', 'amount_minor' => 'int'];
+    protected $casts = ['status' => ReceiptStatus::class, 'value_date' => 'immutable_date', 'received_at' => 'immutable_datetime', 'cheque_date' => 'immutable_date', 'bounced_on' => 'immutable_date', 'amount_minor' => 'int'];
 }

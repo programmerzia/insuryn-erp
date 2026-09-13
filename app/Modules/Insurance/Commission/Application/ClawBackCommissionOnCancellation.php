@@ -25,7 +25,9 @@ final class ClawBackCommissionOnCancellation
             return;
         }
         $policy = Policy::query()->findOrFail($event->policyId);
-        $earned = CommissionEntry::query()->where('policy_id', $policy->id)->where('kind', 'earned')
+        // Earned commission still standing: earned entries less clawbacks of reversed allocations (bounced cheques).
+        $earned = CommissionEntry::query()->where('policy_id', $policy->id)
+            ->where(fn ($q) => $q->where('kind', 'earned')->orWhere(fn ($r) => $r->where('kind', 'clawback')->whereNotNull('receipt_allocation_id')))
             ->selectRaw('agent_id, sum(base_minor) as base, sum(amount_minor) as amount, sum(withholding_minor) as withholding')->groupBy('agent_id')->get();
         $transaction = PolicyTransaction::query()->findOrFail($event->policyTransactionId);
 

@@ -1,0 +1,18 @@
+{
+  "code": "PREMIUM_RECEIPT_REVERSED.default",
+  "version": 1,
+  "event_type": "PREMIUM_RECEIPT_REVERSED",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch","policy","customer"], "inherit_from_event": true },
+  "lines": [
+    { "role": "premium_receivable", "side": "debit",  "amount": "payload.amount" },
+    { "role": "bank_main", "side": "credit", "amount": "payload.amount" }
+  ],
+  "validation": ["amount > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "PREMIUM_RECEIPT_REVERSED:{receipt_allocation_id}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}

@@ -59,6 +59,29 @@ final class CollectionsAccountingEvents
         );
     }
 
+    /** Bounced cheque: an allocation's money never arrived — DR premium_receivable / CR bank_main (direct) or CR suspense_receipts (out of suspense). */
+    public function allocationReversed(Receipt $receipt, ReceiptAllocation $allocation, Policy $policy, CarbonImmutable $reversedOn): void
+    {
+        $eventType = $allocation->suspense_item_id === null ? 'PREMIUM_RECEIPT_REVERSED' : 'RECEIPT_ALLOCATION_REVERSED';
+        ($this->submit)(
+            entityId: $receipt->entity_id, eventType: $eventType, sourceType: 'receipt_allocation', sourceId: $allocation->id,
+            idempotencyKey: $eventType.':'.$allocation->id, transactionDate: $reversedOn, effectiveDate: $reversedOn,
+            currency: $receipt->currency, payload: $this->receiptPayload($receipt, $allocation->amount_minor) + ['receipt_allocation_id' => $allocation->id],
+            dimensions: PolicyAccountingEvents::dimensions($policy) + ['receipt' => $receipt->id],
+        );
+    }
+
+    /** Bounced cheque: the receipt's suspense leaves with the money — DR suspense_receipts / CR bank_main for the suspense item's full amount. */
+    public function receiptBounced(Receipt $receipt, SuspenseItem $item, CarbonImmutable $bouncedOn): void
+    {
+        ($this->submit)(
+            entityId: $receipt->entity_id, eventType: 'RECEIPT_BOUNCED', sourceType: 'receipt', sourceId: $receipt->id,
+            idempotencyKey: 'RECEIPT_BOUNCED:'.$receipt->id, transactionDate: $bouncedOn, effectiveDate: $bouncedOn,
+            currency: $receipt->currency, payload: $this->receiptPayload($receipt, $item->amount_minor) + ['suspense_item_id' => $item->id],
+            dimensions: ['branch' => $receipt->branch_id, 'receipt' => $receipt->id],
+        );
+    }
+
     /** Design §4.4 event B: DR customer_refund_payable / CR bank_main. */
     public function refundIssued(Refund $refund, Policy $policy, CarbonImmutable $paidOn): void
     {

@@ -51,6 +51,8 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     }
     Route::post('receipts', [ReceiptController::class, 'store']);
     Route::get('receipts/{receipt}', [ReceiptController::class, 'show'])->whereUuid('receipt');
+    Route::post('receipts/{receipt}/bounce', [ReceiptController::class, 'bounce'])->whereUuid('receipt');
+    Route::get('cheques', [ReceiptController::class, 'cheques']);
     Route::get('suspense/ageing', [SuspenseController::class, 'ageing']);
     Route::post('suspense-items/{suspenseItem}/allocate', [SuspenseController::class, 'allocate'])->whereUuid('suspenseItem');
     Route::post('policies/{policy}/refunds', [RefundController::class, 'store'])->whereUuid('policy');

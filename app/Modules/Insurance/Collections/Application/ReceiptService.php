@@ -49,6 +49,7 @@ final class ReceiptService
         if ($request->allocatedMinor() > $request->amountMinor) {
             throw new BusinessRuleViolation('ALLOCATION_EXCEEDS_RECEIPT', "Allocations of {$request->allocatedMinor()} exceed the receipt of {$request->amountMinor}.");
         }
+        $this->assertCheque($request);
         if ($request->bankAccountId !== null) {
             $this->bankAccounts->glAccountFor($request->bankAccountId, $request->entityId, $request->currency);
         }
@@ -60,6 +61,7 @@ final class ReceiptService
                 'channel' => $request->channel, 'amount_minor' => $request->amountMinor, 'currency' => $request->currency,
                 'value_date' => $request->valueDate->toDateString(), 'received_at' => CarbonImmutable::now(), 'bank_account_id' => $request->bankAccountId,
                 'reference' => $request->reference, 'status' => $this->statusFor($request), 'created_by' => $actorUserId,
+                'cheque_no' => $request->cheque?->number, 'cheque_bank' => $request->cheque?->bank, 'cheque_date' => $request->cheque?->date->toDateString(),
             ]);
             $this->numbers->markUsed($number->id, 'receipt', $receipt->id);
             foreach ($request->allocations as $line) {
@@ -78,6 +80,22 @@ final class ReceiptService
 
             return $receipt;
         });
+    }
+
+    /** @throws BusinessRuleViolation CHEQUE_DETAILS_REQUIRED | DUPLICATE_CHEQUE (a cheque is presented once unless it bounced) */
+    private function assertCheque(RecordReceiptRequest $request): void
+    {
+        if ($request->channel !== 'cheque') {
+            return;
+        }
+        if ($request->cheque === null || trim($request->cheque->number) === '' || trim($request->cheque->bank) === '') {
+            throw new BusinessRuleViolation('CHEQUE_DETAILS_REQUIRED', 'A cheque receipt needs the cheque number, bank and date.');
+        }
+        $presented = Receipt::query()->where('channel', 'cheque')->where('cheque_no', $request->cheque->number)
+            ->whereRaw('lower(cheque_bank) = ?', [mb_strtolower($request->cheque->bank)])->where('status', '<>', ReceiptStatus::Bounced->value)->exists();
+        if ($presented) {
+            throw new BusinessRuleViolation('DUPLICATE_CHEQUE', "Cheque {$request->cheque->number} of {$request->cheque->bank} has already been received.");
+        }
     }
 
     private function statusFor(RecordReceiptRequest $request): ReceiptStatus

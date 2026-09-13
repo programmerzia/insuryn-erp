@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $allocated_minor
  * @property CarbonImmutable $aged_since
  * @property SuspenseStatus $status
+ * @property CarbonImmutable|null $bounced_on
  */
 final class SuspenseItem extends Model
 {
@@ -28,7 +29,7 @@ final class SuspenseItem extends Model
 
     protected $table = 'suspense_items';
     protected $guarded = [];
-    protected $casts = ['status' => SuspenseStatus::class, 'aged_since' => 'immutable_date', 'amount_minor' => 'int', 'allocated_minor' => 'int'];
+    protected $casts = ['status' => SuspenseStatus::class, 'aged_since' => 'immutable_date', 'bounced_on' => 'immutable_date', 'amount_minor' => 'int', 'allocated_minor' => 'int'];
 
     public function openMinor(): int
     {

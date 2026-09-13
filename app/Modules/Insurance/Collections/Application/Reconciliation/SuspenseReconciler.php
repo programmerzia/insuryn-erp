@@ -9,7 +9,7 @@ use Brick\Money\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
-/** Design §6.1 suspense subledger → suspense_receipts: per receipt, suspense received on or before the date less suspense allocated by then. */
+/** Design §6.1 suspense subledger → suspense_receipts: per receipt, suspense received on or before the date less suspense allocated by then (plus allocations reversed, less the whole item once its cheque bounced). */
 final class SuspenseReconciler implements SubledgerReconciler
 {
     public function subledger(): string
@@ -36,8 +36,13 @@ final class SuspenseReconciler implements SubledgerReconciler
         $allocated = DB::table('receipt_allocations as a')->join('suspense_items as s', 's.id', '=', 'a.suspense_item_id')
             ->where('s.entity_id', $entityId)->where('a.posted_on', '<=', $day)
             ->selectRaw('s.receipt_id as object_id, -a.amount_minor as amount');
+        $reversed = DB::table('receipt_allocations as a')->join('suspense_items as s', 's.id', '=', 'a.suspense_item_id')
+            ->where('s.entity_id', $entityId)->where('a.reversed_on', '<=', $day)
+            ->selectRaw('s.receipt_id as object_id, a.amount_minor as amount');
+        $bounced = DB::table('suspense_items')->where('entity_id', $entityId)->where('bounced_on', '<=', $day)
+            ->selectRaw('receipt_id as object_id, -amount_minor as amount');
 
-        return SubledgerItems::of('receipt', DB::query()->fromSub($received->unionAll($allocated), 'm')
+        return SubledgerItems::of('receipt', DB::query()->fromSub($received->unionAll($allocated)->unionAll($reversed)->unionAll($bounced), 'm')
             ->groupBy('object_id')->orderBy('object_id')->selectRaw('object_id, sum(amount) as amount')->get());
     }
 }
