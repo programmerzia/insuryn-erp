@@ -81,8 +81,11 @@ it('copies legacy agent rows into producers, keeping ids, parents and dates', fu
 
         LegacyAgentBackfill::copy('legacy_agents_fixture');
 
-        $rows = ($this->in)(fn () => DB::table('producers as p')->join('channels as c', 'c.id', '=', 'p.channel_id')->whereIn('p.id', [$leader, $member])->orderBy('p.code')
-            ->get(['p.id', 'p.type', 'p.status', 'p.parent_agent_id', 'p.joined_on', 'c.code as channel'])->map(fn (object $r): array => (array) $r)->all());
+        // Since slice D3 the parent lives in the effective-dated hierarchy, from the day the agent joined.
+        $rows = ($this->in)(fn () => DB::table('producers as p')->join('channels as c', 'c.id', '=', 'p.channel_id')
+            ->leftJoin('producer_hierarchy as h', fn ($j) => $j->on('h.producer_id', '=', 'p.id')->whereColumn('h.effective_from', 'p.joined_on'))
+            ->whereIn('p.id', [$leader, $member])->orderBy('p.code')
+            ->get(['p.id', 'p.type', 'p.status', 'h.parent_producer_id as parent_agent_id', 'p.joined_on', 'c.code as channel'])->map(fn (object $r): array => (array) $r)->all());
         expect($rows)->toBe([
             ['id' => $leader, 'type' => 'agent', 'status' => 'active', 'parent_agent_id' => null, 'joined_on' => '2026-03-05', 'channel' => 'AGENCY'],
             ['id' => $member, 'type' => 'agent', 'status' => 'suspended', 'parent_agent_id' => $leader, 'joined_on' => '2026-04-10', 'channel' => 'AGENCY'],

@@ -10,11 +10,11 @@ use Illuminate\Support\Facades\DB;
 /** Read-only producer lookups for other contexts (Insurance commission, collections, policy screens). */
 final class ProducerDirectory
 {
-    private const COLUMNS = ['id', 'party_id', 'code', 'type', 'status', 'channel_id', 'branch_id', 'parent_agent_id', 'commission_plan_id', 'joined_on'];
+    private const COLUMNS = ['p.id', 'p.party_id', 'p.code', 'p.type', 'p.status', 'p.channel_id', 'p.branch_id', 'p.commission_plan_id', 'p.joined_on'];
 
     public function find(string $producerId): ?ProducerSummary
     {
-        $row = DB::table('producers')->where('id', $producerId)->first(self::COLUMNS);
+        $row = $this->query()->where('p.id', $producerId)->first();
 
         return $row === null ? null : ProducerSummary::fromRow($row);
     }
@@ -28,7 +28,8 @@ final class ProducerDirectory
     /** Locks the producer row for the rest of the transaction (serialises work per producer, e.g. agent cash deposits). */
     public function lock(string $producerId): ProducerSummary
     {
-        $row = DB::table('producers')->where('id', $producerId)->lockForUpdate()->first(self::COLUMNS);
+        DB::table('producers')->where('id', $producerId)->lockForUpdate()->value('id');
+        $row = $this->query()->where('p.id', $producerId)->first();
 
         return $row === null ? throw new RecordsNotFoundException("Producer {$producerId} does not exist.") : ProducerSummary::fromRow($row);
     }
@@ -39,7 +40,17 @@ final class ProducerDirectory
      */
     public function all(?string $type = null): array
     {
-        return array_values(DB::table('producers')->when($type !== null, fn ($q) => $q->where('type', $type))->orderBy('code')->get(self::COLUMNS)
+        return array_values($this->query()->when($type !== null, fn ($q) => $q->where('p.type', $type))->orderBy('p.code')->get()
             ->map(fn (\stdClass $row): ProducerSummary => ProducerSummary::fromRow($row))->all());
+    }
+
+    /** Producers with today's parent from the effective-dated hierarchy (slice D3). */
+    private function query(): \Illuminate\Database\Query\Builder
+    {
+        $today = now()->toDateString();
+
+        return DB::table('producers as p')->select(self::COLUMNS)->selectSub(fn ($q) => $q->from('producer_hierarchy as h')->whereColumn('h.producer_id', 'p.id')
+            ->where('h.effective_from', '<=', $today)->where(fn ($w) => $w->whereNull('h.effective_to')->orWhere('h.effective_to', '>', $today))
+            ->select('h.parent_producer_id')->limit(1), 'parent_producer_id');
     }
 }

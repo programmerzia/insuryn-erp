@@ -10,6 +10,7 @@ use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Application\Reversals\ReversalRequestService;
 use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\Side;
+use App\Modules\Distribution\Application\Hierarchy\HierarchyService;
 use App\Modules\Distribution\Application\Licences\LicenceExpiryAlerts;
 use App\Modules\Finance\Bank\Application\BankAccountService;
 use App\Modules\Finance\Bank\Application\BankMatcher;
@@ -118,6 +119,7 @@ function populateEveryTenantTable(array $ctx): void
             app(RefundService::class)->request($policy->id, $due, 'cancellation', $officer);
         }
         app(LicenceExpiryAlerts::class)->run($d('2030-12-01')); // the world agent's licence expires 2030-12-31 (slice D2)
+        app(HierarchyService::class)->defineLevels((string) Str::uuid7(), [['code' => 'FA', 'rank' => 1, 'label' => 'Financial associate']], $world['admin']); // slice D3
     });
 }
 

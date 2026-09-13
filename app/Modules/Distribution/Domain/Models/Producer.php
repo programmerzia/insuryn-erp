@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Distribution design note §1 producers: a party that brings business in a channel (agent, agency organisation, BDO, broker, partner).
  * Phase 1 agents kept their ids (D1), so `agent_id` columns elsewhere and the `dim_agent` dimension hold producer ids.
- * `parent_agent_id` is the Phase 1 hierarchy until the effective-dated hierarchy replaces it (D3).
+ * Its parent and level live in the effective-dated `producer_hierarchy` (D3).
  *
  * @property string $id
  * @property string $party_id
@@ -19,7 +19,6 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $type
  * @property string $channel_id
  * @property string $branch_id
- * @property string|null $parent_agent_id
  * @property string|null $commission_plan_id
  * @property string|null $employee_id
  * @property string $status

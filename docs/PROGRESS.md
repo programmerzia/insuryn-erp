@@ -83,7 +83,7 @@ code and in the register below, configurable.
 | 2.1 | Design addendum v2 and Phase 2 customer questions | todo (pending, after Distribution D1–D9) | |
 | D1 | Distribution: agents → producers with channels | done | see git log |
 | D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | done | see git log |
-| D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | todo | |
+| D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | done | see git log |
 | D4 | Distribution: compensation schemes, rules, compliance profile | todo | |
 | D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | todo | |
 | D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | todo | |
@@ -1336,4 +1336,22 @@ Scope: review only; only the critical finding was fixed.
   `DemoBusinessSeeder` licences its three agents for 2026; `TenantIsolationEveryTableTest` runs the licence alerts once so `producer_licence_alerts` has rows.
 - Tests: `tests/Feature/Distribution/LicencesTest.php` (7). Local demo database rebuilt with `composer db:fresh`: 3 licences, 32 policies issued.
 - Result: 1,026 Pest tests green, PHPStan 0 errors.
+
+### D3 — Distribution: effective-dated hierarchy — done
+- Tables `hierarchy_levels` (per scheme: level code, rank, label; codes and ranks unique within a scheme) and `producer_hierarchy` (producer, parent, level,
+  `[effective_from, effective_to)`), both RLS. The scheme foreign key arrives with `compensation_schemes` in D4.
+- INVARIANT one active parent: exclusion constraint `producer_hierarchy_one_parent_at_a_time` (btree_gist) rejects overlapping positions per producer.
+- INVARIANT no cycles: `HierarchyService::place` writes the change, then walks the tree on the change date and on every later date where the tenant's hierarchy
+  changes; a loop rolls the change back (`AGENT_HIERARCHY_CYCLE`, the Phase 1 code). Changes are serialised per tenant with an advisory lock.
+- A change closes the position in force and opens a new one (transfers keep history); a second change on the same day corrects that day's position;
+  a change dated before an existing later change is refused (`HIERARCHY_LATER_CHANGE`). Levels must be defined (`HIERARCHY_LEVEL_UNKNOWN`), and a parent must
+  outrank its children wherever one scheme defines both levels (`HIERARCHY_LEVEL_ORDER`). `defineLevels` refuses duplicate codes or ranks and removing a
+  level that open positions hold (unless another scheme defines it).
+- `HierarchyQuery::hierarchyAt(producer, date)` returns the producer and everyone above it on that date (`HierarchyNode`: producer, code, level, depth);
+  `toArray()` is the stored snapshot form D5 puts on commission entries.
+- Migration `2026_09_18_000003`: every producer gets a position from the day it joined with its Phase 1 parent, then `producers.parent_agent_id` is dropped.
+  The agent API still shows and accepts `parent_agent_id`, now meaning today's parent (`ProducerDirectory` reads it from the hierarchy).
+- Test changes, not weakened: `ProducersTest` (D1) reads the copied parent from the hierarchy instead of the dropped column (same facts asserted);
+  `TenantIsolationEveryTableTest` defines one level set so `hierarchy_levels` has rows.
+- Tests: `tests/Feature/Distribution/HierarchyTest.php` (6). Local database migrated: 3 positions, no parents (the demo agents had none).
 
