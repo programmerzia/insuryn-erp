@@ -15,7 +15,8 @@ php artisan migrate --database=pgsql_migrations --seed
 git log --oneline | head             # one commit per green slice: feat(<area>): slice N – <name>
 ```
 
-Next slice to pick up: the first row below whose status is not `done`, in table order.
+Next slice to pick up: the first row below whose status is not `done`, in table order. All Phase 1 rows are done;
+Phase 2 starts from `docs/phase-2/kickoff.md` (slice 2.0 carry-over, then 2.1 design addendum).
 Phase 1C ("make Phase 1 ready for Phase 2") closes spec §4/§11 Phase 1 gaps found after 1B: non-negotiable #9 commission payouts,
 spec §4 items outside the 1A/1B slice list, review hardening, and screens for daily operations. Same operating rules as 1A/1B.
 Rules for every slice: tests first; pest + phpstan green before commit; never weaken/skip/delete a test
@@ -58,7 +59,7 @@ code and in the register below, configurable.
 | 1C.9 | Operations UI: receipts, suspense, refunds, bank | done | see git log |
 | 1C.10 | Operations UI: claims and commission | done | see git log |
 | 1C.11 | Operations UI: month-end close and reports | done | see git log |
-| 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | pending | |
+| 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | done | see git log |
 
 ## ASSUMPTION register
 
@@ -113,7 +114,10 @@ bank statement format (A-5); commission tiers/term-year rules/hierarchy override
 commission payouts and per-installment payments/credits (A-8, A-9). For the customer: which commission payout workflow (`commission.approve`
 / `commission.pay`) and claims reopen/limits policies to configure.
 
-State at end of run: all slices 0.0 → 1B.3 done; nothing partial or blocked; 886 tests green on PHP 8.5 and PHP 8.4 (888 after the review pass), PHPStan level 8 clean, vue-tsc and
+State after Phase 1C: all slices 0.0 → 1C.12 done; nothing partial or blocked; 956 tests green on PHP 8.5 and PHP 8.4, PHPStan level 8
+clean, vue-tsc and vite build green. Go-live gaps and customer questions: `docs/phase-1/exit-checklist.md`, `docs/phase-1/customer-questions.md`.
+
+State at end of the overnight run: all slices 0.0 → 1B.3 done; nothing partial or blocked; 886 tests green on PHP 8.5 and PHP 8.4 (888 after the review pass), PHPStan level 8 clean, vue-tsc and
 vite build green.
 
 ## Slice details
@@ -846,3 +850,18 @@ Scope: review only; only the critical finding was fixed.
   run detail, reopen); every report 403/200 with drill links from balance sheet to account activity to journals and register totals; manual journal
   created from the form, maker cannot approve, checker approves, reversal requested and approved → journal reversed.
 - Result: 956 tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### 1C.12 — Phase 1 exit pack — done
+- Visual check of the 1C screens in headless Chrome against the local database (login, policy quote, receipt, close, balance sheet, manual
+  journal, claims, security): all rendered without console errors. Fix: date filters in page headers stacked the "Show" button under a
+  full-width date field; they now have a fixed width (commit `fix(ui): keep report date filters on one line`).
+- `docs/phase-1/customer-questions.md` (for the customer): 17 questions in business terms, each with what the system does today — design OPEN
+  #1–#6, assumptions A-1..A-10, payer refund split, commission payout route, month lock approval, role mapping, cheque bounce after cancellation,
+  claim reopen, facultative reinsurance. Notes that limits on refunds and commission payouts, and commission tiers/overrides, need new work.
+- `docs/phase-1/exit-checklist.md`: spec §11/§4/§5 Phase 1 scope, design §9.1 test layers and the ten non-negotiables mapped to slices and tests,
+  with status. Gaps found: no CI pipeline, no Playwright happy path (§9.1, CI-blocking), no generator-based reserve property test, no k6 smoke,
+  **no user/role administration screen or API** (users only from seeders), claims deductibles/co-insurance/batch payments/SLA timers,
+  development triangles; cross-cutting items outside §11 Phase 1 (attachments, notification delivery, Bangla, global search, API keys, flags).
+- `docs/phase-2/kickoff.md`: entry conditions, what Phase 1 gives Phase 2, design addendum outline (spec §12 nine deliverables for Finance +
+  People), Phase 2 open questions, draft slice list 2.0–2.17 (2.0 carries the Phase 1 engineering gaps).
+- No code or test changes beyond the UI fix. Result: 956 tests green on PHP 8.5 and 8.4, PHPStan 0 errors, vue-tsc and build green.
