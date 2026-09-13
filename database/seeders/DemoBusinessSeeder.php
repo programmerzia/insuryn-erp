@@ -167,6 +167,11 @@ final class DemoBusinessSeeder extends Seeder
             $earning->run((string) DB::table('fiscal_periods')->where('starts', $starts)->value('id'));
         }
 
+        $august = (string) DB::table('fiscal_periods')->where('starts', '2026-08-01')->value('id');
+        $run = app(\App\Modules\Accounting\Application\Close\PeriodCloseService::class)->start($august, $users['finance_manager']);
+        $firstTask = (string) DB::table('period_close_tasks')->where('close_run_id', $run)->where('code', 'premium_earning')->value('id');
+        app(\App\Modules\Accounting\Application\Close\PeriodCloseService::class)->execute($firstTask, $users['finance_manager'], 'August earning run');
+
         $journals = app(ManualJournalService::class);
         $journal = $journals->create(new ManualJournalRequest($entityId, $day('2026-09-10'), 'Office rent accrual for September', JournalKind::Manual, 'Rent invoice 9/26', 'BDT', [
             new ManualJournalLine($accounts['5300'], Side::Debit, 85_000_00, ['branch' => $branchId], 'Rent'),

@@ -69,7 +69,7 @@ code and in the register below, configurable.
 | U3 | UX: command palette and shortcuts registry | done | see git log |
 | U4 | UX: data table | done | see git log |
 | U5 | UX: form system | done | see git log |
-| U6 | UX: role home queues and badges | pending | |
+| U6 | UX: role home queues and badges | done | see git log |
 | U7 | UX: rebuild existing screens | pending | |
 | U8 | UX: object pages with timeline | pending | |
 | U9 | UX: feedback, states, accessibility | pending | |
@@ -1030,3 +1030,33 @@ Scope: review only; only the critical finding was fixed.
   (`receipt-preview` as branch.manager@demo.local; the admin demo user holds no receipt permission, and the preview correctly refuses).
 - Not done: inline create exists for customers only (agents need a party and branch, policies need the quote flow).
 - Result: 977 Pest tests, 191 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### U6 — UX: role home queues and badges — done
+- `App\Http\Home\WorkQueues` (read-only, app-level) defines the brief §5 queues per seeded role template and serves both `GET /home`
+  (`home/Index`: blocks top to bottom — title, count, top five rows with visible column headers, "Open queue", "Showing 5 of N") and the
+  sidebar badges in the shared `shell.badges` (count-only queries for the same queues). A user with several roles sees each queue once; a role
+  without queues (tenant admin) gets an empty home that points to Ctrl+K.
+  - Branch officer / manager: installments due this week; lapsing policies (oldest unpaid due date within 14 days of the grace period); receipts
+    to record (unmatched credit lines on bank statements); quotes to follow up.
+  - Accountant: unallocated receipts (open suspense, aged); unmatched bank lines; journals awaiting my approval (pending, made by someone else,
+    only if the user holds `accounting.approve_journal`); failed accounting events with the failure reason.
+  - Claims officer / manager: claims awaiting reserve; awaiting my approval (claim approvals this user may decide; the approval step is shown as
+    "Over limit" because approvals exist only above a policy's limit); payments to release (approved or release requested).
+  - Finance manager / CFO: close progress (running close: open tasks with owners and status, "n of 11 tasks done"); reconciliation variances;
+    approvals over threshold (all approvals this user may decide); cash position (balance of the bank ledger accounts and 30 daily net-movement
+    bars on one scale computed from BigInt minor units).
+  - Auditor: recent reversals and adjustments (30 days); period reopen events (audit trail); control-account manual postings.
+- Badges: receipts ← installments due; policies ← lapsing; bank ← receipts to record / unmatched lines; suspense ← unallocated receipts;
+  journals ← journals awaiting my approval; claims ← awaiting reserve + payments to release; close ← variances; approvals ← the inbox count (U2).
+- Home: `/` redirects to `/home`; Fortify's home is `/home` (a branch manager used to land on a 403 journal page); Alt+H goes home; Home is first
+  in the sidebar. `DemoBusinessSeeder` now starts the August close and runs its first task.
+- Tests first: `tests/Feature/Pages/HomeQueuesTest.php` — queue titles for all nine seeded roles (tenant admin none); counts and top rows for
+  branch officer, accountant, claims manager and finance manager against a built scenario; badges equal the queue counts; accountant cannot
+  see journals to approve until combined with finance manager; multi-role dedupe; sign-in home and `/` redirect.
+- Interpretations and gaps: "SLA breaches" (claims) is not shown — claim SLA timers do not exist (exit checklist gap); "Failed accounting events"
+  has no queue page, so that block has no "Open queue" link; the accountant template lacks `accounting.approve_journal`, so its "Journals awaiting
+  my approval" is always empty unless the customer maps approval rights to accountants (customer question Q7).
+- Screenshots: `storage/ux-screenshots/U6/home-{branch.officer,accountant,claims.manager,finance.manager,auditor}-{1366,1920}-{light,dark}.png`.
+  Self-critique fixes: centred column left a gap at 1920 (now left-aligned like every page); close progress listed all eleven tasks (now the
+  first five open ones); greeting replaced by a plain "Home" title; column headers made visible so dates are not ambiguous.
+- Result: 988 Pest tests, 192 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.

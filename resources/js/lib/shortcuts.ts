@@ -7,6 +7,7 @@ import { onBeforeUnmount, onMounted } from 'vue';
 export const SHORTCUTS = {
     'app.palette': { keys: 'Ctrl+K', label: 'Search or run a command' },
     'app.sidebar': { keys: 'Ctrl+B', label: 'Collapse or expand the sidebar' },
+    'app.home': { keys: 'Alt+H', label: 'Go to home' },
     'app.theme': { keys: 'Alt+T', label: 'Switch theme' },
     'app.density': { keys: 'Alt+D', label: 'Switch row density' },
     'table.filter': { keys: '/', label: 'Filter the table' },

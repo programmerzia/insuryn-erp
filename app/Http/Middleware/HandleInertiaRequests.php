@@ -49,7 +49,7 @@ final class HandleInertiaRequests extends Middleware
             'entity' => $entity === null ? null : ['code' => (string) $entity->code, 'name' => (string) $entity->name, 'currency' => (string) $entity->base_currency],
             'branches' => $branches,
             'approvals' => count(app(\App\Modules\Platform\Approvals\ApprovalInboxQuery::class)->decidableBy($userId)),
-            'badges' => [],
+            'badges' => app(\App\Http\Home\WorkQueues::class)->badges($userId),
         ];
     }
 

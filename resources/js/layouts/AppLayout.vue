@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, watch } from 'vue';
 import CommandPalette from '@/components/shell/CommandPalette.vue';
 import ConfirmHost from '@/components/shell/ConfirmHost.vue';
@@ -24,6 +24,7 @@ const page = usePage<SharedProps>();
 const preferences = usePreferences();
 useShortcut('app.sidebar', () => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed));
 useShortcut('app.palette', openPalette, { allowInInputs: true });
+useShortcut('app.home', () => router.visit('/home'), { allowInInputs: true });
 useShortcut('app.theme', () => savePreference('theme', preferences.theme === 'dark' ? 'light' : 'dark', 0), { allowInInputs: true });
 useShortcut('app.density', () => savePreference('density', preferences.density === 'compact' ? 'comfortable' : 'compact', 0), { allowInInputs: true });
 

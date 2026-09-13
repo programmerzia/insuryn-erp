@@ -28,7 +28,7 @@ const signOut = () => router.post('/logout');
         <button type="button" class="inline-flex size-8 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink" :title="`Collapse or expand the sidebar (${shortcutKeys('app.sidebar')})`" aria-label="Collapse or expand the sidebar" @click="toggleSidebar">
             <PanelLeft :size="16" :stroke-width="1.5" />
         </button>
-        <Link href="/" class="flex items-center gap-2 pr-2 text-ui font-semibold text-ink" aria-label="Insuryn home"><Logo :size="18" /><span class="max-lg:sr-only">Insuryn</span></Link>
+        <Link href="/home" class="flex items-center gap-2 pr-2 text-ui font-semibold text-ink" aria-label="Insuryn home"><Logo :size="18" /><span class="max-lg:sr-only">Insuryn</span></Link>
 
         <Menu v-if="shell?.entity">
             <MenuTrigger class="flex h-8 items-center gap-1.5 rounded-control px-2 text-ui text-ink hover:bg-surface-2">

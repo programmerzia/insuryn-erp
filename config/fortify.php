@@ -14,7 +14,7 @@ return [
     'username' => 'email',
     'email' => 'email',
     'lowercase_usernames' => true,
-    'home' => '/accounting/journals',
+    'home' => '/home',
     'prefix' => '',
     'domain' => null,
     'middleware' => ['web'],

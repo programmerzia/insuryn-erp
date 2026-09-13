@@ -22,7 +22,8 @@ use App\Modules\Platform\Authentication\Http\SecurityPageController;
 use App\Modules\Platform\Preferences\Http\PreferencesController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/accounting/journals');
+Route::redirect('/', '/home');
+Route::middleware('auth')->get('home', \App\Http\Home\HomeController::class)->name('home');
 
 Route::middleware('auth')->get('account/security', SecurityPageController::class)->name('account.security');
 Route::middleware('auth')->get('search', GlobalSearchController::class)->name('search');

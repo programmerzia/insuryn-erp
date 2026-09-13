@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing } from 'lucide-vue-next';
+import { Banknote, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -21,6 +21,7 @@ const collections = ['receipt.create', 'receipt.allocate', 'receipt.refund_reque
 const claims = ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_request', 'claim.pay_release', 'claim.close', reader];
 
 export const navigation: NavItem[] = [
+    { id: 'home', label: 'Home', href: '/home', icon: House, any: [] },
     { id: 'policies', label: 'Policies', href: '/policies', icon: FileText, any: ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', reader], badge: 'policies' },
     { id: 'receipts', label: 'Receipts', href: '/receipts', icon: Banknote, any: collections, badge: 'receipts' },
     { id: 'suspense', label: 'Suspense', href: '/suspense', icon: Inbox, any: collections, badge: 'suspense' },
