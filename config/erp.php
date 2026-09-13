@@ -103,5 +103,12 @@ return [
         'disk' => env('ERP_DOCUMENTS_DISK', 'documents'),
         'max_upload_kb' => (int) env('ERP_DOCUMENT_MAX_UPLOAD_KB', 10240),
         'allowed_extensions' => ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'],
+        /*
+         * Slice R8: generated documents. DECISION D-34 — PDFs are printed by the Chrome binary in headless mode (Platform\Documents\Rendering\ChromePdfRenderer).
+         * ASSUMPTION: A-102 — a document is generated in English unless the user chooses Bangla.
+         */
+        'chrome_binary' => env('ERP_CHROME_BINARY', '/usr/bin/google-chrome'),
+        'render_timeout_seconds' => (int) env('ERP_DOCUMENT_RENDER_TIMEOUT', 60),
+        'default_locale' => env('ERP_DOCUMENT_LOCALE', 'en'),
     ],
 ];

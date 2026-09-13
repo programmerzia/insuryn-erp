@@ -79,8 +79,9 @@ it('seeds the design role templates per tenant', function (): void {
             ->and($permissionsOf('auditor'))->toBe(['accounting.view_journals', 'audit.view', 'reports.financial', 'reports.regulatory'])
             ->and($permissionsOf('finance_manager'))->toContain('accounting.approve_journal', 'accounting.create_manual_journal', 'periods.lock')
             ->and($permissionsOf('cfo'))->toContain('periods.reopen', 'accounting.post_to_control', 'accounting.approve_journal')
-            // Fix F3 (A-54): the Tenant Admin template also sets approval limits.
-            ->and($permissionsOf('tenant_admin'))->toBe(['platform.manage_approvals', 'platform.manage_roles', 'platform.manage_users']);
+            // Fix F3 (A-54): the Tenant Admin template also sets approval limits; slice R8 (A-101): and manages document templates.
+            ->and($permissionsOf('tenant_admin'))->toBe(['document.manage_templates', 'platform.manage_approvals', 'platform.manage_roles', 'platform.manage_users'])
+            ->and($permissionsOf('branch_officer'))->toBe(['document.generate', 'party.manage', 'policy.create', 'policy.issue', 'receipt.create']);
     });
 });
 

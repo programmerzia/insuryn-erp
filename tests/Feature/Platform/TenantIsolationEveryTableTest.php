@@ -147,6 +147,9 @@ function populateEveryTenantTable(array $ctx): void
         app(App\Modules\Platform\Setup\SetupProgress::class)->complete('company', $world['admin']); // session S1 setup wizard
         Illuminate\Support\Facades\Storage::fake('documents'); // fix F2: a document attached to the claim
         app(App\Modules\Platform\Documents\DocumentStore::class)->attach('claim', $claim->id, new App\Modules\Platform\Documents\DocumentContents('survey.pdf', '%PDF isolation'), $officer);
+        app(App\Modules\Platform\Documents\Templates\DocumentTemplates::class)->seedCurrentTenant(); // Phase 3 R8: templates and a generated schedule
+        fakePdfRenderer();
+        app(App\Modules\Platform\Documents\Generation\DocumentGenerator::class)->generate('policy_schedule', 'policy', $policy->id, $world['admin']);
         app(App\Modules\Insurance\Rating\Application\DutyBook::class)->record(['code' => 'vat', 'basis' => 'pct_of_premium', 'rate_bp' => 1500, 'class_codes' => ['motor'], // Phase 3 R2
             'effective_from' => '2026-01-01', 'label_en' => 'VAT', 'label_bn' => 'মূসক'], $world['admin']);
     });

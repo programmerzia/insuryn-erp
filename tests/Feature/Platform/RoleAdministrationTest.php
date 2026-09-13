@@ -75,13 +75,13 @@ it('refuses a permission change that would give a holder a forbidden combination
     actingAs($this->admin)->put('/admin/roles/'.($this->role)('auditor'), ['permissions' => ['audit.view', 'receipt.create']], $this->headers)
         ->assertSessionHasErrors(['form' => 'Auditors stay read-only, so the Auditor role cannot include receipt.create.']);
 
-    expect(($this->permissionsOf)('branch_officer'))->toBe(['party.manage', 'policy.create', 'policy.issue', 'receipt.create']);
+    expect(($this->permissionsOf)('branch_officer'))->toBe(['document.generate', 'party.manage', 'policy.create', 'policy.issue', 'receipt.create']); // + A-101 (slice R8)
 });
 
 it('never removes the last way to manage users or roles', function (): void {
     actingAs($this->admin)->put('/admin/roles/'.($this->role)('tenant_admin'), ['permissions' => ['platform.manage_users']], $this->headers)
         ->assertSessionHasErrors(['form' => 'Nobody active would be left who can manage roles. Give that permission to someone else first.']);
-    expect(($this->permissionsOf)('tenant_admin'))->toBe(['platform.manage_approvals', 'platform.manage_roles', 'platform.manage_users']); // + A-54 (fix F3)
+    expect(($this->permissionsOf)('tenant_admin'))->toBe(['document.manage_templates', 'platform.manage_approvals', 'platform.manage_roles', 'platform.manage_users']); // + A-54 (fix F3), A-101 (slice R8)
 });
 
 it('deletes a role only when nobody holds it', function (): void {

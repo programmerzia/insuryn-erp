@@ -69,6 +69,46 @@ final class DocumentStore
     /** @throws BusinessRuleViolation DOCUMENT_TYPE_NOT_ALLOWED, DOCUMENT_TOO_LARGE, DOCUMENT_EMPTY, DOCUMENT_DESCRIPTION_TOO_LONG */
     public function attach(string $objectType, string $objectId, UploadedFile|DocumentContents $file, ?string $actorUserId, ?string $description = null): StoredDocument
     {
+        $row = $this->write($objectType, $objectId, $file, $actorUserId, $description);
+        DB::transaction(function () use ($row, $objectType, $objectId, $actorUserId): void {
+            DB::table('stored_documents')->insert($row);
+            $this->audit->record('document.attached', AuditSubject::of($objectType, $objectId), null,
+                ['document_id' => $row['id'], 'name' => $row['original_name'], 'size_bytes' => $row['size_bytes'], 'sha256' => $row['sha256'], 'description' => $row['description']],
+                actor: $actorUserId === null ? Actor::system() : Actor::user($actorUserId));
+        });
+
+        return StoredDocument::fromRow((object) ($row + ['uploaded_by_name' => null]));
+    }
+
+    /**
+     * A document the system produced from a template (slice R8, DocumentGenerator): stored exactly like an attachment — same disk, hash, limits,
+     * append-only row and object — but audited as `document.generated` with what produced it, not as a person attaching a file. Call inside the
+     * transaction that records the generated document.
+     *
+     * @param array<string, mixed> $generation template code and version, version, locale and the generated document id, for the audit row
+     * @throws BusinessRuleViolation DOCUMENT_TYPE_NOT_ALLOWED, DOCUMENT_TOO_LARGE, DOCUMENT_EMPTY, DOCUMENT_DESCRIPTION_TOO_LONG
+     */
+    public function storeGenerated(string $objectType, string $objectId, DocumentContents $file, string $actorUserId, string $description, array $generation): StoredDocument
+    {
+        $row = $this->write($objectType, $objectId, $file, $actorUserId, $description);
+        DB::transaction(function () use ($row, $objectType, $objectId, $actorUserId, $generation): void {
+            DB::table('stored_documents')->insert($row);
+            $this->audit->record('document.generated', AuditSubject::of($objectType, $objectId), null,
+                ['document_id' => $row['id'], 'name' => $row['original_name'], 'size_bytes' => $row['size_bytes'], 'sha256' => $row['sha256'], ...$generation],
+                actor: Actor::user($actorUserId));
+        });
+
+        return StoredDocument::fromRow((object) ($row + ['uploaded_by_name' => null]));
+    }
+
+    /**
+     * Checks the file, writes its bytes under their hash (once) and returns the stored_documents row to insert.
+     *
+     * @return array{id: string, tenant_id: string, object_type: string, object_id: string, original_name: string, mime: string, size_bytes: int, sha256: string, disk: string,
+     *   storage_path: string, description: string|null, uploaded_by: string|null, uploaded_at: CarbonImmutable}
+     */
+    private function write(string $objectType, string $objectId, UploadedFile|DocumentContents $file, ?string $actorUserId, ?string $description): array
+    {
         self::assertSubject($objectType, $objectId);
         $name = self::cleanName($file instanceof UploadedFile ? $file->getClientOriginalName() : $file->name);
         $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
@@ -116,17 +156,9 @@ final class DocumentStore
             }
         }
 
-        $row = ['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(), 'object_type' => $objectType, 'object_id' => $objectId, 'original_name' => $name,
+        return ['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(), 'object_type' => $objectType, 'object_id' => $objectId, 'original_name' => $name,
             'mime' => self::MIME_BY_EXTENSION[$extension] ?? 'application/octet-stream', 'size_bytes' => $size, 'sha256' => $sha256, 'disk' => $diskName, 'storage_path' => $path,
             'description' => $description, 'uploaded_by' => $actorUserId, 'uploaded_at' => CarbonImmutable::now()];
-        DB::transaction(function () use ($row, $objectType, $objectId, $actorUserId): void {
-            DB::table('stored_documents')->insert($row);
-            $this->audit->record('document.attached', AuditSubject::of($objectType, $objectId), null,
-                ['document_id' => $row['id'], 'name' => $row['original_name'], 'size_bytes' => $row['size_bytes'], 'sha256' => $row['sha256'], 'description' => $row['description']],
-                actor: $actorUserId === null ? Actor::system() : Actor::user($actorUserId));
-        });
-
-        return StoredDocument::fromRow((object) ($row + ['uploaded_by_name' => null]));
     }
 
     /** @return list<StoredDocument> the object's documents, newest first */

@@ -162,3 +162,33 @@ function thrownBy(callable $operation, string $type): Throwable
 
     throw new AssertionFailedError("Expected {$type} to be thrown.");
 }
+
+/** The default document templates (Phase 3 slice R8) in the tenant, as BlankTenantSeeder and the demo seeders give them. */
+function seedDocumentTemplates(string $tenantId): void
+{
+    asTenant($tenantId, fn (): int => app(App\Modules\Platform\Documents\Templates\DocumentTemplates::class)->seedCurrentTenant());
+}
+
+/**
+ * Replaces headless Chromium with a fake renderer (slice R8): the "PDF" is a small %PDF file holding the SHA-256 of the HTML it was given, and
+ * every rendered HTML page is kept, so tests can check what was printed.
+ *
+ * @return ArrayObject<int, string> the rendered HTML pages, in order
+ */
+function fakePdfRenderer(): ArrayObject
+{
+    $pages = new ArrayObject();
+    app()->instance(App\Modules\Platform\Documents\Rendering\PdfRenderer::class, new class($pages) implements App\Modules\Platform\Documents\Rendering\PdfRenderer {
+        /** @param ArrayObject<int, string> $pages */
+        public function __construct(private readonly ArrayObject $pages) {}
+
+        public function render(string $html): string
+        {
+            $this->pages->append($html);
+
+            return "%PDF-1.7\n% fake render ".count($this->pages).' '.hash('sha256', $html)."\n%%EOF\n";
+        }
+    });
+
+    return $pages;
+}

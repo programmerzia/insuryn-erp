@@ -24,7 +24,11 @@ use App\Modules\Insurance\Commission\Application\EarnCommissionOnIssue;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyIssued;
 use App\Modules\Insurance\Policy\Application\PremiumEarning\CatchUpEarningOnCancellation;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyCancelled;
+use App\Modules\Insurance\Collections\Application\Documents\ReceiptDocumentData;
+use App\Modules\Insurance\Policy\Application\Documents\EndorsementDocumentData;
+use App\Modules\Insurance\Policy\Application\Documents\PolicyScheduleDocumentData;
 use App\Modules\Platform\Approvals\ApprovalHandlerRegistry;
+use App\Modules\Platform\Documents\Generation\DocumentDataProvider;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -35,6 +39,8 @@ final class InsuranceServiceProvider extends ServiceProvider
     {
         $this->app->tag([PremiumReconciler::class, SuspenseReconciler::class, CommissionReconciler::class, ClaimsReconciler::class], SubledgerReconciler::class);
         $this->app->tag([PremiumEarningCloseCheck::class, SuspenseReviewCloseCheck::class], CloseTaskCheck::class);
+        // Slice R8: printable documents. A new document for an object is one DocumentDataProvider class tagged here.
+        $this->app->tag([PolicyScheduleDocumentData::class, EndorsementDocumentData::class, ReceiptDocumentData::class], DocumentDataProvider::class);
     }
 
     public function boot(ApprovalHandlerRegistry $approvals): void

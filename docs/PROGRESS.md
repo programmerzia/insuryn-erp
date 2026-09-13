@@ -143,6 +143,14 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-112 | R10a | Which version the diff compares with by default is not specified beyond "the currently active/previous version": the active version of the same code, else the version the plan was copied from, else the latest earlier version, else the latest later one. A row is the same row in both versions when its keys (a band table: its band start) and its own start date match; two rows with the same identity are paired in order. | `RatingPlanDirectory::comparison` (`ASSUMPTION:`), `RatingPlanDiff`. |
 | A-113 | R10a | Which duties the plan page lists is not specified: the duties of the plan's class in force today or starting later (ended ones are not listed; the audit trail keeps them), marked "verify" while flagged. A duty recorded on the page defaults to `verify = true`. | `RatingPlanDirectory::duties` (`ASSUMPTION:`), `DutiesPageController`. |
 | A-114 | R10a | Who opens the tariff editor is not specified: holders of `rating.manage_plans` or `rating.approve_plans` (not report readers). Approve shows as disabled with the reason for anyone who drafted or edited the plan (created it or exercised `rating.manage_plans` on its audit trail — the SoD object rule); the server refuses regardless. | `TariffsPageController::AREA` (`ASSUMPTION:`), `RatingPlanDirectory::editors`, `navigation.ts` (Tariffs). |
+| A-100 | R8 | How much of Blade a tenant-edited template may use is not specified: a whitelist — escaped output of documented variables (`{{ $name['key'] }}`, `?? 'fallback'`), `@if/@elseif/@else/@endif` over variable comparisons, `@foreach($list as $item)`, comments, `@@` for a literal @, CSS `@media`/`@page`, images as data: URIs. Everything else is refused on save with the reason (PHP tags, `{!! !!}`, every other directive, components, scripts, frames, forms, SVG, event handlers, `javascript:`, `@import`, `file:` and remote URLs). Quoted text in conditions holds no brackets, braces, quotes, `@`, `$`, `<`, `>` or `?`. A body must also render with the demo variables before it is saved or activated. | `TemplateBodyGuard` (`ASSUMPTION` in docblock), `DocumentTemplates::validate`. |
+| A-101 | R8 | Who generates documents and who edits templates is not specified: `document.generate` (checked in the object's branch, plus the page's own area permission) goes to the Branch Officer template (so also the Branch Manager: they quote, issue and record receipts); `document.manage_templates` goes to the Tenant Admin template (configuration, `document.*` is not `accounting.*`, so the §7.3 rule `platform.manage_roles` ✕ `accounting.*` is untouched). Existing tenants' roles get them by migration. Claims officers get nothing yet (claim acknowledgement and discharge voucher have no provider). | `RoleTemplates`, `PermissionsSeeder`, migration `2026_09_26_000001`, `DocumentGenerator::PERMISSION`, `DocumentTemplates::MANAGE`, `GeneratedDocumentsController`. |
+| A-102 | R8 | Which language and template a document prints with is not specified: the person generating chooses English or Bangla (default `erp.documents.default_locale` = en); the active template of the object's product class wins over the template for every class; with neither, generation is refused (`DOCUMENT_TEMPLATE_MISSING`), never falls back to another language. | `DocumentGenerator::generate`, `DocumentTemplates::active`, `config/erp.php` `documents.default_locale`. |
+| A-103 | R8 | Number and date style on Bangla documents is not specified (brief §8 makes Bengali digits optional): Latin digits, thousands separators, negatives in parentheses and dates like "14 Sep 2026" in both languages; labels and fixed wording in Bangla. | `DocumentValues` (`ASSUMPTION` in docblock). |
+| A-104 | R8 | What each provided document contains is not specified beyond design §3: a schedule only once the policy is issued (not for a quote) with every endorsement's date and reason — and, when policies carry a frozen rating result (R7), its manual adjustments (steps whose code starts with `manual`), its `special_terms` list, duties by name and the rating breakdown — as special terms; an endorsement's number is the policy number plus `/E<n>` (n = its order among the policy's endorsements) and its PDF is listed on the policy; a receipt shows the allocations still standing (reversed ones left out), what is held in suspense, the payer (the receipt's party, else the first allocated policy's holder), and a bounced cheque gets no receipt. | `PolicyScheduleDocumentData`, `EndorsementDocumentData`, `ReceiptDocumentData`. |
+| A-105 | R8 | What the footer's "short hash" is, is not specified: a PDF cannot print its own hash, so the footer shows "Generated <date time in the tenant's time zone> · Reference <12 hex>", the start of the SHA-256 of the rendered letterhead and body (`generated_documents.content_sha256`); the SHA-256 of the PDF bytes is `generated_documents.sha256` (= the stored document's). | `TemplateRenderer::document`, `DocumentGenerator`. |
+| A-106 | R8 | Template editing workflow is not specified beyond "editing an active template creates a new draft version; activating retires the previous": a draft is edited in place, one open draft per code, class and locale (`DOCUMENT_TEMPLATE_DRAFT_EXISTS`), activation needs no second person (templates move no money; audited), drafts are not deleted from the screen, and documents already generated keep the template version they were printed with. | `DocumentTemplates` (`saveDraft`, `activate`). |
+| A-107 | R8 | **Verify with the insurer (legal wording).** The default templates' fixed wording is a placeholder: closing sentences ("This schedule forms part of the policy…", "Payments by cheque… subject to realisation", "…full and final settlement…"), signature lines, section titles and their Bangla translations; the demo values of the preview (Padma General Insurance, Rahima Akter, POL-HO-2026-000123, amounts) are illustrative only. | `DefaultDocumentTemplates`, `DocumentVariables::demo`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1954,3 +1962,93 @@ Scope: review only; only the critical finding was fixed.
   `resources/js/tests/rating.test.ts` (9: "2.25‰" ↔ 225, "10%" ↔ 1000, BDT ↔ minor units, refusals, exact integers, grid rows).
 
 - Result: 1,213 Pest tests green, PHPStan 0 errors, Vitest (292) and vue-tsc green.
+### R8 — Documents: templates, generated PDFs, Bangla fonts — done
+- Phase 3 design §3 (market cross-check G2, Part A step 3 "receipt for the customer"). Migration `2026_09_26_000001_create_document_templates_and_generated_documents`
+  (both tenant tables, forced RLS):
+  - `document_templates`: code (`quotation`, `cover_note`, `policy_schedule`, `endorsement`, `receipt`, `renewal_notice`, `claim_ack`, `discharge_voucher`), `product_class`
+    (null = every class), version, engine `blade_pdf`, locale `en`|`bn`, body, letterhead (null = the entity name), status `draft`|`active`|`retired`, created_by (null =
+    seeded), activated_by/at, retired_at. **INVARIANT** one active version per (code, class, locale): partial unique index `document_templates_one_active`. Trigger
+    `DOCUMENT_TEMPLATE_IMMUTABLE`: code, class, locale, version and author never change; active and retired bodies and letterheads never change; only draft → active → retired
+    (`DOCUMENT_TEMPLATE_TRANSITION`); only drafts can be deleted.
+  - `generated_documents`: template id, code and version, locale, object type and id, business number, version per (object type, object id, code), `stored_document_id`
+    → `stored_documents`, `sha256` (of the PDF, equal to the stored document's), `content_sha256` (of the rendered letterhead and body, printed as the reference), size,
+    rendered_at/by. Append-only by trigger (`GENERATED_DOCUMENT_APPEND_ONLY`).
+  - Permissions `document.generate`, `document.manage_templates` (A-101), added to existing tenants' branch officer / branch manager and tenant admin roles.
+- Platform, no business dependency (arch tests unchanged):
+  - `Documents\Templates\DocumentTemplates`: `all`, `find`, `versions`, `active(code, class, locale)` (class template, else every class), `create`, `saveDraft` (a draft in place;
+    an active or retired version → the next draft version; `DOCUMENT_TEMPLATE_DRAFT_EXISTS`), `activate` (retires the version in force; `DOCUMENT_TEMPLATE_NOT_DRAFT`,
+    `DOCUMENT_TEMPLATE_ACTIVATION_CONFLICT`), `preview(code, locale, body, letterhead)` (demo data, stores nothing), `seedCurrentTenant()` (active v1 of the 16 defaults, rerun-safe).
+    Audited on `document_template`: `created`, `draft_saved`, `activated`, `retired` (body and letterhead SHA-256 before/after). Also `DOCUMENT_TEMPLATE_CLASS_UNKNOWN`,
+    `DOCUMENT_TEMPLATE_CODE_UNKNOWN`, `DOCUMENT_TEMPLATE_LOCALE_UNKNOWN`, `DOCUMENT_TEMPLATE_EMPTY`, `DOCUMENT_TEMPLATE_TOO_LONG` (200,000 / 50,000 characters). A-106.
+  - `TemplateBodyGuard` (A-100): Blade compiles output tags and directive arguments to PHP, so a body is checked against a whitelist before it is compiled; refusals
+    (`DOCUMENT_TEMPLATE_UNSAFE`) say what is not allowed, e.g. "@php is not allowed in a template. Use @if, @elseif, @else, @endif, @foreach and @endforeach only", "Only
+    variables can be printed: {{ system('id') }} is not allowed", "$app is not a variable of this template". Directives are found the way Blade finds them (after comments, with
+    output tags still in place), so `{{ $x ?? '@php(…)' }}` and `a{{ $x }}@php(…)` are caught. A body must also render with the demo variables (`DOCUMENT_TEMPLATE_RENDER_FAILED`).
+  - `DocumentVariables`: one bag for every template — `company {name}`, `document {title, number, date}`, `currency`, `parties [{role, name}]`, `product {code, name, class}`,
+    `period {from, to}`, `details [{label, value}]`, `money [{label, amount}]`, `total {label, amount}`, `special_terms [text]`, `installments [{no, due_date, amount}]`,
+    `allocations [{reference, description, amount}]`, `rating [{label, amount}]`; values are text (money and dates formatted by `DocumentValues`, A-103), always escaped.
+    `documentation(code)` is the editor's variables list per document; `demo(code, locale)` the preview data (illustrative, A-107).
+  - `Rendering\TemplateRenderer` (Blade string → HTML with only the bag in scope; A4 layout, letterhead, footer "Generated <tenant time> · Reference <12 hex>", A-105) and
+    `Rendering\PdfRenderer` → `ChromePdfRenderer` (D-34: the Chrome binary headless through Symfony Process; `erp.documents.chrome_binary` / `ERP_CHROME_BINARY`, default
+    `/usr/bin/google-chrome`; `erp.documents.render_timeout_seconds`; `DOCUMENT_PDF_FAILED`). IBM Plex Sans and Noto Sans Bengali (400/600, OFL) are self-hosted in
+    `resources/fonts/documents` and embedded as data URIs; the PDF embeds a NotoSansBengali subset.
+  - `Generation\DocumentGenerator::generate(templateCode, objectType, objectId, actor, ?locale)` and `history(objectType, objectId)` (D-35): provider → subject (page object,
+    number, class, scope) → `document.generate` in that scope → active template (A-102, `DOCUMENT_TEMPLATE_MISSING`) → HTML → PDF → one transaction: advisory lock, next
+    version, `DocumentStore::storeGenerated` (new, narrowly scoped: same disk, hash, limits and append-only row as `attach`, audited `document.generated` with template code and
+    version, version, locale, generated-for object and number instead of `document.attached`), `generated_documents` row. Also `DOCUMENT_PROVIDER_MISSING`,
+    `DOCUMENT_OBJECT_UNKNOWN`, `DOCUMENT_OBJECT_NOT_READY`.
+  - `Generation\DocumentDataProvider` (contract) and `DocumentDataProviders` (services tagged `DocumentDataProvider::class`, bound in `PlatformServiceProvider`).
+- Insurance providers (tagged in `InsuranceServiceProvider`, A-104): `Policy\Application\Documents\PolicyScheduleDocumentData` (`policy`: parties with payers and agent,
+  product and class, period, status/issued/version/installments, net premium, VAT and duties — or the rating result's named duties when there is one — gross, installments,
+  special terms from endorsement reasons and the rating result's manual steps and `special_terms`, the rating breakdown), `EndorsementDocumentData` (`policy_transaction` of type
+  endorsement → PDF on the policy, number `<policy>/E<n>`), `Collections\Application\Documents\ReceiptDocumentData` (`receipt`: payer, received on, method, cheque, reference,
+  standing allocations by policy and installment, suspense, amount received). `PolicyDocumentFacts` reads `policies.rating_result` only when R7 has added it.
+- **Adding a provider after merge (quotation R4–R6, cover note R6, renewal notice R9) is one class.** Implement `DocumentDataProvider` in the owning context's Application layer —
+  `objectType()` (`quotation`, `cover_note`, `policy`), `templateCodes()` (`[DocumentTemplateCode::Quotation]` …), `subject($id, $code)` returning
+  `new DocumentSubject(<page object type>, <page object id>, <number>, <class code>, AuthorizationScope::branch($entity, $branch))` (throw `DOCUMENT_OBJECT_NOT_READY` when the
+  object cannot have the document yet) and `variables($id, $code, $locale)` filling the bag above (the editor lists what each variable holds per code; `DocumentVariables::demo`
+  shows the shape) — and add the class to the `tag([...], DocumentDataProvider::class)` call. Templates, preview, versions, storage, audit and permissions already work. For a
+  "Generate …" button, add the action to that page's panel in `App\Http\Documents\GeneratedDocumentsController` (like `forPolicy`/`forReceipt`), pass `documentGeneration` from
+  `ObjectPageController` and add a POST route that calls `DocumentGenerator::generate`.
+- HTTP and screens:
+  - Documents → Templates (`/documents/templates`, sidebar "Templates", secondary, `document.manage_templates`; `Platform\Documents\Http\DocumentTemplatesPageController`): queue by
+    document, class, language, version, status, changed (QueueView with inspector; "New template" drawer: document, class, language → a draft copied from the template in use).
+    Editor (`/documents/templates/{id}`): letterhead and body, "Save draft" (a version in use saves as a new draft), "Activate" (confirmation; disabled while unsaved), live
+    preview in a sandboxed `iframe srcdoc` refreshed 500 ms after typing (`POST /documents/templates/preview`, JSON, stores nothing, the refusal shown above the frame),
+    "Preview saved version as PDF" (`GET …/{id}/preview?format=pdf`, real Chrome; the HTML form has a strict CSP), variables list and versions list.
+  - Policy and receipt pages, Documents tab: "Printed documents" — language (English / বাংলা), "Generate schedule" (issued policies), "Generate endorsement n (date)" per
+    endorsement, "Generate receipt" (not for a bounced cheque); the versions generated (document and number, version, language, generated by, date, reference, download of the
+    stored PDF). `POST /policies/{id}/generated-documents` (template_code, object_id for an endorsement, locale) and `POST /receipts/{id}/generated-documents` (locale) in the
+    composition controller `App\Http\Documents\GeneratedDocumentsController` (page area + the generator's permission check); deferred prop `documentGeneration` (group
+    `history`) from `ObjectPageController`. The PDFs are also in the tab's document list. Timeline: "Policy schedule version 2 generated by Rafiq Islam". The policy and
+    collections module controllers are untouched.
+  - Components: `components/object/GeneratedDocuments.vue`; `DocumentList.vue` (`generation`), `ObjectPage.vue` (`documentGeneration`); pages `documents/templates/Index.vue`, `Edit.vue`.
+- Seeding: `DocumentTemplates::seedCurrentTenant()` from `BlankTenantSeeder`, `DatabaseSeeder` (demo tenant, after the unchanged `DemoTenantSeeder`) and `PartADemoSeeder`.
+  Tests use `seedDocumentTemplates($tenantId)` and `fakePdfRenderer()` (tests/Pest.php).
+- CI: `.github/workflows/ci.yml` sets `ERP_CHROME_BINARY=/usr/bin/google-chrome` on the backend job; `.env.example` documents it.
+- Shared files edited: `PermissionsSeeder`, `RoleTemplates`, `PlatformServiceProvider`, `InsuranceServiceProvider`, `DocumentStore` (attach split into a private `write`, behaviour
+  unchanged, plus `storeGenerated`), `ObjectPageController`, `ObjectHistory` (`document.generated` sentence), `routes/web.php`, `config/erp.php`, `lib/navigation.ts`,
+  `DocumentList.vue`, `ObjectPage.vue`, `components/object/types.ts`, `policies/Show.vue`, `receipts/Show.vue`, `tests/Pest.php`, `TenantIsolationEveryTableTest` (seeds templates and
+  generates a schedule with the fake renderer), `documents.test.ts` (+1), `BlankTenantSeeder`, `DatabaseSeeder`, `PartADemoSeeder`, `ci.yml`, `.env.example`.
+- Test changes (the requirement changed; equally strict exact lists): `PermissionsTest` and `RoleAdministrationTest` now expect `document.manage_templates` on the tenant admin
+  template and `document.generate` on the branch officer template; `UserAdministrationTest` expects the auditor refusal to name `document.generate` (the branch officer role's
+  first write permission, was `party.manage`).
+- **Placeholder values to verify (R8):**
+  | Where | Value |
+  |---|---|
+  | Default template wording (A-107) | closing sentences, e.g. "This schedule forms part of the policy and must be read together with the policy wording.", "Payments by cheque or other instruments are subject to realisation.", "I accept the amount above in full and final settlement of this claim."; signature lines ("For <company> / Authorised signatory", claimant and witness); section titles |
+  | Bangla wording (A-107) | every Bangla label and sentence of the defaults (e.g. পলিসি তফসিল, বিশেষ শর্তাবলি, প্রাপ্তি রসিদ, দাবি নিষ্পত্তি ভাউচার) — to be checked by a Bangla-speaking underwriter |
+  | Endorsement number (A-104) | `<policy number>/E<n>` |
+  | Preview demo data (A-107) | Padma General Insurance PLC, Rahima Akter, POL-HO-2026-000123 and the amounts — illustrative only |
+  | Numbers on Bangla documents (A-103) | Latin digits and English month abbreviations |
+- Not done, and why: providers for quotation, cover note and renewal notice (their objects come with R4–R6 and R9; templates, variables and preview are ready); claim
+  acknowledgement and discharge voucher providers (outside this slice; templates ready); bulk print/email/SMS from queues (design §3, with the notification gateway, LATER); a
+  template diff view; deleting drafts from the screen; syntax highlighting in the editor (plain text areas; the theme test forbids monospace utility classes).
+- Tests: `tests/Feature/Documents/DocumentTemplatesTest.php` (30: seeding, versioning and one active, database immutability, 22 unsafe bodies, the safe subset, escaping and
+  render failures, preview of all 8 defaults in en and bn, permissions and screens), `DocumentGenerationTest.php` (8: schedule row, stored document hash = bytes, audit;
+  regeneration keeps v1 with its template version; append-only triggers; endorsement and receipt; refusals; class template; branch permission; pages, props and download;
+  tenant isolation under the runtime role), `ChromePdfRendererTest.php` (2: real Chromium Bangla schedule → `%PDF-`, > 8 KB, NotoSansBengali embedded; a missing binary is
+  refused), `resources/js/tests/documents.test.ts` (+1).
+
+
+- Result: 1,240 Pest tests green, PHPStan 0 errors, Vitest (282) and vue-tsc green.

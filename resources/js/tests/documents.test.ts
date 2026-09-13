@@ -32,6 +32,33 @@ describe('documents tab (fix F2)', () => {
         expect(readOnly.find('button').exists()).toBe(false);
     });
 
+    it('offers the printed documents the user may generate, in the chosen language, and lists every version (slice R8)', async () => {
+        const generation = {
+            url: '/policies/p1/generated-documents',
+            actions: [{ label: 'Generate schedule', template_code: 'policy_schedule', object_id: null }, { label: 'Generate endorsement 1 (2026-10-01)', template_code: 'endorsement', object_id: 't1' }],
+            locales: [{ value: 'en', label: 'English' }, { value: 'bn', label: 'বাংলা' }],
+            history: [{ id: 'g2', title: 'Policy schedule', number: 'POL-HO-2026-000001', version: 2, locale: 'bn', template_version: 1, rendered_by: 'Rafiq Islam',
+                rendered_at: '2026-09-14T10:15:00+00:00', reference: 'a1b2c3d4e5f6', sha256: 'f'.repeat(64), size_bytes: 56_000, url: '/policies/p1/documents/d2' }],
+        };
+        const wrapper = mount(DocumentList, { props: { documents: [], uploadUrl: null, generation } });
+        const buttons = wrapper.findAll('section button');
+        expect(buttons.map((b) => b.text())).toEqual(['Generate schedule', 'Generate endorsement 1 (2026-10-01)']);
+        const row = wrapper.findAll('section tbody td').map((cell) => cell.text());
+        expect(row[0]).toContain('Policy schedule POL-HO-2026-000001');
+        expect(row.slice(1, 6)).toEqual(['2', 'বাংলা', 'Rafiq Islam', '14 Sep 2026', 'a1b2c3d4e5f6']);
+        expect(wrapper.get('section tbody a').attributes('href')).toBe('/policies/p1/documents/d2');
+
+        await wrapper.get('select').setValue('bn');
+        await buttons[1]!.trigger('click');
+        const form = (wrapper.findComponent({ name: 'GeneratedDocuments' }).vm as unknown as { $: { setupState: { form: { post: ReturnType<typeof vi.fn>; locale: string; object_id: string | null } } } }).$.setupState.form;
+        expect(form.post).toHaveBeenCalledWith('/policies/p1/generated-documents', expect.objectContaining({ preserveScroll: true }));
+        expect([form.locale, form.object_id]).toEqual(['bn', 't1']);
+
+        const empty = mount(DocumentList, { props: { documents: [], uploadUrl: null, generation: { ...generation, actions: [], history: [] } } });
+        expect(empty.get('section p').text()).toBe('Nothing printed yet.');
+        expect(empty.find('section button').exists()).toBe(false);
+    });
+
     it('writes file sizes for people', () => {
         expect(formatFileSize(512)).toBe('512 B');
         expect(formatFileSize(12_700)).toBe('12.4 KB');

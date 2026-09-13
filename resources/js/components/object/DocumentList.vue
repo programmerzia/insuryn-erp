@@ -3,14 +3,15 @@ import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
 import TextInput from '@/components/forms/TextInput.vue';
-import type { StoredDocumentRow } from '@/components/object/types';
+import GeneratedDocuments from '@/components/object/GeneratedDocuments.vue';
+import type { DocumentGeneration, StoredDocumentRow } from '@/components/object/types';
 import { formatDate, formatFileSize } from '@/lib/format';
 
 /**
  * The Documents tab (fix F2): the object's documents, newest first, each downloaded with its original name, and — when the user may attach —
  * a file and an optional description. Empty state (brief §4): one sentence and one action.
  */
-const props = defineProps<{ documents: StoredDocumentRow[]; uploadUrl?: string | null }>();
+const props = defineProps<{ documents: StoredDocumentRow[]; uploadUrl?: string | null; generation?: DocumentGeneration | null }>();
 
 /** ASSUMPTION: A-52 — mirrors config erp.documents (the server validates; this only narrows the file chooser). */
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx';
@@ -42,6 +43,8 @@ function attach(): void {
 
 <template>
     <div class="grid max-w-[900px] gap-4">
+        <GeneratedDocuments v-if="generation" :generation="generation" />
+        <h2 v-if="generation" class="text-ui font-medium">All documents</h2>
         <div v-if="documents.length" class="overflow-x-auto border border-line">
             <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
                 <colgroup><col /><col style="width: 90px" /><col style="width: 170px" /><col style="width: 110px" /><col style="width: 90px" /></colgroup>

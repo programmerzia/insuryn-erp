@@ -8,6 +8,10 @@ use App\Models\User;
 use App\Modules\Platform\Approvals\ApprovalHandlerRegistry;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Documents\Generation\DocumentDataProvider;
+use App\Modules\Platform\Documents\Generation\DocumentDataProviders;
+use App\Modules\Platform\Documents\Rendering\ChromePdfRenderer;
+use App\Modules\Platform\Documents\Rendering\PdfRenderer;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Database\Events\ConnectionEstablished;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +37,9 @@ final class PlatformServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(ApprovalHandlerRegistry::class);
+        // Slice R8: documents. PDFs through headless Chromium (D-34); data providers are tagged by the business contexts.
+        $this->app->bind(PdfRenderer::class, ChromePdfRenderer::class);
+        $this->app->singleton(DocumentDataProviders::class, fn ($app): DocumentDataProviders => new DocumentDataProviders($app->tagged(DocumentDataProvider::class)));
     }
 
     public function boot(): void

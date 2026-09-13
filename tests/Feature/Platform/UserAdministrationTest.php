@@ -85,7 +85,7 @@ it('assigns roles by tenant, entity or branch and removes them', function (): vo
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('branch_officer'), 'scope_type' => 'branch', 'scope_id' => $this->ctx['branch_id']], $this->headers)
         ->assertSessionHasNoErrors()->assertSessionHas('status', 'Branch Officer added.');
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('auditor'), 'scope_type' => 'tenant'], $this->headers)
-        ->assertSessionHasErrors(['form' => 'An auditor stays read-only, so Rafiq Officer cannot hold the Auditor role together with party.manage.']);
+        ->assertSessionHasErrors(['form' => 'An auditor stays read-only, so Rafiq Officer cannot hold the Auditor role together with document.generate.']); // the first write permission of the role (slice R8 added document.generate, A-101)
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('branch_officer'), 'scope_type' => 'branch', 'scope_id' => $this->ctx['branch_id']], $this->headers)
         ->assertSessionHasErrors(['form' => 'Rafiq Officer already has Branch Officer there.']);
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('accountant'), 'scope_type' => 'branch', 'scope_id' => (string) Str::uuid7()], $this->headers)

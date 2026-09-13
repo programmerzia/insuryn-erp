@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Pages;
 
+use App\Http\Documents\GeneratedDocumentsController;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
@@ -18,7 +19,7 @@ use Inertia\Response;
  */
 final class ObjectPageController
 {
-    public function policy(Request $request, string $policy, ObjectHistory $history, ObjectDocuments $documents): Response
+    public function policy(Request $request, string $policy, ObjectHistory $history, ObjectDocuments $documents, GeneratedDocumentsController $generated): Response
     {
         $subjects = [['policy', $policy]];
 
@@ -27,6 +28,7 @@ final class ObjectPageController
             'accounting' => Inertia::defer(fn (): array => $history->accounting($history->journalsOnDimension('dim_policy', $policy)), 'history'),
             'audit' => Inertia::defer(fn (): array => $history->audit($subjects), 'history'),
             'documents' => Inertia::defer(fn (): array => $documents->forPage('policy', $policy, "/policies/{$policy}"), 'history'),
+            'documentGeneration' => Inertia::defer(fn (): array => $generated->forPolicy(PageSupport::actor($request), $policy), 'history'), // slice R8
         ]);
     }
 
@@ -42,7 +44,7 @@ final class ObjectPageController
         ]);
     }
 
-    public function receipt(Request $request, string $receipt, ObjectHistory $history, ObjectDocuments $documents): Response
+    public function receipt(Request $request, string $receipt, ObjectHistory $history, ObjectDocuments $documents, GeneratedDocumentsController $generated): Response
     {
         $subjects = array_values([['receipt', $receipt], ...array_map(fn (string $id): array => ['suspense_item', $id], DB::table('suspense_items')->where('receipt_id', $receipt)->pluck('id')->map(fn ($id): string => (string) $id)->all())]);
 
@@ -51,6 +53,7 @@ final class ObjectPageController
             'accounting' => Inertia::defer(fn (): array => $history->accounting($history->journalsForReceipt($receipt)), 'history'),
             'audit' => Inertia::defer(fn (): array => $history->audit($subjects), 'history'),
             'documents' => Inertia::defer(fn (): array => $documents->forPage('receipt', $receipt, "/receipts/{$receipt}"), 'history'),
+            'documentGeneration' => Inertia::defer(fn (): array => $generated->forReceipt(PageSupport::actor($request), $receipt), 'history'), // slice R8
         ]);
     }
 }

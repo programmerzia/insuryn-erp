@@ -96,6 +96,7 @@ final class PartADemoSeeder extends Seeder
             TenantContext::run($context['tenant_id'], function () use ($context, $slug): void {
                 DB::table('legal_entities')->where('id', $context['entity_id'])->update(['code' => 'PADMA', 'name' => 'Padma General Insurance PLC']);
                 RoleTemplates::seedCurrentTenant();
+                app(\App\Modules\Platform\Documents\Templates\DocumentTemplates::class)->seedCurrentTenant(); // slice R8: default document templates
                 $this->entityId = $context['entity_id'];
                 $this->branchId = $context['branch_id'];
                 $this->users = $this->roleUsers($context['tenant_id'], $slug);

@@ -19,7 +19,9 @@ final class RoleTemplates
     /** Permissions an auditor may hold: read-only (§7.3 "Auditor role can never be combined with write permissions"). */
     public const READ_ONLY_PERMISSIONS = ['accounting.view_journals', 'audit.view', 'reports.financial', 'reports.regulatory'];
 
-    private const BRANCH_OFFICER = ['policy.create', 'policy.issue', 'receipt.create', 'party.manage'];
+    private const BRANCH_OFFICER = ['policy.create', 'policy.issue', 'receipt.create', 'party.manage',
+        // ASSUMPTION A-101 (slice R8): whoever quotes, issues and records receipts at the branch prints the schedule, endorsement and receipt for the customer.
+        'document.generate'];
     private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
@@ -47,7 +49,9 @@ final class RoleTemplates
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
             self::AUDITOR => ['name' => 'Auditor', 'permissions' => self::READ_ONLY_PERMISSIONS],
             // Interpretation (A-54, fix F3): approval limits are platform configuration (platform.*), not a financial permission.
-            'tenant_admin' => ['name' => 'Tenant Admin', 'permissions' => ['platform.manage_users', 'platform.manage_roles', 'platform.manage_approvals']],
+            'tenant_admin' => ['name' => 'Tenant Admin', 'permissions' => ['platform.manage_users', 'platform.manage_roles', 'platform.manage_approvals',
+                // ASSUMPTION A-101 (slice R8): document templates are tenant configuration (document.*, not accounting.*), so the §7.3 rule platform.manage_roles ✕ accounting.* is untouched.
+                'document.manage_templates']],
         ];
     }
 

@@ -119,6 +119,17 @@ Route::middleware('auth')->prefix('admin')->group(function (): void {
     Route::post('approval-limits/{policy}/end', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'end'])->whereUuid('policy');
 });
 
+// Documents (slice R8): template editor with live preview; everything needs document.manage_templates (the controller authorizes).
+Route::middleware('auth')->prefix('documents/templates')->group(function (): void {
+    Route::get('/', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'index']);
+    Route::post('/', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'store']);
+    Route::post('preview', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'preview']);
+    Route::get('{template}', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'show'])->whereUuid('template');
+    Route::put('{template}', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'update'])->whereUuid('template');
+    Route::post('{template}/activate', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'activate'])->whereUuid('template');
+    Route::get('{template}/preview', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'previewSaved'])->whereUuid('template');
+});
+
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);
 // sign-in, sign-out, password reset and two-factor routes come from Fortify (config/fortify.php).
 Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting')->name('accounting.')->group(function (): void {
@@ -162,6 +173,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('policies/{policy}', [\App\Http\Pages\ObjectPageController::class, 'policy'])->whereUuid('policy');
     Route::post('policies/{policy}/documents', [PolicyPageController::class, 'attachDocument'])->whereUuid('policy');
     Route::get('policies/{policy}/documents/{document}', [PolicyPageController::class, 'downloadDocument'])->whereUuid(['policy', 'document']);
+    Route::post('policies/{policy}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'policy'])->whereUuid('policy'); // slice R8
     Route::post('policies/{policy}/issue', [PolicyPageController::class, 'issue'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/endorse', [PolicyPageController::class, 'endorse'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy')->middleware('moves-money');
@@ -173,6 +185,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('receipts/{receipt}', [\App\Http\Pages\ObjectPageController::class, 'receipt'])->whereUuid('receipt');
     Route::post('receipts/{receipt}/documents', [CollectionsPageController::class, 'attachDocument'])->whereUuid('receipt');
     Route::get('receipts/{receipt}/documents/{document}', [CollectionsPageController::class, 'downloadDocument'])->whereUuid(['receipt', 'document']);
+    Route::post('receipts/{receipt}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'receipt'])->whereUuid('receipt'); // slice R8
     Route::get('receipts/{receipt}/allocate', [CollectionsPageController::class, 'allocateWorkbench'])->whereUuid('receipt');
     Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt')->middleware('moves-money');
     Route::get('suspense', [CollectionsPageController::class, 'suspense']);

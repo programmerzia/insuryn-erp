@@ -15,7 +15,7 @@ final class ObjectHistory
 {
     private const ACTION_WORDS = ['policy.quoted' => 'Policy quoted', 'policy.issued' => 'Policy issued', 'policy.endorsed' => 'Policy endorsed', 'policy.cancelled' => 'Policy cancelled',
         'claim.registered' => 'Claim registered', 'claim.reserved' => 'Reserve changed', 'claim_payment.approved' => 'Claim payment approved', 'receipt.recorded' => 'Receipt recorded',
-        'document.attached' => 'Document attached', 'document.downloaded' => 'Document downloaded'];
+        'document.attached' => 'Document attached', 'document.downloaded' => 'Document downloaded', 'document.generated' => 'Document generated'];
 
     /**
      * @param list<array{0: string, 1: string}> $subjects [object_type, object_id] pairs
@@ -156,6 +156,8 @@ final class ObjectHistory
             'receipt.bounced' => 'Cheque bounced on '.$date($after['bounced_on'] ?? 'today').$why.$by,
             'suspense.allocated' => $money($after['amount_minor'] ?? 0).' allocated from suspense'.$by,
             'document.attached' => 'Document '.($after['name'] ?? '').' attached'.$by,
+            'document.generated' => (\App\Modules\Platform\Documents\Templates\DocumentTemplateCode::tryFrom((string) ($after['template_code'] ?? ''))?->title() ?? 'Document')
+                .' version '.(string) ($after['version'] ?? '').' generated'.$by, // slice R8
             'user.invited' =>'Invited'.$by, 'user.invitation_sent' => 'Invitation sent again'.$by,
             'user.deactivated' => 'Deactivated'.$by, 'user.reactivated' => 'Reactivated'.$by,
             'user_role.assigned' => 'Given '.$this->roleAndScope($after).$by,

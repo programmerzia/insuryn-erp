@@ -45,6 +45,8 @@ jobs:
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
+      # Slice R8 (D-34): generated PDFs are printed by headless Chrome; ubuntu-24.04 runners ship it here, and ChromePdfRendererTest renders for real.
+      ERP_CHROME_BINARY: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2

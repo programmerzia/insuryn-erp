@@ -9,7 +9,7 @@ import AuditList from '@/components/object/AuditList.vue';
 import DocumentList from '@/components/object/DocumentList.vue';
 import SkeletonRows from '@/components/object/SkeletonRows.vue';
 import Timeline from '@/components/object/Timeline.vue';
-import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
+import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import type { Crumb } from '@/lib/drill';
@@ -31,6 +31,8 @@ const props = defineProps<{
     audit?: AuditRow[];
     documents?: StoredDocumentRow[];
     documentUpload?: string | null;
+    /** Slice R8: printed documents (generate and versions) on the Documents tab; loaded with the documents. */
+    documentGeneration?: DocumentGeneration | null;
     transactionsLabel?: string;
 }>();
 
@@ -96,7 +98,7 @@ const tabs = [
                     <Deferred data="accounting"><template #fallback><SkeletonRows /></template><AccountingList :journals="accounting ?? []" :currency="currency" :from="title" /></Deferred>
                 </TabsContent>
                 <TabsContent value="documents" class="outline-none">
-                    <Deferred data="documents"><template #fallback><SkeletonRows /></template><DocumentList :documents="documents ?? []" :upload-url="documentUpload" /></Deferred>
+                    <Deferred data="documents"><template #fallback><SkeletonRows /></template><DocumentList :documents="documents ?? []" :upload-url="documentUpload" :generation="documentGeneration" /></Deferred>
                 </TabsContent>
                 <TabsContent value="audit" class="outline-none">
                     <Deferred data="audit"><template #fallback><SkeletonRows /></template><AuditList :rows="audit ?? []" /></Deferred>

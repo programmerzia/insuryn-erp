@@ -25,6 +25,8 @@ final class PermissionsSeeder extends Seeder
         'platform.manage_approvals',
         // Phase 3 rating (slice R2): draft plans and duties / approve, activate and retire plans (A-69)
         'rating.manage_plans','rating.approve_plans',
+        // Phase 3 documents (slice R8): generate printable documents / edit and activate templates (A-101)
+        'document.generate','document.manage_templates',
     ];
 
     /**

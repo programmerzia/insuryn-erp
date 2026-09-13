@@ -8,7 +8,7 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
-import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
+import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -28,6 +28,7 @@ const props = defineProps<{
     audit?: AuditRow[];
     documents?: StoredDocumentRow[];
     documentUpload: string | null;
+    documentGeneration?: DocumentGeneration;
 }>();
 
 const base = `/policies/${props.policy.id}`;
@@ -69,6 +70,7 @@ async function renew(): Promise<void> {
             :audit="audit"
             :documents="documents"
             :document-upload="documentUpload"
+            :document-generation="documentGeneration"
         >
             <template #actions>
                 <button v-if="actions.endorse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'endorse'">Endorse</button>

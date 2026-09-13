@@ -7,7 +7,7 @@ import FormLayout from '@/components/forms/FormLayout.vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
-import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
+import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -23,6 +23,7 @@ const props = defineProps<{
     audit?: AuditRow[];
     documents?: StoredDocumentRow[];
     documentUpload: string | null;
+    documentGeneration?: DocumentGeneration;
 }>();
 
 const bouncing = ref(false);
@@ -50,6 +51,7 @@ const facts = computed(() => [
             :audit="audit"
             :documents="documents"
             :document-upload="documentUpload"
+            :document-generation="documentGeneration"
         >
             <template #actions>
                 <button v-if="actions.bounce" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="bouncing = true">Cheque bounced</button>

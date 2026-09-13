@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Modules\Platform\Authorization\RoleTemplates;
+use App\Modules\Platform\Documents\Templates\DocumentTemplates;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ final class BlankTenantSeeder extends Seeder
 
         TenantContext::run($tenantId, function () use ($tenantId): void {
             RoleTemplates::seedCurrentTenant();
+            app(DocumentTemplates::class)->seedCurrentTenant(); // slice R8: default document templates, English and Bangla
             foreach (PermissionsSeeder::SOD as $i => [$a, $b, $appliesTo]) {
                 DB::table('sod_rules')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'code' => 'SOD'.($i + 1), 'permission_a' => $a, 'permission_b' => $b, 'mode' => 'block', 'applies_to' => $appliesTo]);
             }
