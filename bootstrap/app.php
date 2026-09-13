@@ -42,8 +42,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // a broken business rule → 422, both with the machine-readable reason code.
         // API and JSON requests get the machine-readable body; browser (Inertia) forms go back to the form with the reason as a `form` error.
         $wantsJson = fn (Request $request): bool => $request->is('api/*') || $request->expectsJson();
+        // Browser forms get the reason written for people (UX brief §4); JSON keeps the domain message.
         $backToForm = fn (Request $request, string $message, string $reason) => back()->withInput($request->except(['password', 'password_confirmation', 'current_password']))
-            ->withErrors(['form' => $message, 'reason' => $reason]);
+            ->withErrors(['form' => \App\Http\Feedback\ReasonMessages::forPeople($reason, $message), 'reason' => $reason]);
         $exceptions->render(fn (PermissionDenied $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => 'PERMISSION_DENIED', 'permission' => $e->permission], 403)
             : ($request->isMethod('GET') ? response('You do not have permission for this page.', 403) : $backToForm($request, 'You do not have permission for this action.', 'PERMISSION_DENIED')));

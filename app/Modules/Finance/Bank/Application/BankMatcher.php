@@ -151,6 +151,35 @@ final class BankMatcher
     }
 
     /**
+     * Undo a match or an explanation (UX brief §4 "undo where the action is reversible"). Matching posts nothing, so undoing it is safe while the
+     * statement line's month is not locked; a locked month keeps its reconciliation as it was signed off.
+     *
+     * @throws BusinessRuleViolation NOT_MATCHED | PERIOD_LOCKED
+     */
+    public function unmatch(string $statementLineId, string $actorUserId): void
+    {
+        [$bankAccount] = $this->authorize($statementLineId, $actorUserId);
+
+        DB::transaction(function () use ($statementLineId, $actorUserId, $bankAccount): void {
+            $statementLine = BankStatementLine::query()->whereKey($statementLineId)->lockForUpdate()->firstOrFail();
+            if ($statementLine->match_status === 'unmatched') {
+                throw new BusinessRuleViolation('NOT_MATCHED', 'This statement line is not matched or explained, so there is nothing to undo.');
+            }
+            $period = DB::table('fiscal_periods as f')->join('books as b', 'b.id', '=', 'f.book_id')->where('b.is_primary', true)->where('f.entity_id', $bankAccount->entity_id)
+                ->where('f.starts', '<=', $statementLine->posted_on->toDateString())->where('f.ends', '>=', $statementLine->posted_on->toDateString())->first(['f.starts', 'f.status']);
+            if ($period !== null && $period->status === 'locked') {
+                throw new BusinessRuleViolation('PERIOD_LOCKED', CarbonImmutable::parse((string) $period->starts)->format('F Y').' is locked, so its bank matches cannot change. Ask for the period to be reopened first.');
+            }
+            $before = ['match_status' => $statementLine->match_status, 'journal_line_ids' => DB::table('bank_matches')->where('statement_line_id', $statementLine->id)->pluck('journal_line_id')->all(),
+                'explanation' => $statementLine->explanation];
+            DB::table('bank_matches')->where('statement_line_id', $statementLine->id)->delete();
+            $statementLine->forceFill(['match_status' => 'unmatched', 'explanation' => null, 'explained_by' => null])->save();
+            $this->audit->record('bank_line.unmatched', AuditSubject::of('bank_statement_line', $statementLine->id), $before, ['match_status' => 'unmatched'],
+                null, 'bank.match', Actor::user($actorUserId));
+        });
+    }
+
+    /**
      * @return list<array{journal_line_id: string, journal_id: string, journal_number: string|null, posting_date: string, amount_minor: int, currency: string,
      *     reference: string|null, receipt_number: string|null, source_type: string|null, source_id: string|null}>
      */

@@ -29,18 +29,23 @@ useShortcut('app.theme', () => savePreference('theme', preferences.theme === 'da
 useShortcut('app.density', () => savePreference('density', preferences.density === 'compact' ? 'comfortable' : 'compact', 0), { allowInInputs: true });
 
 const status = computed(() => page.props.status);
-watch(status, (message) => message && toast(message, { tone: 'ok' }), { immediate: true });
+watch(status, (message) => {
+    if (!message) return;
+    const undo = page.props.undo as { label: string; url: string } | null;
+    toast(message, { tone: 'ok', undo: undo ? () => router.post(undo.url, {}, { preserveScroll: true }) : undefined, duration: undo ? 6000 : 4000 });
+}, { immediate: true });
 // Business-rule refusals from list and inspector actions (forms show theirs above the fields as well).
 watch(() => page.props.errors?.form, (message) => message && toast(message, { tone: 'danger', duration: 6000 }));
 </script>
 
 <template>
     <Head :title="title" />
+    <a href="#main" class="sr-only z-50 rounded-control bg-surface px-3 py-2 text-ui text-ink focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:shadow-float">Skip to the main content</a>
     <div class="grid h-screen grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-surface text-ink">
         <TopBar class="col-span-2 col-start-1 row-start-1" />
         <TabStrip class="col-span-2 col-start-1 row-start-2" />
         <Sidebar class="col-start-1 row-start-3" />
-        <main id="main" class="col-start-2 row-start-3 min-h-0" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4'">
+        <main id="main" tabindex="-1" class="col-start-2 row-start-3 min-h-0 outline-none" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4'">
             <slot />
         </main>
         <StatusBar class="col-span-2 col-start-1 row-start-4" />

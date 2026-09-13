@@ -36,7 +36,8 @@ const columns: DataColumn<PolicyRow>[] = [
             :row-key="(p) => p.id"
             currency="BDT"
             selectable
-            empty-text="No policies yet. Start with a new quote."
+            empty-text="No policies yet."
+            :empty-action="can('policy.create') ? { label: 'New quote', href: '/policies/create' } : null"
             :action="can('policy.create') ? { label: 'New quote', href: '/policies/create' } : null"
             :inspector-title="(p) => p.number ?? 'Quote'"
             :inspector-subtitle="(p) => p.policyholder"

@@ -99,7 +99,14 @@ final class BankPageController
         $data = $request->validate(['journal_line_ids' => ['required', 'array', 'min:1'], 'journal_line_ids.*' => ['required', 'uuid']]);
         $matcher->match($statementLine, $data['journal_line_ids'], PageSupport::actor($request));
 
-        return back()->with('status', 'Statement line matched.');
+        return back()->with('status', 'Statement line matched.')->with('undo', ['label' => 'Undo', 'url' => "/bank/lines/{$statementLine}/unmatch"]);
+    }
+
+    public function unmatch(Request $request, string $statementLine, BankMatcher $matcher): RedirectResponse
+    {
+        $matcher->unmatch($statementLine, PageSupport::actor($request));
+
+        return back()->with('status', 'Match undone.');
     }
 
     public function explain(Request $request, string $statementLine, BankMatcher $matcher): RedirectResponse
@@ -108,6 +115,6 @@ final class BankPageController
         $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
         $matcher->explain($statementLine, $data['reason'], PageSupport::actor($request));
 
-        return back()->with('status', 'Statement line explained.');
+        return back()->with('status', 'Statement line explained.')->with('undo', ['label' => 'Undo', 'url' => "/bank/lines/{$statementLine}/unmatch"]);
     }
 }

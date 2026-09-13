@@ -2,7 +2,7 @@
 import { ArrowDown, ArrowUp } from 'lucide-vue-next';
 import { ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuTrigger } from 'reka-ui';
 import { useVirtualizer } from '@tanstack/vue-virtual';
-import { router } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 import PinLink from '@/components/shell/PinLink.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -13,6 +13,7 @@ import Kbd from '@/components/ui/Kbd.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { savePreference, usePreferences } from '@/lib/preferences';
+import { useReloading } from '@/lib/loading';
 import { useShortcut } from '@/lib/shortcuts';
 import { pinTab } from '@/lib/tabs';
 import { toast } from '@/lib/toasts';
@@ -40,8 +41,10 @@ const props = withDefaults(
         openOnClick?: boolean;
         /** Icon-only toolbar with tooltips, for tables sharing the screen. */
         compactToolbar?: boolean;
+        /** Empty state's one primary action (brief §4 "one sentence + one primary action"). */
+        emptyAction?: { label: string; href: string } | null;
     }>(),
-    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false },
+    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false, emptyAction: null },
 );
 const emit = defineEmits<{ open: [row: T]; close: [] }>();
 const active = defineModel<string | null>('active', { default: null });
@@ -58,6 +61,8 @@ const state = useDataTable<T>({
 const { table, rows, columns, totals, selectedRows, showFilters, activeIndex } = state;
 
 const preferences = usePreferences();
+const reloading = useReloading();
+const showSkeleton = computed(() => props.loading || reloading.value);
 const scroller = ref<HTMLElement | null>(null);
 const filterRow = ref<HTMLElement | null>(null);
 const rowHeight = computed(() => (preferences.density === 'comfortable' ? 40 : 32));
@@ -102,6 +107,10 @@ function display(meta: DataColumn<T>, row: T): string {
     if (meta.type === 'money') return formatMoney(String(value));
     if (meta.type === 'date') return formatDate(String(value));
     return String(value);
+}
+
+function focusGrid(): void {
+    scroller.value?.querySelector<HTMLElement>('table[role=grid]')?.focus();
 }
 
 function focusRow(index: number): void {
@@ -230,18 +239,19 @@ defineExpose({ state, focusRow });
 
         <ContextMenuRoot>
             <ContextMenuTrigger as-child>
-                <div
-                    ref="scroller"
-                    class="relative min-h-0 flex-1 overflow-auto outline-none"
-                    :class="activeIndex === -1 ? 'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset' : ''"
-                    tabindex="0"
-                    role="grid"
-                    :aria-label="label"
-                    :aria-rowcount="rows.length"
-                    :aria-multiselectable="selectable || undefined"
-                    @keydown="onKeydown"
-                >
-                    <table class="table-fixed border-separate border-spacing-0 text-dense" :style="{ width: `max(${tableWidth}px, 100%)` }">
+                <div ref="scroller" class="relative min-h-0 flex-1 overflow-auto">
+                    <table
+                        class="table-fixed border-separate border-spacing-0 text-dense outline-none"
+                        :class="activeIndex === -1 ? 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus' : ''"
+                        :style="{ width: `max(${tableWidth}px, 100%)` }"
+                        tabindex="0"
+                        role="grid"
+                        :aria-label="label"
+                        :aria-rowcount="rows.length + 1"
+                        :aria-multiselectable="selectable || undefined"
+                        :aria-activedescendant="activeIndex >= 0 && rows[activeIndex] ? `${id}-row-${activeIndex}` : undefined"
+                        @keydown="onKeydown"
+                    >
                         <colgroup>
                             <col v-if="selectable" style="width: 36px" />
                             <col v-for="{ column } in columns" :key="column.id" :style="{ width: `${column.getSize()}px` }" />
@@ -303,8 +313,8 @@ defineExpose({ state, focusRow });
                                         :placeholder="meta.type === 'money' ? 'e.g. >1000' : meta.type === 'date' ? 'e.g. Sep 2026' : 'Contains'"
                                         :aria-label="`Filter ${meta.header}`"
                                         @input="state.setFilter(column.id, ($event.target as HTMLInputElement).value)"
-                                        @keydown.escape.stop="state.setFilter(column.id, ''); scroller?.focus()"
-                                        @keydown.down.prevent="scroller?.focus(); focusRow(0)"
+                                        @keydown.escape.stop="state.setFilter(column.id, ''); focusGrid()"
+                                        @keydown.down.prevent="focusGrid(); focusRow(0)"
                                     />
                                 </th>
                                 <th class="border-b border-line" />
@@ -312,7 +322,7 @@ defineExpose({ state, focusRow });
                         </thead>
                         <tbody>
                             <tr v-if="padTop > 0" aria-hidden="true"><td :style="{ height: `${padTop}px` }" /></tr>
-                            <template v-if="loading">
+                            <template v-if="showSkeleton">
                                 <tr v-for="n in 8" :key="`skeleton-${n}`" class="h-(--row-h)" aria-hidden="true">
                                     <td v-if="selectable" class="border-b border-line" />
                                     <td v-for="{ column } in columns" :key="column.id" class="border-b border-line px-3"><span class="block h-2.5 w-2/3 animate-pulse rounded-control bg-surface-2" /></td>
@@ -323,6 +333,7 @@ defineExpose({ state, focusRow });
                                 v-for="{ row, index } in windowRows"
                                 v-else
                                 :key="row.id"
+                                :id="`${id}-row-${index}`"
                                 :data-row-index="index"
                                 class="h-(--row-h) cursor-default"
                                 :class="[
@@ -330,7 +341,7 @@ defineExpose({ state, focusRow });
                                     index === activeIndex ? 'outline-2 -outline-offset-2 outline-focus' : '',
                                 ]"
                                 :aria-selected="selectable ? row.getIsSelected() : row.id === active"
-                                :aria-rowindex="index + 1"
+                                :aria-rowindex="index + 2"
                                 @click="openOnClick ? open(index) : ((activeIndex = index), (active = row.id))"
                                 @contextmenu="contextRow = index; activeIndex = index"
                             >
@@ -354,10 +365,11 @@ defineExpose({ state, focusRow });
                                 <td class="border-b border-line" />
                             </tr>
                             <tr v-if="padBottom > 0" aria-hidden="true"><td :style="{ height: `${padBottom}px` }" /></tr>
-                            <tr v-if="!loading && rows.length === 0">
+                            <tr v-if="!showSkeleton && rows.length === 0">
                                 <td :colspan="columns.length + (selectable ? 2 : 1)" class="px-3 py-10 text-center text-ui text-ink-2">
                                     <slot name="empty">
                                         <p>{{ activeFilters ? 'No rows match these filters.' : emptyText }}</p>
+                                        <Link v-if="!activeFilters && emptyAction" :href="emptyAction.href" class="mt-3 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">{{ emptyAction.label }}</Link>
                                     </slot>
                                     <button v-if="activeFilters" type="button" class="mt-2 text-accent-text hover:underline" @click="state.columnFilters.value = []">Clear filters</button>
                                 </td>

@@ -80,7 +80,7 @@ final class PreviewJournal
             /** @var array<string, mixed> $body */
             $body = (array) $response->getData(true);
             if (! isset($body['errors']) && isset($body['message'])) {
-                $body['errors'] = ['form' => $body['message'], 'reason' => $body['reason'] ?? null];
+                $body['errors'] = ['form' => \App\Http\Feedback\ReasonMessages::forPeople((string) ($body['reason'] ?? ''), (string) $body['message']), 'reason' => $body['reason'] ?? null];
             }
 
             return ['status' => $response->getStatusCode(), 'body' => $body];

@@ -49,7 +49,8 @@ const columns: DataColumn<ReceiptRow>[] = [
                 :row-key="(r) => r.id"
                 :currency="currency"
                 selectable
-                empty-text="No receipts yet. Record one when money arrives."
+                empty-text="No receipts yet."
+                :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }"
                 export-name="receipts"
                 @close="active = null"
             >

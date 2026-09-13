@@ -28,6 +28,8 @@ final class HandleInertiaRequests extends Middleware
             'preferences' => fn (): array => $user instanceof User ? app(\App\Modules\Platform\Preferences\UserPreferences::class)->of($user->id) : \App\Modules\Platform\Preferences\UserPreferences::DEFAULTS,
             'shell' => fn (): ?array => $user instanceof User ? self::shell($user->id) : null,
             'status' => fn (): mixed => $request->hasSession() ? $request->session()->get('status') : null,
+            // UX brief §4: a reversible action's confirmation carries its undo (label and the POST that reverses it).
+            'undo' => fn (): mixed => $request->hasSession() ? $request->session()->get('undo') : null,
         ];
     }
 

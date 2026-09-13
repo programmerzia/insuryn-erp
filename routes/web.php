@@ -95,6 +95,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('bank/{bankAccount}/auto-match', [BankPageController::class, 'autoMatch'])->whereUuid('bankAccount');
     Route::post('bank/lines/{statementLine}/match', [BankPageController::class, 'match'])->whereUuid('statementLine');
     Route::post('bank/lines/{statementLine}/explain', [BankPageController::class, 'explain'])->whereUuid('statementLine');
+    Route::post('bank/lines/{statementLine}/unmatch', [BankPageController::class, 'unmatch'])->whereUuid('statementLine');
 
     Route::get('claims', [ClaimPageController::class, 'index']);
     Route::get('claims/create', [ClaimPageController::class, 'create']);

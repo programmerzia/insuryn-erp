@@ -108,4 +108,21 @@ describe('DataTable', () => {
         expect(statusBar.rows).toBe(1000);
         expect(wrapper.find('tfoot').text()).toContain('1,000.00');
     });
+
+    it('shows one sentence and one action when empty, skeleton rows while loading, and a way out when filters hide everything', async () => {
+        const empty = mountTable({ rows: [], emptyText: 'No receipts yet.', emptyAction: { label: 'Record a receipt', href: '/receipts/create' } });
+        expect(empty.find('tbody').text()).toContain('No receipts yet.');
+        expect(empty.find('tbody a[href="/receipts/create"]').text()).toBe('Record a receipt');
+
+        const loading = mountTable({ loading: true });
+        expect(loading.findAll('tbody tr[aria-hidden="true"]').length).toBeGreaterThanOrEqual(8);
+        expect(bodyRows(loading)).toHaveLength(0);
+
+        const filtered = mountTable({ emptyAction: { label: 'Record a receipt', href: '/receipts/create' } });
+        await filtered.findAll('[role=toolbar] button').find((b) => b.text().startsWith('Filter'))!.trigger('click');
+        await filtered.find('input[aria-label="Filter Amount"]').setValue('>999999');
+        expect(filtered.find('tbody').text()).toContain('No rows match these filters.');
+        expect(filtered.find('tbody a').exists()).toBe(false);
+        expect(filtered.find('tbody button').text()).toBe('Clear filters');
+    });
 });

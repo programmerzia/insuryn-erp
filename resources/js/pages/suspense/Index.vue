@@ -34,7 +34,8 @@ void props;
             :rows="ageing.items"
             :row-key="(i) => i.id"
             currency="BDT"
-            empty-text="No unallocated receipts. Import a bank statement to find more."
+            empty-text="No unallocated receipts."
+            :empty-action="{ label: 'Import a bank statement', href: '/bank' }"
             :inspector-title="(i) => i.receipt_number"
             :inspector-subtitle="(i) => i.reference ?? 'No reference'"
         >

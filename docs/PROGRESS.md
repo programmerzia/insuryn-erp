@@ -72,7 +72,7 @@ code and in the register below, configurable.
 | U6 | UX: role home queues and badges | done | see git log |
 | U7 | UX: rebuild existing screens | done | see git log |
 | U8 | UX: object pages with timeline | done | see git log |
-| U9 | UX: feedback, states, accessibility | pending | |
+| U9 | UX: feedback, states, accessibility | done | see git log |
 | U10 | UX: performance | pending | |
 
 ## ASSUMPTION register
@@ -1136,3 +1136,28 @@ Scope: review only; only the critical finding was fixed.
   `{policy,policy-timeline,policy-accounting,receipt}-…png` (finance.manager). Self-critique fix: the accounting side panel was 440px and truncated account
   names (now 680px; the drawer takes a width).
 - Result: 997 Pest tests, 208 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### U9 — UX: feedback, states, accessibility — done
+- Undo (brief §4 "undo where the action is reversible"): `BankMatcher::unmatch` (Finance module) undoes a match or an explanation, audited as
+  `bank_line.unmatched`, refused with a plain reason once the statement line's month is locked; `POST /bank/lines/{line}/unmatch`. Match and explain
+  flash an `undo` (label and URL) with their status; the shell shows it as a 6-second toast with an Undo button. Unallocating a receipt is not
+  offered: an allocation posts journals, so undoing it needs a compensating event that does not exist yet.
+- Specific errors (brief §4 "Errors say what happened and what to do"; "minor units never shown"): `App\Http\Feedback\ReasonMessages` rewrites
+  business-rule refusals for browser forms and journal previews — amounts in major units computed from the domain message ("The amount exceeds the
+  installment balance of 60,000.00 by 1,200.00.", "The amount exceeds what is left in suspense (20,000.00) by 5,000.00.", reserve, deposit, refund,
+  match totals), fixed sentences for twenty reasons (SoD, maker-checker, control accounts, close readiness, stale records), and record ids stripped
+  from anything else. The JSON API keeps the domain's message (contract unchanged, tested). Field validation says what to enter and names fields the
+  way screens do (`lang/en/validation.php`: "Enter the value date.", "Enter the cheque date as a date, like 12 Sep 2026.", "Choose the policy from the list.").
+- States: tables show skeleton rows in place during same-page reloads that take longer than 250ms (`lib/loading.ts`) and while deferred props
+  load (U8); empty tables give one sentence and one primary action (receipts, suspense "Import a bank statement", policies, claims, journals), and
+  "No rows match these filters · Clear filters" when filters hide everything. No full-screen spinner anywhere (the thin Inertia progress bar remains).
+- Accessibility pass: automated WCAG 2.1 A/AA audit with axe-core (`scripts/ux-axe.mjs`, new devDependency) on 32 screens plus sign-in, light and
+  dark. It found two critical issues, both fixed: the data table put `role="grid"` on its scroll wrapper instead of the table (grid without rows) — the
+  table is now the focusable grid with `aria-activedescendant`, row ids and row indexes; selects did not receive their Field's id, so their labels did
+  not name them. Final run: no violations on any audited screen in either theme. Also: "Skip to the main content" link, `main` focus target, visible
+  `:focus-visible` outline from the theme token (3:1 checked in U1), contrast AA on every token pairing (U1 test), reduced motion honoured globally (U1).
+- Tests first: `tests/Feature/Pages/FeedbackTest.php` (match flashes undo; unmatch restores unmatched with audit; locked month refuses with the sentence;
+  over-allocation and over-suspense messages in major units; API message unchanged); `resources/js/tests/data-table.test.ts` gains empty action,
+  skeleton rows and filtered-empty behaviour.
+- Screenshots: `storage/ux-screenshots/U9/{undo-toast,specific-error,empty-filtered,skip-link}-{1366,1920}-{light,dark}.png`.
+- Result: 999 Pest tests, 210 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
