@@ -45,7 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withErrors(['form' => $message, 'reason' => $reason]);
         $exceptions->render(fn (PermissionDenied $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => 'PERMISSION_DENIED', 'permission' => $e->permission], 403)
-            : response('You do not have permission for this page or action.', 403));
+            : ($request->isMethod('GET') ? response('You do not have permission for this page.', 403) : $backToForm($request, 'You do not have permission for this action.', 'PERMISSION_DENIED')));
         $exceptions->render(fn (SodViolation $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));

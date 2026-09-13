@@ -56,7 +56,7 @@ code and in the register below, configurable.
 | 1C.7 | Account security page (2FA, password) | done | see git log |
 | 1C.8 | Operations UI: parties, products, policies | done | see git log |
 | 1C.9 | Operations UI: receipts, suspense, refunds, bank | done | see git log |
-| 1C.10 | Operations UI: claims and commission | pending | |
+| 1C.10 | Operations UI: claims and commission | done | see git log |
 | 1C.11 | Operations UI: month-end close and reports | pending | |
 | 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | pending | |
 
@@ -809,3 +809,22 @@ Scope: review only; only the critical finding was fixed.
   over-allocation) → bounce → register and list; refund request, SoD refusal, release; agent collection, deposit and position; dunning list;
   bank account, import, auto-match message, manual match and explanation empty the queue.
 - Result: 949 tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### 1C.10 — Operations UI: claims and commission — done
+- `Insurance\Claims\Http\Controllers\ClaimPageController` (area: claim.* and reports.financial): `/claims` (status filter), `/claims/create` (policies
+  that were issued), `/claims/{id}` (case reserve and history, payments with request-release / release, recoveries; set reserve, approve payment,
+  record recovery, close, reject, reopen — shown only when allowed). Messages say when a payment or release went for approval (above a limit).
+- `Insurance\Commission\Http\Controllers\CommissionPageController` (area: commission.manage_plans, commission.approve, commission.pay,
+  reports.financial): `/commission` (payout statements with pay, plans, approve a payout, new plan with the rate in percent → basis points
+  with string arithmetic), `/commission/agents/{agent}` (agent statement for a range with totals and opening/closing payable).
+- Approvals inbox: `Platform\Approvals\ApprovalInboxQuery::decidableBy(user)` (pending approvals whose current step the user may decide — holds
+  the step permission, is not the requester, has not decided a step), `Platform\Approvals\DescribesApprovalSubject` (optional handler interface:
+  title, amount, link — implemented by the claim payment, claim payment release, claim reopen, manual journal, reversal and period reopen
+  handlers, so Platform never depends on modules), `Platform\Approvals\Http\ApprovalsPageController` (`/approvals`, decide approve/reject).
+  The top bar links to Approvals.
+- `bootstrap/app.php`: a permission refusal on a form submit (non-GET browser request) now returns to the form with the reason; page visits
+  still get 403.
+- Tests `tests/Feature/Pages/ClaimsCommissionApprovalsPagesTest.php`: area access and the inbox for anyone; full claim flow through the screens
+  (permission refusal back to the form, release by someone else, recovery, close, detail props, filter); approval above a limit decided from the
+  inbox by the right person only (requester sees nothing); plan in percent, statement approve, SoD refusal on pay, pay by someone else, statement page.
+- Result: 953 tests green, PHPStan 0 errors, vue-tsc and build green.

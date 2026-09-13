@@ -6,10 +6,13 @@ use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Finance\Bank\Http\Controllers\BankPageController;
+use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
+use App\Modules\Insurance\Commission\Http\Controllers\CommissionPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Product\Http\Controllers\ProductPageController;
+use App\Modules\Platform\Approvals\Http\ApprovalsPageController;
 use App\Modules\Platform\Authentication\Http\SecurityPageController;
 use Illuminate\Support\Facades\Route;
 
@@ -73,4 +76,24 @@ Route::middleware('auth')->group(function (): void {
     Route::post('bank/{bankAccount}/auto-match', [BankPageController::class, 'autoMatch'])->whereUuid('bankAccount');
     Route::post('bank/lines/{statementLine}/match', [BankPageController::class, 'match'])->whereUuid('statementLine');
     Route::post('bank/lines/{statementLine}/explain', [BankPageController::class, 'explain'])->whereUuid('statementLine');
+
+    Route::get('claims', [ClaimPageController::class, 'index']);
+    Route::get('claims/create', [ClaimPageController::class, 'create']);
+    Route::post('claims', [ClaimPageController::class, 'store']);
+    Route::get('claims/{claim}', [ClaimPageController::class, 'show'])->whereUuid('claim');
+    Route::post('claims/{claim}/reserve', [ClaimPageController::class, 'reserve'])->whereUuid('claim');
+    Route::post('claims/{claim}/payments', [ClaimPageController::class, 'approvePayment'])->whereUuid('claim');
+    Route::post('claims/{claim}/recover', [ClaimPageController::class, 'recover'])->whereUuid('claim');
+    Route::post('claims/{claim}/{action}', [ClaimPageController::class, 'decision'])->whereUuid('claim')->whereIn('action', ['close', 'reject', 'reopen']);
+    Route::post('claim-payments/{payment}/request-release', [ClaimPageController::class, 'requestRelease'])->whereUuid('payment');
+    Route::post('claim-payments/{payment}/release', [ClaimPageController::class, 'release'])->whereUuid('payment');
+
+    Route::get('commission', [CommissionPageController::class, 'index']);
+    Route::post('commission/plans', [CommissionPageController::class, 'storePlan']);
+    Route::post('commission/statements', [CommissionPageController::class, 'approve']);
+    Route::post('commission/statements/{statement}/pay', [CommissionPageController::class, 'pay'])->whereUuid('statement');
+    Route::get('commission/agents/{agent}', [CommissionPageController::class, 'statement'])->whereUuid('agent');
+
+    Route::get('approvals', [ApprovalsPageController::class, 'index']);
+    Route::post('approvals/{approval}/decide', [ApprovalsPageController::class, 'decide'])->whereUuid('approval');
 });

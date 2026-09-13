@@ -24,6 +24,13 @@ export const navigation: NavGroup[] = [
         ],
     },
     {
+        label: 'Claims',
+        items: [
+            { label: 'Claims', href: '/claims', any: ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_request', 'claim.pay_release', 'claim.close', reader] },
+            { label: 'Commission', href: '/commission', any: ['commission.manage_plans', 'commission.approve', 'commission.pay', reader] },
+        ],
+    },
+    {
         label: 'Collections',
         items: [
             { label: 'Receipts', href: '/receipts', any: collections },
