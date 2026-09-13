@@ -65,7 +65,7 @@ code and in the register below, configurable.
 | 1C.11 | Operations UI: month-end close and reports | done | see git log |
 | 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | done | see git log |
 | U1 | UX: theme tokens and design system | done | see git log |
-| U2 | UX: application shell | pending | |
+| U2 | UX: application shell | done | see git log |
 | U3 | UX: command palette and shortcuts registry | pending | |
 | U4 | UX: data table | pending | |
 | U5 | UX: form system | pending | |
@@ -906,3 +906,34 @@ Scope: review only; only the critical finding was fixed.
 - Screenshots: `storage/ux-screenshots/U1/{policies,journals,receipt-create,tb}-{1366,1920}-{light,dark}.png`. Self-critique: tokens and contrast hold in
   both modes; the old top-bar shell, ISO dates, pill-less but unsorted tables and card-wrapped forms remain until U2, U4, U5 and U7.
 - Result: 956 Pest tests, 121 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 96.9 KB gzip).
+
+### U2 — UX: application shell — done
+- Backend (thin): migration `2026_09_17_000001_create_user_preferences` (tenant + RLS, one JSON document per user);
+  `Platform\Preferences\UserPreferences` (`of`, `set`): keys `theme` (system|light|dark), `density` (compact|comfortable), `sidebar_collapsed`,
+  `branch_id`, `splits.<id>` (240–1400px), `tabs` (≤ 8, in-app paths), `tables.<id>`, `views.<id>`, `recents` (≤ 20), `drafts.<id>`; unknown keys
+  and invalid values are refused with 422. `PUT /preferences/{key} {value}` (auth). Shared props `preferences` and `shell` (entity, active
+  branches, approvals waiting for the user; `badges` filled in U6). `app.blade.php` stamps `data-theme` (explicit choice only) and `data-density`
+  on `<html>` server-side, so there is no flash of the wrong theme.
+- Shell (`layouts/AppLayout.vue`, `components/shell/*`): 44px top bar (sidebar toggle, CoreBari mark, entity/branch switcher, "Search or run
+  a command Ctrl+K" field, approvals bell, display settings menu with theme and density, user menu); pinned tab strip (Ctrl+click through
+  `PinLink`, max 8, persisted, closable); sidebar ordered by frequency with Lucide 16px/1.5 icons, badge dots with counts, collapsible to
+  icons with tooltips (Ctrl+B, persisted); status bar (row count, selection count, Σ of selected amounts, pagination, entity · branch ·
+  currency); `SplitPane` (draggable divider, arrow keys, width persisted per list); `Inspector` (Details · Accounting · History · Files tabs
+  from slots, Esc closes, Ctrl+Enter primary action with its shortcut shown); toasts bottom-left, 4s, with optional undo (`lib/toasts.ts`,
+  flash `status` now arrives as a toast).
+- Libraries: `lib/preferences.ts` (hydrate once, optimistic, debounced save), `lib/shortcuts.ts` (registry + `useShortcut`; Ctrl also matches
+  ⌘; single-key shortcuts ignored while typing), `lib/tabs.ts`, `lib/statusbar.ts`, `lib/http.ts` (JSON with XSRF), `lib/palette.ts` (open state
+  for U3), reka-ui menus with shortcut hints (`components/ui/menu`), `Kbd`.
+- Journals list uses the split pane, inspector, pinned-tab links and status bar as the first queue on the shell (full table rebuild in U4/U7).
+- Tests first: `tests/Feature/Platform/UserPreferencesTest.php` (guests refused; per-user merge; shared prop; `data-theme`/`data-density` on
+  `<html>`; eight invalid inputs refused with nothing stored; eight tabs kept); `TenantIsolationEveryTableTest` scenario now writes a preference
+  so the new table is covered (extended, nothing relaxed); `resources/js/tests/shell.test.ts` (shortcut matching incl. ⌘, registry keys,
+  grouped preference keys, tab pin/dedupe/refuse ninth/unpin); theme test now also refuses arbitrary pixel font sizes.
+- Checked in the browser: collapse persists across reload (sidebar 48px after reload); two layout defects found in screenshots and fixed
+  (status bar pushed off-screen when no tabs were pinned; sidebar placed right of the content when tabs were pinned, because `TooltipProvider`
+  renders no element) — grid rows and columns now explicit.
+- Screenshots: `storage/ux-screenshots/U2/{journals-inspector,tabs,policies,settings-menu,switcher,collapsed}-{1366,1920}-{light,dark}.png`,
+  `sidebar-collapsed-1366-light.png`. `scripts/ux-shots.mjs` gained interaction steps and signs in once (Fortify's login limiter).
+- Not yet: the branch choice is stored and shown but lists do not filter by it until their queries take a branch (U6/U7); sidebar badges are
+  zero until U6; the command field opens nothing until U3.
+- Result: 967 Pest tests, 146 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 147.9 KB gzip, before route splitting in U10).

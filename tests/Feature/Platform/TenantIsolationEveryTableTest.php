@@ -63,6 +63,7 @@ function populateEveryTenantTable(array $ctx): void
         $d = fn (string $date): CarbonImmutable => CarbonImmutable::parse($date);
         DB::table('dimension_requirements')->insert(['tenant_id' => $ctx['tenant_id'], 'event_type' => 'PREMIUM_RECEIVED', 'dimension_code' => 'branch']);
         app(PartyService::class)->addBankAccount($world['policyholder_id'], 'City Bank', '0012345678', true, $world['admin']);
+        app(App\Modules\Platform\Preferences\UserPreferences::class)->set($world['admin'], 'theme', 'dark');
 
         $lifecycle = app(PolicyLifecycle::class);
         $policy = $lifecycle->quote(new QuoteRequest($ctx['entity_id'], $ctx['branch_id'], $world['product_id'], $world['policyholder_id'], $world['agent_id'],

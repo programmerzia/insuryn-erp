@@ -17,11 +17,13 @@ use App\Modules\Insurance\Product\Http\Controllers\ProductPageController;
 use App\Modules\Insurance\Reports\Http\Controllers\ReportsPageController;
 use App\Modules\Platform\Approvals\Http\ApprovalsPageController;
 use App\Modules\Platform\Authentication\Http\SecurityPageController;
+use App\Modules\Platform\Preferences\Http\PreferencesController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/accounting/journals');
 
 Route::middleware('auth')->get('account/security', SecurityPageController::class)->name('account.security');
+Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
 
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);
 // sign-in, sign-out, password reset and two-factor routes come from Fortify (config/fortify.php).

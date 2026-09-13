@@ -1,62 +1,40 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
-import Logo from '@/components/Logo.vue';
-import { computed } from 'vue';
-import { visibleNavigation } from '@/lib/navigation';
+import { Head, usePage } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
+import Sidebar from '@/components/shell/Sidebar.vue';
+import StatusBar from '@/components/shell/StatusBar.vue';
+import TabStrip from '@/components/shell/TabStrip.vue';
+import Toaster from '@/components/shell/Toaster.vue';
+import TopBar from '@/components/shell/TopBar.vue';
+import { savePreference, usePreferences } from '@/lib/preferences';
+import { useShortcut } from '@/lib/shortcuts';
+import { toast } from '@/lib/toasts';
 import type { SharedProps } from '@/types/shared';
 
-defineProps<{ title: string }>();
+/**
+ * Application shell (UX brief §3): top bar, pinned tabs, sidebar, main area, status bar — always the full window, like a desktop app.
+ * `fill` pages (queues with an inspector) manage their own scrolling; other pages scroll inside the main area.
+ */
+defineProps<{ title: string; fill?: boolean }>();
 
 const page = usePage<SharedProps>();
-const user = computed(() => page.props.auth.user);
-const tenant = computed(() => page.props.tenant);
+const preferences = usePreferences();
+useShortcut('app.sidebar', () => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed));
 
-const groups = computed(() => visibleNavigation(page.props.auth.permissions ?? []));
 const status = computed(() => page.props.status);
+watch(status, (message) => message && toast(message, { tone: 'ok' }), { immediate: true });
 </script>
 
 <template>
     <Head :title="title" />
-    <div class="min-h-screen bg-surface">
-        <header class="border-b border-line bg-surface-2">
-            <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3 sm:px-6">
-                <Link href="/accounting/journals" class="flex items-center gap-2 text-section font-semibold text-ink">
-                    <Logo :size="20" />
-                    Insuryn
-                </Link>
-                <nav class="flex flex-wrap gap-x-6 gap-y-1 text-ui" aria-label="Main">
-                    <div v-for="group in groups" :key="group.label" class="flex items-center gap-4">
-                        <span class="text-dense font-semibold text-ink-2/70">{{ group.label }}</span>
-                        <Link
-                            v-for="item in group.items"
-                            :key="item.href"
-                            :href="item.href"
-                            class="text-ink-2 hover:text-ink"
-                            :class="{ 'text-ink underline decoration-accent-text underline-offset-8': page.url.startsWith(item.href) }"
-                        >
-                            {{ item.label }}
-                        </Link>
-                    </div>
-                </nav>
-                <div class="ml-auto flex items-center gap-4 text-ui">
-                    <span v-if="tenant" class="text-ui font-medium text-ink-2" title="Organisation">{{ tenant.name }}</span>
-                    <Link v-if="user" href="/approvals" class="text-ink-2 hover:text-ink">Approvals</Link>
-                    <Link v-if="user" href="/account/security" class="text-ink-2 hover:text-ink" :title="`${user.email} · security settings`">{{ user.name }}</Link>
-                    <Link
-                        v-if="user"
-                        href="/logout"
-                        method="post"
-                        as="button"
-                        class="rounded-control px-2 py-1 text-ink-2 hover:bg-surface-2 hover:text-ink"
-                    >
-                        Sign out
-                    </Link>
-                </div>
-            </div>
-        </header>
-        <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-            <p v-if="status" class="mb-4 rounded-control border border-ok/40 bg-ok/10 px-3 py-2 text-ui text-ok" role="status">{{ status }}</p>
+    <div class="grid h-screen grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-surface text-ink">
+        <TopBar class="col-span-2 col-start-1 row-start-1" />
+        <TabStrip class="col-span-2 col-start-1 row-start-2" />
+        <Sidebar class="col-start-1 row-start-3" />
+        <main id="main" class="col-start-2 row-start-3 min-h-0" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4'">
             <slot />
         </main>
+        <StatusBar class="col-span-2 col-start-1 row-start-4" />
+        <Toaster />
     </div>
 </template>

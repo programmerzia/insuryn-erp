@@ -115,7 +115,7 @@ describe('components consume tokens only', () => {
         expect(text).not.toMatch(retired);
         expect(text).not.toMatch(/\b(?:uppercase|font-display|font-bold|font-mono|font-light|font-extrabold)\b/);
         // brief §2 type scale and shape: text-dense/ui/body/section/title; rounded-control/panel (tables 0); one shadow for floating layers
-        expect(text).not.toMatch(/\btext-(?:xs|sm|base|lg|xl|2xl|3xl|4xl)\b/);
+        expect(text).not.toMatch(/\btext-(?:xs|sm|base|lg|xl|2xl|3xl|4xl|\[\d+px\])(?![\w-])/);
         expect(text).not.toMatch(/\brounded(?:-(?:sm|md|lg|xl|2xl|none))?(?=[\s"'`])/);
         expect(text).not.toMatch(/\bshadow-(?!float\b)[a-z]+/);
     });

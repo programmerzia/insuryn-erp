@@ -1,61 +1,54 @@
-/** Top bar navigation. `any` mirrors the server's area permissions (a page opens for users holding any of them), so links never lead to a 403. */
+import type { Component } from 'vue';
+import { Banknote, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing } from 'lucide-vue-next';
+
+/**
+ * Sidebar navigation (UX brief §3). Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
+ * for users holding any of them; empty = every signed-in user), so links never lead to a 403. `badge` names the work-queue count the
+ * server shares in `shell.badges`.
+ */
 export interface NavItem {
+    id: string;
     label: string;
     href: string;
+    icon: Component;
     any: string[];
-}
-
-export interface NavGroup {
-    label: string;
-    items: NavItem[];
+    badge?: string;
+    secondary?: boolean;
 }
 
 const reader = 'reports.financial';
 const collections = ['receipt.create', 'receipt.allocate', 'receipt.refund_request', 'receipt.refund_release', reader];
+const claims = ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_request', 'claim.pay_release', 'claim.close', reader];
 
-export const navigation: NavGroup[] = [
-    {
-        label: 'Operations',
-        items: [
-            { label: 'Parties', href: '/parties', any: ['party.manage', 'agent.manage', 'policy.create', reader] },
-            { label: 'Agents', href: '/agents', any: ['party.manage', 'agent.manage', 'policy.create', reader] },
-            { label: 'Products', href: '/products', any: ['product.manage', 'policy.create', reader] },
-            { label: 'Policies', href: '/policies', any: ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', reader] },
-        ],
-    },
-    {
-        label: 'Claims',
-        items: [
-            { label: 'Claims', href: '/claims', any: ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_request', 'claim.pay_release', 'claim.close', reader] },
-            { label: 'Commission', href: '/commission', any: ['commission.manage_plans', 'commission.approve', 'commission.pay', reader] },
-        ],
-    },
-    {
-        label: 'Collections',
-        items: [
-            { label: 'Receipts', href: '/receipts', any: collections },
-            { label: 'Suspense', href: '/suspense', any: collections },
-            { label: 'Refunds', href: '/refunds', any: collections },
-            { label: 'Agent cash', href: '/agent-cash', any: collections },
-            { label: 'Dunning', href: '/dunning', any: collections },
-            { label: 'Bank', href: '/bank', any: ['bank.import', 'bank.match', 'bank.manage_accounts', reader] },
-        ],
-    },
-    {
-        label: 'Accounting',
-        items: [
-            { label: 'Journals', href: '/accounting/journals', any: ['accounting.view_journals'] },
-            { label: 'Trial balance', href: '/accounting/trial-balance', any: [reader] },
-            { label: 'Close', href: '/close', any: ['periods.soft_lock', 'periods.lock', 'periods.reopen', reader] },
-            { label: 'Reports', href: '/reports', any: [reader] },
-            { label: 'Imports', href: '/accounting/imports', any: ['accounting.view_journals'] },
-        ],
-    },
+export const navigation: NavItem[] = [
+    { id: 'policies', label: 'Policies', href: '/policies', icon: FileText, any: ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', reader], badge: 'policies' },
+    { id: 'receipts', label: 'Receipts', href: '/receipts', icon: Banknote, any: collections, badge: 'receipts' },
+    { id: 'suspense', label: 'Suspense', href: '/suspense', icon: Inbox, any: collections, badge: 'suspense' },
+    { id: 'claims', label: 'Claims', href: '/claims', icon: ShieldAlert, any: claims, badge: 'claims' },
+    { id: 'bank', label: 'Bank', href: '/bank', icon: Landmark, any: ['bank.import', 'bank.match', 'bank.manage_accounts', reader], badge: 'bank' },
+    { id: 'approvals', label: 'Approvals', href: '/approvals', icon: CheckCheck, any: [], badge: 'approvals' },
+    { id: 'commission', label: 'Commission', href: '/commission', icon: Percent, any: ['commission.manage_plans', 'commission.approve', 'commission.pay', reader], badge: 'commission' },
+    { id: 'journals', label: 'Journals', href: '/accounting/journals', icon: BookOpen, any: ['accounting.view_journals'], badge: 'journals' },
+    { id: 'trial-balance', label: 'Trial balance', href: '/accounting/trial-balance', icon: Scale, any: [reader] },
+    { id: 'close', label: 'Close', href: '/close', icon: CalendarCheck, any: ['periods.soft_lock', 'periods.lock', 'periods.reopen', reader], badge: 'close' },
+    { id: 'reports', label: 'Reports', href: '/reports', icon: ChartColumn, any: [reader] },
+    { id: 'parties', label: 'Parties', href: '/parties', icon: Users, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
+    { id: 'agents', label: 'Agents', href: '/agents', icon: UserCheck, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
+    { id: 'products', label: 'Products', href: '/products', icon: Package, any: ['product.manage', 'policy.create', reader], secondary: true },
+    { id: 'refunds', label: 'Refunds', href: '/refunds', icon: Undo2, any: collections, secondary: true },
+    { id: 'agent-cash', label: 'Agent cash', href: '/agent-cash', icon: Wallet, any: collections, secondary: true },
+    { id: 'cheques', label: 'Cheques', href: '/cheques', icon: Receipt, any: collections, secondary: true },
+    { id: 'dunning', label: 'Reminders', href: '/dunning', icon: BellRing, any: collections, secondary: true },
+    { id: 'imports', label: 'Imports', href: '/accounting/imports', icon: Upload, any: ['accounting.view_journals'], secondary: true },
 ];
 
-export function visibleNavigation(permissions: string[]): NavGroup[] {
+export function visibleNavigation(permissions: string[]): NavItem[] {
     const held = new Set(permissions);
-    return navigation
-        .map((group) => ({ ...group, items: group.items.filter((item) => item.any.some((permission) => held.has(permission))) }))
-        .filter((group) => group.items.length > 0);
+    return navigation.filter((item) => item.any.length === 0 || item.any.some((permission) => held.has(permission)));
+}
+
+/** The navigation item a URL belongs to: the longest matching href prefix. */
+export function activeItem(items: NavItem[], url: string): NavItem | undefined {
+    const path = url.split('?')[0] ?? url;
+    return items.filter((item) => path === item.href || path.startsWith(`${item.href}/`)).sort((a, b) => b.href.length - a.href.length)[0];
 }
