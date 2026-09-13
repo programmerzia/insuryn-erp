@@ -151,6 +151,12 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-105 | R8 | What the footer's "short hash" is, is not specified: a PDF cannot print its own hash, so the footer shows "Generated <date time in the tenant's time zone> · Reference <12 hex>", the start of the SHA-256 of the rendered letterhead and body (`generated_documents.content_sha256`); the SHA-256 of the PDF bytes is `generated_documents.sha256` (= the stored document's). | `TemplateRenderer::document`, `DocumentGenerator`. |
 | A-106 | R8 | Template editing workflow is not specified beyond "editing an active template creates a new draft version; activating retires the previous": a draft is edited in place, one open draft per code, class and locale (`DOCUMENT_TEMPLATE_DRAFT_EXISTS`), activation needs no second person (templates move no money; audited), drafts are not deleted from the screen, and documents already generated keep the template version they were printed with. | `DocumentTemplates` (`saveDraft`, `activate`). |
 | A-107 | R8 | **Verify with the insurer (legal wording).** The default templates' fixed wording is a placeholder: closing sentences ("This schedule forms part of the policy…", "Payments by cheque… subject to realisation", "…full and final settlement…"), signature lines, section titles and their Bangla translations; the demo values of the preview (Padma General Insurance, Rahima Akter, POL-HO-2026-000123, amounts) are illustrative only. | `DefaultDocumentTemplates`, `DocumentVariables::demo`. |
+| A-80 | R4 | "Valid 15 days" is not defined further: a quotation is valid on the day it is issued and the 14 days after (`valid_until` = issue date + 14); it expires the day after, in the nightly job or when quotations are read. | `config/erp.php` `quotations.valid_days` (`ASSUMPTION:`), `QuotationService::issue`, `expireDue`. |
+| A-81 | R4 | How producer eligibility affects a quote is not specified beyond "feeds referral": quoting is never blocked; the answer (licence for the product's life / non-life class, producer active — `LicenceRegistry`, A-14) is recorded on the quotation when saved and again on the issue date, and the proposal refers an ineligible producer (R5). | `ProducerEligibility`, `quotations.producer_eligible` / `producer_eligibility_reason`. |
+| A-82 | R4 | Whether a quotation may be issued without a customer is not specified: a draft may be anonymous (a price for a walk-in), an issued quotation names its customer (`QUOTATION_CUSTOMER_REQUIRED`), because it is printed and becomes a proposal. | `QuotationService::issue` (`ASSUMPTION:`), CHECK `quotations_issued_complete`. |
+| A-83 | R4 | No §7.2 template covers quotations: new permission `quotation.create` (rate, save, issue, decline, and in R5 turn into a proposal and record KYC) in the Branch Officer template, so also the Branch Manager; existing tenants' roles get it by migration. The quotation screens open read-only for `policy.create` holders. | `RoleTemplates`, `PermissionsSeeder`, migration `2026_09_24_000001`, `QuotationPageController::AREA`. |
+| A-84 | R4 | Which day a quote is rated on is not specified: the proposed cover start (the tariff and product version in force when cover starts), and cover cannot start before the issue day (`QUOTATION_INCEPTION_IN_PAST`). | `QuotationService::rate` / `issue`. |
+| A-88 | R4, R5 | Which risk fields identify "the same risk" for the duplicate check (design §5) is not specified: motor registration number or chassis number, fire risk address; compared with letters and digits only, upper-cased; values shorter than three characters are ignored. Verify with underwriting. | `config/erp.php` `underwriting.duplicate_keys` (`ASSUMPTION:`), `RiskKeys`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -2052,3 +2058,48 @@ Scope: review only; only the critical finding was fixed.
 
 
 - Result: 1,240 Pest tests green, PHPStan 0 errors, Vitest (282) and vue-tsc green.
+### R4 — Quotation workbench — done
+- Phase 3 design §2 step 1 and §6 "Quote workbench". Module `App\Modules\Insurance\Quotation` (D-30). Migration `2026_09_24_000001_create_quotations`:
+  - `quotations` (tenant, forced RLS): entity, branch, number (branch-coded, unique when set), product and product version, class, customer (null on a draft), producer,
+    proposed cover start `inception`, `risk_inputs`, chosen optional `coverages`, `risk_keys` (normalised duplicate-risk keys, A-88, used by R5), `rating_result`
+    (`RatingResult::toArray()`), plan code and version, currency, sum insured / net / duties / gross premium columns for queues, `valid_until`, status
+    `draft|issued|expired|converted|declined`, producer eligibility (flag, reason code, note), decline reason/by/at, issued/expired/converted by and at, created/updated by.
+  - CHECKs: status list; issued/expired/converted rows have number, rating, validity and customer; declined has a reason; amounts not negative.
+  - **INVARIANT** trigger `protect_quotation`: only draft → issued | declined and issued → expired | declined | converted (`QUOTATION_TRANSITION`); once out of draft the
+    terms, rating, premiums, dates and number never change and the row is never deleted (`QUOTATION_FROZEN`).
+  - Permission `quotation.create` (A-83), granted to existing tenants' branch officer and branch manager roles.
+- `QuotationService` (permission on the quotation's branch):
+  - `rate(QuotationTerms, actor)` — `RatingEngine::rate` on the cover start (A-84); nothing written.
+  - `saveDraft(terms, ?id, actor)` — creates or changes a draft, keeps only the version's risk fields, re-rates when the inputs are complete (otherwise no rating),
+    records producer eligibility; refusals `BRANCH_UNKNOWN`, `PRODUCT_UNKNOWN`, `PRODUCT_NOT_RATED`, `PRODUCT_VERSION_NOT_EFFECTIVE`, `CUSTOMER_UNKNOWN`, `PRODUCER_UNKNOWN`,
+    `QUOTATION_NOT_DRAFT`; audited `quotation.created` / `quotation.saved`.
+  - `issue(id, on, actor)` — customer required (`QUOTATION_CUSTOMER_REQUIRED`, A-82), cover start not before the issue day (`QUOTATION_INCEPTION_IN_PAST`), re-rated (risk
+    problems and rating failures refuse), number reserved before and used inside the transaction (`DocumentNumberer`, doc type `quotation`, prefix `QUO`, format
+    `{prefix}-{branch}-{fy}-{seq}` → `QUO-HO-2026-000001`), rating frozen, valid for `erp.quotations.valid_days` (15) days including the issue day (A-80); audited.
+  - `decline(id, reason, actor)` (draft or issued, `REASON_REQUIRED`, `QUOTATION_NOT_OPEN`), `expireDue(today)` (system actor, audited `quotation.expired`; run by
+    `QuotationExpiryJob` nightly at 00:15 per tenant and before the queue and workbench are read), `accept(id, on, actor)` for R5 (inside the proposal transaction:
+    issued and within validity → converted; `QUOTATION_EXPIRED`, `QUOTATION_NOT_ISSUED`).
+  - `ProducerEligibility::check(producer, product, day)` wraps `LicenceRegistry::assertMayWriteNewBusiness` and never throws (A-81).
+- HTTP (`QuotationPageController`): `GET /quotations` (queue), `GET /quotations/create`, `GET /quotations/{id}` (workbench), `POST /quotations/rate` (JSON: `{result}` or 422
+  `{reason, message, errors: {field: code}}`), `POST /quotations` and `PUT /quotations/{id}` (save draft; `intent=issue` saves then issues — a refused issue keeps the draft
+  and returns to it with the reason), `POST /quotations/{id}/issue`, `POST /quotations/{id}/decline`. Screens open for `quotation.create` or `policy.create` held in any scope
+  (branch-scoped officers), actions check the quotation's branch.
+- UI: sidebar **Quotes** (primary, above Policies, `quotation.create | policy.create`). `pages/quotations/Index.vue` (QueueView: number, customer, product, producer, sum insured,
+  gross, valid until, status; inspector with eligibility). `pages/quotations/Workbench.vue`: branch, cover start, product, customer lookup (Ctrl+N creates), producer lookup,
+  the risk form generated from the version's risk schema (text / integer / money / date / select / boolean, required marks, bounds as hints, errors per field from the browser
+  and the server), optional coverages; right rail with the live breakdown (debounced 400 ms, stale answers dropped) in English or Bangla (toggle saves the user's `locale`
+  preference), net, duties, gross, tariff code and version, the placeholder-duty warning; Save draft / Issue quotation / Decline (drawer with reason).
+  Pure logic in `resources/js/lib/riskForm.ts` (form fields, bounds hints, typed values → risk inputs with money as minor-unit digit strings, local checks and
+  problem wording, version in force, breakdown lines, rating key).
+- Shared file changes: `config/erp.php` (`numbering.formats` quotation / proposal / cover_note, `quotations.valid_days`, `underwriting.duplicate_keys`), `RoleTemplates`,
+  `PermissionsSeeder`, `routes/web.php`, `routes/console.php`, `lib/navigation.ts`, `tests/Pest.php` (`ratedProductsWorld`: the golden motor and fire plans with duties and
+  rated products MOTOR-PVT and FIRE-SME), `TenantIsolationEveryTableTest` (a quotation row).
+- Test change: `RoleAdministrationTest` expects `quotation.create` in the Branch Officer template after the refused change (the template gained it; the assertion stays exact).
+- Placeholder values to verify: quotation validity 15 days (A-80); duplicate-risk key fields (A-88).
+- Not done, and why: no printable quotation (R8 documents); the home queue "Quotes to follow up" still reads Phase 1 policy quotes (shared home queues, left for the lead);
+  no quotation for life products (life rating is LATER).
+- Tests: `tests/Feature/Quotations/QuotationWorkbenchTest.php` (10: endpoint equals engine and writes nothing; per-field schema problems and rating failures; drafts re-rate and
+  keep incomplete inputs unrated; issue numbers, freezes and survives a superseding tariff, trigger refusals; issue needs customer and cover start; expiry by job and on read;
+  decline; producer eligibility recorded; permissions and role templates; queue and workbench props), `resources/js/tests/risk-form.test.ts` (6).
+
+- Result: 1,210 Pest tests green, PHPStan 0 errors, Vitest (287) and vue-tsc green.

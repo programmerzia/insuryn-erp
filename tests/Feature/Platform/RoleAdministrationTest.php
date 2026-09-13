@@ -75,7 +75,7 @@ it('refuses a permission change that would give a holder a forbidden combination
     actingAs($this->admin)->put('/admin/roles/'.($this->role)('auditor'), ['permissions' => ['audit.view', 'receipt.create']], $this->headers)
         ->assertSessionHasErrors(['form' => 'Auditors stay read-only, so the Auditor role cannot include receipt.create.']);
 
-    expect(($this->permissionsOf)('branch_officer'))->toBe(['document.generate', 'party.manage', 'policy.create', 'policy.issue', 'receipt.create']); // + A-101 (slice R8)
+    expect(($this->permissionsOf)('branch_officer'))->toBe(['document.generate', 'party.manage', 'policy.create', 'policy.issue', 'quotation.create', 'receipt.create']); // + A-101 (slice R8), A-83 (slice R4)
 });
 
 it('never removes the last way to manage users or roles', function (): void {

@@ -17,6 +17,8 @@ Schedule::job(new PremiumEarningJob(), 'batch')->dailyAt('01:00')->withoutOverla
 Schedule::job(new ReconciliationJob(), 'recon')->dailyAt('02:00')->withoutOverlapping();
 Schedule::job(new DunningJob(), 'batch')->dailyAt('01:30')->withoutOverlapping();
 Schedule::job(new LicenceExpiryAlertJob(), 'batch')->dailyAt('01:45')->withoutOverlapping();
+// Phase 3 R4: issued quotations past their validity expire.
+Schedule::job(new App\Modules\Insurance\Quotation\Infrastructure\Jobs\QuotationExpiryJob(), 'batch')->dailyAt('00:15')->withoutOverlapping();
 
 // Slice D9: regenerate the producer portal's OpenAPI document from the routes and their PortalOperation attributes.
 Illuminate\Support\Facades\Artisan::command('portal:openapi', function (App\Http\Portal\OpenApi\PortalOpenApi $openApi): void {

@@ -25,6 +25,7 @@ const claims = ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_r
 
 export const navigation: NavItem[] = [
     { id: 'home', page: 'home/Index', label: 'Home', href: '/home', icon: House, any: [] },
+    { id: 'quotes', detail: 'quotations/Workbench', page: 'quotations/Index', label: 'Quotes', href: '/quotations', icon: Calculator, any: ['quotation.create', 'policy.create'] },
     { id: 'policies', detail: 'policies/Show', page: 'policies/Index', label: 'Policies', href: '/policies', icon: FileText, any: ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', reader], badge: 'policies' },
     { id: 'receipts', detail: 'receipts/Show', page: 'receipts/Index', label: 'Receipts', href: '/receipts', icon: Banknote, any: collections, badge: 'receipts' },
     { id: 'suspense', page: 'suspense/Index', label: 'Suspense', href: '/suspense', icon: Inbox, any: collections, badge: 'suspense' },

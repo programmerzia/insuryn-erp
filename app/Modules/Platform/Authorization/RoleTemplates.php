@@ -21,7 +21,9 @@ final class RoleTemplates
 
     private const BRANCH_OFFICER = ['policy.create', 'policy.issue', 'receipt.create', 'party.manage',
         // ASSUMPTION A-101 (slice R8): whoever quotes, issues and records receipts at the branch prints the schedule, endorsement and receipt for the customer.
-        'document.generate'];
+        'document.generate',
+        // ASSUMPTION A-83 (slice R4): whoever quotes policies today rates and issues quotations (branch officer, and the branch manager through "+").
+        'quotation.create'];
     private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',

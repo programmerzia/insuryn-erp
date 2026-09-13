@@ -167,6 +167,16 @@ Route::middleware('auth')->group(function (): void {
     Route::get('products', [ProductPageController::class, 'index']);
     Route::post('products', [ProductPageController::class, 'store']);
     Route::post('products/{product}/versions', [ProductPageController::class, 'storeVersion'])->whereUuid('product');
+    // Phase 3 R4: quotations (quote workbench, live rating, issue, decline).
+    Route::get('quotations', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'index']);
+    Route::get('quotations/create', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'create']);
+    Route::post('quotations/rate', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'rate']);
+    Route::post('quotations', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'store']);
+    Route::get('quotations/{quotation}', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'show'])->whereUuid('quotation');
+    Route::put('quotations/{quotation}', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'update'])->whereUuid('quotation');
+    Route::post('quotations/{quotation}/issue', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'issue'])->whereUuid('quotation');
+    Route::post('quotations/{quotation}/decline', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'decline'])->whereUuid('quotation');
+
     Route::get('policies', [PolicyPageController::class, 'index']);
     Route::get('policies/create', [PolicyPageController::class, 'create']);
     Route::post('policies', [PolicyPageController::class, 'store']);

@@ -27,6 +27,8 @@ final class PermissionsSeeder extends Seeder
         'rating.manage_plans','rating.approve_plans',
         // Phase 3 documents (slice R8): generate printable documents / edit and activate templates (A-101)
         'document.generate','document.manage_templates',
+        // Phase 3 quotations (slice R4, A-83)
+        'quotation.create',
     ];
 
     /**

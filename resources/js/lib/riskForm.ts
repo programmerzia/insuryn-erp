@@ -1,0 +1,221 @@
+import { formatMinor, parseMoney } from '@/lib/money';
+
+/**
+ * Phase 3 slice R4 quote workbench: the risk form is generated from the product version's risk schema (text, integer, money, date, select, boolean with
+ * EN/BN labels, required marks, min/max), values typed by the officer become the risk inputs the server rates (integers as numbers, money as minor units
+ * in a digit string — never a float), and the rating result's explanation lines are shown in the user's language. Pure functions, no Vue.
+ */
+export type Locale = 'en' | 'bn';
+export type RiskFieldType = 'text' | 'integer' | 'money' | 'date' | 'select' | 'boolean';
+
+export interface RiskFieldDefinition {
+    key: string;
+    label_en: string;
+    label_bn: string;
+    type: RiskFieldType;
+    required: boolean;
+    options?: { value: string; label_en: string; label_bn: string }[];
+    min?: number;
+    max?: number;
+    max_length?: number;
+}
+
+export interface FormField {
+    key: string;
+    label: string;
+    type: RiskFieldType;
+    required: boolean;
+    options: { value: string; label: string }[];
+    hint: string | null;
+    maxLength: number | null;
+}
+
+export interface ProductVersionOption {
+    id: string;
+    version: number;
+    effective_from: string;
+    effective_to: string | null;
+    class_code: string;
+    risk_schema: RiskFieldDefinition[];
+    coverages: { code: string; name_en: string; name_bn: string; mandatory: boolean }[];
+}
+
+export interface ExplanationLine {
+    step_code: string;
+    kind: string;
+    label_en: string;
+    label_bn: string;
+    amount_minor: number;
+    running_total_minor: number;
+}
+
+export interface RatingResultData {
+    currency: string;
+    as_of: string;
+    plan: { id: string | null; code: string; version: number; class_code: string };
+    net_premium_minor: number;
+    duties: { code: string; label_en: string; label_bn: string; amount_minor: number }[];
+    duties_total_minor: number;
+    gross_premium_minor: number;
+    explanation: ExplanationLine[];
+    risk_inputs: Record<string, string | number | boolean | null>;
+    coverages: string[];
+    verify: boolean;
+}
+
+/** Form values as typed: strings for every input, booleans for checkboxes. */
+export type FormValues = Record<string, string | boolean>;
+
+const label = (item: { label_en: string; label_bn: string }, locale: Locale) => (locale === 'bn' ? item.label_bn : item.label_en) || item.label_en;
+const group = (value: number) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/** The product version in force on the cover start: effective_from ≤ day < effective_to. */
+export function versionOn(versions: ProductVersionOption[], day: string): ProductVersionOption | null {
+    return versions.find((v) => v.effective_from <= day && (v.effective_to === null || day < v.effective_to)) ?? null;
+}
+
+export function formFields(schema: RiskFieldDefinition[], locale: Locale): FormField[] {
+    return schema.map((field) => ({
+        key: field.key,
+        label: label(field, locale),
+        type: field.type,
+        required: field.required,
+        options: (field.options ?? []).map((o) => ({ value: o.value, label: label(o, locale) })),
+        hint: boundsHint(field),
+        maxLength: field.max_length ?? null,
+    }));
+}
+
+/** "50 to 10,000", "At least 1.00", "Up to 60" — money bounds are minor units shown in major units. */
+export function boundsHint(field: RiskFieldDefinition): string | null {
+    if (field.type !== 'integer' && field.type !== 'money') return null;
+    const show = (n: number) => (field.type === 'money' ? formatMinor(BigInt(n)) : field.key.startsWith('year') ? String(n) : group(n));
+    if (field.min !== undefined && field.max !== undefined) return `${show(field.min)} to ${show(field.max)}`;
+    if (field.min !== undefined) return `At least ${show(field.min)}`;
+    if (field.max !== undefined) return `Up to ${show(field.max)}`;
+    return null;
+}
+
+/** Stored risk inputs (a saved quotation) → form values: money minor units become "1,234,567.00". */
+export function initialValues(schema: RiskFieldDefinition[], inputs: Record<string, unknown> | null | undefined): FormValues {
+    const values: FormValues = {};
+    for (const field of schema) {
+        const raw = inputs?.[field.key];
+        if (field.type === 'boolean') {
+            values[field.key] = raw === true || raw === 'true' || raw === 1 || raw === '1';
+        } else if (field.type === 'money' && (typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw)))) {
+            values[field.key] = formatMinor(BigInt(raw));
+        } else {
+            values[field.key] = raw === null || raw === undefined ? '' : String(raw);
+        }
+    }
+    return values;
+}
+
+/**
+ * Form values → risk inputs for the server. Empty fields are left out (the server says REQUIRED); integers that are whole numbers become numbers,
+ * money becomes minor units as a digit string; text that is not a number is sent as typed so the server names the problem.
+ */
+export function riskInputs(schema: RiskFieldDefinition[], values: FormValues): Record<string, string | number | boolean> {
+    const inputs: Record<string, string | number | boolean> = {};
+    for (const field of schema) {
+        const value = values[field.key];
+        if (field.type === 'boolean') {
+            inputs[field.key] = value === true;
+            continue;
+        }
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (text === '') continue;
+        if (field.type === 'integer') {
+            const digits = text.replaceAll(',', '');
+            inputs[field.key] = /^-?\d{1,15}$/.test(digits) ? Number(digits) : text;
+        } else if (field.type === 'money') {
+            const minor = parseMoney(text);
+            inputs[field.key] = minor === null || minor < 0n ? text : minor.toString();
+        } else {
+            inputs[field.key] = text;
+        }
+    }
+    return inputs;
+}
+
+/** Checks in the browser before rating (the server checks again): required, whole numbers, bounds, options, dates, length. Field key → message. */
+export function localProblems(schema: RiskFieldDefinition[], values: FormValues): Record<string, string> {
+    const problems: Record<string, string> = {};
+    const inputs = riskInputs(schema, values);
+    for (const field of schema) {
+        const value = inputs[field.key];
+        if (value === undefined) {
+            if (field.required) problems[field.key] = problemMessage('REQUIRED', field);
+            continue;
+        }
+        const code = problemCode(field, value);
+        if (code) problems[field.key] = problemMessage(code, field);
+    }
+    return problems;
+}
+
+function problemCode(field: RiskFieldDefinition, value: string | number | boolean): string | null {
+    switch (field.type) {
+        case 'integer':
+        case 'money': {
+            const number = field.type === 'money' ? (typeof value === 'string' && /^\d+$/.test(value) ? BigInt(value) : null) : typeof value === 'number' ? BigInt(value) : null;
+            if (number === null) return 'NOT_INTEGER';
+            if (field.min !== undefined && number < BigInt(field.min)) return 'BELOW_MIN';
+            if (field.max !== undefined && number > BigInt(field.max)) return 'ABOVE_MAX';
+            return null;
+        }
+        case 'select':
+            return (field.options ?? []).some((o) => o.value === value) ? null : 'NOT_AN_OPTION';
+        case 'date':
+            return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) ? null : 'NOT_A_DATE';
+        case 'text':
+            return typeof value === 'string' && value.length > (field.max_length ?? 255) ? 'TOO_LONG' : null;
+        default:
+            return null;
+    }
+}
+
+/** A risk schema problem code (from the browser or the server) in words for the field. */
+export function problemMessage(code: string, field: RiskFieldDefinition | undefined): string {
+    const show = (n: number | undefined) => (n === undefined || !field ? '' : field.type === 'money' ? formatMinor(BigInt(n)) : field.key.startsWith('year') ? String(n) : group(n));
+    switch (code) {
+        case 'REQUIRED':
+            return field?.type === 'select' ? `Choose the ${field.label_en.toLowerCase()}.` : `Enter the ${(field?.label_en ?? 'value').toLowerCase()}.`;
+        case 'NOT_INTEGER':
+            return field?.type === 'money' ? 'Enter an amount, like 1,234,567.00.' : 'Enter a whole number.';
+        case 'BELOW_MIN':
+            return field?.min === undefined ? 'The value is too low.' : `Enter at least ${show(field.min)}.`;
+        case 'ABOVE_MAX':
+            return field?.max === undefined ? 'The value is too high.' : `Enter at most ${show(field.max)}.`;
+        case 'NOT_AN_OPTION':
+            return 'Choose one of the options.';
+        case 'NOT_A_DATE':
+            return 'Enter a date like 15 Sep 2026.';
+        case 'TOO_LONG':
+            return `Keep it to ${field?.max_length ?? 255} characters.`;
+        case 'UNKNOWN_FIELD':
+            return 'This product does not ask for this.';
+        case 'NOT_BOOLEAN':
+            return 'Tick or clear the box.';
+        default:
+            return 'Check this value.';
+    }
+}
+
+/** The breakdown on the right rail: each explanation line in the user's language with its amount in major units. */
+export function breakdown(result: RatingResultData, locale: Locale): { code: string; kind: string; label: string; amount: string; running: string }[] {
+    return result.explanation.map((line) => ({
+        code: line.step_code,
+        kind: line.kind,
+        label: label(line, locale),
+        amount: formatMinor(BigInt(line.amount_minor)),
+        running: formatMinor(BigInt(line.running_total_minor)),
+    }));
+}
+
+/** A stable key for the inputs, so the workbench rates again only when something that affects the premium changed. */
+export function ratingKey(parts: { product_id: string; inception: string; risk_inputs: Record<string, unknown>; coverages: string[] }): string {
+    const sorted = Object.keys(parts.risk_inputs).sort().map((k) => [k, parts.risk_inputs[k]]);
+    return JSON.stringify([parts.product_id, parts.inception, sorted, [...parts.coverages].sort()]);
+}

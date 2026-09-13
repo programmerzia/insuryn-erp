@@ -38,6 +38,17 @@ return [
             'fiscal_period_reopen' => ['label' => 'Period reopening', 'permission' => 'periods.reopen'],
         ],
     ],
+    // Phase 3 slice R4 quotations. ASSUMPTION: A-80 — "valid 15 days": the issue day and the 14 days after it; the quotation expires the day after.
+    'quotations' => [
+        'valid_days' => (int) env('ERP_QUOTATION_VALID_DAYS', 15),
+    ],
+    'underwriting' => [
+        // ASSUMPTION: A-88 — the risk fields that identify a risk for the duplicate check (design §5), per product class. Verify with underwriting.
+        'duplicate_keys' => [
+            'motor' => ['registration_no', 'chassis_no'],
+            'fire' => ['address'],
+        ],
+    ],
     'setup' => [
         // Session S1 setup wizard: the jurisdiction a first product's premium tax (VAT) is recorded under, and the template offered first.
         'tax_jurisdiction' => env('ERP_TAX_JURISDICTION', 'BD'),
@@ -67,7 +78,11 @@ return [
     'numbering' => [
         'reservation_ttl_minutes' => 15,
         // Fix F1: number format per document type ({prefix}, {branch} code, {fy}, {seq}); others use {prefix}-{fy}-{seq}. New numbers only.
-        'formats' => ['policy' => env('ERP_POLICY_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}')],
+        'formats' => ['policy' => env('ERP_POLICY_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            // Phase 3 R4–R6: quotations, proposals and cover notes are branch-coded like policies (QUO-HO-2026-000001).
+            'quotation' => env('ERP_QUOTATION_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            'proposal' => env('ERP_PROPOSAL_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            'cover_note' => env('ERP_COVER_NOTE_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}')],
     ],
     'close' => ['suspense_max_age_days' => 30],
 

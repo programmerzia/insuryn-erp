@@ -141,6 +141,47 @@ function activeRatingPlan(string $tenantId, array $definition, bool $supersede =
 }
 
 /**
+ * Phase 3 new-business world (slices R4–R6): seedInsuranceWorld plus the golden motor and fire rating plans (tests/Fixtures/rating 01 and 02) with their
+ * duties, and two rated products from 2026-01-01 with the demo risk schemas and coverages — MOTOR-PVT (class motor) and FIRE-SME (class fire).
+ * `motor_inputs` / `fire_inputs` are the golden risks (gross 30,918.30 and 57,006.40 on 2026-09-15).
+ *
+ * @param array{tenant_id: string, entity_id: string, branch_id: string, book_id: string, accounts: array<string, string>} $ctx
+ * @return array{admin: string, product_id: string, product_version_id: string, policyholder_id: string, agent_id: string, agent_party_id: string,
+ *     motor_product_id: string, motor_version_id: string, fire_product_id: string, fire_version_id: string, motor_inputs: array<string, mixed>, fire_inputs: array<string, mixed>,
+ *     motor_plan_id: string, fire_plan_id: string}
+ */
+function ratedProductsWorld(array $ctx): array
+{
+    $world = seedInsuranceWorld($ctx);
+    $fixture = fn (string $name): array => json_decode((string) file_get_contents(__DIR__."/Fixtures/rating/{$name}.json"), true, 512, JSON_THROW_ON_ERROR);
+    $motor = $fixture('01_motor_comprehensive');
+    $fire = $fixture('02_fire_per_mille_by_occupancy');
+    $motorPlan = activeRatingPlan($ctx['tenant_id'], $motor['plan']);
+    $firePlan = activeRatingPlan($ctx['tenant_id'], $fire['plan']);
+
+    return asTenant($ctx['tenant_id'], function () use ($world, $motor, $fire, $motorPlan, $firePlan): array {
+        $duties = app(App\Modules\Insurance\Rating\Application\DutyBook::class);
+        foreach ([...$motor['duties'], ...array_filter($fire['duties'], fn (array $d): bool => $d['code'] !== 'vat')] as $duty) {
+            $duties->record($duty, $world['admin']);
+        }
+        $catalogue = app(App\Modules\Insurance\Product\Application\ProductCatalogue::class);
+        $taxProfile = ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => false, 'refund_tax_on_cancellation' => true];
+        $motorProduct = $catalogue->createProduct('MOTOR-PVT', 'Private motor', 'motor', $world['admin']);
+        $motorVersion = $catalogue->addVersion($motorProduct->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'monthly', 'posting_rule_set' => 'default',
+            'tax_profile' => $taxProfile, 'class_code' => 'motor', 'risk_schema' => Database\Seeders\DemoRatingCatalogue::riskSchema('motor'),
+            'coverage_definitions' => Database\Seeders\DemoRatingCatalogue::coverages('motor')], $world['admin']);
+        $fireProduct = $catalogue->createProduct('FIRE-SME', 'Fire for small business', 'fire', $world['admin']);
+        $fireVersion = $catalogue->addVersion($fireProduct->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'monthly', 'posting_rule_set' => 'default',
+            'tax_profile' => $taxProfile, 'class_code' => 'fire', 'risk_schema' => Database\Seeders\DemoRatingCatalogue::riskSchema('fire'),
+            'coverage_definitions' => Database\Seeders\DemoRatingCatalogue::coverages('fire')], $world['admin']);
+
+        return [...$world, 'motor_product_id' => $motorProduct->id, 'motor_version_id' => $motorVersion->id, 'fire_product_id' => $fireProduct->id, 'fire_version_id' => $fireVersion->id,
+            'motor_inputs' => [...$motor['request']['risk_inputs'], 'chassis_no' => 'CHS-0001-XYZ'], 'fire_inputs' => $fire['request']['risk_inputs'],
+            'motor_plan_id' => $motorPlan, 'fire_plan_id' => $firePlan];
+    });
+}
+
+/**
  * The exception of $type thrown by $operation, for asserting on its details. Fails the test when
  * nothing is thrown; any other exception propagates unchanged.
  *
