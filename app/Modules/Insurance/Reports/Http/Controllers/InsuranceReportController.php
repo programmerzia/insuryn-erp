@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Reports\Http\Controllers;
 
+use App\Modules\Insurance\Reports\Application\LeaderboardQuery;
+use App\Modules\Insurance\Reports\Application\PersistencyReport;
 use App\Modules\Insurance\Collections\Application\AgentCashPositionQuery;
 use App\Modules\Insurance\Reports\Application\ClaimsPaidRegisterQuery;
 use App\Modules\Insurance\Reports\Application\CommissionStatementReport;
@@ -94,6 +96,28 @@ final class InsuranceReportController
         $this->authorize($request, AuthorizationScope::entity($data['entity_id']));
 
         return response()->json(['data' => $register->register($data['entity_id'], CarbonImmutable::parse($data['from']), CarbonImmutable::parse($data['to']))]);
+    }
+
+    /** Distribution design note §4 leaderboard (slice D7). */
+    public function leaderboard(Request $request, LeaderboardQuery $leaderboard): JsonResponse
+    {
+        /** @var array{metric: string, from: string, to: string, channel_id?: string|null, branch_id?: string|null} $data */
+        $data = $request->validate(['metric' => ['required', 'in:premium,policies,persistency,collections'], 'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'], 'channel_id' => ['nullable', 'uuid'], 'branch_id' => ['nullable', 'uuid']]);
+        $this->authorize($request, null);
+
+        return response()->json(['data' => $leaderboard->rows($data['metric'], CarbonImmutable::parse($data['from']), CarbonImmutable::parse($data['to']),
+            $data['channel_id'] ?? null, $data['branch_id'] ?? null)]);
+    }
+
+    /** Distribution design note §4 13th/25th-month persistency (slice D7). */
+    public function persistency(Request $request, PersistencyReport $report): JsonResponse
+    {
+        /** @var array{as_of: string} $data */
+        $data = $request->validate(['as_of' => ['required', 'date_format:Y-m-d']]);
+        $this->authorize($request, null);
+
+        return response()->json(['data' => $report->rows(CarbonImmutable::parse($data['as_of']))]);
     }
 
     private function authorize(Request $request, ?AuthorizationScope $scope): void

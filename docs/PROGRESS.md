@@ -87,7 +87,7 @@ code and in the register below, configurable.
 | D4 | Distribution: compensation schemes, rules, compliance profile | done | see git log |
 | D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | done | see git log |
 | D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | done | see git log |
-| D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | todo | |
+| D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | done | see git log |
 | D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | todo | |
 | D9 | Distribution: producer portal REST with Sanctum and OpenAPI | todo | |
 
@@ -118,6 +118,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-21 | D5 | Policy year is not defined beyond "1..1 = first year, 2..99 = renewal": 1 + renewals in the policy's renewal chain + whole years from inception to the premium's installment due date (inception for written premium). | `Insurance\Policy\Application\PolicyYear`. |
 | A-22 | D6 | Payout route is not specified beyond "payroll (BDO/agent on payroll) or AP (agencies, brokers)": a producer with an employee record is paid through payroll; otherwise by type, default accounts payable (BDOs payroll). Payroll and AP modules are Phase 2, so the payout moves the net to salary_payable or accounts_payable and queues `CommissionPayrollEarning` / `CommissionPayableToAp` outbox messages for them. | `config/erp.php` `distribution.payout_route_by_type` (`ASSUMPTION:`), `CommissionStatementRun::route`. |
 | A-23 | D6 | Persistency is not defined: the 13th-month persistency on a date is the share of the producer's new policies with inception 25 to 13 months before that date that are not cancelled or lapsed; with no such policies it is not measurable, and a minimum-persistency condition stays unmet (commission stays conditional). | `Insurance\Policy\Application\PersistencyQuery` (`ASSUMPTION:`). |
+| A-24 | D7 | Target and incentive periods are not specified: calendar months, quarters (from January, April, July, October) and years; fiscal periods are LATER. | `Distribution\Domain\Incentives\IncentivePeriod` (`ASSUMPTION:`). |
+| A-25 | D7 | A producer without a target for the plan's period and metric earns no incentive; the highest tier reached pays; a bonus carries the plan's withholding tax, none when the plan names none (payroll handles tax for salaried producers). Production: gross written premium dated in the period (new, renewal, endorsement and cancellation transactions), new and renewal policies, collections by value date net of reversed allocations. | `IncentiveRun`, `ProductionQuery` (`ASSUMPTION:`). |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1440,4 +1442,26 @@ Scope: review only; only the critical finding was fixed.
 - Test setup change: `TenantIsolationEveryTableTest` issues and recovers an advance.
 - Tests: `tests/Feature/Distribution/StatementRunTest.php` (4), `GoldenRulesTest` (+4 fixtures).
 - Result: 1,059 Pest tests green, PHPStan 0 errors. Local demo database rebuilt with the new accounts.
+
+### D7 — Distribution: targets, incentives, persistency and leaderboard — done
+- Tables:
+  - `targets`: producer, branch or channel × monthly, quarterly or annual period (A-24) × premium, policies, persistency or collections; one value, replaced and audited;
+  - `incentive_plans`: code, period, metric, tiers, applies_to by producer type, channel or level, effective dates, optional withholding;
+  - `incentive_awards`: once per plan, producer and period.
+- All three have RLS. `commission_entries.policy_id` is now nullable for `bonus` entries only.
+- Distribution:
+  - `TargetService`;
+  - `IncentivePlanService`, which validates tiers (ascending achievement in basis points, fixed or percent-of-metric bonus, percentages only on money metrics);
+  - `IncentivePlanDirectory` (plans ending a period on a day, and the active producers each applies to);
+  - domain `IncentiveTiers` and `IncentivePeriod`.
+- Insurance:
+  - `ProductionQuery`: premium, policies, collections, persistency per producer;
+  - `IncentiveRun` (`commission.approve`): at a period end, measures each targeted producer, and the highest tier reached creates an award plus a `bonus` commission entry
+    posted INCENTIVE_BONUS_EARNED. Reruns are no-ops (A-25). The statement run already sums bonuses into `bonus_minor`, so a salaried BDO's bonus is paid through payroll.
+- Reports (`reports.financial`): `GET /api/reports/leaderboard?metric&from&to[&channel_id&branch_id]` (rank with ties, value, target and achievement when the range is a
+  target period) and `GET /api/reports/persistency?as_of` (13th and 25th month, with cohort sizes, A-23).
+- New posting rule INCENTIVE_BONUS_EARNED (DR commission_expense / CR commission_payable / CR commission_withholding_payable) with golden fixture `05h_incentive_bonus_earned`.
+- ASSUMPTIONS A-24, A-25.
+- Test setup change: `TenantIsolationEveryTableTest` sets a target, a plan and runs incentives for July.
+- Tests: `tests/Feature/Distribution/IncentivesTest.php` (5), `GoldenRulesTest` (+1).
 

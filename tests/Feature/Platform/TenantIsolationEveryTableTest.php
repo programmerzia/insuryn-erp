@@ -16,6 +16,9 @@ use App\Modules\Distribution\Application\Compensation\CompensationRequest;
 use App\Modules\Distribution\Application\Compensation\CompensationRuleRequest;
 use App\Modules\Distribution\Application\Compensation\CompensationSchemeService;
 use App\Modules\Distribution\Application\Hierarchy\HierarchyService;
+use App\Modules\Distribution\Application\Incentives\IncentivePlanService;
+use App\Modules\Distribution\Application\Targets\TargetService;
+use App\Modules\Insurance\Commission\Application\IncentiveRun;
 use App\Modules\Distribution\Application\Licences\LicenceExpiryAlerts;
 use App\Modules\Finance\Bank\Application\BankAccountService;
 use App\Modules\Finance\Bank\Application\BankMatcher;
@@ -132,6 +135,10 @@ function populateEveryTenantTable(array $ctx): void
             $d('2026-09-30'), 'isolation', (string) Str::uuid7(), $scheme)); // slice D5: records a compliance exception (non-life commission disabled)
         app(AdvanceService::class)->issue($world['agent_id'], 500_000, ['type' => 'full'], $d('2026-09-01'), $world['admin']); // slice D6
         DB::transaction(fn () => app(AdvanceService::class)->recover($world['agent_id'], $ctx['entity_id'], 100_000, (string) Str::uuid7(), $d('2026-09-30')));
+        app(TargetService::class)->set('producer', $world['agent_id'], 'monthly', $d('2026-07-01'), 'premium', 1_000, $world['admin']); // slice D7: the policy above was written in July
+        app(IncentivePlanService::class)->create(['code' => 'AG-MONTHLY', 'name' => 'Agent bonus', 'period_type' => 'monthly', 'metric' => 'premium', 'applies_to' => ['producer_type' => 'agent'],
+            'tiers' => [['achievement_bp_from' => 1, 'bonus' => ['type' => 'fixed_minor', 'value' => 1_000]]], 'effective_from' => '2026-01-01'], $world['admin']);
+        app(IncentiveRun::class)->run($ctx['entity_id'], $d('2026-07-31'), $world['admin']);
     });
 }
 

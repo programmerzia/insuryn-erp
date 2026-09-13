@@ -102,6 +102,8 @@ Route::middleware('auth')->prefix('finance')->group(function (): void {
 // Read-only reports (slice 1A.10); every figure carries URLs drilling to account activity and journals.
 Route::middleware('auth')->prefix('reports')->group(function (): void {
     Route::get('premium-register', [InsuranceReportController::class, 'premiumRegister']);
+    Route::get('leaderboard', [InsuranceReportController::class, 'leaderboard']);
+    Route::get('persistency', [InsuranceReportController::class, 'persistency']);
     Route::get('receivable-ageing', [InsuranceReportController::class, 'receivableAgeing']);
     Route::get('suspense-ageing', [InsuranceReportController::class, 'suspenseAgeing']);
     Route::get('commission-statement', [InsuranceReportController::class, 'commissionStatement']);
