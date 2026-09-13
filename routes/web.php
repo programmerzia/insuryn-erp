@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
+use App\Modules\Finance\Bank\Http\Controllers\BankPageController;
+use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Product\Http\Controllers\ProductPageController;
@@ -48,4 +50,27 @@ Route::middleware('auth')->group(function (): void {
     Route::post('policies/{policy}/endorse', [PolicyPageController::class, 'endorse'])->whereUuid('policy');
     Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy');
     Route::post('policies/{policy}/{action}', [PolicyPageController::class, 'transition'])->whereUuid('policy')->whereIn('action', ['lapse', 'reinstate', 'renew']);
+
+    Route::get('receipts', [CollectionsPageController::class, 'index']);
+    Route::get('receipts/create', [CollectionsPageController::class, 'create']);
+    Route::post('receipts', [CollectionsPageController::class, 'store']);
+    Route::get('receipts/{receipt}', [CollectionsPageController::class, 'show'])->whereUuid('receipt');
+    Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt');
+    Route::get('suspense', [CollectionsPageController::class, 'suspense']);
+    Route::post('suspense/{suspenseItem}/allocate', [CollectionsPageController::class, 'allocate'])->whereUuid('suspenseItem');
+    Route::get('refunds', [CollectionsPageController::class, 'refunds']);
+    Route::post('refunds', [CollectionsPageController::class, 'requestRefund']);
+    Route::post('refunds/{refund}/{decision}', [CollectionsPageController::class, 'decideRefund'])->whereUuid('refund')->whereIn('decision', ['release', 'reject']);
+    Route::get('agent-cash', [CollectionsPageController::class, 'agentCash']);
+    Route::post('agent-cash/deposits', [CollectionsPageController::class, 'deposit']);
+    Route::get('cheques', [CollectionsPageController::class, 'cheques']);
+    Route::get('dunning', [CollectionsPageController::class, 'dunning']);
+
+    Route::get('bank', [BankPageController::class, 'index']);
+    Route::post('bank', [BankPageController::class, 'store']);
+    Route::get('bank/{bankAccount}', [BankPageController::class, 'show'])->whereUuid('bankAccount');
+    Route::post('bank/{bankAccount}/statements', [BankPageController::class, 'import'])->whereUuid('bankAccount');
+    Route::post('bank/{bankAccount}/auto-match', [BankPageController::class, 'autoMatch'])->whereUuid('bankAccount');
+    Route::post('bank/lines/{statementLine}/match', [BankPageController::class, 'match'])->whereUuid('statementLine');
+    Route::post('bank/lines/{statementLine}/explain', [BankPageController::class, 'explain'])->whereUuid('statementLine');
 });

@@ -55,7 +55,7 @@ code and in the register below, configurable.
 | 1C.6 | Hardening: posting/lock race, isolation on every tenant table | done | see git log |
 | 1C.7 | Account security page (2FA, password) | done | see git log |
 | 1C.8 | Operations UI: parties, products, policies | done | see git log |
-| 1C.9 | Operations UI: receipts, suspense, refunds, bank | pending | |
+| 1C.9 | Operations UI: receipts, suspense, refunds, bank | done | see git log |
 | 1C.10 | Operations UI: claims and commission | pending | |
 | 1C.11 | Operations UI: month-end close and reports | pending | |
 | 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | pending | |
@@ -792,3 +792,20 @@ Scope: review only; only the critical finding was fixed.
   account/agents; products and versions; quote with major-unit premium → issue → endorsement refused back to the form, then accepted →
   detail props and allowed actions → cancel → status filter; the JSON API still answers 422 with the reason.
 - Result: 944 tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### 1C.9 — Operations UI: receipts, suspense, refunds, bank — done
+- `Insurance\Collections\Http\Controllers\CollectionsPageController` (area: receipt.create, receipt.allocate, receipt.refund_request,
+  receipt.refund_release, reports.financial):
+  - `/receipts` (list), `/receipts/create` (branch, channel, amount, value date, reference, bank account; cheque details for cheques; collecting
+    agent for cash; allocations against outstanding installments), `/receipts/{id}` (allocations with reversal dates, suspense, "cheque bounced").
+  - `/suspense` (ageing buckets and items as of a date; allocate an item to an installment), `/refunds` (refundable cancelled policies from the new
+    `RefundableQuery`, request, release with paid date or reject — the SoD refusal returns to the form), `/agent-cash` (position as of a date,
+    record a deposit), `/cheques` (register for a range), `/dunning` (reminders issued in a range).
+- `Finance\Bank\Http\Controllers\BankPageController` (area: bank.import, bank.match, bank.manage_accounts, reports.financial): `/bank` (accounts
+  with their ledger account and unmatched line count; add account), `/bank/{id}` (unmatched statement and ledger lines as of a date; CSV import
+  with row errors shown; automatic match; manual match of one statement line to selected ledger lines; explain).
+- Navigation gains the Collections group (Receipts, Suspense, Refunds, Agent cash, Dunning, Bank).
+- Tests `tests/Feature/Pages/CollectionsBankPagesTest.php`: area access; receipt with cheque and allocation → suspense → allocate (and refused
+  over-allocation) → bounce → register and list; refund request, SoD refusal, release; agent collection, deposit and position; dunning list;
+  bank account, import, auto-match message, manual match and explanation empty the queue.
+- Result: 949 tests green, PHPStan 0 errors, vue-tsc and build green.

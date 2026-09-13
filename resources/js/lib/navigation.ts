@@ -11,6 +11,7 @@ export interface NavGroup {
 }
 
 const reader = 'reports.financial';
+const collections = ['receipt.create', 'receipt.allocate', 'receipt.refund_request', 'receipt.refund_release', reader];
 
 export const navigation: NavGroup[] = [
     {
@@ -20,6 +21,17 @@ export const navigation: NavGroup[] = [
             { label: 'Agents', href: '/agents', any: ['party.manage', 'agent.manage', 'policy.create', reader] },
             { label: 'Products', href: '/products', any: ['product.manage', 'policy.create', reader] },
             { label: 'Policies', href: '/policies', any: ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', reader] },
+        ],
+    },
+    {
+        label: 'Collections',
+        items: [
+            { label: 'Receipts', href: '/receipts', any: collections },
+            { label: 'Suspense', href: '/suspense', any: collections },
+            { label: 'Refunds', href: '/refunds', any: collections },
+            { label: 'Agent cash', href: '/agent-cash', any: collections },
+            { label: 'Dunning', href: '/dunning', any: collections },
+            { label: 'Bank', href: '/bank', any: ['bank.import', 'bank.match', 'bank.manage_accounts', reader] },
         ],
     },
     {
