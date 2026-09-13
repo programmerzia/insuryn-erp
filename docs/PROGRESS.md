@@ -1778,3 +1778,11 @@ Scope: review only; only the critical finding was fixed.
 - Tests: `tests/Feature/Accounting/AccountRolesTest.php` (5: remap with effective dates, history and audit; overlap refusals; account and permission refusals; no remap over posted
   days; unmapped roles against the real rules; screen props, banner data and the map endpoint), `SetupWizardTest` (+1: template covers the rules, refusal with an extra rule writes
   nothing, success once the account is added).
+
+### Flow audit after F1–F6 — done
+- `scripts/flow-audit.mjs` walks market cross-check Part A steps 1–14 in a browser as each step's role on the Part A demo company; results and the run instructions are in
+  `docs/flow-audit.md` (results in `storage/flow-audit/`). Latest run: 9 pass, 5 partial, 0 fail — the partials are rating (G1), stamp duty, printed documents (G2), AP/payroll (G6)
+  and IDRA forms (G5). Steps 2 (number), 5 (documents), 7 (limits) and 14 (UPR, register by class, agency export) moved to pass or closer through F1–F6.
+- Observations to decide on are listed there: default dates may follow UTC rather than the tenant's time zone; a month can be locked with a manual journal pending approval
+  in it and before the month ends; the finance manager lacks `reports.regulatory`; without a queue worker the close shows variances.
+- Final gate after merging F1–F6: 1,134 Pest tests and 277 Vitest tests green, PHPStan 0 errors, vue-tsc green.
