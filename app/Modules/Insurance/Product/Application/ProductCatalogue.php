@@ -93,8 +93,8 @@ final class ProductCatalogue
             ]);
             $this->audit->record('product_version.created', AuditSubject::of('product', $product->id), null,
                 ['version' => $version->version, 'effective_from' => $terms['effective_from'], 'effective_to' => $terms['effective_to'] ?? null, ...$ratingTerms], null, 'product.manage', Actor::user($actorUserId));
-            foreach ($terms['coverage_definitions'] ?? [] as $coverage) {
-                $this->createCoverage($product->id, $version, $coverage, $actorUserId);
+            foreach ($terms['coverage_definitions'] ?? [] as $position => $coverage) {
+                $this->createCoverage($product->id, $version, ['sort_order' => $position + 1, ...$coverage], $actorUserId); // listed order unless given (R3)
             }
 
             return $version;

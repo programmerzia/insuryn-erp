@@ -1,0 +1,369 @@
+{
+    "description": "Marine cargo: rate per mille by voyage and conveyance, minimum, rounding, stamp duty and VAT as plan steps.",
+    "note": "Illustrative placeholder tariff and duties (flagged verify) — NOT current IDRA/NBR values. Expected amounts worked by hand.",
+    "product": {
+        "class_code": "marine_cargo",
+        "risk_schema": [
+            {
+                "key": "voyage_type",
+                "label_en": "Voyage",
+                "label_bn": "যাত্রার ধরন",
+                "type": "select",
+                "required": true,
+                "options": [
+                    {
+                        "value": "import",
+                        "label_en": "Import",
+                        "label_bn": "আমদানি"
+                    },
+                    {
+                        "value": "export",
+                        "label_en": "Export",
+                        "label_bn": "রপ্তানি"
+                    },
+                    {
+                        "value": "inland",
+                        "label_en": "Inland transit",
+                        "label_bn": "অভ্যন্তরীণ পরিবহন"
+                    }
+                ]
+            },
+            {
+                "key": "conveyance",
+                "label_en": "Conveyance",
+                "label_bn": "পরিবহন মাধ্যম",
+                "type": "select",
+                "required": true,
+                "options": [
+                    {
+                        "value": "sea",
+                        "label_en": "Sea",
+                        "label_bn": "সমুদ্র"
+                    },
+                    {
+                        "value": "air",
+                        "label_en": "Air",
+                        "label_bn": "আকাশ"
+                    },
+                    {
+                        "value": "road",
+                        "label_en": "Road or rail",
+                        "label_bn": "সড়ক বা রেল"
+                    }
+                ]
+            },
+            {
+                "key": "commodity",
+                "label_en": "Commodity",
+                "label_bn": "পণ্য",
+                "type": "text",
+                "required": true
+            },
+            {
+                "key": "from_port",
+                "label_en": "From",
+                "label_bn": "যাত্রাস্থল",
+                "type": "text",
+                "required": true
+            },
+            {
+                "key": "to_port",
+                "label_en": "To",
+                "label_bn": "গন্তব্য",
+                "type": "text",
+                "required": true
+            },
+            {
+                "key": "sum_insured",
+                "label_en": "Sum insured",
+                "label_bn": "বিমাকৃত অঙ্ক",
+                "type": "money",
+                "required": true,
+                "min": 1
+            }
+        ],
+        "min_premium_minor": null,
+        "duty_profile": null,
+        "coverages": [
+            {
+                "code": "cargo",
+                "name_en": "Cargo in transit",
+                "name_bn": "পরিবহনকালীন পণ্য",
+                "basis": "sum_insured",
+                "mandatory": true
+            }
+        ]
+    },
+    "plan": {
+        "code": "MARINE-CARGO-TARIFF",
+        "name": "Marine cargo tariff (placeholder)",
+        "class_code": "marine_cargo",
+        "version": 1,
+        "currency": "BDT",
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "source": "idra_tariff",
+        "tables": [
+            {
+                "code": "voyage_rate",
+                "name": "Voyage rate per mille",
+                "dimensions": [
+                    "voyage_type",
+                    "conveyance"
+                ],
+                "value_type": "rate_pm",
+                "rows": [
+                    {
+                        "keys": {
+                            "voyage_type": "import",
+                            "conveyance": "sea"
+                        },
+                        "value_bp": 150
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "import",
+                            "conveyance": "air"
+                        },
+                        "value_bp": 100
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "import",
+                            "conveyance": "road"
+                        },
+                        "value_bp": 120
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "export",
+                            "conveyance": "sea"
+                        },
+                        "value_bp": 120
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "export",
+                            "conveyance": "air"
+                        },
+                        "value_bp": 80
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "export",
+                            "conveyance": "road"
+                        },
+                        "value_bp": 100
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "inland",
+                            "conveyance": "sea"
+                        },
+                        "value_bp": 180
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "inland",
+                            "conveyance": "air"
+                        },
+                        "value_bp": 120
+                    },
+                    {
+                        "keys": {
+                            "voyage_type": "inland",
+                            "conveyance": "road"
+                        },
+                        "value_bp": 200
+                    }
+                ]
+            }
+        ],
+        "steps": [
+            {
+                "order_no": 10,
+                "code": "voyage",
+                "kind": "base",
+                "expression": "per_mille(sum_insured, lookup('voyage_rate', risk.voyage_type, risk.conveyance))",
+                "condition": null,
+                "applies_to": "cargo",
+                "label_en": "Voyage premium",
+                "label_bn": "যাত্রার প্রিমিয়াম"
+            },
+            {
+                "order_no": 20,
+                "code": "minimum",
+                "kind": "minimum",
+                "expression": "50000",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Minimum premium",
+                "label_bn": "ন্যূনতম প্রিমিয়াম"
+            },
+            {
+                "order_no": 30,
+                "code": "rounding",
+                "kind": "rounding",
+                "expression": "round_to(running.premium, 100)",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Rounded to the nearest taka",
+                "label_bn": "নিকটতম টাকায় পূর্ণসংখ্যা"
+            },
+            {
+                "order_no": 40,
+                "code": "stamp",
+                "kind": "duty",
+                "expression": "duty('stamp')",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক"
+            },
+            {
+                "order_no": 50,
+                "code": "vat",
+                "kind": "tax",
+                "expression": "duty('vat')",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "VAT 15%",
+                "label_bn": "মূসক ১৫%"
+            }
+        ]
+    },
+    "duties": [
+        {
+            "code": "stamp",
+            "basis": "flat_per_policy",
+            "amount_minor": 10000,
+            "class_codes": [
+                "marine_cargo"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": null,
+            "label_en": "Stamp duty",
+            "label_bn": "স্ট্যাম্প শুল্ক",
+            "verify": true
+        },
+        {
+            "code": "vat",
+            "basis": "pct_of_premium",
+            "rate_bp": 1500,
+            "class_codes": [
+                "motor",
+                "fire",
+                "marine_cargo",
+                "misc"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": null,
+            "label_en": "VAT",
+            "label_bn": "মূসক",
+            "verify": true
+        }
+    ],
+    "request": {
+        "as_of": "2026-09-15",
+        "risk_inputs": {
+            "voyage_type": "import",
+            "conveyance": "sea",
+            "commodity": "Raw cotton, 120 bales",
+            "from_port": "Shanghai",
+            "to_port": "Chattogram",
+            "sum_insured": 876543210
+        },
+        "coverages": []
+    },
+    "expected": {
+        "currency": "BDT",
+        "as_of": "2026-09-15",
+        "plan": {
+            "code": "MARINE-CARGO-TARIFF",
+            "version": 1,
+            "class_code": "marine_cargo"
+        },
+        "risk_inputs": {
+            "voyage_type": "import",
+            "conveyance": "sea",
+            "commodity": "Raw cotton, 120 bales",
+            "from_port": "Shanghai",
+            "to_port": "Chattogram",
+            "sum_insured": 876543210
+        },
+        "coverages": [
+            "cargo"
+        ],
+        "base_premium_minor": 1314815,
+        "coverage_premiums": [
+            {
+                "code": "cargo",
+                "amount_minor": 1314815
+            }
+        ],
+        "loadings": [],
+        "discounts": [],
+        "minimum_adjustment_minor": 0,
+        "rounding_adjustment_minor": -15,
+        "net_premium_minor": 1314800,
+        "duties": [
+            {
+                "code": "stamp",
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক",
+                "amount_minor": 10000
+            },
+            {
+                "code": "vat",
+                "label_en": "VAT 15%",
+                "label_bn": "মূসক ১৫%",
+                "amount_minor": 197220
+            }
+        ],
+        "duties_total_minor": 207220,
+        "gross_premium_minor": 1522020,
+        "explanation": [
+            {
+                "step_code": "voyage",
+                "kind": "base",
+                "label_en": "Voyage premium",
+                "label_bn": "যাত্রার প্রিমিয়াম",
+                "amount_minor": 1314815,
+                "running_total_minor": 1314815
+            },
+            {
+                "step_code": "minimum",
+                "kind": "minimum",
+                "label_en": "Minimum premium",
+                "label_bn": "ন্যূনতম প্রিমিয়াম",
+                "amount_minor": 0,
+                "running_total_minor": 1314815
+            },
+            {
+                "step_code": "rounding",
+                "kind": "rounding",
+                "label_en": "Rounded to the nearest taka",
+                "label_bn": "নিকটতম টাকায় পূর্ণসংখ্যা",
+                "amount_minor": -15,
+                "running_total_minor": 1314800
+            },
+            {
+                "step_code": "stamp",
+                "kind": "duty",
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক",
+                "amount_minor": 10000,
+                "running_total_minor": 1324800
+            },
+            {
+                "step_code": "vat",
+                "kind": "tax",
+                "label_en": "VAT 15%",
+                "label_bn": "মূসক ১৫%",
+                "amount_minor": 197220,
+                "running_total_minor": 1522020
+            }
+        ],
+        "verify": true
+    }
+}

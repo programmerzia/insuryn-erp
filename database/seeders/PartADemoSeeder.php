@@ -136,6 +136,7 @@ final class PartADemoSeeder extends Seeder
         };
         $products = ['MOTOR' => $product('MOTOR', 'Motor Comprehensive', 'motor', 'motor'), 'FIRE' => $product('FIRE', 'Fire and Allied Perils', 'fire', 'fire'),
             'MARINE' => $product('MARINE', 'Marine Cargo', 'marine', 'marine_cargo')];
+        DemoRatingPlans::seed($finance, $this->users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify)
         $this->bankAccountId = app(BankAccountService::class)->create($this->entityId, $accounts['bank_main'], 'City Bank', '****4471', 'BDT', $finance)->id;
         $journals = app(ManualJournalService::class);
         $opening = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Bank balance brought forward', JournalKind::Manual, 'Opening balance at City Bank', 'BDT', [

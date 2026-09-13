@@ -1,0 +1,322 @@
+{
+    "description": "Fire: rate per mille by occupancy, construction loading, minimum and rounding; stamp duty by sum insured band and VAT applied automatically (no duty steps).",
+    "note": "Illustrative placeholder tariff and duties (flagged verify) — NOT current IDRA/NBR values. Expected amounts worked by hand.",
+    "product": {
+        "class_code": "fire",
+        "risk_schema": [
+            {
+                "key": "occupancy",
+                "label_en": "Occupancy",
+                "label_bn": "ব্যবহারের ধরন",
+                "type": "select",
+                "required": true,
+                "options": [
+                    {
+                        "value": "dwelling",
+                        "label_en": "Dwelling",
+                        "label_bn": "বাসস্থান"
+                    },
+                    {
+                        "value": "shop",
+                        "label_en": "Shop or office",
+                        "label_bn": "দোকান বা অফিস"
+                    },
+                    {
+                        "value": "warehouse",
+                        "label_en": "Warehouse",
+                        "label_bn": "গুদাম"
+                    },
+                    {
+                        "value": "factory",
+                        "label_en": "Factory",
+                        "label_bn": "কারখানা"
+                    }
+                ]
+            },
+            {
+                "key": "construction_class",
+                "label_en": "Construction class",
+                "label_bn": "নির্মাণ শ্রেণি",
+                "type": "select",
+                "required": true,
+                "options": [
+                    {
+                        "value": "class_1",
+                        "label_en": "Class 1 (brick and concrete)",
+                        "label_bn": "শ্রেণি ১ (ইট ও কংক্রিট)"
+                    },
+                    {
+                        "value": "class_2",
+                        "label_en": "Class 2 (mixed)",
+                        "label_bn": "শ্রেণি ২ (মিশ্র)"
+                    },
+                    {
+                        "value": "class_3",
+                        "label_en": "Class 3 (tin or wood)",
+                        "label_bn": "শ্রেণি ৩ (টিন বা কাঠ)"
+                    }
+                ]
+            },
+            {
+                "key": "address",
+                "label_en": "Risk address",
+                "label_bn": "ঝুঁকির ঠিকানা",
+                "type": "text",
+                "required": true
+            },
+            {
+                "key": "sum_insured",
+                "label_en": "Sum insured",
+                "label_bn": "বিমাকৃত অঙ্ক",
+                "type": "money",
+                "required": true,
+                "min": 1
+            }
+        ],
+        "min_premium_minor": null,
+        "duty_profile": null,
+        "coverages": [
+            {
+                "code": "fire",
+                "name_en": "Fire and lightning",
+                "name_bn": "অগ্নি ও বজ্রপাত",
+                "basis": "sum_insured",
+                "mandatory": true
+            }
+        ]
+    },
+    "plan": {
+        "code": "FIRE-TARIFF",
+        "name": "Fire tariff (placeholder)",
+        "class_code": "fire",
+        "version": 1,
+        "currency": "BDT",
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "source": "idra_tariff",
+        "tables": [
+            {
+                "code": "fire_rate",
+                "name": "Fire rate per mille by occupancy",
+                "dimensions": [
+                    "occupancy"
+                ],
+                "value_type": "rate_pm",
+                "rows": [
+                    {
+                        "keys": {
+                            "occupancy": "dwelling"
+                        },
+                        "value_bp": 80
+                    },
+                    {
+                        "keys": {
+                            "occupancy": "shop"
+                        },
+                        "value_bp": 150
+                    },
+                    {
+                        "keys": {
+                            "occupancy": "warehouse"
+                        },
+                        "value_bp": 200
+                    },
+                    {
+                        "keys": {
+                            "occupancy": "factory"
+                        },
+                        "value_bp": 250
+                    }
+                ]
+            }
+        ],
+        "steps": [
+            {
+                "order_no": 10,
+                "code": "fire_basic",
+                "kind": "base",
+                "expression": "per_mille(sum_insured, lookup('fire_rate', risk.occupancy))",
+                "condition": null,
+                "applies_to": "fire",
+                "label_en": "Fire premium by occupancy",
+                "label_bn": "ব্যবহার অনুযায়ী অগ্নি প্রিমিয়াম"
+            },
+            {
+                "order_no": 20,
+                "code": "construction",
+                "kind": "loading",
+                "expression": "pct(running.premium, 2500)",
+                "condition": "risk.construction_class == 'class_3'",
+                "applies_to": null,
+                "label_en": "Class 3 construction loading 25%",
+                "label_bn": "শ্রেণি ৩ নির্মাণ লোডিং ২৫%"
+            },
+            {
+                "order_no": 30,
+                "code": "minimum",
+                "kind": "minimum",
+                "expression": "100000",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Minimum premium",
+                "label_bn": "ন্যূনতম প্রিমিয়াম"
+            },
+            {
+                "order_no": 40,
+                "code": "rounding",
+                "kind": "rounding",
+                "expression": "round_to(running.premium, 100)",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Rounded to the nearest taka",
+                "label_bn": "নিকটতম টাকায় পূর্ণসংখ্যা"
+            }
+        ]
+    },
+    "duties": [
+        {
+            "code": "stamp",
+            "basis": "per_sum_insured_band",
+            "bands": [
+                {
+                    "from": 0,
+                    "to": 1000000000,
+                    "amount_minor": 20000
+                },
+                {
+                    "from": 1000000000,
+                    "to": 5000000000,
+                    "amount_minor": 50000
+                },
+                {
+                    "from": 5000000000,
+                    "to": null,
+                    "amount_minor": 100000
+                }
+            ],
+            "class_codes": [
+                "fire"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": null,
+            "label_en": "Stamp duty",
+            "label_bn": "স্ট্যাম্প শুল্ক",
+            "verify": true
+        },
+        {
+            "code": "vat",
+            "basis": "pct_of_premium",
+            "rate_bp": 1500,
+            "class_codes": [
+                "motor",
+                "fire",
+                "marine_cargo",
+                "misc"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": null,
+            "label_en": "VAT",
+            "label_bn": "মূসক",
+            "verify": true
+        }
+    ],
+    "request": {
+        "as_of": "2026-09-15",
+        "risk_inputs": {
+            "occupancy": "warehouse",
+            "construction_class": "class_1",
+            "address": "Plot 12, Tejgaon I/A, Dhaka",
+            "sum_insured": 2456789000
+        },
+        "coverages": []
+    },
+    "expected": {
+        "currency": "BDT",
+        "as_of": "2026-09-15",
+        "plan": {
+            "code": "FIRE-TARIFF",
+            "version": 1,
+            "class_code": "fire"
+        },
+        "risk_inputs": {
+            "occupancy": "warehouse",
+            "construction_class": "class_1",
+            "address": "Plot 12, Tejgaon I/A, Dhaka",
+            "sum_insured": 2456789000
+        },
+        "coverages": [
+            "fire"
+        ],
+        "base_premium_minor": 4913578,
+        "coverage_premiums": [
+            {
+                "code": "fire",
+                "amount_minor": 4913578
+            }
+        ],
+        "loadings": [],
+        "discounts": [],
+        "minimum_adjustment_minor": 0,
+        "rounding_adjustment_minor": 22,
+        "net_premium_minor": 4913600,
+        "duties": [
+            {
+                "code": "stamp",
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক",
+                "amount_minor": 50000
+            },
+            {
+                "code": "vat",
+                "label_en": "VAT",
+                "label_bn": "মূসক",
+                "amount_minor": 737040
+            }
+        ],
+        "duties_total_minor": 787040,
+        "gross_premium_minor": 5700640,
+        "explanation": [
+            {
+                "step_code": "fire_basic",
+                "kind": "base",
+                "label_en": "Fire premium by occupancy",
+                "label_bn": "ব্যবহার অনুযায়ী অগ্নি প্রিমিয়াম",
+                "amount_minor": 4913578,
+                "running_total_minor": 4913578
+            },
+            {
+                "step_code": "minimum",
+                "kind": "minimum",
+                "label_en": "Minimum premium",
+                "label_bn": "ন্যূনতম প্রিমিয়াম",
+                "amount_minor": 0,
+                "running_total_minor": 4913578
+            },
+            {
+                "step_code": "rounding",
+                "kind": "rounding",
+                "label_en": "Rounded to the nearest taka",
+                "label_bn": "নিকটতম টাকায় পূর্ণসংখ্যা",
+                "amount_minor": 22,
+                "running_total_minor": 4913600
+            },
+            {
+                "step_code": "stamp",
+                "kind": "duty",
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক",
+                "amount_minor": 50000,
+                "running_total_minor": 4963600
+            },
+            {
+                "step_code": "vat",
+                "kind": "tax",
+                "label_en": "VAT",
+                "label_bn": "মূসক",
+                "amount_minor": 737040,
+                "running_total_minor": 5700640
+            }
+        ],
+        "verify": true
+    }
+}

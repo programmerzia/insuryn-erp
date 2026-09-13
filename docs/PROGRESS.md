@@ -135,6 +135,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-57 | F4 | "Roles used by active posting rules" = the line roles and the rounding residual role of every rule in force on the day that posts to the book. Overridable roles (`bank_main`) still need a mapping, because events without an override fall back to it. | `AccountRoleMappingService::rolesUsedByRules`, `unmappedRoles` (`ASSUMPTION:`). |
 | A-65 | R1 | Rating design OPEN 3 (is premium recognised at the cover note?) and OPEN 4 (credit issuance rules) are unanswered: every product version has `recognise_at = policy` and `allow_credit_issue = false` unless set. Stored now; the quotation flow (R5–R7) reads them. | `product_versions.recognise_at` / `allow_credit_issue` (`ProductCatalogue::ratingTerms`, `ASSUMPTION:`), `PremiumRecognition`. |
 | A-66 | R1 | Which duties apply to a product is not specified beyond "stamp (flat by class), VAT on premium": every duty in force for the product's class applies unless the version's `duty_profile` excludes it (`{"exclude": ["levy"]}`), so a product never silently goes without VAT or stamp duty. | `DutyProfile` (`ASSUMPTION:`). |
+| A-67 | R3 | Which minimum premium wins when both the plan (a `minimum` step) and the product version (`min_premium_minor`) set one is not specified: the product's minimum is applied after the plan's premium steps and before rounding, so the higher of the two wins. | `RatingCalculator` (`ASSUMPTION` in the class docblock), `product_versions.min_premium_minor`. |
 | A-68 | R2 | How duties combine is not specified beyond "stamp (flat by class), VAT 15% on premium": VAT and levies are worked on the net premium (after minimum and rounding), never on stamp duty or other duties; duties not named by a plan step apply automatically in the order stamp, levy, vat. Duty values are placeholders flagged `verify` (design OPEN 1). | `DutyDefinition::amountFor`, `RatingCalculator` (R3), `duties` rows. |
 | A-69 | R2 | No §7.2 role template covers tariffs: `rating.manage_plans` (draft plans, new versions, duties) and `rating.approve_plans` (approve, activate, retire) both go to the Finance Manager and CFO templates; the SoD object rule (SOD7) stops anyone approving a plan they drafted or edited. Duties are recorded without a second approval (effective-dated, audited). Activating a plan that overlaps the active plan of its class is refused unless the caller asks to supersede it (the current plan then ends the day the new one starts, only if it started earlier). | `RoleTemplates`, `PermissionsSeeder::SOD`, migration `2026_09_20_000002`, `RatingPlanService::activate`, `DutyBook`. |
 
@@ -1854,3 +1855,60 @@ Scope: review only; only the critical finding was fixed.
 - Tests: `tests/Unit/Insurance/RatingExpressionsTest.php` (22), `tests/Feature/Insurance/RatingPlanLifecycleTest.php` (6), `tests/Feature/Insurance/DutyBookTest.php` (2).
 
 - Result: 1,158 Pest tests green, PHPStan 0 errors, Vitest (269) and vue-tsc green.
+
+### R3 — Rating: RatingEngine::rate() — done
+- `Insurance\Rating\Application\RatingEngine::rate(ProductVersion|id, riskInputs, CarbonImmutable asOf, chosenCoverages = []): RatingResult` — reads only (no writes, no audit,
+  no permission check: the caller that quotes checks its own). Plan: the version's `rating_plan_id` when set (must be active — `RATING_PLAN_NOT_ACTIVE` — and in force —
+  `RATING_PLAN_NOT_EFFECTIVE`), else the active plan for the version's class on the date (`RATING_PLAN_NOT_FOUND`); a version without a class is `PRODUCT_NOT_RATED`.
+- Pure `Rating\Domain\RatingCalculator::calculate(RatingRequest)`: validates the inputs against the risk schema (`RISK_INPUTS_INVALID`), rates mandatory coverages plus the
+  chosen ones (`COVERAGE_UNKNOWN`), runs the steps in order (base/coverage/loading add, discount subtracts, minimum floors, rounding replaces; a step with `applies_to`
+  runs only for a rated coverage, a false condition skips it; negative step amounts or premium refused), applies the product minimum (A-67), then duties: duty/tax steps via
+  `duty('code')`, and every other duty in force for the class that the duty profile does not exclude, in the order stamp, levy, vat, on the net premium (A-66, A-68).
+- `RatingResult` (readonly): currency, as_of, product_version_id, plan {id, code, version, class_code}, inputs_hash (sha256 of plan code/version/class, date, normalised inputs
+  and coverages — no database ids, so it is stable across databases), risk_inputs, coverages, base premium, coverage premiums, loadings, discounts, minimum and rounding
+  adjustments, net premium, duties, duties total, gross premium, explanation lines {step_code, kind, label_en, label_bn, amount_minor, running_total_minor}, `verify` (a duty
+  used is a placeholder). `toArray()` / `fromArray()` round-trip exactly (R4/R7 freeze it as JSON).
+- `ProductCatalogue`: coverage definitions keep their listed order (`sort_order` defaults to the position).
+- Golden fixtures `tests/Fixtures/rating/` (expected amounts worked by hand, not produced by the code), each rated by the pure calculator and by RatingEngine through the
+  database (plan drafted, approved, activated; duties recorded; product version created):
+  - `01_motor_comprehensive`: own damage per mille by vehicle type × cc band, third-party, passenger liability per seat, young-driver loading, (skipped) old-vehicle
+    loading, no-claim bonus band, minimum by vehicle type, rounding, stamp duty and VAT steps — gross 30,918.30;
+  - `02_fire_per_mille_by_occupancy`: rate per mille by occupancy, construction loading (skipped), minimum, rounding (+0.22), stamp duty by sum insured band and VAT applied
+    automatically — gross 57,006.40;
+  - `03_marine_cargo_voyage`: voyage rate per mille by voyage type × conveyance, minimum, rounding (−0.15), stamp and VAT steps — gross 15,220.20.
+- Property tests (fixed seed 20260914, no library): 200 random motor quotes rate identically twice (objects, arrays and the fromArray round trip; gross = net + duties = last
+  running total); 150 random risks × 6 increasing sums insured each for motor and fire never lower net or gross.
+- Demo data: `Database\Seeders\DemoRatingPlans` seeds duties and active plans MOTOR-TARIFF, FIRE-TARIFF, MARINE-CARGO-TARIFF, MISC-TARIFF (drafted by the finance manager,
+  approved and activated by the CFO) in `DemoBusinessSeeder` (demo tenant; `DistributionDemoSeeder`'s FIRE-SME is rated by the same fire plan) and `PartADemoSeeder`
+  (nonlife tenant). Products are linked by class (no `rating_plan_id` pin). `DemoTenantSeeder` is unchanged; tests create plans with `activeRatingPlan`.
+- **Placeholder values to verify (consolidated, R1–R3)** — every one is illustrative, not an IDRA tariff or NBR rule. In the data: plans `verify = true` with a notes line,
+  duties `verify = true` and `source = placeholder_verify`, golden fixtures carry a `note`.
+  | Where | Value (minor units unless stated) |
+  |---|---|
+  | Duty VAT (motor, fire, marine_cargo, misc) | 15 % of net premium (1500 bp), on net premium only (A-68) — OPEN 1 |
+  | Duty stamp, motor | flat 5,000 (50.00) per policy — OPEN 1 |
+  | Duty stamp, fire | by sum insured: < 10,000,000.00 → 200.00; < 50,000,000.00 → 500.00; above → 1,000.00 — OPEN 1 |
+  | Duty stamp, marine cargo and misc | flat 10,000 (100.00) per policy — OPEN 1 |
+  | Motor own damage rate (‰) | private 20.00 / 22.50 / 25.00; commercial 27.50 / 30.00 / 32.50; motorcycle 15.00 / 17.50 / 20.00 for cc ≤ 1300 / 1301–1800 / > 1800 |
+  | Motor cc bands | [0, 1301), [1301, 1801), [1801, ∞) |
+  | Motor third-party liability | private 2,500.00; commercial 4,000.00; motorcycle 900.00 |
+  | Motor passenger liability | 45.00 per seat (all vehicle types) |
+  | Motor loadings | driver age < 25: +10 %; year of manufacture ≤ 2015: +15 % |
+  | Motor NCB scale (OPEN 5) | 0 years 0 %, 1 year 10 %, 2 years 20 %, 3+ years 30 % |
+  | Motor minimum premium | private 5,000.00; commercial 7,500.00; motorcycle 1,500.00 |
+  | Fire rate (‰) by occupancy | dwelling 0.80; shop 1.50; warehouse 2.00; factory 2.50 |
+  | Fire loading | construction class 3: +25 % |
+  | Fire minimum premium | 1,000.00 |
+  | Marine cargo rate (‰) | import sea 1.50 / air 1.00 / road 1.20; export 1.20 / 0.80 / 1.00; inland 1.80 / 1.20 / 2.00 |
+  | Marine cargo minimum premium | 500.00 |
+  | Misc rate and minimum | 3.00 ‰ of sum insured; minimum 500.00 |
+  | Rounding (all plans) | to the nearest 1.00, half-even |
+  | Risk schemas (R1) | select options (vehicle types, occupancies, construction classes, voyage types, conveyances) and bounds: engine 50–10,000 cc, seats 1–60, year 1950–2100, driver age 18–99, claim-free years 0–50 |
+  | Product flags (R1) | `recognise_at = policy` (OPEN 3), `allow_credit_issue = false` (OPEN 4) — defaults, not placeholders, but to confirm |
+- Not done, and why: no screens or HTTP endpoints (R10); quotations, proposals, cover notes and policies do not call the engine yet (R4–R7); endorsement re-rating with the
+  original plan version needs a "rate with this plan" entry point, left to R7 (the pinned `rating_plan_id` path covers a fixed plan today); `document_set_id` is stored
+  only (documents are R8); duties need no second approval (A-69).
+- Tests: `tests/Feature/Insurance/RatingGoldenTest.php` (3), `tests/Unit/Insurance/RatingPropertiesTest.php` (3), `tests/Feature/Insurance/RatingEngineTest.php` (4);
+  `RatingDemoSeedersTest` extended (active plans, verify flags, the demo motor product rates the golden quote).
+
+- Result: 1,168 Pest tests green, PHPStan 0 errors, Vitest (269) and vue-tsc green.

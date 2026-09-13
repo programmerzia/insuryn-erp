@@ -89,6 +89,8 @@ final class DemoBusinessSeeder extends Seeder
             $products[] = $product->id;
         }
 
+        DemoRatingPlans::seed($users['finance_manager'], $users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify), drafted by finance, approved by the CFO
+
         $parties = app(PartyService::class);
         $holders = [];
         foreach (self::NAMES as $i => $name) {

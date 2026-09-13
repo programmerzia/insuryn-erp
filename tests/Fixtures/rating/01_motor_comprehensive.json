@@ -1,0 +1,649 @@
+{
+    "description": "Motor comprehensive: base by vehicle type and cc band (per mille), third-party and passenger liability, young-driver loading, no-claim bonus, minimum, rounding, stamp duty and VAT.",
+    "note": "Illustrative placeholder tariff and duties (flagged verify) — NOT current IDRA/NBR values. Expected amounts worked by hand.",
+    "product": {
+        "class_code": "motor",
+        "risk_schema": [
+            {
+                "key": "vehicle_type",
+                "label_en": "Vehicle type",
+                "label_bn": "যানবাহনের ধরন",
+                "type": "select",
+                "required": true,
+                "options": [
+                    {
+                        "value": "private",
+                        "label_en": "Private car",
+                        "label_bn": "ব্যক্তিগত গাড়ি"
+                    },
+                    {
+                        "value": "commercial",
+                        "label_en": "Commercial vehicle",
+                        "label_bn": "বাণিজ্যিক যান"
+                    },
+                    {
+                        "value": "motorcycle",
+                        "label_en": "Motorcycle",
+                        "label_bn": "মোটরসাইকেল"
+                    }
+                ]
+            },
+            {
+                "key": "registration_no",
+                "label_en": "Registration number",
+                "label_bn": "নিবন্ধন নম্বর",
+                "type": "text",
+                "required": true,
+                "max_length": 32
+            },
+            {
+                "key": "engine_cc",
+                "label_en": "Engine capacity (cc)",
+                "label_bn": "ইঞ্জিন ক্ষমতা (সিসি)",
+                "type": "integer",
+                "required": true,
+                "min": 50,
+                "max": 10000
+            },
+            {
+                "key": "seats",
+                "label_en": "Seats",
+                "label_bn": "আসন সংখ্যা",
+                "type": "integer",
+                "required": true,
+                "min": 1,
+                "max": 60
+            },
+            {
+                "key": "year_of_manufacture",
+                "label_en": "Year of manufacture",
+                "label_bn": "তৈরির বছর",
+                "type": "integer",
+                "required": true,
+                "min": 1950,
+                "max": 2100
+            },
+            {
+                "key": "driver_age",
+                "label_en": "Driver age",
+                "label_bn": "চালকের বয়স",
+                "type": "integer",
+                "required": true,
+                "min": 18,
+                "max": 99
+            },
+            {
+                "key": "sum_insured",
+                "label_en": "Sum insured",
+                "label_bn": "বিমাকৃত অঙ্ক",
+                "type": "money",
+                "required": true,
+                "min": 1
+            },
+            {
+                "key": "ncb_years",
+                "label_en": "Claim-free years",
+                "label_bn": "দাবিমুক্ত বছর",
+                "type": "integer",
+                "required": false,
+                "min": 0,
+                "max": 50
+            }
+        ],
+        "min_premium_minor": null,
+        "duty_profile": null,
+        "coverages": [
+            {
+                "code": "own_damage",
+                "name_en": "Own damage",
+                "name_bn": "নিজস্ব ক্ষতি",
+                "basis": "sum_insured",
+                "mandatory": true
+            },
+            {
+                "code": "third_party",
+                "name_en": "Third-party liability",
+                "name_bn": "তৃতীয় পক্ষের দায়",
+                "basis": "flat",
+                "mandatory": true
+            },
+            {
+                "code": "passenger_liability",
+                "name_en": "Passenger liability",
+                "name_bn": "যাত্রী দায়",
+                "basis": "per_unit",
+                "mandatory": false
+            }
+        ]
+    },
+    "plan": {
+        "code": "MOTOR-TARIFF",
+        "name": "Motor comprehensive tariff (placeholder)",
+        "class_code": "motor",
+        "version": 1,
+        "currency": "BDT",
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "source": "idra_tariff",
+        "tables": [
+            {
+                "code": "cc_bands",
+                "name": "Engine capacity bands",
+                "dimensions": [],
+                "value_type": "band",
+                "rows": [
+                    {
+                        "keys": [],
+                        "band_from": 0,
+                        "band_to": 1301,
+                        "band_label": "upto_1300"
+                    },
+                    {
+                        "keys": [],
+                        "band_from": 1301,
+                        "band_to": 1801,
+                        "band_label": "1301_1800"
+                    },
+                    {
+                        "keys": [],
+                        "band_from": 1801,
+                        "band_to": null,
+                        "band_label": "above_1800"
+                    }
+                ]
+            },
+            {
+                "code": "min_premium",
+                "name": "Minimum premium by vehicle type",
+                "dimensions": [
+                    "vehicle_type"
+                ],
+                "value_type": "flat",
+                "rows": [
+                    {
+                        "keys": {
+                            "vehicle_type": "private"
+                        },
+                        "value_minor": 500000
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "commercial"
+                        },
+                        "value_minor": 750000
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "motorcycle"
+                        },
+                        "value_minor": 150000
+                    }
+                ]
+            },
+            {
+                "code": "motor_base",
+                "name": "Own damage rate per mille",
+                "dimensions": [
+                    "vehicle_type",
+                    "cc_band"
+                ],
+                "value_type": "rate_pm",
+                "rows": [
+                    {
+                        "keys": {
+                            "vehicle_type": "private",
+                            "cc_band": "upto_1300"
+                        },
+                        "value_bp": 2000
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "private",
+                            "cc_band": "1301_1800"
+                        },
+                        "value_bp": 2250
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "private",
+                            "cc_band": "above_1800"
+                        },
+                        "value_bp": 2500
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "commercial",
+                            "cc_band": "upto_1300"
+                        },
+                        "value_bp": 2750
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "commercial",
+                            "cc_band": "1301_1800"
+                        },
+                        "value_bp": 3000
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "commercial",
+                            "cc_band": "above_1800"
+                        },
+                        "value_bp": 3250
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "motorcycle",
+                            "cc_band": "upto_1300"
+                        },
+                        "value_bp": 1500
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "motorcycle",
+                            "cc_band": "1301_1800"
+                        },
+                        "value_bp": 1750
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "motorcycle",
+                            "cc_band": "above_1800"
+                        },
+                        "value_bp": 2000
+                    }
+                ]
+            },
+            {
+                "code": "ncb_scale",
+                "name": "No-claim bonus scale",
+                "dimensions": [],
+                "value_type": "band",
+                "rows": [
+                    {
+                        "keys": [],
+                        "band_from": 0,
+                        "band_to": 1,
+                        "band_label": "ncb_0",
+                        "value_bp": 0
+                    },
+                    {
+                        "keys": [],
+                        "band_from": 1,
+                        "band_to": 2,
+                        "band_label": "ncb_10",
+                        "value_bp": 1000
+                    },
+                    {
+                        "keys": [],
+                        "band_from": 2,
+                        "band_to": 3,
+                        "band_label": "ncb_20",
+                        "value_bp": 2000
+                    },
+                    {
+                        "keys": [],
+                        "band_from": 3,
+                        "band_to": null,
+                        "band_label": "ncb_30",
+                        "value_bp": 3000
+                    }
+                ]
+            },
+            {
+                "code": "passenger_seat",
+                "name": "Passenger liability per seat",
+                "dimensions": [
+                    "vehicle_type"
+                ],
+                "value_type": "flat",
+                "rows": [
+                    {
+                        "keys": {
+                            "vehicle_type": "private"
+                        },
+                        "value_minor": 4500
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "commercial"
+                        },
+                        "value_minor": 4500
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "motorcycle"
+                        },
+                        "value_minor": 4500
+                    }
+                ]
+            },
+            {
+                "code": "third_party",
+                "name": "Third-party liability",
+                "dimensions": [
+                    "vehicle_type"
+                ],
+                "value_type": "flat",
+                "rows": [
+                    {
+                        "keys": {
+                            "vehicle_type": "private"
+                        },
+                        "value_minor": 250000
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "commercial"
+                        },
+                        "value_minor": 400000
+                    },
+                    {
+                        "keys": {
+                            "vehicle_type": "motorcycle"
+                        },
+                        "value_minor": 90000
+                    }
+                ]
+            }
+        ],
+        "steps": [
+            {
+                "order_no": 10,
+                "code": "own_damage",
+                "kind": "base",
+                "expression": "per_mille(sum_insured, lookup('motor_base', risk.vehicle_type, band(risk.engine_cc, 'cc_bands')))",
+                "condition": null,
+                "applies_to": "own_damage",
+                "label_en": "Own damage premium",
+                "label_bn": "নিজস্ব ক্ষতির প্রিমিয়াম"
+            },
+            {
+                "order_no": 20,
+                "code": "third_party",
+                "kind": "coverage",
+                "expression": "lookup('third_party', risk.vehicle_type)",
+                "condition": null,
+                "applies_to": "third_party",
+                "label_en": "Third-party liability",
+                "label_bn": "তৃতীয় পক্ষের দায়"
+            },
+            {
+                "order_no": 30,
+                "code": "passenger_liability",
+                "kind": "coverage",
+                "expression": "lookup('passenger_seat', risk.vehicle_type) * risk.seats",
+                "condition": null,
+                "applies_to": "passenger_liability",
+                "label_en": "Passenger liability (per seat)",
+                "label_bn": "যাত্রী দায় (প্রতি আসন)"
+            },
+            {
+                "order_no": 40,
+                "code": "young_driver",
+                "kind": "loading",
+                "expression": "pct(running.premium, 1000)",
+                "condition": "risk.driver_age < 25",
+                "applies_to": null,
+                "label_en": "Young driver loading 10%",
+                "label_bn": "তরুণ চালক লোডিং ১০%"
+            },
+            {
+                "order_no": 50,
+                "code": "old_vehicle",
+                "kind": "loading",
+                "expression": "pct(running.premium, 1500)",
+                "condition": "risk.year_of_manufacture <= 2015",
+                "applies_to": null,
+                "label_en": "Vehicle over 10 years loading 15%",
+                "label_bn": "১০ বছরের পুরনো গাড়ি লোডিং ১৫%"
+            },
+            {
+                "order_no": 60,
+                "code": "no_claim_bonus",
+                "kind": "discount",
+                "expression": "pct(running.premium, band_value(risk.ncb_years ?? 0, 'ncb_scale'))",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "No-claim bonus",
+                "label_bn": "দাবিহীন বোনাস"
+            },
+            {
+                "order_no": 70,
+                "code": "minimum",
+                "kind": "minimum",
+                "expression": "lookup('min_premium', risk.vehicle_type)",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Minimum premium",
+                "label_bn": "ন্যূনতম প্রিমিয়াম"
+            },
+            {
+                "order_no": 80,
+                "code": "rounding",
+                "kind": "rounding",
+                "expression": "round_to(running.premium, 100)",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Rounded to the nearest taka",
+                "label_bn": "নিকটতম টাকায় পূর্ণসংখ্যা"
+            },
+            {
+                "order_no": 90,
+                "code": "stamp",
+                "kind": "duty",
+                "expression": "duty('stamp')",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক"
+            },
+            {
+                "order_no": 100,
+                "code": "vat",
+                "kind": "tax",
+                "expression": "duty('vat')",
+                "condition": null,
+                "applies_to": null,
+                "label_en": "VAT 15%",
+                "label_bn": "মূসক ১৫%"
+            }
+        ]
+    },
+    "duties": [
+        {
+            "code": "stamp",
+            "basis": "flat_per_policy",
+            "amount_minor": 5000,
+            "class_codes": [
+                "motor"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": null,
+            "label_en": "Stamp duty",
+            "label_bn": "স্ট্যাম্প শুল্ক",
+            "verify": true
+        },
+        {
+            "code": "vat",
+            "basis": "pct_of_premium",
+            "rate_bp": 1500,
+            "class_codes": [
+                "motor",
+                "fire",
+                "marine_cargo",
+                "misc"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": null,
+            "label_en": "VAT",
+            "label_bn": "মূসক",
+            "verify": true
+        }
+    ],
+    "request": {
+        "as_of": "2026-09-15",
+        "risk_inputs": {
+            "vehicle_type": "private",
+            "registration_no": "DHAKA-METRO-GA-12-3456",
+            "engine_cc": 1500,
+            "seats": 5,
+            "year_of_manufacture": 2020,
+            "driver_age": 23,
+            "sum_insured": 123456700,
+            "ncb_years": 2
+        },
+        "coverages": [
+            "passenger_liability"
+        ]
+    },
+    "expected": {
+        "currency": "BDT",
+        "as_of": "2026-09-15",
+        "plan": {
+            "code": "MOTOR-TARIFF",
+            "version": 1,
+            "class_code": "motor"
+        },
+        "risk_inputs": {
+            "vehicle_type": "private",
+            "registration_no": "DHAKA-METRO-GA-12-3456",
+            "engine_cc": 1500,
+            "seats": 5,
+            "year_of_manufacture": 2020,
+            "driver_age": 23,
+            "sum_insured": 123456700,
+            "ncb_years": 2
+        },
+        "coverages": [
+            "own_damage",
+            "third_party",
+            "passenger_liability"
+        ],
+        "base_premium_minor": 2777776,
+        "coverage_premiums": [
+            {
+                "code": "own_damage",
+                "amount_minor": 2777776
+            },
+            {
+                "code": "third_party",
+                "amount_minor": 250000
+            },
+            {
+                "code": "passenger_liability",
+                "amount_minor": 22500
+            }
+        ],
+        "loadings": [
+            {
+                "code": "young_driver",
+                "label_en": "Young driver loading 10%",
+                "label_bn": "তরুণ চালক লোডিং ১০%",
+                "amount_minor": 305028
+            }
+        ],
+        "discounts": [
+            {
+                "code": "no_claim_bonus",
+                "label_en": "No-claim bonus",
+                "label_bn": "দাবিহীন বোনাস",
+                "amount_minor": 671061
+            }
+        ],
+        "minimum_adjustment_minor": 0,
+        "rounding_adjustment_minor": -43,
+        "net_premium_minor": 2684200,
+        "duties": [
+            {
+                "code": "stamp",
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক",
+                "amount_minor": 5000
+            },
+            {
+                "code": "vat",
+                "label_en": "VAT 15%",
+                "label_bn": "মূসক ১৫%",
+                "amount_minor": 402630
+            }
+        ],
+        "duties_total_minor": 407630,
+        "gross_premium_minor": 3091830,
+        "explanation": [
+            {
+                "step_code": "own_damage",
+                "kind": "base",
+                "label_en": "Own damage premium",
+                "label_bn": "নিজস্ব ক্ষতির প্রিমিয়াম",
+                "amount_minor": 2777776,
+                "running_total_minor": 2777776
+            },
+            {
+                "step_code": "third_party",
+                "kind": "coverage",
+                "label_en": "Third-party liability",
+                "label_bn": "তৃতীয় পক্ষের দায়",
+                "amount_minor": 250000,
+                "running_total_minor": 3027776
+            },
+            {
+                "step_code": "passenger_liability",
+                "kind": "coverage",
+                "label_en": "Passenger liability (per seat)",
+                "label_bn": "যাত্রী দায় (প্রতি আসন)",
+                "amount_minor": 22500,
+                "running_total_minor": 3050276
+            },
+            {
+                "step_code": "young_driver",
+                "kind": "loading",
+                "label_en": "Young driver loading 10%",
+                "label_bn": "তরুণ চালক লোডিং ১০%",
+                "amount_minor": 305028,
+                "running_total_minor": 3355304
+            },
+            {
+                "step_code": "no_claim_bonus",
+                "kind": "discount",
+                "label_en": "No-claim bonus",
+                "label_bn": "দাবিহীন বোনাস",
+                "amount_minor": -671061,
+                "running_total_minor": 2684243
+            },
+            {
+                "step_code": "minimum",
+                "kind": "minimum",
+                "label_en": "Minimum premium",
+                "label_bn": "ন্যূনতম প্রিমিয়াম",
+                "amount_minor": 0,
+                "running_total_minor": 2684243
+            },
+            {
+                "step_code": "rounding",
+                "kind": "rounding",
+                "label_en": "Rounded to the nearest taka",
+                "label_bn": "নিকটতম টাকায় পূর্ণসংখ্যা",
+                "amount_minor": -43,
+                "running_total_minor": 2684200
+            },
+            {
+                "step_code": "stamp",
+                "kind": "duty",
+                "label_en": "Stamp duty",
+                "label_bn": "স্ট্যাম্প শুল্ক",
+                "amount_minor": 5000,
+                "running_total_minor": 2689200
+            },
+            {
+                "step_code": "vat",
+                "kind": "tax",
+                "label_en": "VAT 15%",
+                "label_bn": "মূসক ১৫%",
+                "amount_minor": 402630,
+                "running_total_minor": 3091830
+            }
+        ],
+        "verify": true
+    }
+}
