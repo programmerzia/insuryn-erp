@@ -54,3 +54,44 @@ it('re-applies the tenant to the database session after a reconnect', function (
         expect(DB::scalar("select current_setting('app.tenant_id', true)"))->toBe($tenantId);
     });
 });
+
+/** A tenant row as seeded by DemoTenantSeeder; the tenants table is platform-level (not RLS-protected). */
+function tenantWithSlug(string $slug): string
+{
+    $id = (string) Str::uuid7();
+    DB::table('tenants')->insert(['id' => $id, 'name' => ucfirst($slug), 'slug' => $slug, 'created_at' => now(), 'updated_at' => now()]);
+
+    return $id;
+}
+
+it('falls back to the default tenant slug when no header, session or subdomain names a tenant', function (): void {
+    config(['erp.tenancy.default_slug' => 'demo']);
+    $demo = tenantWithSlug('demo');
+
+    getJson('/api/_test/tenant')->assertOk()->assertJson(['tenant' => $demo]);
+});
+
+it('resolves the tenant from the subdomain before the default slug', function (): void {
+    config(['erp.tenancy.default_slug' => 'demo']);
+    tenantWithSlug('demo');
+    $acme = tenantWithSlug('acme');
+
+    getJson('http://acme.insuryn.test/api/_test/tenant')->assertOk()->assertJson(['tenant' => $acme]);
+});
+
+it('rejects an unknown subdomain as a bad request when no default tenant is configured', function (): void {
+    config(['erp.tenancy.default_slug' => null]);
+    tenantWithSlug('demo');
+
+    getJson('http://unknown.insuryn.test/api/_test/tenant')->assertStatus(400);
+});
+
+it('lets the X-Tenant header win over session, subdomain and default in local', function (): void {
+    app()->detectEnvironment(fn (): string => 'local');
+    config(['erp.tenancy.default_slug' => 'demo']);
+    tenantWithSlug('demo');
+    tenantWithSlug('acme');
+    $fromHeader = (string) Str::uuid7();
+
+    getJson('http://acme.insuryn.test/_test/tenant', ['X-Tenant' => $fromHeader])->assertOk()->assertJson(['tenant' => $fromHeader]);
+});

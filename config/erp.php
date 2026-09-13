@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'tenancy' => [
+        // Tenant used when no header, session or subdomain names one (local browsing, single-install deployments). Empty = none.
+        'default_slug' => env('ERP_DEFAULT_TENANT', 'demo'),
+    ],
     'posting' => [
         'rules_path' => resource_path('posting-rules'),
         'transient_retry_attempts' => 5,
