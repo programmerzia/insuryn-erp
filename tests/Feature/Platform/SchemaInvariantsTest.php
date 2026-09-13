@@ -14,6 +14,7 @@ const GLOBAL_TABLES = [
     'tenants',               // platform root; resolving a tenant must not need a tenant (§8.6.5)
     'permissions',           // global permission catalogue (§7.1)
     'account_roles',         // global semantic account roles (§3.4)
+    'product_classes',       // global insurance class catalogue (Phase 3 design §1, D-18)
     'password_reset_tokens', // framework auth infrastructure
     'sessions',              // framework session store
     'cache', 'cache_locks',  // framework cache store

@@ -133,6 +133,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-55 | F3 | **Verify with the customer** (design §7.3 OPEN: actual thresholds). Default limits offered by the setup wizard and seeded in the Part A demo: claim payment approval from 500,000 BDT → Finance Manager, then CFO (below it the Claims Manager's own approval stands, no policy); claim payment release from 500,000 → CFO; manual journal and journal reversal, any amount → Finance Manager. "> 500,000" is read as "500,000 and above" (the engine's `min_amount_minor` is inclusive). Refunds and commission payouts are not routed through the approval engine (maker-checker only), so they have no limit to set. A policy's end date is not included (`effective_to` exclusive, as the engine matches). | `ApprovalPolicyService::DEFAULTS`, `config/erp.php` `approvals.object_types` (`ASSUMPTION:`). |
 | A-56 | F4 | Which accounts a role may be mapped to is not specified: an active, postable account of the entity; a control account only to a role its subledger reconciles to (`subledger_controls` of the entity and book), and such a control role only to a control account. | `AccountRoleMappingService::assertMappable` (`ASSUMPTION:`). |
 | A-57 | F4 | "Roles used by active posting rules" = the line roles and the rounding residual role of every rule in force on the day that posts to the book. Overridable roles (`bank_main`) still need a mapping, because events without an override fall back to it. | `AccountRoleMappingService::rolesUsedByRules`, `unmappedRoles` (`ASSUMPTION:`). |
+| A-65 | R1 | Rating design OPEN 3 (is premium recognised at the cover note?) and OPEN 4 (credit issuance rules) are unanswered: every product version has `recognise_at = policy` and `allow_credit_issue = false` unless set. Stored now; the quotation flow (R5–R7) reads them. | `product_versions.recognise_at` / `allow_credit_issue` (`ProductCatalogue::ratingTerms`, `ASSUMPTION:`), `PremiumRecognition`. |
+| A-66 | R1 | Which duties apply to a product is not specified beyond "stamp (flat by class), VAT on premium": every duty in force for the product's class applies unless the version's `duty_profile` excludes it (`{"exclude": ["levy"]}`), so a product never silently goes without VAT or stamp duty. | `DutyProfile` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1786,3 +1788,31 @@ Scope: review only; only the critical finding was fixed.
 - Observations to decide on are listed there: default dates may follow UTC rather than the tenant's time zone; a month can be locked with a manual journal pending approval
   in it and before the month ends; the finance manager lacks `reports.regulatory`; without a queue worker the close shows variances.
 - Final gate after merging F1–F6: 1,134 Pest tests and 277 Vitest tests green, PHPStan 0 errors, vue-tsc green.
+### R1 — Rating: product model extensions — done
+- Phase 3 (docs/rating-quotation-documents-design.md §1, committed with this slice). Migration `2026_09_20_000001_product_classes_and_coverages`:
+  - `product_classes` — global catalogue (D-18): code, `name_en`, `name_bn`, life/non-life, status. Active: motor, fire, marine_cargo, misc; `later` (reserved, refused):
+    marine_hull, engineering, health, life. Seeded by the migration and `ProductClassesSeeder` (called by `seedDemoTenant`, `DatabaseSeeder`, `BlankTenantSeeder`, `PartADemoSeeder`).
+  - `product_versions` += `class_code` (FK, nullable so Phase 1 versions keep working), `risk_schema` jsonb, `duty_profile` jsonb, `document_set_id`, `allow_short_period`
+    (false), `min_premium_minor` bigint (≥ 0), `recognise_at` (`policy` | `cover_note`, default policy — OPEN 3, A-65), `allow_credit_issue` (false — OPEN 4, A-65).
+    `rating_plan_id` arrives with rating plans in R2.
+  - `coverages` (tenant, forced RLS): version, code, EN/BN names, mandatory, basis (`sum_insured` | `flat` | `per_unit` | `pct_of_base`), `rating_rule_ref`, `limit_rule`,
+    `deductible_rule`, sort order; unique per version. The Phase 1 `product_versions.coverages` JSON is untouched (D-19).
+- Domain (`Insurance\Product\Domain`): `Risk\RiskSchema` / `RiskField` (readonly): field list `{key, label_en, label_bn, type text|integer|money|date|select|boolean, required,
+  options [{value, label_en, label_bn}], min, max, max_length}` validated on write (`RISK_SCHEMA_INVALID` names the first problem); `validate(inputs)` returns the inputs
+  normalised in schema order (integers and money as int minor units — never floats, digit strings accepted; booleans; `Y-m-d` dates; absent optional fields null) or throws
+  `RiskInputsInvalid` (`RISK_INPUTS_INVALID`) listing every field's problem (REQUIRED, UNKNOWN_FIELD, NOT_INTEGER, BELOW_MIN, ABOVE_MAX, NOT_AN_OPTION, NOT_A_DATE, NOT_BOOLEAN,
+  NOT_TEXT, TOO_LONG). Money is never negative. `DutyProfile` `{"exclude": [...]}` (A-66). Enums `RiskFieldType`, `CoverageBasis`, `PremiumRecognition`.
+- `ProductCatalogue`: `addVersion` takes the new optional keys (`class_code`, `risk_schema`, `duty_profile`, `document_set_id`, `allow_short_period`, `min_premium_minor`,
+  `recognise_at`, `allow_credit_issue`, `coverage_definitions`) — existing calls unchanged; `configureRating(version, fields)` and `addCoverage(version, coverage)` while no
+  policy uses the version (`PRODUCT_VERSION_IN_USE`). Refusals: `PRODUCT_CLASS_UNKNOWN`, `PRODUCT_CLASS_NOT_AVAILABLE`, `PRODUCT_CLASS_MISMATCH` (life class on a non-life
+  product), `DUTY_PROFILE_INVALID`, `MIN_PREMIUM_INVALID`, `RECOGNISE_AT_INVALID`, `COVERAGE_INVALID`, `COVERAGE_DUPLICATE`. Audited (`product_version.created` now carries the
+  rating fields, `product_version.rating_configured`, `product_version.coverage_added`), permission `product.manage`.
+- Demo data: `Database\Seeders\DemoRatingCatalogue` holds the risk schema and coverages per class (motor: vehicle_type private/commercial/motorcycle, registration_no, chassis_no,
+  engine_cc, seats, year_of_manufacture, driver_age, sum_insured, ncb_years; own damage, third party, passenger liability. Fire: occupancy, construction_class, address,
+  sum_insured. Marine cargo: voyage_type, conveyance, commodity, from/to, sum_insured. Misc: description, sum_insured). `DemoBusinessSeeder` and `PartADemoSeeder` give MOTOR,
+  FIRE and MARINE their class, schema and coverages; `DistributionDemoSeeder` gives FIRE-SME the fire class (the life product stays without a class: life is LATER).
+  The schemas are illustrative (select options, integer bounds such as engine 50–10,000 cc, seats 1–60, driver age 18–99): **verify** with underwriting.
+- Test setup changes (additive): `seedDemoTenant` runs `ProductClassesSeeder`; `SchemaInvariantsTest` lists `product_classes` as a global table (D-18);
+  `TenantIsolationEveryTableTest` adds a coverage; `DistributionDemoSeederTest` also checks FIRE-SME's class.
+- Tests: `tests/Unit/Insurance/RiskSchemaTest.php` (18), `tests/Feature/Insurance/ProductRatingTermsTest.php` (6), `tests/Feature/Insurance/RatingDemoSeedersTest.php` (1).
+- Result: 1,127 Pest tests green, PHPStan 0 errors, Vitest and vue-tsc green.

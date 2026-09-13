@@ -38,6 +38,7 @@ it('seeds a life commission scheme with overrides and a non-life salaried scheme
             ->and(DB::table('commission_statements')->where('period_end', '2026-09-30')->where('status', 'draft')->count())->toBeGreaterThan(0)
             ->and(DB::table('commission_statements as s')->join('producers as p', 'p.id', '=', 's.agent_id')->where('p.type', 'bdo')->pluck('s.paid_via')->unique()->values()->all())->toBe(['payroll'])
             ->and(DB::table('producer_advance_recoveries')->count())->toBeGreaterThan(0)
+            ->and(DB::table('product_versions as v')->join('products as p', 'p.id', '=', 'v.product_id')->where('p.code', 'FIRE-SME')->value('v.class_code'))->toBe('fire') // Phase 3 R1
             ->and(DB::table('compliance_exceptions')->count())->toBe(0)
             ->and(DB::table('accounting_events')->where('status', 'failed')->whereIn('event_type', ['COMMISSION_EARNED', 'INCENTIVE_BONUS_EARNED', 'PRODUCER_ADVANCE_ISSUED', 'PRODUCER_ADVANCE_RECOVERED', 'COMMISSION_PAYOUT_TO_AP', 'COMMISSION_PAYOUT_TO_PAYROLL'])->count())->toBe(0);
     });

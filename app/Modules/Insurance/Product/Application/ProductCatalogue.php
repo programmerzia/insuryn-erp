@@ -5,8 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Product\Application;
 
 use App\Modules\Distribution\Application\Compensation\CompensationSchemeDirectory;
+use App\Modules\Insurance\Product\Domain\DutyProfile;
+use App\Modules\Insurance\Product\Domain\Enums\CoverageBasis;
+use App\Modules\Insurance\Product\Domain\Enums\PremiumRecognition;
+use App\Modules\Insurance\Product\Domain\Models\Coverage;
 use App\Modules\Insurance\Product\Domain\Models\Product;
+use App\Modules\Insurance\Product\Domain\Models\ProductClass;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
+use App\Modules\Insurance\Product\Domain\Risk\RiskSchema;
+use App\Modules\Insurance\Product\Domain\Risk\RiskSchemaInvalid;
+use BackedEnum;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
@@ -50,7 +58,10 @@ final class ProductCatalogue
     /**
      * @param array{effective_from: string, effective_to?: string|null, term_months: int, earning_method: string, short_rate_table?: array<int, mixed>|null,
      *   tax_profile: array{tax_type?: string|null, jurisdiction?: string|null, inclusive?: bool, refund_tax_on_cancellation?: bool},
-     *   commission_plan_id?: string|null, compensation_scheme_id?: string|null, posting_rule_set?: string|null, coverages?: list<array<string, mixed>>} $terms
+     *   commission_plan_id?: string|null, compensation_scheme_id?: string|null, posting_rule_set?: string|null, coverages?: list<array<string, mixed>>,
+     *   class_code?: string|null, risk_schema?: list<array<string, mixed>>|null, duty_profile?: array<string, mixed>|null, document_set_id?: string|null,
+     *   allow_short_period?: bool, min_premium_minor?: int|null, recognise_at?: string, allow_credit_issue?: bool,
+     *   coverage_definitions?: list<array<string, mixed>>} $terms Phase 3 keys (slice R1) are optional; see configureRating() and addCoverage()
      */
     public function addVersion(string $productId, array $terms, string $actorUserId): ProductVersion
     {
@@ -62,7 +73,8 @@ final class ProductCatalogue
                 throw new BusinessRuleViolation('COMPENSATION_SCHEME_UNKNOWN', "Compensation scheme {$terms['compensation_scheme_id']} does not exist.");
             }
             $this->assertNoOverlap($product->id, $terms['effective_from'], $terms['effective_to'] ?? null, null);
-            $version = ProductVersion::query()->create([
+            $ratingTerms = $this->ratingTerms($product, $terms);
+            $version = ProductVersion::query()->create([...$ratingTerms,
                 'product_id' => $product->id,
                 'version' => (int) ProductVersion::query()->where('product_id', $product->id)->max('version') + 1,
                 'effective_from' => $terms['effective_from'], 'effective_to' => $terms['effective_to'] ?? null,
@@ -80,9 +92,58 @@ final class ProductCatalogue
                 'coverages' => $terms['coverages'] ?? [],
             ]);
             $this->audit->record('product_version.created', AuditSubject::of('product', $product->id), null,
-                ['version' => $version->version, 'effective_from' => $terms['effective_from'], 'effective_to' => $terms['effective_to'] ?? null], null, 'product.manage', Actor::user($actorUserId));
+                ['version' => $version->version, 'effective_from' => $terms['effective_from'], 'effective_to' => $terms['effective_to'] ?? null, ...$ratingTerms], null, 'product.manage', Actor::user($actorUserId));
+            foreach ($terms['coverage_definitions'] ?? [] as $coverage) {
+                $this->createCoverage($product->id, $version, $coverage, $actorUserId);
+            }
 
             return $version;
+        });
+    }
+
+    /**
+     * Sets the Phase 3 rating fields of a version that no policy uses yet (a version in use is immutable: add a new version instead).
+     *
+     * @param array<string, mixed> $fields any of class_code, risk_schema, duty_profile, document_set_id, allow_short_period, min_premium_minor,
+     *   recognise_at, allow_credit_issue; only the given keys change
+     *
+     * @throws BusinessRuleViolation PRODUCT_VERSION_IN_USE, PRODUCT_CLASS_UNKNOWN, PRODUCT_CLASS_NOT_AVAILABLE, PRODUCT_CLASS_MISMATCH, RISK_SCHEMA_INVALID, DUTY_PROFILE_INVALID
+     */
+    public function configureRating(string $versionId, array $fields, string $actorUserId): ProductVersion
+    {
+        $this->permissions->authorize($actorUserId, 'product.manage');
+
+        return DB::transaction(function () use ($versionId, $fields, $actorUserId): ProductVersion {
+            $version = ProductVersion::query()->whereKey($versionId)->lockForUpdate()->firstOrFail();
+            $this->assertNotInUse($version);
+            $product = Product::query()->findOrFail($version->product_id);
+            $changes = array_intersect_key($this->ratingTerms($product, $fields), $fields);
+            $before = $this->auditable($version->only(array_keys($changes)));
+            $version->forceFill($changes)->save();
+            $this->audit->record('product_version.rating_configured', AuditSubject::of('product', $product->id), $before,
+                ['version' => $version->version, ...$changes], null, 'product.manage', Actor::user($actorUserId));
+
+            return $version->refresh();
+        });
+    }
+
+    /**
+     * Adds a coverage (Phase 3 design §1) to a version that no policy uses yet.
+     *
+     * @param array<string, mixed> $coverage code, name_en, name_bn, basis (sum_insured|flat|per_unit|pct_of_base), mandatory?, rating_rule_ref?, limit_rule?,
+     *   deductible_rule?, sort_order?
+     *
+     * @throws BusinessRuleViolation COVERAGE_INVALID, COVERAGE_DUPLICATE, PRODUCT_VERSION_IN_USE
+     */
+    public function addCoverage(string $versionId, array $coverage, string $actorUserId): Coverage
+    {
+        $this->permissions->authorize($actorUserId, 'product.manage');
+
+        return DB::transaction(function () use ($versionId, $coverage, $actorUserId): Coverage {
+            $version = ProductVersion::query()->whereKey($versionId)->lockForUpdate()->firstOrFail();
+            $this->assertNotInUse($version);
+
+            return $this->createCoverage($version->product_id, $version, $coverage, $actorUserId);
         });
     }
 
@@ -114,6 +175,107 @@ final class ProductCatalogue
             ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', $day))
             ->first()
             ?? throw new BusinessRuleViolation('PRODUCT_VERSION_NOT_EFFECTIVE', "Product {$productId} has no version in force on {$day}.");
+    }
+
+    /**
+     * The Phase 3 columns (slice R1), validated, with their defaults for keys not given.
+     *
+     * @param array<string, mixed> $terms
+     * @return array{class_code: string|null, risk_schema: list<array<string, mixed>>|null, duty_profile: array{exclude: list<string>}|null, document_set_id: string|null,
+     *   allow_short_period: bool, min_premium_minor: int|null, recognise_at: string, allow_credit_issue: bool}
+     */
+    private function ratingTerms(Product $product, array $terms): array
+    {
+        $classCode = $terms['class_code'] ?? null;
+        if ($classCode !== null) {
+            $class = is_string($classCode) ? ProductClass::query()->find($classCode) : null;
+            if ($class === null) {
+                throw new BusinessRuleViolation('PRODUCT_CLASS_UNKNOWN', 'Product class '.(is_string($classCode) ? $classCode : '?').' does not exist.');
+            }
+            if ($class->status !== 'active') {
+                throw new BusinessRuleViolation('PRODUCT_CLASS_NOT_AVAILABLE', "Product class {$class->code} is not available yet.");
+            }
+            if ($class->insurance_class !== $product->insurance_class) {
+                throw new BusinessRuleViolation('PRODUCT_CLASS_MISMATCH', "Product class {$class->code} is {$class->insurance_class}; product {$product->code} is {$product->insurance_class}.");
+            }
+        }
+        $schema = $terms['risk_schema'] ?? null;
+        if ($schema !== null && ! is_array($schema)) {
+            throw new RiskSchemaInvalid('A risk schema is a list of fields.');
+        }
+        $profile = $terms['duty_profile'] ?? null;
+        if ($profile !== null && ! is_array($profile)) {
+            throw new BusinessRuleViolation('DUTY_PROFILE_INVALID', 'A duty profile is {"exclude": [...]} listing vat, stamp or levy.');
+        }
+        $minPremium = $terms['min_premium_minor'] ?? null;
+        if ($minPremium !== null && (! is_int($minPremium) || $minPremium < 0)) {
+            throw new BusinessRuleViolation('MIN_PREMIUM_INVALID', 'The minimum premium is a non-negative amount in minor units.');
+        }
+        // ASSUMPTION: A-65 — design OPEN 3 (is premium recognised at the cover note?) defaults to 'policy'; OPEN 4 (credit issuance) defaults to not allowed.
+        $recogniseAt = is_string($terms['recognise_at'] ?? null) ? PremiumRecognition::tryFrom($terms['recognise_at']) : PremiumRecognition::Policy;
+        if ($recogniseAt === null) {
+            throw new BusinessRuleViolation('RECOGNISE_AT_INVALID', 'recognise_at is policy or cover_note.');
+        }
+        $documentSet = $terms['document_set_id'] ?? null;
+
+        return [
+            'class_code' => is_string($classCode) ? $classCode : null,
+            'risk_schema' => $schema === null ? null : RiskSchema::fromArray($schema)->toArray(),
+            'duty_profile' => $profile === null ? null : DutyProfile::fromArray($profile)->toArray(),
+            'document_set_id' => is_string($documentSet) ? $documentSet : null,
+            'allow_short_period' => (bool) ($terms['allow_short_period'] ?? false),
+            'min_premium_minor' => $minPremium,
+            'recognise_at' => $recogniseAt->value,
+            'allow_credit_issue' => (bool) ($terms['allow_credit_issue'] ?? false),
+        ];
+    }
+
+    /** @param array<string, mixed> $coverage */
+    private function createCoverage(string $productId, ProductVersion $version, array $coverage, string $actorUserId): Coverage
+    {
+        $code = $coverage['code'] ?? null;
+        $basis = is_string($coverage['basis'] ?? null) ? CoverageBasis::tryFrom($coverage['basis']) : null;
+        $nameEn = $coverage['name_en'] ?? null;
+        $nameBn = $coverage['name_bn'] ?? null;
+        $ruleRef = $coverage['rating_rule_ref'] ?? null;
+        $limit = $coverage['limit_rule'] ?? null;
+        $deductible = $coverage['deductible_rule'] ?? null;
+        $mandatory = $coverage['mandatory'] ?? false;
+        $sort = $coverage['sort_order'] ?? 0;
+        $unknown = array_diff(array_keys($coverage), ['code', 'name_en', 'name_bn', 'basis', 'mandatory', 'rating_rule_ref', 'limit_rule', 'deductible_rule', 'sort_order']);
+        if ($unknown !== [] || ! is_string($code) || preg_match('/^[a-z][a-z0-9_]{0,63}$/', $code) !== 1 || $basis === null
+            || ! is_string($nameEn) || trim($nameEn) === '' || ! is_string($nameBn) || trim($nameBn) === '' || ! is_bool($mandatory) || ! is_int($sort)
+            || ($ruleRef !== null && ! is_string($ruleRef)) || ($limit !== null && ! is_array($limit)) || ($deductible !== null && ! is_array($deductible))) {
+            throw new BusinessRuleViolation('COVERAGE_INVALID', 'A coverage needs a snake_case code, name_en, name_bn and a basis of sum_insured, flat, per_unit or pct_of_base'
+                .($unknown === [] ? '.' : '; unknown settings: '.implode(', ', $unknown).'.'));
+        }
+        if (Coverage::query()->where('product_version_id', $version->id)->where('code', $code)->exists()) {
+            throw new BusinessRuleViolation('COVERAGE_DUPLICATE', "Version {$version->version} already has coverage {$code}.");
+        }
+        $row = Coverage::query()->create([
+            'product_version_id' => $version->id, 'code' => $code, 'name_en' => $nameEn, 'name_bn' => $nameBn, 'mandatory' => $mandatory, 'basis' => $basis,
+            'rating_rule_ref' => $ruleRef, 'limit_rule' => $limit, 'deductible_rule' => $deductible, 'sort_order' => $sort,
+        ]);
+        $this->audit->record('product_version.coverage_added', AuditSubject::of('product', $productId), null,
+            ['version' => $version->version, 'code' => $code, 'basis' => $basis->value, 'mandatory' => $mandatory], null, 'product.manage', Actor::user($actorUserId));
+
+        return $row;
+    }
+
+    private function assertNotInUse(ProductVersion $version): void
+    {
+        if (DB::table('policies')->where('product_version_id', $version->id)->exists()) {
+            throw new BusinessRuleViolation('PRODUCT_VERSION_IN_USE', "Version {$version->version} already has policies; add a new version instead.");
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $values
+     * @return array<string, mixed> enum values as their strings, for the audit trail
+     */
+    private function auditable(array $values): array
+    {
+        return array_map(fn (mixed $value): mixed => $value instanceof BackedEnum ? $value->value : $value, $values);
     }
 
     private function assertNoOverlap(string $productId, string $from, ?string $to, ?string $exceptVersionId): void

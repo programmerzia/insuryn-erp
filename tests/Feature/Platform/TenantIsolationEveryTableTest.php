@@ -75,6 +75,8 @@ function populateEveryTenantTable(array $ctx): void
         DB::table('dimension_requirements')->insert(['tenant_id' => $ctx['tenant_id'], 'event_type' => 'PREMIUM_RECEIVED', 'dimension_code' => 'branch']);
         app(PartyService::class)->addBankAccount($world['policyholder_id'], 'City Bank', '0012345678', true, $world['admin']);
         app(App\Modules\Platform\Preferences\UserPreferences::class)->set($world['admin'], 'theme', 'dark');
+        app(App\Modules\Insurance\Product\Application\ProductCatalogue::class)->addCoverage($world['product_version_id'], // Phase 3 R1 coverages
+            ['code' => 'own_damage', 'name_en' => 'Own damage', 'name_bn' => 'নিজস্ব ক্ষতি', 'basis' => 'sum_insured', 'mandatory' => true], $world['admin']);
 
         $lifecycle = app(PolicyLifecycle::class);
         $policy = $lifecycle->quote(new QuoteRequest($ctx['entity_id'], $ctx['branch_id'], $world['product_id'], $world['policyholder_id'], $world['agent_id'],

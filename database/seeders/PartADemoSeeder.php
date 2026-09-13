@@ -90,6 +90,7 @@ final class PartADemoSeeder extends Seeder
         DB::transaction(function () use ($slug): void {
             (new AccountRolesSeeder())->run();
             (new PermissionsSeeder())->run();
+            (new ProductClassesSeeder())->run();
             $context = (new DemoTenantSeeder())->run($slug);
             DB::table('tenants')->where('id', $context['tenant_id'])->update(['name' => 'Padma General Insurance']);
             TenantContext::run($context['tenant_id'], function () use ($context, $slug): void {
@@ -126,14 +127,15 @@ final class PartADemoSeeder extends Seeder
         app(TaxRateSetup::class)->ensure('BD', 'VAT', 1500, true, $day('2026-01-01'), $finance);
         $plan = app(CommissionPlanService::class)->create('AGENT10', 'Agent commission 10%', 1000, null, null, $finance);
         $catalogue = app(ProductCatalogue::class);
-        $product = function (string $code, string $name, string $lob) use ($catalogue, $finance): string {
+        $product = function (string $code, string $name, string $lob, string $class) use ($catalogue, $finance): string {
             $product = $catalogue->createProduct($code, $name, $lob, $finance, 'non_life');
             $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'monthly',
-                'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true]], $finance);
+                'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true], ...DemoRatingCatalogue::versionTerms($class)], $finance); // Phase 3 R1
 
             return $product->id;
         };
-        $products = ['MOTOR' => $product('MOTOR', 'Motor Comprehensive', 'motor'), 'FIRE' => $product('FIRE', 'Fire and Allied Perils', 'fire'), 'MARINE' => $product('MARINE', 'Marine Cargo', 'marine')];
+        $products = ['MOTOR' => $product('MOTOR', 'Motor Comprehensive', 'motor', 'motor'), 'FIRE' => $product('FIRE', 'Fire and Allied Perils', 'fire', 'fire'),
+            'MARINE' => $product('MARINE', 'Marine Cargo', 'marine', 'marine_cargo')];
         $this->bankAccountId = app(BankAccountService::class)->create($this->entityId, $accounts['bank_main'], 'City Bank', '****4471', 'BDT', $finance)->id;
         $journals = app(ManualJournalService::class);
         $opening = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Bank balance brought forward', JournalKind::Manual, 'Opening balance at City Bank', 'BDT', [

@@ -24,6 +24,7 @@ function seedDemoTenant(string $slug = 'demo'): array
 {
     (new AccountRolesSeeder())->run();
     (new PermissionsSeeder())->run();
+    (new Database\Seeders\ProductClassesSeeder())->run(); // Phase 3 R1 global catalogue (truncated between tests like account_roles)
     return (new DemoTenantSeeder())->run($slug);
 }
 

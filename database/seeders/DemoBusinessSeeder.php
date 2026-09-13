@@ -81,11 +81,11 @@ final class DemoBusinessSeeder extends Seeder
 
         $catalogue = app(ProductCatalogue::class);
         $products = [];
-        foreach ([['MOTOR', 'Motor comprehensive', 'motor'], ['FIRE', 'Fire and allied perils', 'fire'], ['MARINE', 'Marine cargo', 'marine']] as [$code, $name, $lob]) {
+        foreach ([['MOTOR', 'Motor comprehensive', 'motor', 'motor'], ['FIRE', 'Fire and allied perils', 'fire', 'fire'], ['MARINE', 'Marine cargo', 'marine', 'marine_cargo']] as [$code, $name, $lob, $class]) {
             $product = $catalogue->createProduct($code, $name, $lob, $admin);
             $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'daily_365',
                 'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true, 'refund_tax_on_cancellation' => true],
-                'commission_plan_id' => $plan->id, 'posting_rule_set' => 'default', 'coverages' => []], $admin);
+                'commission_plan_id' => $plan->id, 'posting_rule_set' => 'default', 'coverages' => [], ...DemoRatingCatalogue::versionTerms($class)], $admin); // Phase 3 R1: class, risk schema, coverages
             $products[] = $product->id;
         }
 

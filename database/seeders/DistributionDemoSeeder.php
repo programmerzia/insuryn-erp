@@ -98,7 +98,7 @@ final class DistributionDemoSeeder extends Seeder
         $versionTerms = ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'daily_365', 'posting_rule_set' => 'default', 'coverages' => [],
             'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true, 'refund_tax_on_cancellation' => true]];
         $catalogue->addVersion($life->id, [...$versionTerms, 'tax_profile' => ['inclusive' => true], 'compensation_scheme_id' => $lifeScheme], $admin);
-        $catalogue->addVersion($fire->id, [...$versionTerms, 'compensation_scheme_id' => $nonLifeScheme], $admin);
+        $catalogue->addVersion($fire->id, [...$versionTerms, 'compensation_scheme_id' => $nonLifeScheme, ...DemoRatingCatalogue::versionTerms('fire')], $admin); // Phase 3 R1 (life is a LATER class)
 
         $parties = app(PartyService::class);
         $producers = app(ProducerService::class);

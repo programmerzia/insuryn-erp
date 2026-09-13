@@ -21,6 +21,7 @@ final class BlankTenantSeeder extends Seeder
     {
         (new AccountRolesSeeder())->run();
         (new PermissionsSeeder())->run();
+        (new ProductClassesSeeder())->run();
         $existing = DB::table('tenants')->where('slug', $slug)->value('id');
         if (is_string($existing)) {
             return $existing;
