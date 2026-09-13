@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application\Setup;
 
+use App\Modules\Accounting\Application\AccountRoles\AccountRoleMappingService;
 use App\Modules\Accounting\Application\Imports\ChartOfAccountsImport;
 use App\Modules\Accounting\Application\Imports\ImportMode;
 use App\Modules\Accounting\Application\Imports\ImportOutcome;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -23,7 +25,10 @@ final class ChartOfAccountsSetup
 {
     public const TEMPLATES = ['non-life-insurance' => ['name' => 'Non-life insurance', 'description' => 'Motor, fire, marine and other general insurance: premium, unearned premium, VAT, claims reserves, commission, suspense and bank.']];
 
-    public function __construct(private readonly ChartOfAccountsImport $import) {}
+    public function __construct(
+        private readonly ChartOfAccountsImport $import,
+        private readonly AccountRoleMappingService $mappings,
+    ) {}
 
     /** @return list<array{code: string, name: string, type: string, normal_side: string, is_control: bool, control_subledger: string|null, role: string|null}> */
     public function template(string $templateId): array
@@ -47,7 +52,7 @@ final class ChartOfAccountsSetup
     /**
      * @param list<array{code: string, name: string, type: string, normal_side: string, is_control: bool, control_subledger: string|null, role: string|null}> $rows
      *
-     * @throws BusinessRuleViolation SETUP_COMPANY_MISSING | SETUP_FISCAL_YEAR_MISSING | SETUP_ROLE_ACCOUNT_MISSING
+     * @throws BusinessRuleViolation SETUP_COMPANY_MISSING | SETUP_FISCAL_YEAR_MISSING | SETUP_ROLE_ACCOUNT_MISSING | SETUP_ROLES_UNMAPPED
      */
     public function import(string $templateId, array $rows, string $actorUserId): ImportOutcome
     {
@@ -65,17 +70,26 @@ final class ChartOfAccountsSetup
             throw new BusinessRuleViolation('SETUP_ROLE_ACCOUNT_MISSING', 'Keep an account for: '.implode('; ', $names).'. The accounting behind policies, receipts and claims posts to them.');
         }
 
-        $outcome = $this->import->run($this->csv($rows), $entityId, ImportMode::Commit, $actorUserId);
-        if ($outcome->result !== null) {
+        // Fix F4: the import and its control accounts commit only when every account role the posting rules in force use has an account.
+        return DB::transaction(function () use ($rows, $entityId, $bookId, $actorUserId): ImportOutcome {
+            $outcome = $this->import->run($this->csv($rows), $entityId, ImportMode::Commit, $actorUserId);
+            if ($outcome->result === null) {
+                return $outcome;
+            }
             foreach ($rows as $row) {
                 if ($row['is_control'] && $row['control_subledger'] !== null && $row['role'] !== null) {
                     DB::table('subledger_controls')->insertOrIgnore(['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(),
                         'entity_id' => $entityId, 'book_id' => $bookId, 'subledger' => $row['control_subledger'], 'control_account_role' => $row['role']]);
                 }
             }
-        }
+            $unmapped = $this->mappings->unmappedRoles($entityId, $bookId, CarbonImmutable::today());
+            if ($unmapped !== []) {
+                throw new BusinessRuleViolation('SETUP_ROLES_UNMAPPED', 'The posting rules need an account for: '.implode('; ', array_column($unmapped, 'description'))
+                    .'. Add an account for each, with that purpose, before creating the chart.');
+            }
 
-        return $outcome;
+            return $outcome;
+        });
     }
 
     /** @param list<array{code: string, name: string, type: string, normal_side: string, is_control: bool, control_subledger: string|null, role: string|null}> $rows */

@@ -112,6 +112,12 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
 });
 
+// Fix F4: account role → account mappings need accounting.manage_coa (the controller authorizes per entity).
+Route::middleware('auth')->prefix('accounting')->group(function (): void {
+    Route::get('account-roles', [\App\Modules\Accounting\Http\Controllers\AccountRolesPageController::class, 'index']);
+    Route::post('account-roles', [\App\Modules\Accounting\Http\Controllers\AccountRolesPageController::class, 'map']);
+});
+
 // Financial reports need reports.financial (design §7.1–7.2: Auditor reports.*, Finance Manager and CFO).
 Route::middleware(['auth', 'can:reports.financial'])->prefix('accounting')->name('accounting.')->group(function (): void {
     Route::get('trial-balance', TrialBalanceController::class)->name('trial-balance');

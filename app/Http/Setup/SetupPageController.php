@@ -136,7 +136,7 @@ final class SetupPageController
         try {
             $outcome = $coa->import((string) config('erp.setup.chart_of_accounts_template'), $rows, PageSupport::actor($request));
         } catch (BusinessRuleViolation $e) {
-            if ($e->reasonCode !== 'SETUP_ROLE_ACCOUNT_MISSING') {
+            if (! in_array($e->reasonCode, ['SETUP_ROLE_ACCOUNT_MISSING', 'SETUP_ROLES_UNMAPPED'], true)) {
                 throw $e;
             }
             throw ValidationException::withMessages(['rows' => $e->getMessage()]);

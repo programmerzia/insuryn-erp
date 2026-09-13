@@ -139,6 +139,43 @@ it('refuses a chart that drops an account the accounting needs, or has an invali
     expect(($this->in)(fn () => DB::table('accounts')->count()))->toBe(0);
 });
 
+it('ends the chart of accounts step by checking every role the posting rules use has an account, and writes nothing when one has not', function (): void {
+    ($this->company)();
+    ($this->fiscalYear)();
+    $rows = ($this->templateRows)();
+
+    // The shipped template maps every role the posting rules in force use.
+    $used = array_keys(($this->in)(fn (): array => app(App\Modules\Accounting\Application\AccountRoles\AccountRoleMappingService::class)
+        ->rolesUsedByRules((string) DB::table('books')->where('is_primary', true)->value('id'), CarbonImmutable::today())));
+    expect($used)->toContain('premium_receivable', 'rounding_difference')
+        ->and(array_values(array_diff($used, array_filter(array_column($rows, 'role')))))->toBe([]);
+
+    // A posting rule in force that needs an account the chart does not give: refused, nothing imported.
+    $dir = sys_get_temp_dir().'/posting-rules-'.Str::random(8);
+    mkdir($dir);
+    foreach (glob(resource_path('posting-rules/*.json')) ?: [] as $file) {
+        copy($file, $dir.'/'.basename($file));
+    }
+    file_put_contents($dir.'/DAC_DEFERRED.default.json', json_encode(['code' => 'DAC_DEFERRED.default', 'version' => 1, 'event_type' => 'DAC_DEFERRED', 'effective_from' => '2026-01-01',
+        'books' => ['LOCAL'], 'lines' => [['role' => 'dac_asset', 'side' => 'debit', 'amount' => 'payload.amount'], ['role' => 'commission_expense', 'side' => 'credit', 'amount' => 'payload.amount']]], JSON_THROW_ON_ERROR));
+    app()->instance(App\Modules\Accounting\Application\PostingRuleRepository::class,
+        new App\Modules\Accounting\Application\PostingRuleRepository($dir, app(Symfony\Component\ExpressionLanguage\ExpressionLanguage::class)));
+    try {
+        actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => $rows], $this->headers)
+            ->assertSessionHasErrors(['rows' => 'The posting rules need an account for: Deferred acquisition cost. Add an account for each, with that purpose, before creating the chart.']);
+        expect(($this->in)(fn (): array => [DB::table('accounts')->count(), DB::table('account_role_mappings')->count(), DB::table('subledger_controls')->count(),
+            DB::table('setup_progress')->where('step', 'chart_of_accounts')->count()]))->toBe([0, 0, 0, 0]);
+
+        // With an account for it, the same chart goes through.
+        $withDac = [...$rows, ['code' => '1400', 'name' => 'Deferred acquisition cost', 'type' => 'asset', 'normal_side' => 'debit', 'is_control' => false, 'control_subledger' => null, 'role' => 'dac_asset']];
+        actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => $withDac], $this->headers)->assertSessionHasNoErrors()->assertRedirect('/setup?step=product');
+        expect(($this->in)(fn (): int => DB::table('accounts')->count()))->toBe(count($withDac));
+    } finally {
+        array_map('unlink', glob($dir.'/*.json') ?: []);
+        rmdir($dir);
+    }
+});
+
 it('creates the first product with its term and VAT through the product catalogue', function (): void {
     ($this->company)();
     ($this->fiscalYear)();

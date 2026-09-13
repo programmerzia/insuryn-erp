@@ -131,6 +131,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-62 | F6 | The as-of date of the agency register downloaded from the producers queue is not specified: today (the route and the API still take `as_of`). The XLSX holds the same columns as the CSV (A-16), every cell as text. | `resources/js/pages/distribution/producers/Index.vue` (`ASSUMPTION:` comment), `LicenceController::register`. |
 | A-54 | F3 | Who sets approval limits is not specified: a new permission `platform.manage_approvals`, held by the Tenant Admin template (existing tenants' `tenant_admin` role gets it by migration). It is platform configuration, not `accounting.*`, so the §7.3 rule `platform.manage_roles` ✕ `accounting.*` is untouched; the Tenant Admin could already give anyone any role. | `RoleTemplates`, `PermissionsSeeder`, migration `2026_09_19_000030`, `ApprovalPolicyService::PERMISSION` (`ASSUMPTION:`). |
 | A-55 | F3 | **Verify with the customer** (design §7.3 OPEN: actual thresholds). Default limits offered by the setup wizard and seeded in the Part A demo: claim payment approval from 500,000 BDT → Finance Manager, then CFO (below it the Claims Manager's own approval stands, no policy); claim payment release from 500,000 → CFO; manual journal and journal reversal, any amount → Finance Manager. "> 500,000" is read as "500,000 and above" (the engine's `min_amount_minor` is inclusive). Refunds and commission payouts are not routed through the approval engine (maker-checker only), so they have no limit to set. A policy's end date is not included (`effective_to` exclusive, as the engine matches). | `ApprovalPolicyService::DEFAULTS`, `config/erp.php` `approvals.object_types` (`ASSUMPTION:`). |
+| A-56 | F4 | Which accounts a role may be mapped to is not specified: an active, postable account of the entity; a control account only to a role its subledger reconciles to (`subledger_controls` of the entity and book), and such a control role only to a control account. | `AccountRoleMappingService::assertMappable` (`ASSUMPTION:`). |
+| A-57 | F4 | "Roles used by active posting rules" = the line roles and the rounding residual role of every rule in force on the day that posts to the book. Overridable roles (`bank_main`) still need a mapping, because events without an override fall back to it. | `AccountRoleMappingService::rolesUsedByRules`, `unmappedRoles` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1756,3 +1758,23 @@ Scope: review only; only the critical finding was fixed.
   four default limits.
 - Tests: `tests/Feature/Platform/ApprovalLimitsTest.php` (6: screen and permission, validation and overlap, effective dating and audit, claim payment routed to Finance Manager then CFO
   through `ClaimPaymentService` and the inbox, role deletion guard, defaults), `SetupWizardTest` (+1).
+
+### F4 — Account role mapping screen — done
+- Design §3.4: posting rules post to account roles; a role without an account makes its events fail (`UNMAPPED_ROLE`), and until now nothing showed which roles had which account.
+- **Accounting → Account roles** `/accounting/account-roles` (sidebar, secondary, after Imports; `accounting.manage_coa`, Finance Manager and CFO): entity and book selectors (shown even with
+  one of each), a queue of every account role (plain description, code muted) with the account (code · name) in force today, from / until and status (mapped, no account, not used);
+  the inspector shows the rules that use the role, whether it is a subledger's control role and the mapping history; a drawer maps or remaps the role to an account from a date
+  (control roles offer control accounts, other roles the rest).
+- Warning banner at the top: "N account roles used by the posting rules have no account: …", with *Show only these* filtering the queue to them.
+- `Accounting\Application\AccountRoles\AccountRoleMappingService`:
+  - `roles(entity, book, date)` (current mapping and history), `rolesUsedByRules(book, date)` and `unmappedRoles(entity, book, date)` read the real posting rules through
+    `PostingRuleRepository` (A-57);
+  - `map(entity, book, role, account, from)` ends the current mapping that day and inserts the new one; refuses overlaps, a remap to the same account, a date already posted with the
+    role (D-27), and accounts that cannot take the role (A-56); audited as `account_role.mapped` with before and after.
+- **Setup wizard**, chart of accounts: the import, its mappings and control accounts now commit in one transaction that ends by checking every role the posting rules in force use
+  has an account; otherwise nothing is written and the step lists the missing roles (`SETUP_ROLES_UNMAPPED`). The non-life template already maps every role the rules use
+  (checked by the test), so `resources/setup/chart-of-accounts/non-life-insurance.csv` is unchanged; `dac_asset` and `recovery_receivable` are used by no rule in force.
+- No migration, no new permission.
+- Tests: `tests/Feature/Accounting/AccountRolesTest.php` (5: remap with effective dates, history and audit; overlap refusals; account and permission refusals; no remap over posted
+  days; unmapped roles against the real rules; screen props, banner data and the map endpoint), `SetupWizardTest` (+1: template covers the rules, refusal with an extra rule writes
+  nothing, success once the account is added).
