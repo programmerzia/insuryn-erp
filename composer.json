@@ -56,7 +56,8 @@
         "db:migrate": "@php artisan migrate --database=pgsql_migrations",
         "db:fresh": [
             "@php artisan migrate:fresh --database=pgsql_migrations --seed",
-            "@php artisan db:seed --database=pgsql_migrations --class=DemoBusinessSeeder"
+            "@php artisan db:seed --database=pgsql_migrations --class=DemoBusinessSeeder",
+            "@php artisan db:seed --database=pgsql_migrations --class=DistributionDemoSeeder"
         ],
         "worker": [
             "Composer\\Config::disableProcessTimeout",

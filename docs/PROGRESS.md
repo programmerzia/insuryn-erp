@@ -1518,3 +1518,28 @@ Scope: review only; only the critical finding was fixed.
 - Test setup change: `TenantIsolationEveryTableTest` grants portal access and creates a token so `personal_access_tokens` has rows.
 - Tests: `tests/Feature/Distribution/ProducerPortalTest.php` (5).
 
+### Distribution (D1–D9) — end state
+- All nine slices are done, one commit each, following docs/distribution-module-design.md §7 MVP. Decisions D-12 to D-16; ASSUMPTIONS A-14, A-16 to A-26
+  (there is no A-15).
+- **Seeded example** (`DistributionDemoSeeder`, run by `composer db:fresh`, local only):
+  - **Life, commission mode:** `LIFE-AGENCY` on the Endowment product has levels FA < UM < BM, 25% first-year and 5% renewal direct, UM overrides of 5% / 1% and a BM override of 2%,
+    caps of 35% for the first year and 10% for renewals, and 5% withholding. BM-01 → UM-01 (FA-01, FA-02), UM-02 (FA-03).
+  - **Non-life, salary and incentives:** `NL-BDO` on SME fire has commission disabled (profile `non_life_commission_allowed` false). BDO-01..03 are on payroll, with a monthly premium incentive
+    plan (100% → fixed bonus, 125% → 1% of premium) and targets.
+  - **Activity:** August statements prepared and approved, three paid (accounts payable and payroll); September drafts; FA-02 has an advance being recovered and a licence expiring
+    on 20 Oct 2026. A local-only `payer@demo.local` holds `commission.pay`, because no §7.2 role template grants it.
+  - `DistributionDemoSeederTest` checks both modes: direct FA and UM/BM override entries, no BDO commission, bonuses through payroll, recoveries, and no failed events.
+- **Not achieved, and why:**
+  - LATER in the design note: leads and activities, contests, bancassurance settlement, full proposal submission in the portal, IDRA electronic returns (the register export is CSV, A-16).
+  - Payroll and accounts payable are Phase 2 modules not built yet: payouts move the net to `salary_payable` / `accounts_payable` and queue
+    `CommissionPayrollEarning` / `CommissionPayableToAp` outbox messages, but nothing consumes them yet. Licence-expiry alerts are likewise queued, not delivered.
+  - Existing tenants must map the new account roles `producer_advances` and `accounts_payable` before issuing advances or paying through AP (the demo chart has 1160 and 2500).
+  - `commission.pay` is in no §7.2 role template, so a tenant must give it to a role before statements can be paid. It is worth asking the customer who pays commission.
+  - The design note's OPEN 1 (IDRA caps and the non-life circular) and OPEN 3 (renewal commission after termination) stay open as configurable defaults (A-18, A-19); the level names
+    and rates of OPEN 2 exist only in the seeded example.
+  - Phase 1 commission plans still work as flat terms (A-20) and are not migrated into schemes; product versions move to schemes one by one.
+  - No staff screen grants portal access yet (service `ProducerPortalAccess::grant`), and there is no portal UI (design note §5).
+  - No sidebar badge for expiring licences; hierarchy drag-transfer has no touch support.
+- Final gate: 1,077 Pest tests, 231 Vitest tests green, PHPStan 0 errors, vue-tsc and production build green; `composer db:fresh` builds the demo with both modes.
+- **Pending after Distribution:** 2.0c Playwright E2E happy path, 2.0d claim reserve property test, 2.1 design addendum v2 (rows above).
+
