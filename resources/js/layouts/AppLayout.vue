@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, watch } from 'vue';
-import CommandPalette from '@/components/shell/CommandPalette.vue';
+import { computed, defineAsyncComponent, watch } from 'vue';
 import ConfirmHost from '@/components/shell/ConfirmHost.vue';
 import Sidebar from '@/components/shell/Sidebar.vue';
 import StatusBar from '@/components/shell/StatusBar.vue';
 import TabStrip from '@/components/shell/TabStrip.vue';
 import Toaster from '@/components/shell/Toaster.vue';
 import TopBar from '@/components/shell/TopBar.vue';
-import { openPalette } from '@/lib/palette';
+import { openPalette, paletteOpen } from '@/lib/palette';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useShortcut } from '@/lib/shortcuts';
 import { toast } from '@/lib/toasts';
@@ -18,6 +17,9 @@ import type { SharedProps } from '@/types/shared';
  * Application shell (UX brief §3): top bar, pinned tabs, sidebar, main area, status bar — always the full window, like a desktop app.
  * `fill` pages (queues with an inspector) manage their own scrolling; other pages scroll inside the main area.
  */
+// The palette is loaded the first time it opens (UX brief §7: keep first-load JavaScript small).
+const CommandPalette = defineAsyncComponent(() => import('@/components/shell/CommandPalette.vue'));
+
 defineProps<{ title: string; fill?: boolean }>();
 
 const page = usePage<SharedProps>();
@@ -50,7 +52,7 @@ watch(() => page.props.errors?.form, (message) => message && toast(message, { to
         </main>
         <StatusBar class="col-span-2 col-start-1 row-start-4" />
         <Toaster />
-        <CommandPalette />
+        <CommandPalette v-if="paletteOpen" />
         <ConfirmHost />
     </div>
 </template>

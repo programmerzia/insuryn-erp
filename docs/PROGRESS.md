@@ -73,7 +73,7 @@ code and in the register below, configurable.
 | U7 | UX: rebuild existing screens | done | see git log |
 | U8 | UX: object pages with timeline | done | see git log |
 | U9 | UX: feedback, states, accessibility | done | see git log |
-| U10 | UX: performance | pending | |
+| U10 | UX: performance | done | see git log |
 
 ## ASSUMPTION register
 
@@ -1161,3 +1161,88 @@ Scope: review only; only the critical finding was fixed.
   skeleton rows and filtered-empty behaviour.
 - Screenshots: `storage/ux-screenshots/U9/{undo-toast,specific-error,empty-filtered,skip-link}-{1366,1920}-{light,dark}.png`.
 - Result: 999 Pest tests, 210 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### U10 — UX: performance — done
+- Code splitting: every page is its own chunk (`import.meta.glob` without `eager`); framework code in long-lived vendor chunks through Rolldown
+  `advancedChunks` groups (`vendor-vue`: Vue + Inertia; `vendor-ui`: reka-ui, floating-ui, VueUse; `vendor-table`: TanStack); icons stay with the code
+  that uses them (forcing them into one chunk defeated tree-shaking: 47 KB of icons); the command palette loads when first opened.
+- Bundle (gzip, measured from `public/build`):
+  - total JS gzip KB 256.3 | CSS gzip KB 11.0
+  - home/Index first-load JS gzip KB 122.3
+  - receipts/Index first-load JS gzip KB 152.2
+  - policies/Show first-load JS gzip KB 134.6
+  - accounting/TrialBalance first-load JS gzip KB 123.2
+  - receipts/Create first-load JS gzip KB 140.8
+  - bank/Show first-load JS gzip KB 154.1
+  - close/Run first-load JS gzip KB 122.6
+  - largest: [('vendor-vue-C7i0L2Ub.js', 73.9), ('vendor-ui-DVKHvQRl.js', 29.3), ('vendor-table-BglFa6Zq.js', 19.1), ('AppLayout-DPdgpRRb.js', 12.5), ('DataTable-B7jdwf2K.js', 9.7), ('utils-BuYa9y6l.js', 8.4)]
+  Brief §7 budget "total JS < 350KB gzipped": met with every page chunk included.
+- Fonts: self-hosted, subset (Latin IBM Plex Sans 400/500/600 at 22–24 KB each; Bengali Noto Sans only downloaded when Bengali text appears,
+  through its `unicode-range`); U1.
+- First paint: the HTML carries a skeleton of the shell (top bar, sidebar, content lines) drawn with the theme tokens from a 0.4 KB render-blocking
+  stylesheet (`corebari.css` as its own Vite entry); the app stylesheet no longer blocks rendering (`Vite::useStyleTagAttributes`, media swap) and
+  `app.ts` mounts once it has loaded, then removes the skeleton — no unstyled flash (checked in the browser under Fast 3G emulation).
+- Navigation: sidebar links and object links prefetch on hover (Inertia prefetch, cached 30s fresh / 1m stale); page code for the sidebar's lists and the
+  records they open, and the palette, are fetched when the browser is idle (`lib/warmup.ts`); the progress bar waits 250ms before showing.
+- Measurement set-up (local, not production): `php artisan serve` with `APP_DEBUG=false`, OPcache, 4 workers, behind a gzip proxy standing in for the
+  production web server (artisan serve does not compress); Chrome headless 1366×768 desktop, finance.manager@demo.local, demo data from
+  DemoBusinessSeeder. "3G-fast" is Chrome DevTools' Fast 3G: 562.5 ms request latency, 1.44 Mbps down, 675 kbps up; Lighthouse's simulated
+  equivalent is 150 ms RTT at 1,638 kbps. CPU slowed ×2.
+- Lighthouse 12 (performance category, after sign-in; "applied" = DevTools throttling in the browser, "simulated" = Lighthouse's model):
+
+| Profile | Page | Score | FCP ms | LCP ms | TBT ms | CLS | TTI ms | Transfer KB |
+|---|---|---|---|---|---|---|---|---|
+| simulated | /home | 84 | 1509 | 2119 | 20 | 0.001 | 2185 | 317 |
+| simulated | /receipts | 77 | 1506 | 3020 | 44 | 0.001 | 3020 | 317 |
+| simulated | /policies/{policy} | 77 | 1506 | 3022 | 40 | 0.001 | 3255 | 319 |
+| simulated | /accounting/trial-balance | 76 | 1886 | 2565 | 9 | 0.006 | 2565 | 317 |
+| applied | /home | 79 | 1165 | 2907 | 13 | 0.001 | 2876 | 317 |
+| applied | /receipts | 75 | 1155 | 3250 | 62 | 0.001 | 3214 | 317 |
+| applied | /policies/{policy} | 72 | 1168 | 4047 | 40 | 0.001 | 4021 | 319 |
+| applied | /accounting/trial-balance | 78 | 1155 | 2919 | 14 | 0.004 | 2880 | 317 |
+
+  First paint target (< 1.5 s on 3G-fast after sign-in): met with applied throttling (FCP 1.16 s, the skeleton frame); Lighthouse's simulation, which
+  cannot credit a frame painted before the scripts, puts FCP at 1.5–1.9 s. The full working screen (LCP) arrives at 2.9–4.0 s on Fast 3G.
+- Subsequent navigations (`node scripts/ux-perf.mjs`, click to Inertia `navigate`, same server set-up, CDP network emulation):
+
+| Step | Fast 3G | 4G | No throttling |
+|---|---|---|---|
+| Home → Receipts (sidebar, hover prefetch) | 48 | 54 | 46 |
+| Receipts → Policies (sidebar, no hover) | 608 | 175 | 73 |
+| Policies → policy page (hover prefetch, then click) | 33 | 35 | 32 |
+| Policy page → Accounting tab (deferred props already loaded) | 9 | 6 | 6 |
+| Trial balance → account activity (drill) | 599 | 175 | 72 |
+
+  Target (< 300 ms): met for every hover-prefetched navigation and in-page tab (6–54 ms on any network) and for all navigations on 4G and unthrottled;
+  a navigation that was not prefetched costs one request, about 600 ms on Fast 3G's 562.5 ms latency, so it cannot meet 300 ms there.
+- Tables virtualise above 200 rows and the server paginates above 5,000 (U4); offline reads and queued writes are LATER in the brief and not built.
+- Production notes: serve `/build/assets` with gzip or brotli (`gzip_static`) and `Cache-Control: immutable` (hashed names), HTTP/2 so the parallel
+  chunk requests share one connection.
+- Screenshots: `storage/ux-screenshots/U10/{boot-skeleton,after-boot}-1366-light.png` (skeleton under Fast 3G, then the app), `{home,palette}-{1366,1920}-{light,dark}.png`
+  (palette loaded lazily). Raw Lighthouse reports were kept in the session scratchpad only.
+- Found while measuring: my first Lighthouse profile put 562.5 ms in as the simulated RTT (3.75× too slow) and my first navigation timer measured the
+  hover prefetch instead of the click — both corrected before recording numbers; inlining the theme CSS into the HTML broke `UserPreferencesTest`
+  (it rightly checks no `data-theme=` is present for a user on the system theme), so the tokens became a separate stylesheet instead.
+- Result: 999 Pest tests, 211 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### UX rebuild (U1–U10) — end state
+- All ten slices done, one commit each; backend changes thin and tested (preferences, search, lookups, journal preview, work queues, batch
+  allocation, bank suggestions and unmatch, close readiness, trial balance comparison, journal and object page composition, reason messages).
+  Existing tests unchanged except extending `TenantIsolationEveryTableTest` to populate the new `user_preferences` table.
+- Final counts: 999 Pest tests, 211 Vitest tests, PHPStan level 8 with 0 errors, vue-tsc and vite build green; axe-core WCAG 2.1 AA: no violations on
+  32 audited screens plus sign-in in both themes.
+- Screenshots per slice: `storage/ux-screenshots/U1` … `U10` (1366×768 and 1920×1080, light and dark), taken with `scripts/ux-shots.mjs`.
+- Brief items not achieved, and why:
+  - Accent `#1F5F8B` and neutral dark greys (§2): replaced by CoreBari Brick and Navy on the user's instruction; light `warn` darkened for AA (docs/theme.md).
+  - Search by phone (§4 lookups): parties have no phone number.
+  - Split one ledger line across several statement lines (§6.4): BankMatcher matches one statement line to many ledger lines only.
+  - Undo for unallocate (§4): an allocation posts journals; undo needs a compensating event that does not exist. Bank match undo is built.
+  - "SLA breaches" queue (§5) and claim SLA timers: not built in the domain; the claims queue omits the block.
+  - "Failed accounting events" block has no queue page to open.
+  - Documents tab (§6.2): attachments are not built; the tab says so.
+  - English / Bangla switching and Bengali digits (§8): not built — English only; the Bengali font is in the stack for Bengali names.
+  - Branch switcher (§3): chosen branch is stored and shown but lists do not filter by it yet.
+  - Right-click menus exist on tables only; "keyboard-first" coverage is tables, palette, forms, inspector and shell shortcuts.
+  - Navigations that were not prefetched take one round trip (~600 ms) on Fast 3G; the full screen (LCP) on Fast 3G is 2.9–4.0 s.
+  - Offline-tolerant reads and queued writes (§7) are LATER in the brief.
+  - Toasts sit bottom-left per the brief and can briefly cover the allocation workbench's commit button.

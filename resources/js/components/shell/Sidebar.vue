@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import { TooltipContent, TooltipPortal, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { activeItem, visibleNavigation } from '@/lib/navigation';
 import { usePreferences } from '@/lib/preferences';
+import { warmPages } from '@/lib/warmup';
 import type { SharedProps } from '@/types/shared';
 
 /** Brief §3: collapsible to icons (Ctrl+B), badge = items needing action for this user, order = frequency of use. */
@@ -14,6 +15,7 @@ const primary = computed(() => items.value.filter((item) => !item.secondary));
 const secondary = computed(() => items.value.filter((item) => item.secondary));
 const active = computed(() => activeItem(items.value, page.url));
 const badges = computed(() => ({ ...(page.props.shell?.badges ?? {}), approvals: page.props.shell?.approvals ?? 0 }) as Record<string, number>);
+onMounted(() => warmPages([...new Set(items.value.flatMap((item) => [item.page, item.detail].filter((p): p is string => !!p)))]));
 const count = (badge?: string) => (badge ? (badges.value[badge] ?? 0) : 0);
 </script>
 
@@ -26,6 +28,8 @@ const count = (badge?: string) => (badge ? (badges.value[badge] ?? 0) : 0);
                     <TooltipTrigger as-child>
                         <Link
                             :href="item.href"
+                            prefetch="hover"
+                            :cache-for="['30s', '1m']"
                             class="mx-1.5 flex h-8 items-center gap-2.5 rounded-control px-2 text-ui text-ink-2 hover:bg-surface hover:text-ink"
                             :class="{ 'bg-accent-soft font-medium text-ink hover:bg-accent-soft': active?.id === item.id, 'justify-center': preferences.sidebar_collapsed }"
                             :aria-current="active?.id === item.id ? 'page' : undefined"

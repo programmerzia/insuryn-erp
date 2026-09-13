@@ -75,9 +75,9 @@ startTrail();
                     <template v-if="!collapsed[group.type]">
                         <tr v-for="row in group.rows" :key="row.accountId" class="h-(--row-h) hover:bg-surface-2">
                             <td class="truncate border-b border-line pr-3 pl-10"><span class="text-ink-2 tabular-nums">{{ row.code }}</span> {{ row.name }}</td>
-                            <td class="num border-b border-line px-3"><Link :href="activity(row)" class="hover:underline" @click="drillFrom('Trial balance')">{{ formatMoney(row.debit) }}</Link></td>
-                            <td class="num border-b border-line px-3"><Link :href="activity(row)" class="hover:underline" @click="drillFrom('Trial balance')">{{ formatMoney(row.credit) }}</Link></td>
-                            <td class="num border-b border-line px-3"><Link :href="activity(row)" class="font-medium hover:text-accent-text hover:underline" @click="drillFrom('Trial balance')">{{ formatMoney(row.balance) }}</Link></td>
+                            <td class="num border-b border-line px-3"><Link prefetch="hover" :href="activity(row)" class="hover:underline" @click="drillFrom('Trial balance')">{{ formatMoney(row.debit) }}</Link></td>
+                            <td class="num border-b border-line px-3"><Link prefetch="hover" :href="activity(row)" class="hover:underline" @click="drillFrom('Trial balance')">{{ formatMoney(row.credit) }}</Link></td>
+                            <td class="num border-b border-line px-3"><Link prefetch="hover" :href="activity(row)" class="font-medium hover:text-accent-text hover:underline" @click="drillFrom('Trial balance')">{{ formatMoney(row.balance) }}</Link></td>
                             <td class="num border-b border-line px-3 text-ink-2">{{ formatMoney(compare?.balances[row.accountId] ?? '0.00') }}</td>
                             <td class="num border-b border-line px-3 text-ink-2">{{ change(row) }}</td>
                             <td class="border-b border-line" />
