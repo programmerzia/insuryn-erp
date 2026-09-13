@@ -37,9 +37,9 @@ function apply(): void {
 <template>
     <AppLayout :title="title">
         <PageHeader eyebrow="Report" :title="title">
-            <form class="flex flex-wrap gap-2" @submit.prevent="apply">
-                <Input v-if="filter === 'as_of'" v-model="filters.as_of" type="date" aria-label="As of" />
-                <template v-else><Input v-model="filters.from" type="date" aria-label="From" /><Input v-model="filters.to" type="date" aria-label="To" /></template>
+            <form class="flex flex-wrap items-center gap-2" @submit.prevent="apply">
+                <Input v-if="filter === 'as_of'" v-model="filters.as_of" type="date" class="w-40" aria-label="As of" />
+                <template v-else><Input v-model="filters.from" type="date" class="w-40" aria-label="From" /><Input v-model="filters.to" type="date" class="w-40" aria-label="To" /></template>
                 <SelectInput v-if="filter === 'range_by'" v-model="filters.by" :options="['product', 'branch', 'agent'].map((b) => ({ value: b, label: `by ${b}` }))" class="w-36" aria-label="Group by" />
                 <Button type="submit" variant="ghost">Show</Button>
             </form>

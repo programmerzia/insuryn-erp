@@ -16,7 +16,7 @@ const range = reactive({ from: props.from, to: props.to });
     <AppLayout title="Cheque register">
         <PageHeader eyebrow="Collections" title="Cheque register" :description="`Presented ${register.totals.presented} · bounced ${register.totals.bounced}`">
             <form class="flex gap-2" @submit.prevent="router.get('/cheques', range, { preserveState: true })">
-                <Input v-model="range.from" type="date" aria-label="From" /><Input v-model="range.to" type="date" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
+                <Input v-model="range.from" type="date" class="w-40" aria-label="From" /><Input v-model="range.to" type="date" class="w-40" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
             </form>
         </PageHeader>
         <Table>

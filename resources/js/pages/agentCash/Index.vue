@@ -26,7 +26,7 @@ const form = useForm({ agent_id: '', amount: '', deposited_on: '', bank_account_
     <AppLayout title="Agent cash">
         <PageHeader eyebrow="Collections" title="Agent cash" :description="`Cash agents collected and have not yet deposited: ${position.totals.undeposited_minor} as of ${asOf}.`">
             <form class="flex gap-2" @submit.prevent="router.get('/agent-cash', { as_of: asOf }, { preserveState: true })">
-                <Input v-model="asOf" type="date" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
+                <Input v-model="asOf" type="date" class="w-40" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
             </form>
         </PageHeader>
         <FormBanner />

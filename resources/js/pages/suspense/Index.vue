@@ -26,7 +26,7 @@ const form = useForm({ installment_id: '', amount: '', on: props.asOf });
     <AppLayout title="Suspense">
         <PageHeader eyebrow="Collections" title="Suspense" :description="`Unidentified money waiting for allocation: ${ageing.total} open as of ${asOf}.`">
             <form class="flex gap-2" @submit.prevent="router.get('/suspense', { as_of: asOf }, { preserveState: true })">
-                <Input v-model="asOf" type="date" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
+                <Input v-model="asOf" type="date" class="w-40" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
             </form>
         </PageHeader>
         <FormBanner />

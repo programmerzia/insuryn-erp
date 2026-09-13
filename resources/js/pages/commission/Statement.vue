@@ -22,7 +22,7 @@ const range = reactive({ from: props.from, to: props.to });
     <AppLayout :title="`Agent ${agent.code}`">
         <PageHeader eyebrow="Commission statement" :title="`Agent ${agent.code}`" :description="`Payable ${statement.opening_payable} at the start, ${statement.closing_payable} at the end.`">
             <form class="flex gap-2" @submit.prevent="router.get(`/commission/agents/${props.agent.id}`, range, { preserveState: true })">
-                <Input v-model="range.from" type="date" aria-label="From" /><Input v-model="range.to" type="date" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
+                <Input v-model="range.from" type="date" class="w-40" aria-label="From" /><Input v-model="range.to" type="date" class="w-40" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
             </form>
             <Link href="/commission" class="text-sm text-blueprint hover:underline">Commission</Link>
         </PageHeader>

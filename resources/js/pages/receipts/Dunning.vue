@@ -15,7 +15,7 @@ const range = reactive({ from: props.from, to: props.to });
     <AppLayout title="Dunning notices">
         <PageHeader eyebrow="Collections" title="Dunning notices" description="Payment reminders issued by the nightly run. Policies unpaid beyond the grace period lapse automatically.">
             <form class="flex gap-2" @submit.prevent="router.get('/dunning', range, { preserveState: true })">
-                <Input v-model="range.from" type="date" aria-label="From" /><Input v-model="range.to" type="date" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
+                <Input v-model="range.from" type="date" class="w-40" aria-label="From" /><Input v-model="range.to" type="date" class="w-40" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
             </form>
         </PageHeader>
         <Table>

@@ -36,7 +36,7 @@ function explain(): void {
     <AppLayout :title="account.bank_name">
         <PageHeader eyebrow="Bank reconciliation" :title="`${account.bank_name} ${account.account_no_masked}`" :description="`Unmatched as of ${asOf}. Pick a statement line, then the ledger lines it pays, or explain it.`">
             <form class="flex gap-2" @submit.prevent="router.get(`/bank/${props.account.id}`, { as_of: asOf }, { preserveState: true })">
-                <Input v-model="asOf" type="date" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
+                <Input v-model="asOf" type="date" class="w-40" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
             </form>
             <Link href="/bank" class="text-sm text-blueprint hover:underline">All accounts</Link>
         </PageHeader>
