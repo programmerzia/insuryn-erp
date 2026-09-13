@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Modules\Accounting\Http\Controllers\ClosePageController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
+use App\Modules\Accounting\Http\Controllers\ManualJournalPageController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Finance\Bank\Http\Controllers\BankPageController;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
@@ -12,6 +14,7 @@ use App\Modules\Insurance\Commission\Http\Controllers\CommissionPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Product\Http\Controllers\ProductPageController;
+use App\Modules\Insurance\Reports\Http\Controllers\ReportsPageController;
 use App\Modules\Platform\Approvals\Http\ApprovalsPageController;
 use App\Modules\Platform\Authentication\Http\SecurityPageController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +27,12 @@ Route::middleware('auth')->get('account/security', SecurityPageController::class
 // sign-in, sign-out, password reset and two-factor routes come from Fortify (config/fortify.php).
 Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting')->name('accounting.')->group(function (): void {
     Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
+    Route::get('journals/create', [ManualJournalPageController::class, 'create'])->name('journals.create');
+    Route::post('journals', [ManualJournalPageController::class, 'store'])->name('journals.store');
+    Route::post('journals/{journal}/approve', [ManualJournalPageController::class, 'approve'])->whereUuid('journal');
+    Route::post('journals/{journal}/reject', [ManualJournalPageController::class, 'reject'])->whereUuid('journal');
+    Route::post('journals/{journal}/reversal-requests', [ManualJournalPageController::class, 'requestReversal'])->whereUuid('journal');
+    Route::post('reversal-requests/{reversalRequest}/{decision}', [ManualJournalPageController::class, 'decideReversal'])->whereUuid('reversalRequest')->whereIn('decision', ['approve', 'reject']);
     Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
     Route::get('imports', [ImportController::class, 'page'])->name('imports');
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
@@ -96,4 +105,14 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('approvals', [ApprovalsPageController::class, 'index']);
     Route::post('approvals/{approval}/decide', [ApprovalsPageController::class, 'decide'])->whereUuid('approval');
+
+    Route::get('close', [ClosePageController::class, 'index']);
+    Route::post('close/periods/{period}', [ClosePageController::class, 'start'])->whereUuid('period');
+    Route::post('close/periods/{period}/reopen', [ClosePageController::class, 'reopen'])->whereUuid('period');
+    Route::get('close/runs/{run}', [ClosePageController::class, 'run'])->whereUuid('run');
+    Route::post('close/tasks/{task}/execute', [ClosePageController::class, 'execute'])->whereUuid('task');
+    Route::post('close/tasks/{task}/skip', [ClosePageController::class, 'skip'])->whereUuid('task');
+
+    Route::get('reports', [ReportsPageController::class, 'index']);
+    Route::get('reports/{report}', [ReportsPageController::class, 'show'])->where('report', '[a-z-]+');
 });

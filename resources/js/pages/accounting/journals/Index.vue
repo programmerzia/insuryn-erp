@@ -27,6 +27,7 @@ function goToPage(page: number): void {
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-blueprint">{{ entity.code }} · {{ journals.total }} journals</p>
                 <h1 class="mt-1 text-3xl font-bold">Journals</h1>
+                <Link href="/accounting/journals/create" class="mt-2 inline-block text-sm text-blueprint hover:underline">New manual journal</Link>
             </div>
             <label class="grid gap-1 text-xs text-ivory-dim" for="status-filter">
                 Status

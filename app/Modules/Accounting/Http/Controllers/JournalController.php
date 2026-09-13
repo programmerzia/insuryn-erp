@@ -40,15 +40,28 @@ final class JournalController
         ]);
     }
 
-    public function show(string $journal, JournalQuery $journals): Response
+    public function show(Request $request, string $journal, JournalQuery $journals, \App\Modules\Platform\Authorization\PermissionChecker $permissions): Response
     {
         $detail = Str::isUuid($journal) ? $journals->detail($journal) : null;
         if ($detail === null) {
             throw new NotFoundHttpException('Journal not found.');
         }
         $j = $detail['journal'];
+        $actor = (string) $request->user()?->getAuthIdentifier();
+        $row = \Illuminate\Support\Facades\DB::table('journals')->where('id', $j['id'])->first(['created_by', 'entity_id']);
+        $reversalRequest = \Illuminate\Support\Facades\DB::table('journal_reversal_requests')->where('journal_id', $j['id'])->orderByDesc('created_at')->first(['id', 'status', 'on_date', 'reason', 'requested_by', 'approval_id']);
+        $scope = \App\Modules\Platform\Authorization\AuthorizationScope::entity((string) ($row->entity_id ?? ''));
+        $pendingApproval = \Illuminate\Support\Facades\DB::table('approvals')->where('object_type', 'journal')->where('object_id', $j['id'])->where('status', 'pending')->exists();
 
         return Inertia::render('accounting/journals/Show', [
+            'actions' => [
+                'approve' => $j['status'] === JournalStatus::PendingApproval->value && ! $pendingApproval && ($row->created_by ?? null) !== $actor && $permissions->has($actor, 'accounting.approve_journal', $scope),
+                'requestReversal' => $j['status'] === JournalStatus::Posted->value && ($reversalRequest === null || $reversalRequest->status !== 'pending') && $permissions->has($actor, 'accounting.reverse_journal', $scope),
+                'decideReversal' => $reversalRequest !== null && $reversalRequest->status === 'pending' && $reversalRequest->approval_id === null && $reversalRequest->requested_by !== $actor
+                    && $permissions->has($actor, 'accounting.approve_journal', $scope),
+            ],
+            'reversalRequest' => $reversalRequest === null ? null : ['id' => (string) $reversalRequest->id, 'status' => (string) $reversalRequest->status, 'on' => (string) $reversalRequest->on_date,
+                'reason' => (string) $reversalRequest->reason, 'viaApproval' => $reversalRequest->approval_id !== null],
             'journal' => [
                 'id' => $j['id'], 'number' => $j['number'], 'status' => $j['status'], 'kind' => $j['kind'],
                 'transactionDate' => $j['transaction_date'], 'postingDate' => $j['posting_date'], 'effectiveDate' => $j['effective_date'],

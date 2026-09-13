@@ -1,12 +1,26 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Link, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import FormBanner from '@/components/forms/FormBanner.vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { JournalDetail, JournalRef } from '@/types/accounting';
 
-const props = defineProps<{ journal: JournalDetail }>();
+const props = defineProps<{
+    journal: JournalDetail;
+    actions?: { approve: boolean; requestReversal: boolean; decideReversal: boolean };
+    reversalRequest?: { id: string; status: string; on: string; reason: string; viaApproval: boolean } | null;
+}>();
+
+const actions = computed(() => props.actions ?? { approve: false, requestReversal: false, decideReversal: false });
+const reversing = ref(false);
+const approveForm = useForm({});
+const rejectForm = useForm({ reason: '' });
+const reversalForm = useForm({ on: '', reason: '' });
+const decisionForm = useForm({ reason: '' });
 
 const links = computed<{ label: string; journal: JournalRef }[]>(() =>
     [
@@ -38,6 +52,31 @@ const facts = computed(() => [
             </div>
             <StatusBadge :status="journal.status" />
         </div>
+
+        <FormBanner />
+        <div v-if="actions.approve || actions.requestReversal" class="mb-6 flex flex-wrap items-center gap-2">
+            <template v-if="actions.approve">
+                <Button :disabled="approveForm.processing" @click="approveForm.post(`/accounting/journals/${props.journal.id}/approve`)">Approve and post</Button>
+                <Input v-model="rejectForm.reason" placeholder="Reason to reject" class="w-56" aria-label="Reason to reject" />
+                <Button variant="ghost" @click="rejectForm.post(`/accounting/journals/${props.journal.id}/reject`)">Reject</Button>
+            </template>
+            <Button v-if="actions.requestReversal && !reversing" variant="ghost" @click="reversing = true">Request reversal</Button>
+            <form v-if="reversing" class="flex flex-wrap items-center gap-2" @submit.prevent="reversalForm.post(`/accounting/journals/${props.journal.id}/reversal-requests`, { onSuccess: () => (reversing = false) })">
+                <Input v-model="reversalForm.on" type="date" aria-label="Reversal date" />
+                <Input v-model="reversalForm.reason" placeholder="Why it is reversed" class="w-64" aria-label="Reversal reason" />
+                <Button type="submit" :disabled="reversalForm.processing">Request</Button>
+            </form>
+        </div>
+        <p v-if="reversalRequest" class="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-line bg-surface px-4 py-3 text-sm">
+            <span class="text-xs font-semibold uppercase tracking-wider text-blueprint">Reversal request</span>
+            <StatusBadge :status="reversalRequest.status" /> on {{ reversalRequest.on }} — {{ reversalRequest.reason }}
+            <span v-if="reversalRequest.viaApproval && reversalRequest.status === 'pending'" class="text-ivory-dim">(decided in the approvals inbox)</span>
+            <template v-if="actions.decideReversal">
+                <Button @click="decisionForm.post(`/accounting/reversal-requests/${reversalRequest.id}/approve`)">Approve reversal</Button>
+                <Input v-model="decisionForm.reason" placeholder="Reason to reject" class="w-48" aria-label="Reason to reject reversal" />
+                <Button variant="ghost" @click="decisionForm.post(`/accounting/reversal-requests/${reversalRequest.id}/reject`)">Reject</Button>
+            </template>
+        </p>
 
         <dl class="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-3">
             <div v-for="fact in facts" :key="fact.term" class="bg-surface px-4 py-3">

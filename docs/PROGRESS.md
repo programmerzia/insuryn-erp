@@ -57,7 +57,7 @@ code and in the register below, configurable.
 | 1C.8 | Operations UI: parties, products, policies | done | see git log |
 | 1C.9 | Operations UI: receipts, suspense, refunds, bank | done | see git log |
 | 1C.10 | Operations UI: claims and commission | done | see git log |
-| 1C.11 | Operations UI: month-end close and reports | pending | |
+| 1C.11 | Operations UI: month-end close and reports | done | see git log |
 | 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | pending | |
 
 ## ASSUMPTION register
@@ -828,3 +828,21 @@ Scope: review only; only the critical finding was fixed.
   (permission refusal back to the form, release by someone else, recovery, close, detail props, filter); approval above a limit decided from the
   inbox by the right person only (requester sees nothing); plan in percent, statement approve, SoD refusal on pay, pay by someone else, statement page.
 - Result: 953 tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### 1C.11 — Operations UI: month-end close and reports — done
+- `Accounting\Http\Controllers\ClosePageController` (area: periods.soft_lock, periods.lock, periods.reopen, reports.financial): `/close` (periods of the
+  primary book with status and close run; start close; reopen with reason), `/close/runs/{run}` (tasks in order with owner, dependencies, status and
+  result summary; run a task with a note, or skip with a reason). Task permissions and dependencies are enforced by `PeriodCloseService`.
+- `Accounting\Http\Controllers\ManualJournalPageController` (inside the `accounting.view_journals` group): `/accounting/journals/create` (manual or
+  adjustment journal, lines with account, side, amount in major units, branch, memo) → create and submit; approve and reject on the journal page
+  (maker ≠ checker enforced by the service; journals under an approval policy go through the inbox); request a reversal and approve/reject it.
+  `JournalController::show` now also shares `actions` and the latest `reversalRequest`.
+- `Insurance\Reports\Http\Controllers\ReportsPageController` (`reports.financial`): `/reports` catalogue and `/reports/{report}` for premium register,
+  receivable ageing, outstanding claims, claims paid, loss ratio (by product/branch/agent), profit and loss, balance sheet and account activity (with
+  dimension filter) — one generic `reports/Show` table page (columns, rows with a drill link, totals). Account rows drill to account activity, which
+  drills to journals; policy and claim rows open their pages.
+- Navigation: Accounting group gains Close and Reports; the journal list links to "New manual journal".
+- Tests `tests/Feature/Pages/CloseReportsJournalsPagesTest.php`: full close through the screens (dependency refusal back to the form, skip, lock,
+  run detail, reopen); every report 403/200 with drill links from balance sheet to account activity to journals and register totals; manual journal
+  created from the form, maker cannot approve, checker approves, reversal requested and approved → journal reversed.
+- Result: 956 tests green, PHPStan 0 errors, vue-tsc and build green.

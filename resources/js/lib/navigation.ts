@@ -46,6 +46,8 @@ export const navigation: NavGroup[] = [
         items: [
             { label: 'Journals', href: '/accounting/journals', any: ['accounting.view_journals'] },
             { label: 'Trial balance', href: '/accounting/trial-balance', any: [reader] },
+            { label: 'Close', href: '/close', any: ['periods.soft_lock', 'periods.lock', 'periods.reopen', reader] },
+            { label: 'Reports', href: '/reports', any: [reader] },
             { label: 'Imports', href: '/accounting/imports', any: ['accounting.view_journals'] },
         ],
     },
