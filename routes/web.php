@@ -42,6 +42,8 @@ Route::middleware('auth')->prefix('distribution')->group(function (): void {
     Route::post('producers/{producer}/licences', [\App\Http\Distribution\ProducersPageController::class, 'storeLicence'])->whereUuid('producer');
     Route::post('producers/{producer}/advances', [\App\Http\Distribution\ProducersPageController::class, 'issueAdvance'])->whereUuid('producer')->middleware('moves-money');
     Route::post('producers/{producer}/status', [\App\Http\Distribution\ProducersPageController::class, 'updateStatus'])->whereUuid('producer');
+    // F6: the agency (IDRA) register download from the producers queue, the same export as GET /api/distribution/licences/register.
+    Route::get('licences/register', [\App\Modules\Distribution\Http\Controllers\LicenceController::class, 'register']);
     Route::post('licences/{licence}/{action}', [\App\Http\Distribution\ProducersPageController::class, 'licenceStatus'])->whereUuid('licence')->whereIn('action', ['suspend', 'revoke', 'reinstate']);
     Route::get('hierarchy', [\App\Modules\Distribution\Http\Controllers\HierarchyPageController::class, 'index']);
     Route::post('hierarchy/moves', [\App\Modules\Distribution\Http\Controllers\HierarchyPageController::class, 'move']);

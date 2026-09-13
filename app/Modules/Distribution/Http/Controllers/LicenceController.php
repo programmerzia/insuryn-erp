@@ -16,7 +16,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
-/** Licences API (slice D2): list and record per producer, suspend / revoke / reinstate, the IDRA register export. */
+/**
+ * Licences API (slice D2): list and record per producer, suspend / revoke / reinstate, the IDRA register export (CSV, or XLSX with format=xlsx).
+ * The register export is also routed on the web (F6) for the producers queue's export control, with the same permission and output.
+ */
 final class LicenceController
 {
     public function __construct(
@@ -68,14 +71,16 @@ final class LicenceController
     public function register(Request $request, IdraRegisterExport $export): Response
     {
         $this->permissions->authorize((string) $request->user()?->getAuthIdentifier(), 'reports.regulatory');
-        /** @var array{as_of?: string} $data */
-        $data = $request->validate(['as_of' => ['sometimes', 'date_format:Y-m-d']]);
+        /** @var array{as_of?: string, format?: string} $data */
+        $data = $request->validate(['as_of' => ['sometimes', 'date_format:Y-m-d'], 'format' => ['sometimes', Rule::in(['csv', 'xlsx'])]]);
         $asOf = CarbonImmutable::parse($data['as_of'] ?? 'today');
-        $csv = $export->csv($asOf);
+        [$body, $extension, $type] = ($data['format'] ?? 'csv') === 'xlsx'
+            ? [$export->xlsx($asOf), 'xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+            : [$export->csv($asOf), 'csv', 'text/csv; charset=UTF-8'];
 
-        return response()->streamDownload(function () use ($csv): void {
-            echo $csv;
-        }, "idra-agent-register-{$asOf->toDateString()}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return response()->streamDownload(function () use ($body): void {
+            echo $body;
+        }, "idra-agent-register-{$asOf->toDateString()}.{$extension}", ['Content-Type' => $type]);
     }
 
     /** @return array<string, mixed> */

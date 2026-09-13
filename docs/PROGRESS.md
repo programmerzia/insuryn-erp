@@ -129,6 +129,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 
 | A-60 | F5 | "Class" in the unearned premium report and the premium register totals is not defined: the product's line of business (`products.lob`: motor, fire, marine, …), not `products.insurance_class` (life / non-life), which would put all non-life business in one group. | `UnearnedPremiumQuery` (`ASSUMPTION:` docblock), `PremiumRegisterQuery`. |
 | A-61 | F5 | How unearned premium is dated is not specified: as the ledger posts it (A-8) — net written premium on the issue or endorsement accounting date, each earning row on its posting date (a scheduled row on its period end, a cancellation catch-up on the cancellation date), the released remainder on the cancellation date. Postings to the control from anywhere else (a manual journal, a reversal) are not in the register and show as the reconciliation variance. | `UnearnedPremiumQuery`. |
+| A-62 | F6 | The as-of date of the agency register downloaded from the producers queue is not specified: today (the route and the API still take `as_of`). The XLSX holds the same columns as the CSV (A-16), every cell as text. | `resources/js/pages/distribution/producers/Index.vue` (`ASSUMPTION:` comment), `LicenceController::register`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1717,3 +1718,13 @@ Scope: review only; only the critical finding was fixed.
 - ASSUMPTIONS A-60, A-61.
 - Tests: `tests/Feature/Reports/UnearnedPremiumReportTest.php` (4: zero variance on twelve dates through issue, endorsement, monthly earning and a mid-month cancellation with a
   negative catch-up; a stray posting shows as variance; register totals by class and branch; pages, drill links, API and permission refusal).
+
+### F6 — Distribution: agency register export on the producers queue — done
+- The producers queue toolbar shows *Export agency register: CSV · XLSX* to people with `reports.regulatory` (page prop `can.export_register`). Both are plain links to the new
+  session-authenticated web route `GET /distribution/licences/register?format=csv|xlsx[&as_of=]`, which is the existing `LicenceController::register` action (same permission,
+  same `IdraRegisterExport`), so the web download and `GET /api/distribution/licences/register` return identical files. The API also accepts `format=xlsx`.
+- XLSX: `IdraRegisterExport::xlsx` writes the CSV's header and rows as one sheet through `Platform\Exports\XlsxWriter`, a dependency-free writer (DECISION D-28). No package
+  was added. The export is not audited, like the API export and the other exports.
+- ASSUMPTION A-62.
+- Tests: `tests/Feature/Distribution/AgencyRegisterExportTest.php` (4: the web CSV equals the API CSV; the XLSX is a valid zip whose sheet holds the same rows, including
+  quotes and markup; refusal without `reports.regulatory`, an unknown format, and the toolbar permission prop; column letters past Z and XML escaping).

@@ -25,7 +25,7 @@ const props = defineProps<{
     channels: { id: string; code: string; name: string; type: string }[];
     branches: { id: string; code: string; name: string }[];
     parties: { id: string; display_name: string }[];
-    can: { manage: boolean };
+    can: { manage: boolean; export_register: boolean };
 }>();
 
 const active = ref<string | null>(null);
@@ -65,6 +65,14 @@ const columns: DataColumn<ProducerRow>[] = [
             :inspector-subtitle="(p) => `${producerTypeLabel(p.type)} · ${p.channel} · ${p.branch}`"
             @action="creating = true"
         >
+            <template v-if="can.export_register" #toolbar>
+                <!-- A plain link: the browser downloads the file the authenticated route returns (same export as the API). ASSUMPTION: A-62 as of today. -->
+                <div class="ml-2 flex items-center gap-2 text-ui" role="group" aria-label="Export agency register">
+                    <span class="text-ink-2">Export agency register</span>
+                    <a href="/distribution/licences/register?format=csv" class="text-accent-text hover:underline">CSV</a>
+                    <a href="/distribution/licences/register?format=xlsx" class="text-accent-text hover:underline">XLSX</a>
+                </div>
+            </template>
             <template #details="{ row }">
                 <DetailList :items="[
                     { label: 'Status' },

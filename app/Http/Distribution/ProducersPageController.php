@@ -84,7 +84,7 @@ final class ProducersPageController
             'branches' => $branches->map(fn (object $b): array => (array) $b)->values()->all(),
             'parties' => DB::table('parties')->whereNotIn('id', DB::table('producers')->select('party_id'))->orderBy('display_name')->limit(500)->get(['id', 'display_name'])
                 ->map(fn (object $p): array => (array) $p)->values()->all(),
-            'can' => ['manage' => $this->permissions->has($actor, 'agent.manage')],
+            'can' => ['manage' => $this->permissions->has($actor, 'agent.manage'), 'export_register' => $this->permissions->has($actor, 'reports.regulatory')],
         ]);
     }
 

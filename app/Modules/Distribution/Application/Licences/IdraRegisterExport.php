@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Distribution\Application\Licences;
 
+use App\Modules\Platform\Exports\XlsxWriter;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Distribution design note §3 "IDRA agent register export". ASSUMPTION A-16: IDRA's register file format is not specified (electronic returns
  * are LATER): CSV with a header row, one row per licence, columns and their order from erp.distribution.idra_register_columns. `status` is the
- * licence's standing on the as-of date: valid, expired, not_yet_valid, suspended or revoked.
+ * licence's standing on the as-of date: valid, expired, not_yet_valid, suspended or revoked. The same table is also offered as an XLSX workbook.
  */
 final class IdraRegisterExport
 {
@@ -37,20 +38,36 @@ final class IdraRegisterExport
 
     public function csv(CarbonImmutable $asOf): string
     {
-        /** @var list<string> $columns */
-        $columns = config('erp.distribution.idra_register_columns');
+        [$columns, $rows] = $this->table($asOf);
         $stream = fopen('php://temp', 'r+');
         if ($stream === false) {
             throw new \RuntimeException('Cannot open a temporary stream for the register export.');
         }
         fputcsv($stream, $columns, escape: '');
-        foreach ($this->rows($asOf) as $row) {
-            fputcsv($stream, array_map(fn (string $column): string => $row[$column] ?? '', $columns), escape: '');
+        foreach ($rows as $row) {
+            fputcsv($stream, $row, escape: '');
         }
         rewind($stream);
         $csv = (string) stream_get_contents($stream);
         fclose($stream);
 
         return $csv;
+    }
+
+    /** The same header and rows as the CSV, as a one-sheet workbook (DECISION D-28). */
+    public function xlsx(CarbonImmutable $asOf): string
+    {
+        [$columns, $rows] = $this->table($asOf);
+
+        return XlsxWriter::workbook('Agency register '.$asOf->toDateString(), $columns, $rows);
+    }
+
+    /** @return array{0: list<string>, 1: list<list<string>>} the configured columns, and each licence's values in that order */
+    private function table(CarbonImmutable $asOf): array
+    {
+        /** @var list<string> $columns */
+        $columns = config('erp.distribution.idra_register_columns');
+
+        return [$columns, array_map(fn (array $row): array => array_map(fn (string $column): string => $row[$column] ?? '', $columns), $this->rows($asOf))];
     }
 }
