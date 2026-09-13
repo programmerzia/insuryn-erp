@@ -26,14 +26,22 @@ final class CollectionsAccountingEvents
         private readonly BankAccountQuery $bankAccounts,
     ) {}
 
-    /** Design §4.2: DR bank_main / CR premium_receivable, one event per allocation. */
+    /**
+     * Design §4.2: DR bank_main / CR premium_receivable, one event per allocation. Cash an agent collected posts AGENT_CASH_COLLECTED instead:
+     * DR agent_receivable (dimension agent = the collecting agent) until the agent deposits it (spec §4).
+     */
     public function premiumReceived(Receipt $receipt, ReceiptAllocation $allocation, Policy $policy): void
     {
+        $eventType = $receipt->collected_by_agent_id === null ? 'PREMIUM_RECEIVED' : 'AGENT_CASH_COLLECTED';
+        $dimensions = PolicyAccountingEvents::dimensions($policy) + ['receipt' => $receipt->id];
+        if ($receipt->collected_by_agent_id !== null) {
+            $dimensions['agent'] = $receipt->collected_by_agent_id;
+        }
         ($this->submit)(
-            entityId: $receipt->entity_id, eventType: 'PREMIUM_RECEIVED', sourceType: 'receipt_allocation', sourceId: $allocation->id,
-            idempotencyKey: 'PREMIUM_RECEIVED:'.$allocation->id, transactionDate: $receipt->value_date, effectiveDate: $receipt->value_date,
+            entityId: $receipt->entity_id, eventType: $eventType, sourceType: 'receipt_allocation', sourceId: $allocation->id,
+            idempotencyKey: $eventType.':'.$allocation->id, transactionDate: $receipt->value_date, effectiveDate: $receipt->value_date,
             currency: $receipt->currency, payload: $this->receiptPayload($receipt, $allocation->amount_minor) + ['receipt_allocation_id' => $allocation->id],
-            dimensions: PolicyAccountingEvents::dimensions($policy) + ['receipt' => $receipt->id],
+            dimensions: $dimensions,
         );
     }
 

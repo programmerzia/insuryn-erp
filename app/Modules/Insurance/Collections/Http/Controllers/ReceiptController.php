@@ -24,13 +24,13 @@ final class ReceiptController
 
     public function store(Request $request): JsonResponse
     {
-        /** @var array{branch_id: string, party_id?: string|null, channel: string, amount_minor: int, value_date: string, bank_account_id?: string|null, reference?: string|null, allocations?: list<array{installment_id: string, amount_minor: int}>, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null} $data */
+        /** @var array{branch_id: string, party_id?: string|null, channel: string, amount_minor: int, value_date: string, bank_account_id?: string|null, reference?: string|null, allocations?: list<array{installment_id: string, amount_minor: int}>, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null} $data */
         $data = $request->validate([
             'branch_id' => ['required', 'uuid'], 'party_id' => ['nullable', 'uuid'],
             'channel' => ['required', 'in:bank_transfer,cash,cheque,card,mobile_money'], 'amount_minor' => ['required', 'integer', 'min:1'],
             'value_date' => ['required', 'date_format:Y-m-d'], 'bank_account_id' => ['nullable', 'uuid'], 'reference' => ['nullable', 'string', 'max:255'],
             'allocations' => ['sometimes', 'array'], 'allocations.*.installment_id' => ['required', 'uuid'], 'allocations.*.amount_minor' => ['required', 'integer', 'min:1'],
-            'cheque_no' => ['nullable', 'string', 'max:64'], 'cheque_bank' => ['nullable', 'string', 'max:255'], 'cheque_date' => ['nullable', 'date_format:Y-m-d'],
+            'cheque_no' => ['nullable', 'string', 'max:64'], 'cheque_bank' => ['nullable', 'string', 'max:255'], 'cheque_date' => ['nullable', 'date_format:Y-m-d'], 'collected_by_agent_id' => ['nullable', 'uuid'],
         ]);
         $entityId = (string) DB::table('branches')->where('id', $data['branch_id'])->value('entity_id');
         $currency = (string) DB::table('legal_entities')->where('id', $entityId)->value('base_currency');
@@ -38,7 +38,7 @@ final class ReceiptController
 
         $receipt = $this->receipts->record(new RecordReceiptRequest($entityId, $data['branch_id'], $data['party_id'] ?? null, $data['channel'], (int) $data['amount_minor'],
             $currency, CarbonImmutable::parse($data['value_date']), $data['bank_account_id'] ?? null, $data['reference'] ?? null, $allocations,
-            isset($data['cheque_no'], $data['cheque_bank'], $data['cheque_date']) ? new ChequeDetails($data['cheque_no'], $data['cheque_bank'], CarbonImmutable::parse($data['cheque_date'])) : null), self::actor($request));
+            isset($data['cheque_no'], $data['cheque_bank'], $data['cheque_date']) ? new ChequeDetails($data['cheque_no'], $data['cheque_bank'], CarbonImmutable::parse($data['cheque_date'])) : null, $data['collected_by_agent_id'] ?? null), self::actor($request));
 
         return response()->json(['data' => self::present($receipt)], 201);
     }
@@ -54,6 +54,17 @@ final class ReceiptController
         $data = $request->validate(['bounced_on' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000']]);
 
         return response()->json(['data' => self::present($bounces->bounce($receipt, $data['reason'], self::actor($request), CarbonImmutable::parse($data['bounced_on'])))]);
+    }
+
+    public function deposit(Request $request, string $agent, \App\Modules\Insurance\Collections\Application\AgentDepositService $deposits): JsonResponse
+    {
+        /** @var array{amount_minor: int, deposited_on: string, bank_account_id?: string|null, reference?: string|null} $data */
+        $data = $request->validate(['amount_minor' => ['required', 'integer', 'min:1'], 'deposited_on' => ['required', 'date_format:Y-m-d'],
+            'bank_account_id' => ['nullable', 'uuid'], 'reference' => ['nullable', 'string', 'max:255']]);
+        $deposit = $deposits->record($agent, (int) $data['amount_minor'], $data['bank_account_id'] ?? null, $data['reference'] ?? null, self::actor($request), CarbonImmutable::parse($data['deposited_on']));
+
+        return response()->json(['data' => ['id' => $deposit->id, 'number' => $deposit->number, 'agent_id' => $deposit->agent_id, 'amount_minor' => $deposit->amount_minor,
+            'deposited_on' => $deposit->deposited_on->toDateString()]], 201);
     }
 
     public function cheques(Request $request, ChequeRegisterQuery $register, PermissionChecker $permissions): JsonResponse

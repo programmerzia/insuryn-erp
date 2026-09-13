@@ -53,6 +53,7 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::get('receipts/{receipt}', [ReceiptController::class, 'show'])->whereUuid('receipt');
     Route::post('receipts/{receipt}/bounce', [ReceiptController::class, 'bounce'])->whereUuid('receipt');
     Route::get('cheques', [ReceiptController::class, 'cheques']);
+    Route::post('agents/{agent}/deposits', [ReceiptController::class, 'deposit'])->whereUuid('agent');
     Route::get('suspense/ageing', [SuspenseController::class, 'ageing']);
     Route::post('suspense-items/{suspenseItem}/allocate', [SuspenseController::class, 'allocate'])->whereUuid('suspenseItem');
     Route::post('policies/{policy}/refunds', [RefundController::class, 'store'])->whereUuid('policy');
@@ -88,6 +89,7 @@ Route::middleware('auth')->prefix('reports')->group(function (): void {
     Route::get('suspense-ageing', [InsuranceReportController::class, 'suspenseAgeing']);
     Route::get('commission-statement', [InsuranceReportController::class, 'commissionStatement']);
     Route::get('outstanding-claims', [InsuranceReportController::class, 'outstandingClaims']);
+    Route::get('agent-cash', [InsuranceReportController::class, 'agentCash']);
     Route::get('loss-ratio', [InsuranceReportController::class, 'lossRatio']);
     Route::get('claims-paid', [InsuranceReportController::class, 'claimsPaid']);
     Route::get('profit-and-loss', [FinancialReportController::class, 'profitAndLoss']);

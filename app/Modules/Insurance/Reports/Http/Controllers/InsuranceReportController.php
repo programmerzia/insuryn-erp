@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Reports\Http\Controllers;
 
+use App\Modules\Insurance\Collections\Application\AgentCashPositionQuery;
 use App\Modules\Insurance\Reports\Application\ClaimsPaidRegisterQuery;
 use App\Modules\Insurance\Reports\Application\CommissionStatementReport;
 use App\Modules\Insurance\Reports\Application\LossRatioQuery;
@@ -56,6 +57,15 @@ final class InsuranceReportController
         $this->authorize($request, null);
 
         return response()->json(['data' => $statements->statement($data['agent_id'], CarbonImmutable::parse($data['from']), CarbonImmutable::parse($data['to']))]);
+    }
+
+    public function agentCash(Request $request, AgentCashPositionQuery $position): JsonResponse
+    {
+        /** @var array{entity_id: string, as_of: string} $data */
+        $data = $request->validate(['entity_id' => ['required', 'uuid'], 'as_of' => ['required', 'date_format:Y-m-d']]);
+        $this->authorize($request, AuthorizationScope::entity($data['entity_id']));
+
+        return response()->json(['data' => $position->position($data['entity_id'], CarbonImmutable::parse($data['as_of']))]);
     }
 
     public function outstandingClaims(Request $request, OutstandingClaimsQuery $claims): JsonResponse

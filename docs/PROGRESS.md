@@ -49,7 +49,7 @@ code and in the register below, configurable.
 | 1B.3 | Claims reports | done | see git log |
 | 1C.1 | Commission payouts (approve → pay, SoD) | done | see git log |
 | 1C.2 | Cheque register and bounce handling | done | see git log |
-| 1C.3 | Agent cash collection and deposit reconciliation | pending | |
+| 1C.3 | Agent cash collection and deposit reconciliation | done | see git log |
 | 1C.4 | Dunning, grace and auto-lapse | pending | |
 | 1C.5 | Multi-payer policies | pending | |
 | 1C.6 | Hardening: posting/lock race, isolation on every tenant table | pending | |
@@ -692,3 +692,22 @@ Scope: review only; only the critical finding was fixed.
 - Tests `tests/Feature/Insurance/ChequeBounceTest.php`: details and duplicate/re-present; full undo (statuses, installments, three journals, bank and
   suspense GL 0, clean reconciliation before and after the bounce date); commission clawback without double count at cancellation; refusals; register + API.
 - Result: 918 tests green, PHPStan 0 errors.
+
+### 1C.3 — Agent cash collection and deposit reconciliation — done
+- Why: spec §4 "Agent cash collection with deposit reconciliation" was outside the 1A slice list.
+- Migration `2026_09_16_000003_create_agent_cash_tables`: `receipts.collected_by_agent_id` (CHECK: cash only) and `agent_deposits` (tenant + RLS,
+  number `ADP-<FY>-nnnnnn` per branch, amount > 0).
+- New rules + golden fixtures: `AGENT_CASH_COLLECTED` (DR agent_receivable / CR premium_receivable, dims incl. agent = collecting agent, key
+  {receipt_allocation_id}, `02c`), `AGENT_DEPOSIT_RECORDED` (DR bank_main / CR agent_receivable, dims branch + agent, key {agent_deposit_id}, `02d`).
+- `ReceiptService::record` with `collectedByAgentId`: `AGENT_COLLECTION_CASH_ONLY`, `AGENT_COLLECTION_UNALLOCATED` (must be fully allocated — agents
+  collect for known policies, so agent cash never sits in suspense), `UNKNOWN_AGENT`; allocations post AGENT_CASH_COLLECTED instead of PREMIUM_RECEIVED
+  (commission still earned on the allocation; premium subledger unchanged).
+- `AgentDepositService::record(agent, amount, ?bankAccount, ?reference, actor, depositedOn)` (`receipt.create`, interpretation): serialised per agent,
+  `DEPOSIT_EXCEEDS_UNDEPOSITED_CASH`, bank override when named.
+- `AgentCashPositionQuery::position(entity, asOf)`: per agent collected, deposited, undeposited, agent_receivable GL balance for the agent, difference,
+  oldest undeposited collection (deposits settle oldest first) and days held; totals. No `agent` reconciler: design §6.1 classes agent as a
+  subsidiary view — the position's `difference_minor` is the deposit reconciliation.
+- API: receipts `collected_by_agent_id`, `POST /api/insurance/agents/{agent}/deposits`, `GET /api/reports/agent-cash?entity_id&as_of` (`reports.financial`).
+- Tests `tests/Feature/Insurance/AgentCashTest.php`: collection journal (no bank line), refusals, deposit limit and journal with bank override, dated
+  position and totals, clean reconciliations; API permissions.
+- Result: 924 tests green, PHPStan 0 errors.

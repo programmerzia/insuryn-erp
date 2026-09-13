@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $reference
  * @property ReceiptStatus $status
  * @property string|null $created_by
+ * @property string|null $collected_by_agent_id
  * @property string|null $cheque_no
  * @property string|null $cheque_bank
  * @property CarbonImmutable|null $cheque_date
