@@ -117,6 +117,10 @@ Route::middleware('auth')->prefix('admin')->group(function (): void {
     Route::post('approval-limits', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'store']);
     Route::put('approval-limits/{policy}', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'update'])->whereUuid('policy');
     Route::post('approval-limits/{policy}/end', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'end'])->whereUuid('policy');
+    // Phase 3 R5: underwriting limits need underwriting.manage_limits.
+    Route::get('underwriting-limits', [\App\Modules\Insurance\Underwriting\Http\Controllers\UnderwritingLimitsPageController::class, 'index']);
+    Route::post('underwriting-limits', [\App\Modules\Insurance\Underwriting\Http\Controllers\UnderwritingLimitsPageController::class, 'store']);
+    Route::post('underwriting-limits/{limit}/end', [\App\Modules\Insurance\Underwriting\Http\Controllers\UnderwritingLimitsPageController::class, 'end'])->whereUuid('limit');
 });
 
 // Documents (slice R8): template editor with live preview; everything needs document.manage_templates (the controller authorizes).
@@ -176,6 +180,15 @@ Route::middleware('auth')->group(function (): void {
     Route::put('quotations/{quotation}', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'update'])->whereUuid('quotation');
     Route::post('quotations/{quotation}/issue', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'issue'])->whereUuid('quotation');
     Route::post('quotations/{quotation}/decline', [\App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::class, 'decline'])->whereUuid('quotation');
+    // Phase 3 R5: proposals, KYC, documents, underwriting referrals.
+    Route::post('quotations/{quotation}/proposal', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'store'])->whereUuid('quotation');
+    Route::get('proposals/{proposal}', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'show'])->whereUuid('proposal');
+    Route::post('proposals/{proposal}/kyc', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'kyc'])->whereUuid('proposal');
+    Route::post('proposals/{proposal}/submit', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'submit'])->whereUuid('proposal');
+    Route::post('proposals/{proposal}/documents', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'attachDocument'])->whereUuid('proposal');
+    Route::get('proposals/{proposal}/documents/{document}', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'downloadDocument'])->whereUuid(['proposal', 'document']);
+    Route::get('underwriting/referrals', [\App\Modules\Insurance\Underwriting\Http\Controllers\ReferralsPageController::class, 'index']);
+    Route::post('underwriting/referrals/{proposal}/decide', [\App\Modules\Insurance\Underwriting\Http\Controllers\ReferralsPageController::class, 'decide'])->whereUuid('proposal');
 
     Route::get('policies', [PolicyPageController::class, 'index']);
     Route::get('policies/create', [PolicyPageController::class, 'create']);

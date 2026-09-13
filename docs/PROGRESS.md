@@ -157,6 +157,13 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-83 | R4 | No §7.2 template covers quotations: new permission `quotation.create` (rate, save, issue, decline, and in R5 turn into a proposal and record KYC) in the Branch Officer template, so also the Branch Manager; existing tenants' roles get it by migration. The quotation screens open read-only for `policy.create` holders. | `RoleTemplates`, `PermissionsSeeder`, migration `2026_09_24_000001`, `QuotationPageController::AREA`. |
 | A-84 | R4 | Which day a quote is rated on is not specified: the proposed cover start (the tariff and product version in force when cover starts), and cover cannot start before the issue day (`QUOTATION_INCEPTION_IN_PAST`). | `QuotationService::rate` / `issue`. |
 | A-88 | R4, R5 | Which risk fields identify "the same risk" for the duplicate check (design §5) is not specified: motor registration number or chassis number, fire risk address; compared with letters and digits only, upper-cased; values shorter than three characters are ignored. Verify with underwriting. | `config/erp.php` `underwriting.duplicate_keys` (`ASSUMPTION:`), `RiskKeys`. |
+| A-85 | R5 | "Sum insured > limit" per user/role is not specified further: a user's limit for a class is the highest limit among the roles they hold (any scope) on the day; a submitter without one is always referred. A referral goes to the role holding `underwriting.decide` with the smallest limit covering the sum insured; when none covers it, anyone deciding referrals may take it but only decline it (approving always needs the decider's own limit to cover the sum insured). An approval policy for `proposal_referral` that matches the sum insured takes precedence. | `UnderwritingLimits::limitFor` / `rolesCovering`, `ProposalService::referralStep`, `UnderwritingDecisions::completeApproval`. |
+| A-86 | R5 | No §7.2 template decides underwriting referrals: new permission `underwriting.decide` (approve, approve with a loading, decline; waive KYC) for the Branch Manager, Finance Manager and CFO templates, always within their underwriting limit; SoD object rule `quotation.create` ✕ `underwriting.decide` (whoever prepared a proposal — created it, recorded KYC, submitted it — does not decide it), on top of the engine's maker ≠ checker. | `RoleTemplates`, `PermissionsSeeder` (`SOD8`), migration `2026_09_24_000002`. |
+| A-87 | R5 | Who sets underwriting limits is not specified: new permission `underwriting.manage_limits`, Tenant Admin template (like approval limits, A-54). | `UnderwritingLimits::PERMISSION`, Admin → Underwriting limits. |
+| A-89 | R5 | Which risk flags refer a proposal (design "risk flags") is not specified: motor vehicle older than 15 years (from the year of manufacture to the submission year); fire construction class 3. Rules available: above, below, age_above, in. Verify with underwriting. | `config/erp.php` `underwriting.risk_flags` (`ASSUMPTION:`), `UnderwritingRules::riskFlags`. |
+| A-90 | R5 | Underwriting limits are unknown (design §5): placeholder defaults, seeded only in the demo tenants with `verify = true` — branch officer motor 2,000,000.00 / fire 5,000,000.00 / marine cargo 2,000,000.00 / misc 1,000,000.00; branch manager 10,000,000.00 / 25,000,000.00 / 10,000,000.00 / 5,000,000.00; finance manager 50,000,000.00 each; CFO 250,000,000.00 each. No limits in a new tenant, so every proposal is referred until they are set. | `UnderwritingLimits::DEFAULTS`, `acceptDefaults`, `DemoBusinessSeeder`, `PartADemoSeeder`. |
+| A-91 | R5 | The form of a "manual loading" is not specified: a percentage loading only (no manual discount), 0.01 % to 100.00 %, with a reason; applied after the plan's premium steps and the product minimum, before rounding and duties, on the quotation's rating and plan version. | `ManualLoading`, `RatingCalculator`, `RatingEngine::rerate`. |
+| A-92 | R5 | KYC on a proposal is not specified: an officer (`quotation.create`) records the identity document type (NID, passport, birth certificate, trade licence, TIN) and number, or an underwriter (`underwriting.decide`) waives it with a reason; only while the proposal is a draft; pending KYC refers the proposal, verified or waived passes. Proposal documents may be attached by `quotation.create` or `underwriting.decide` holders on the branch. | `config/erp.php` `underwriting.kyc_id_types` (`ASSUMPTION:`), `ProposalService::verifyKyc` / `waiveKyc`, `ProposalPageController::ATTACH_DOCUMENTS`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -2103,3 +2110,55 @@ Scope: review only; only the critical finding was fixed.
   decline; producer eligibility recorded; permissions and role templates; queue and workbench props), `resources/js/tests/risk-form.test.ts` (6).
 
 - Result: 1,210 Pest tests green, PHPStan 0 errors, Vitest (287) and vue-tsc green.
+
+### R5 — Proposal and underwriting — done
+- Phase 3 design §2 step 2 and §5. Module `App\Modules\Insurance\Underwriting`. Migration `2026_09_24_000002_create_proposals_and_underwriting`:
+  - `proposals` (tenant, forced RLS): one per quotation (unique), number, entity/branch, product and version, class, customer, producer, cover start, risk inputs and
+    `risk_keys`, `rating_result` (the quotation's frozen result, or re-rated with a loading), plan code and version, sum insured / net / duties / gross, status
+    `draft|submitted|approved|declined|issued`, KYC (`pending|verified|waived`, document type and number, recorded by/at, waiver reason), `underwriting_status`
+    (`auto_approved|referred|approved|declined`), `referral_reasons` (list of {code, detail}), `approval_id`, manual loading bp / reason / by, submitted by/at, decided by/at,
+    decision reason, `policy_id` and issued at (R7). CHECKs: statuses, KYC completeness, loading 1–10,000 bp with a reason, decided statuses, issued has a policy.
+  - `underwriting_limits` (tenant, forced RLS): role code, class, largest sum insured (minor), effective dates, `verify`; exclusion constraint: no overlap per role and class.
+  - `approvals.steps` (jsonb) with `policy_id` now optional (D-31).
+  - Permissions `underwriting.decide` (branch manager, finance manager, CFO) and `underwriting.manage_limits` (tenant admin) for existing tenants; SoD object rule
+    `quotation.create` ✕ `underwriting.decide` (`SOD8` in new tenants).
+- `ProposalService`: `createFromQuotation` (issued quotation within validity → converted, proposal numbered `PRP-<branch>-<fy>-<seq>`, one transaction), `verifyKyc` /
+  `waiveKyc` (drafts only; `KYC_INVALID`, `REASON_REQUIRED`, `PROPOSAL_NOT_DRAFT`), `submit` (UnderwritingRules → approved automatically, or referred with every reason and an
+  approval request), and the **R7 hooks** `approvedForIssue(proposalId): ApprovedProposal` (parties, product version, cover start, risk, `RatingResult` to freeze, manual
+  loading and its reason as `specialTerms`, active cover note — filled in R6; `PROPOSAL_NOT_APPROVED`) and `markIssued(proposalId, policyId, actor)` (inside the policy issue
+  transaction; approved → issued).
+- `UnderwritingRules::evaluate` (A-85, A-88, A-89, A-92): `SUM_INSURED_ABOVE_LIMIT`, `PRODUCER_INELIGIBLE` (LicenceRegistry on the day), `RISK_FLAG` (configured flags),
+  `DUPLICATE_RISK` (the same normalised registration / chassis / address on another issued quotation, a draft, submitted or approved proposal, or an issued proposal whose policy
+  is issued or active and not expired — `jsonb_exists_any` on `risk_keys`; R7/R9 hook: policies issued without a proposal must carry risk keys to be found), `KYC_NOT_VERIFIED`.
+- `UnderwritingLimits`: `limitFor(user, class, day)`, `rolesCovering(class, sumInsured, day, ?holding)`, `all`, `set` (from today or later, ends the limit in force that day;
+  `UNDERWRITING_LIMIT_OVERLAP`, `UNDERWRITING_LIMIT_INVALID`), `end`, `acceptDefaults` (A-90); audited `underwriting_limit.set|ended`.
+- `UnderwritingDecisions::decide(proposal, Decision, ?loadingBp, ?reason, decider)`: `underwriting.decide` on the branch, the pending `proposal_referral` approval
+  (`PROPOSAL_NOT_REFERRED`), optional manual loading applied first in the same transaction (`RatingEngine::rerate` on the quotation's result, D-32; reason mandatory,
+  audited `proposal.loading_applied` with before/after premium), then `ApprovalService::decide`. `ProposalReferralApprovalHandler` completes it: approval needs the decider's
+  own limit (`UNDERWRITING_LIMIT_EXCEEDED`, nothing changes) and SoD on the proposal; decline records the reason. The inbox shows referrals ("Underwriting referral PRP-…").
+- `ApprovalService::requestWithSteps` and steps read from the approval (engine and inbox), D-31. Config `approvals.object_types.proposal_referral` (so a policy can be set on
+  Admin → Approval limits).
+- Rating: `ManualLoading` (1–10,000 bp, reason; `MANUAL_LOADING_INVALID`, `LOADING_REASON_REQUIRED`), `RatingRequest::manualLoading`, calculator step after the product
+  minimum and before rounding, `RatingEngine::rerate` (D-32).
+- HTTP: `POST /quotations/{id}/proposal`, `GET /proposals/{id}`, `POST /proposals/{id}/kyc` (verify | waive), `POST /proposals/{id}/submit`, `POST|GET /proposals/{id}/documents…`
+  (DocumentStore, object type `proposal`), `GET /underwriting/referrals`, `POST /underwriting/referrals/{id}/decide` (approve | approve_with_loading with `loading_percent` |
+  decline), `GET|POST /admin/underwriting-limits`, `POST /admin/underwriting-limits/{id}/end`.
+- UI: sidebar **Referrals** (primary, after Quotes, `underwriting.decide`) and **Underwriting limits** (secondary, `underwriting.manage_limits`). `pages/proposals/Show.vue`
+  (ObjectPage: underwriting outcome and reasons, special terms, KYC, risk with EN/BN labels, premium breakdown; Verify identity / Waive KYC / Submit to underwriting; Documents,
+  Timeline, Audit tabs), `pages/underwriting/Referrals.vue` (QueueView, waiting first; inspector with reasons, risk, breakdown; Approve / Approve with loading / Decline drawers;
+  a note when the user may not decide), `pages/admin/underwriting-limits/Index.vue`, `components/rating/RatingBreakdown.vue` (shared by the workbench, proposal and referrals),
+  `lib/proposals.ts`. The quote workbench gains *Customer accepts: make proposal* and *Open proposal* (`can.convert`, `quotation.proposal_id`).
+- Demo data: `DemoBusinessSeeder` and `PartADemoSeeder` set the placeholder underwriting limits (verify).
+- Shared file changes: `ApprovalService`, `ApprovalInboxQuery`, `RatingEngine`, `RatingCalculator`, `RatingRequest`, `config/erp.php` (`approvals.object_types`, `underwriting.risk_flags`,
+  `underwriting.kyc_id_types`), `RoleTemplates`, `PermissionsSeeder` (2 permissions, SoD row 8), `InsuranceServiceProvider`, `routes/web.php`, `lib/navigation.ts`,
+  `QuotationPageController` / `Workbench.vue`, both demo seeders, `TenantIsolationEveryTableTest` (a proposal and an underwriting limit).
+- Test changes: `PermissionsTest` and `RoleAdministrationTest` expect `underwriting.manage_limits` in the Tenant Admin template (exact lists kept); `QuotationWorkbenchTest` expects the new `can.convert` flag.
+- Placeholder values to verify: underwriting limits (A-90), risk flags (A-89), KYC document types (A-92), duplicate keys (A-88).
+- Not done, and why: no role is protected from deletion while an underwriting limit names it (approval policies are; small follow-up); no proposals list besides the referral queue and
+  the quotation link; sanctions / blacklist check is LATER (design §5).
+- Tests: `tests/Feature/Underwriting/ProposalUnderwritingTest.php` (7: auto-approval and R7 hooks; each referral reason incl. normalised duplicates and a declined proposal no longer
+  counting; limits by role, class, sum insured and dates; engine decisions with role step, SoD on the proposal, maker ≠ checker, an approval policy, the decider's limit and decline;
+  loading re-rated on the original tariff and audited; KYC verify / waive; proposal page, referral queue, decide endpoint, limits screen, documents, role templates),
+  `tests/Feature/Insurance/RatingRerateTest.php` (3: identical re-rate after a tariff change; loading worked by hand, gross 34,006.05; refusals).
+
+- Result: 1,220 Pest tests green, PHPStan 0 errors, Vitest (294) and vue-tsc green.

@@ -7,6 +7,7 @@ namespace App\Modules\Insurance\Rating\Application;
 use App\Modules\Insurance\Product\Domain\Models\Coverage;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Insurance\Rating\Domain\Enums\RatingPlanStatus;
+use App\Modules\Insurance\Rating\Domain\ManualLoading;
 use App\Modules\Insurance\Rating\Domain\Models\RatingPlan;
 use App\Modules\Insurance\Rating\Domain\RatingCalculator;
 use App\Modules\Insurance\Rating\Domain\RatingFailed;
@@ -58,6 +59,44 @@ final class RatingEngine
             productMinimumMinor: $version->min_premium_minor,
             productVersionId: $version->id,
         ));
+    }
+
+    /**
+     * Slice R5 (DECISION D-32): rates a stored result again on its own plan version, product version, date, risk inputs and coverages — whatever plan is active
+     * now — optionally with an underwriter's manual loading. Without a loading the result is identical (rating is deterministic and approved plans are immutable).
+     * R7 reuses it for endorsement re-rating on the original plan version.
+     *
+     * @throws RatingFailed RATING_PLAN_NOT_FOUND (a result without a plan id, or a plan still in draft) and every calculation failure
+     */
+    public function rerate(RatingResult $original, ?ManualLoading $manualLoading = null): RatingResult
+    {
+        $plan = $original->plan['id'] === null ? null : RatingPlan::query()->whereKey($original->plan['id'])->first();
+        if ($plan === null || $plan->status === RatingPlanStatus::Draft) {
+            throw new RatingFailed('RATING_PLAN_NOT_FOUND', "The rating plan {$original->plan['code']} v{$original->plan['version']} of this result is not on record.");
+        }
+        $version = ProductVersion::query()->whereKey((string) $original->productVersionId)->firstOrFail();
+        $asOf = CarbonImmutable::parse($original->asOf);
+
+        return $this->calculator->calculate(new RatingRequest(
+            plan: $this->plans->definition($plan),
+            schema: $version->riskSchema(),
+            riskInputs: $original->riskInputs,
+            asOf: $original->asOf,
+            coverages: $this->coverages($version),
+            chosenCoverages: $original->coverages,
+            duties: $this->duties->inForce($plan->class_code, $asOf),
+            dutyProfile: $version->dutyProfile(),
+            productMinimumMinor: $version->min_premium_minor,
+            productVersionId: $version->id,
+            manualLoading: $manualLoading,
+        ));
+    }
+
+    /** @return list<array{code: string, name_en: string, name_bn: string, mandatory: bool}> */
+    private function coverages(ProductVersion $version): array
+    {
+        return array_values(Coverage::query()->where('product_version_id', $version->id)->orderBy('sort_order')->orderBy('code')->get()
+            ->map(fn (Coverage $c): array => ['code' => $c->code, 'name_en' => $c->name_en, 'name_bn' => $c->name_bn, 'mandatory' => $c->mandatory])->all());
     }
 
     private function plan(ProductVersion $version, string $classCode, CarbonImmutable $asOf): RatingPlan

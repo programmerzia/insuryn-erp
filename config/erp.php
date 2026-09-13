@@ -36,6 +36,8 @@ return [
             'journal_reversal' => ['label' => 'Journal reversal', 'permission' => 'accounting.approve_journal'],
             'claim_reopen' => ['label' => 'Claim reopening', 'permission' => 'claim.approve'],
             'fiscal_period_reopen' => ['label' => 'Period reopening', 'permission' => 'periods.reopen'],
+            // Slice R5: underwriting referrals by sum insured. Without a policy, the referral goes to the role whose underwriting limit covers it (D-31).
+            'proposal_referral' => ['label' => 'Underwriting referral', 'permission' => 'underwriting.decide'],
         ],
     ],
     // Phase 3 slice R4 quotations. ASSUMPTION: A-80 — "valid 15 days": the issue day and the 14 days after it; the quotation expires the day after.
@@ -48,6 +50,14 @@ return [
             'motor' => ['registration_no', 'chassis_no'],
             'fire' => ['address'],
         ],
+        // ASSUMPTION: A-89 — risk flags that refer a proposal to an underwriter (design §2 "risk flags"), per class. Rules: above / below a number,
+        // age_above (years from a year field to the day of submission), in (a list of option values). Conservative placeholders: verify with underwriting.
+        'risk_flags' => [
+            'motor' => [['field' => 'year_of_manufacture', 'rule' => 'age_above', 'value' => 15, 'label' => 'Vehicle older than 15 years']],
+            'fire' => [['field' => 'construction_class', 'rule' => 'in', 'value' => ['class_3'], 'label' => 'Construction class 3 (tin or wood)']],
+        ],
+        // ASSUMPTION: A-92 — identity documents accepted for KYC on a proposal.
+        'kyc_id_types' => ['nid', 'passport', 'birth_certificate', 'trade_licence', 'tin'],
     ],
     'setup' => [
         // Session S1 setup wizard: the jurisdiction a first product's premium tax (VAT) is recorded under, and the template offered first.

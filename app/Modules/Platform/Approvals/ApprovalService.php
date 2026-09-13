@@ -67,6 +67,29 @@ final class ApprovalService
         return $approvalId;
     }
 
+    /**
+     * DECISION D-31 (slice R5): starts an approval whose steps the requesting module works out itself (an underwriting referral goes to the role whose
+     * underwriting limit covers the sum insured) instead of an approval policy. The steps are kept on the approval; deciding follows exactly the same rules.
+     *
+     * @param list<array{permission: string, role: string|null}> $steps
+     * @param array<string, mixed> $context
+     *
+     * @throws ApprovalException INVALID_POLICY when there is no step or a step has no permission
+     */
+    public function requestWithSteps(string $objectType, string $objectId, array $steps, string $requestedBy, array $context = []): string
+    {
+        $json = json_encode($steps, JSON_THROW_ON_ERROR);
+        $this->parseSteps($json, "for {$objectType} {$objectId}");
+        $approvalId = (string) Str::uuid7();
+        DB::table('approvals')->insert([
+            'id' => $approvalId, 'tenant_id' => TenantContext::id(), 'object_type' => $objectType, 'object_id' => $objectId, 'policy_id' => null, 'steps' => $json,
+            'status' => ApprovalStatus::Pending->value, 'current_step' => 1, 'requested_by' => $requestedBy, 'requested_at' => CarbonImmutable::now(),
+            'context' => json_encode($context, JSON_THROW_ON_ERROR),
+        ]);
+
+        return $approvalId;
+    }
+
     public function pendingFor(string $objectType, string $objectId): ?string
     {
         $id = DB::table('approvals')->where('object_type', $objectType)->where('object_id', $objectId)
@@ -83,13 +106,13 @@ final class ApprovalService
     public function decide(string $approvalId, string $deciderId, Decision $decision, ?string $reason): ApprovalStatus
     {
         return DB::transaction(function () use ($approvalId, $deciderId, $decision, $reason): ApprovalStatus {
-            /** @var object{id: string, object_type: string, object_id: string, policy_id: string, status: string, current_step: int, requested_by: string, context: string|null}|null $approval */
+            /** @var object{id: string, object_type: string, object_id: string, policy_id: string|null, steps: string|null, status: string, current_step: int, requested_by: string, context: string|null}|null $approval */
             $approval = DB::table('approvals')->where('id', $approvalId)->lockForUpdate()->first();
             if ($approval === null || $approval->status !== ApprovalStatus::Pending->value) {
                 throw new ApprovalException('NOT_PENDING', "Approval {$approvalId} is not pending.");
             }
             $subject = AuditSubject::of((string) $approval->object_type, (string) $approval->object_id);
-            $steps = $this->steps((string) $approval->policy_id);
+            $steps = $approval->steps !== null ? $this->parseSteps((string) $approval->steps, "on approval {$approvalId}") : $this->steps((string) $approval->policy_id);
             $stepNo = (int) $approval->current_step;
             $step = $steps[$stepNo - 1] ?? throw new ApprovalException('INVALID_POLICY', "Approval {$approvalId} has no step {$stepNo}.");
             $permission = $step['permission'];

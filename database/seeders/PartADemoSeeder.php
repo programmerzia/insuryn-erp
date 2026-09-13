@@ -110,6 +110,9 @@ final class PartADemoSeeder extends Seeder
             // next claim payment from 500,000 routes to the finance manager and then the CFO.
             TenantContext::run($context['tenant_id'], fn (): int => app(ApprovalPolicyService::class)->acceptDefaults(CarbonImmutable::today(),
                 (string) DB::table('users')->where('email', "admin@{$slug}.local")->value('id')));
+            // Phase 3 R5: placeholder underwriting limits (A-90, flagged verify).
+            TenantContext::run($context['tenant_id'], fn (): int => app(\App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->acceptDefaults(CarbonImmutable::today(),
+                (string) DB::table('users')->where('email', "admin@{$slug}.local")->value('id')));
         });
         dispatch_sync(new OutboxRelayJob());
 

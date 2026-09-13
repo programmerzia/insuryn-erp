@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound } from 'lucide-vue-next';
+import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -26,6 +26,7 @@ const claims = ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_r
 export const navigation: NavItem[] = [
     { id: 'home', page: 'home/Index', label: 'Home', href: '/home', icon: House, any: [] },
     { id: 'quotes', detail: 'quotations/Workbench', page: 'quotations/Index', label: 'Quotes', href: '/quotations', icon: Calculator, any: ['quotation.create', 'policy.create'] },
+    { id: 'referrals', detail: 'proposals/Show', page: 'underwriting/Referrals', label: 'Referrals', href: '/underwriting/referrals', icon: ClipboardCheck, any: ['underwriting.decide'] },
     { id: 'policies', detail: 'policies/Show', page: 'policies/Index', label: 'Policies', href: '/policies', icon: FileText, any: ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', reader], badge: 'policies' },
     { id: 'receipts', detail: 'receipts/Show', page: 'receipts/Index', label: 'Receipts', href: '/receipts', icon: Banknote, any: collections, badge: 'receipts' },
     { id: 'suspense', page: 'suspense/Index', label: 'Suspense', href: '/suspense', icon: Inbox, any: collections, badge: 'suspense' },
@@ -56,6 +57,7 @@ export const navigation: NavItem[] = [
     { id: 'users', detail: 'admin/users/Show', page: 'admin/users/Index', label: 'Users', href: '/admin/users', icon: UserCog, any: ['platform.manage_users'], secondary: true },
     { id: 'roles', detail: 'admin/roles/Show', page: 'admin/roles/Index', label: 'Roles', href: '/admin/roles', icon: KeyRound, any: ['platform.manage_roles'], secondary: true },
     { id: 'document-templates', detail: 'documents/templates/Edit', page: 'documents/templates/Index', label: 'Templates', href: '/documents/templates', icon: FileType, any: ['document.manage_templates'], secondary: true },
+    { id: 'underwriting-limits', page: 'admin/underwriting-limits/Index', label: 'Underwriting limits', href: '/admin/underwriting-limits', icon: Gauge, any: ['underwriting.manage_limits'], secondary: true },
     { id: 'approval-limits', page: 'admin/approval-limits/Index', label: 'Approval limits', href: '/admin/approval-limits', icon: ListChecks, any: ['platform.manage_approvals'], secondary: true },
 ];
 

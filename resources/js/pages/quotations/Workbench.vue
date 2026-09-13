@@ -7,16 +7,17 @@ import LookupInput, { type LookupResult } from '@/components/forms/LookupInput.v
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
+import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { confirmAction } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
 import { HttpError, requestJson } from '@/lib/http';
-import { formatMinor } from '@/lib/money';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import {
-    breakdown, type FormValues, formFields, initialValues, localProblems, problemMessage, type ProductVersionOption, ratingKey, type RatingResultData, riskInputs, versionOn,
+    type FormValues, formFields, initialValues, localProblems, problemMessage, type ProductVersionOption, ratingKey, type RatingResultData, riskInputs, versionOn,
 } from '@/lib/riskForm';
 import type { SharedProps } from '@/types/shared';
 
@@ -29,11 +30,11 @@ interface Product { id: string; code: string; name: string; versions: ProductVer
 interface QuotationData {
     id: string; number: string | null; status: string; branch_id: string; product_id: string; product_version_id: string; inception: string; valid_until: string | null;
     customer: LookupResult | null; producer: LookupResult | null; risk_inputs: Record<string, unknown>; coverages: string[]; rating_result: RatingResultData | null;
-    producer_eligible: boolean | null; producer_eligibility_note: string | null; decline_reason: string | null; issued_at: string | null;
+    producer_eligible: boolean | null; producer_eligibility_note: string | null; decline_reason: string | null; issued_at: string | null; proposal_id: string | null;
 }
 const props = defineProps<{
     quotation: QuotationData | null; products: Product[]; branches: { id: string; code: string; name: string }[]; currency: string; today: string; validDays: number;
-    can: { edit: boolean; issue: boolean; decline: boolean };
+    can: { edit: boolean; issue: boolean; decline: boolean; convert: boolean };
 }>();
 
 const page = usePage<SharedProps>();
@@ -123,8 +124,6 @@ function set(key: string, value: string | undefined): void {
     values.value = { ...values.value, [key]: value ?? '' };
     touched.value = true;
 }
-const lines = computed(() => (result.value ? breakdown(result.value, locale.value) : []));
-const money = (minor: number) => formatMinor(BigInt(minor));
 const errorFor = (key: string) => serverErrors.value[key] ?? problems.value[key];
 const formErrors = computed(() => page.props.errors as Record<string, string>);
 
@@ -143,6 +142,11 @@ const declineForm = useForm({ reason: '' });
 function decline(): void {
     if (q) declineForm.post(`/quotations/${q.id}/decline`, { preserveScroll: true, onSuccess: () => (declineOpen.value = false) });
 }
+async function makeProposal(): Promise<void> {
+    if (q && (await confirmAction({ title: `Make a proposal from ${q.number}?`, body: 'The customer accepts this quotation. The proposal keeps its premium; KYC, documents and underwriting follow.', confirmLabel: 'Make proposal' }))) {
+        router.post(`/quotations/${q.id}/proposal`, {}, { preserveScroll: true });
+    }
+}
 const title = computed(() => q?.number ?? (q ? 'Draft quotation' : 'New quote'));
 const validUntil = computed(() => q?.valid_until ?? null);
 </script>
@@ -160,6 +164,8 @@ const validUntil = computed(() => q?.valid_until ?? null);
                     <Button v-if="can.edit" variant="secondary" :disabled="saving || !state.product_id" @click="save('save')">Save draft</Button>
                     <Button v-if="can.issue" :disabled="saving || !result" @click="save('issue')">Issue quotation</Button>
                     <Button v-if="can.decline" variant="ghost" @click="declineOpen = true">Decline</Button>
+                    <Button v-if="can.convert" @click="makeProposal">Customer accepts: make proposal</Button>
+                    <Link v-if="q?.proposal_id" :href="`/proposals/${q.proposal_id}`" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Open proposal</Link>
                 </div>
             </div>
             <p v-if="formErrors.form" class="mb-4 border-l-2 border-danger pl-3 text-ui text-danger" role="alert">{{ formErrors.form }}</p>
@@ -222,21 +228,7 @@ const validUntil = computed(() => q?.valid_until ?? null);
                     <p v-else-if="ratingProblem" class="text-ui text-danger" role="alert">{{ ratingProblem }}</p>
                     <p v-else-if="!result" class="text-ui text-ink-2">Complete the risk details to see the premium.</p>
                     <template v-else>
-                        <table class="w-full text-ui" :class="{ 'opacity-60': rating }">
-                            <tbody>
-                                <tr v-for="line in lines" :key="line.code" class="border-b border-line">
-                                    <td class="py-1 pr-2">{{ line.label }}</td>
-                                    <td class="py-1 text-right tabular-nums">{{ line.amount }}</td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr><td class="pt-2 pr-2 text-ink-2">Net premium</td><td class="pt-2 text-right tabular-nums">{{ money(result.net_premium_minor) }}</td></tr>
-                                <tr><td class="pr-2 text-ink-2">Duties and VAT</td><td class="text-right tabular-nums">{{ money(result.duties_total_minor) }}</td></tr>
-                                <tr class="font-semibold"><td class="pt-1 pr-2">Gross premium ({{ result.currency }})</td><td class="pt-1 text-right tabular-nums">{{ money(result.gross_premium_minor) }}</td></tr>
-                            </tfoot>
-                        </table>
-                        <p class="mt-3 text-dense text-ink-2">Tariff {{ result.plan.code }} version {{ result.plan.version }}, rated for {{ formatDate(result.as_of) }}.</p>
-                        <p v-if="result.verify" class="mt-1 text-dense text-warn">Duty rates are placeholders to verify.</p>
+                        <RatingBreakdown :result="result" :locale="locale" :dimmed="rating" />
                         <p v-if="!q || q.status === 'draft'" class="mt-1 text-dense text-ink-2">Issuing keeps this premium for {{ validDays }} days.</p>
                     </template>
                 </aside>

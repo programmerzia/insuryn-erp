@@ -32,5 +32,6 @@ final readonly class RatingRequest
         public ?DutyProfile $dutyProfile = null,
         public ?int $productMinimumMinor = null,
         public ?string $productVersionId = null,
+        public ?ManualLoading $manualLoading = null,
     ) {}
 }

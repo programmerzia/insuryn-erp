@@ -29,6 +29,8 @@ final class PermissionsSeeder extends Seeder
         'document.generate','document.manage_templates',
         // Phase 3 quotations (slice R4, A-83)
         'quotation.create',
+        // Phase 3 underwriting (slice R5, A-86, A-87)
+        'underwriting.decide','underwriting.manage_limits',
     ];
 
     /**
@@ -43,6 +45,7 @@ final class PermissionsSeeder extends Seeder
         ['commission.approve', 'commission.pay', 'user'],
         ['platform.manage_roles', 'accounting.*', 'user'],
         ['rating.manage_plans', 'rating.approve_plans', 'object'], // slice R2: whoever drafted or edited a rating plan does not approve it
+        ['quotation.create', 'underwriting.decide', 'object'], // slice R5: whoever prepared a proposal does not decide its referral
     ];
 
     public function run(): void

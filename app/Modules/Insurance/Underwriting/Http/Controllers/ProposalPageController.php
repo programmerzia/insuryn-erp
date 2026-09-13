@@ -1,0 +1,183 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Insurance\Underwriting\Http\Controllers;
+
+use App\Http\Pages\ObjectDocuments;
+use App\Http\Pages\ObjectHistory;
+use App\Http\Pages\PageSupport;
+use App\Modules\Insurance\Product\Domain\Enums\RiskFieldType;
+use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
+use App\Modules\Insurance\Quotation\Application\QuotationService;
+use App\Modules\Insurance\Underwriting\Application\ProposalService;
+use App\Modules\Insurance\Underwriting\Application\UnderwritingDecisions;
+use App\Modules\Insurance\Underwriting\Domain\Enums\KycStatus;
+use App\Modules\Insurance\Underwriting\Domain\Enums\ProposalStatus;
+use App\Modules\Insurance\Underwriting\Domain\Models\Proposal;
+use App\Modules\Platform\Authorization\AuthorizationScope;
+use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Authorization\PermissionDenied;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * Proposal page (slice R5, UX brief §6.2 object page): terms and premium, KYC, underwriting outcome and reasons, documents, timeline and audit. Actions: make a
+ * proposal from an issued quotation, verify or waive KYC, submit to underwriting, attach documents.
+ */
+final class ProposalPageController
+{
+    /** People who prepare proposals, decide referrals, and read-only quote policies. */
+    public const AREA = [QuotationService::PERMISSION, UnderwritingDecisions::PERMISSION, 'policy.create'];
+
+    /** ASSUMPTION: A-92 — who may attach proposal documents: whoever prepares it (quotation.create) or decides it (underwriting.decide), on its branch. */
+    public const ATTACH_DOCUMENTS = [QuotationService::PERMISSION, UnderwritingDecisions::PERMISSION];
+
+    public function __construct(
+        private readonly ProposalService $proposals,
+        private readonly PermissionChecker $permissions,
+    ) {}
+
+    public function store(Request $request, string $quotation): RedirectResponse
+    {
+        $proposal = $this->proposals->createFromQuotation($quotation, PageSupport::actor($request));
+
+        return redirect("/proposals/{$proposal->id}")->with('status', "Proposal {$proposal->number} created.");
+    }
+
+    public function show(Request $request, string $proposal, ObjectHistory $history, ObjectDocuments $documents): Response
+    {
+        $actor = PageSupport::actor($request);
+        self::authorizeArea($this->permissions, $actor, self::AREA);
+        $model = Proposal::query()->findOrFail($proposal);
+        $can = fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id));
+        $draft = $model->status === ProposalStatus::Draft;
+        $subjects = [['proposal', $model->id]];
+
+        return Inertia::render('proposals/Show', [
+            'proposal' => self::present($model),
+            'risk' => self::risk($model),
+            'kycIdTypes' => array_map(fn (string $t): array => ['value' => $t, 'label' => self::idTypeLabel($t)], (array) config('erp.underwriting.kyc_id_types', [])),
+            'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/proposals/{$model->id}/documents" : null,
+            'can' => [
+                'verify_kyc' => $draft && $can(QuotationService::PERMISSION),
+                'waive_kyc' => $draft && $model->kyc_status === KycStatus::Pending && $can(UnderwritingDecisions::PERMISSION),
+                'submit' => $draft && $can(QuotationService::PERMISSION),
+                'decide' => $model->status === ProposalStatus::Submitted && $can(UnderwritingDecisions::PERMISSION),
+            ],
+            'timeline' => $history->timeline($subjects),
+            'accounting' => Inertia::defer(fn (): array => [], 'history'),
+            'audit' => Inertia::defer(fn (): array => $history->audit($subjects), 'history'),
+            'documents' => Inertia::defer(fn (): array => $documents->forPage('proposal', $model->id, "/proposals/{$model->id}"), 'history'),
+        ]);
+    }
+
+    public function kyc(Request $request, string $proposal): RedirectResponse
+    {
+        /** @var array{action: string, id_type?: string|null, id_number?: string|null, reason?: string|null} $data */
+        $data = $request->validate(['action' => ['required', Rule::in(['verify', 'waive'])], 'id_type' => ['required_if:action,verify', 'nullable', 'string', 'max:32'],
+            'id_number' => ['required_if:action,verify', 'nullable', 'string', 'max:64'], 'reason' => ['required_if:action,waive', 'nullable', 'string', 'max:1000']]);
+        $actor = PageSupport::actor($request);
+        if ($data['action'] === 'verify') {
+            $this->proposals->verifyKyc($proposal, (string) ($data['id_type'] ?? ''), (string) ($data['id_number'] ?? ''), $actor);
+        } else {
+            $this->proposals->waiveKyc($proposal, (string) ($data['reason'] ?? ''), $actor);
+        }
+
+        return redirect("/proposals/{$proposal}")->with('status', $data['action'] === 'verify' ? 'Identity verified.' : 'KYC waived.');
+    }
+
+    public function submit(Request $request, string $proposal): RedirectResponse
+    {
+        $submitted = $this->proposals->submit($proposal, PageSupport::actor($request));
+
+        return redirect("/proposals/{$proposal}")->with('status', $submitted->status === ProposalStatus::Approved ? 'Proposal approved: no referral needed.' : 'Proposal referred to underwriting.');
+    }
+
+    public function attachDocument(Request $request, string $proposal, ObjectDocuments $documents): RedirectResponse
+    {
+        $model = Proposal::query()->findOrFail($proposal);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::ATTACH_DOCUMENTS, AuthorizationScope::branch($model->entity_id, $model->branch_id));
+
+        return $documents->attach($request, 'proposal', $model->id, "/proposals/{$model->id}");
+    }
+
+    public function downloadDocument(Request $request, string $proposal, string $document, ObjectDocuments $documents): StreamedResponse
+    {
+        self::authorizeArea($this->permissions, PageSupport::actor($request), self::AREA);
+        $model = Proposal::query()->findOrFail($proposal);
+
+        return $documents->download($request, 'proposal', $model->id, $document);
+    }
+
+    /**
+     * Opens for holders of any of the permissions in any scope (branch-scoped roles); actions check the proposal's branch.
+     *
+     * @param list<string> $permissions
+     */
+    public static function authorizeArea(PermissionChecker $checker, string $actor, array $permissions): void
+    {
+        if (array_intersect($permissions, $checker->permissionsOf($actor)) === []) {
+            throw new PermissionDenied($actor, implode('|', $permissions));
+        }
+    }
+
+    /** @return array<string, mixed> */
+    public static function present(Proposal $proposal): array
+    {
+        $names = DB::table('users')->whereIn('id', array_filter([$proposal->submitted_by, $proposal->decided_by, $proposal->kyc_verified_by, $proposal->manual_loading_by]))->pluck('name', 'id');
+        $producer = $proposal->producer_id === null ? null : DB::table('producers')->where('id', $proposal->producer_id)->value('code');
+        $money = fn (int $minor): string => PageSupport::money($minor, $proposal->currency);
+
+        return [
+            'id' => $proposal->id, 'number' => $proposal->number, 'status' => $proposal->status->value, 'underwriting_status' => $proposal->underwriting_status?->value,
+            'quotation' => ['id' => $proposal->quotation_id, 'number' => (string) DB::table('quotations')->where('id', $proposal->quotation_id)->value('number')],
+            'customer' => (string) DB::table('parties')->where('id', $proposal->customer_party_id)->value('display_name'),
+            'producer' => $producer === null ? null : (string) $producer,
+            'product' => (string) DB::table('products')->where('id', $proposal->product_id)->value('code'), 'class_code' => $proposal->class_code,
+            'inception' => $proposal->inception->toDateString(), 'currency' => $proposal->currency,
+            'sum_insured' => $money($proposal->sum_insured_minor), 'net_premium' => $money($proposal->net_premium_minor), 'duties' => $money($proposal->duties_minor),
+            'gross_premium' => $money($proposal->gross_premium_minor), 'rating_result' => $proposal->ratingResult()->toArray(),
+            'kyc_status' => $proposal->kyc_status->value, 'kyc_id_type' => $proposal->kyc_id_type === null ? null : self::idTypeLabel($proposal->kyc_id_type), 'kyc_id_number' => $proposal->kyc_id_number,
+            'kyc_waiver_reason' => $proposal->kyc_waiver_reason, 'kyc_by' => $proposal->kyc_verified_by === null ? null : (string) ($names[$proposal->kyc_verified_by] ?? ''),
+            'referral_reasons' => $proposal->referral_reasons ?? [],
+            'manual_loading' => $proposal->manual_loading_bp === null ? null : PageSupport::percent($proposal->manual_loading_bp), 'manual_loading_reason' => $proposal->manual_loading_reason,
+            'submitted_by' => $proposal->submitted_by === null ? null : (string) ($names[$proposal->submitted_by] ?? ''), 'submitted_at' => $proposal->submitted_at?->toIso8601String(),
+            'decided_by' => $proposal->decided_by === null ? null : (string) ($names[$proposal->decided_by] ?? ''), 'decision_reason' => $proposal->decision_reason,
+            'policy_id' => $proposal->policy_id,
+        ];
+    }
+
+    /** @return list<array{label_en: string, label_bn: string, value: string}> */
+    public static function risk(Proposal $proposal): array
+    {
+        $schema = ProductVersion::query()->whereKey($proposal->product_version_id)->firstOrFail()->riskSchema();
+        $rows = [];
+        foreach ($schema->fields as $field) {
+            $value = $proposal->risk_inputs[$field->key] ?? null;
+            $shown = match (true) {
+                $value === null => '—',
+                $field->type === RiskFieldType::Money && is_int($value) => PageSupport::money($value, $proposal->currency),
+                $field->type === RiskFieldType::Select => (string) (array_column($field->options, 'label_en', 'value')[(string) $value] ?? $value),
+                $field->type === RiskFieldType::Boolean => $value === true ? 'Yes' : 'No',
+                default => is_scalar($value) ? (string) $value : '—',
+            };
+            $rows[] = ['label_en' => $field->labelEn, 'label_bn' => $field->labelBn, 'value' => $shown];
+        }
+
+        return $rows;
+    }
+
+    private static function idTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'nid' => 'National ID', 'passport' => 'Passport', 'birth_certificate' => 'Birth certificate', 'trade_licence' => 'Trade licence', 'tin' => 'Tax ID (TIN)',
+            default => ucfirst(str_replace('_', ' ', $type)),
+        };
+    }
+}

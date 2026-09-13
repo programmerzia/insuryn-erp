@@ -33,7 +33,9 @@ final class RoleTemplates
         // Interpretation (A-28, session S1): no template could maintain the chart of accounts; the finance manager owns it (setup wizard, COA import).
         'accounting.manage_coa',
         // ASSUMPTION A-69 (slice R2): no §7.2 template covers tariffs; the finance manager (and CFO) draft and approve rating plans — never the same plan (SoD object rule).
-        'rating.manage_plans', 'rating.approve_plans'];
+        'rating.manage_plans', 'rating.approve_plans',
+        // ASSUMPTION A-86 (slice R5): no §7.2 template decides underwriting referrals; the finance manager (and CFO) do, within their underwriting limits.
+        'underwriting.decide'];
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */
@@ -43,7 +45,9 @@ final class RoleTemplates
 
         return [
             'branch_officer' => ['name' => 'Branch Officer', 'permissions' => self::BRANCH_OFFICER],
-            'branch_manager' => ['name' => 'Branch Manager', 'permissions' => [...self::BRANCH_OFFICER, 'policy.cancel', 'receipt.allocate', 'claim.register', 'agent.manage']],
+            'branch_manager' => ['name' => 'Branch Manager', 'permissions' => [...self::BRANCH_OFFICER, 'policy.cancel', 'receipt.allocate', 'claim.register', 'agent.manage',
+                // ASSUMPTION A-86 (slice R5): the branch manager decides underwriting referrals within their limit, never on a proposal they prepared (SoD).
+                'underwriting.decide']],
             'claims_officer' => ['name' => 'Claims Officer', 'permissions' => self::CLAIMS_OFFICER],
             'claims_manager' => ['name' => 'Claims Manager', 'permissions' => [...self::CLAIMS_OFFICER, 'claim.approve', 'claim.pay_request', 'claim.close']],
             'accountant' => ['name' => 'Accountant', 'permissions' => self::ACCOUNTANT],
@@ -53,7 +57,9 @@ final class RoleTemplates
             // Interpretation (A-54, fix F3): approval limits are platform configuration (platform.*), not a financial permission.
             'tenant_admin' => ['name' => 'Tenant Admin', 'permissions' => ['platform.manage_users', 'platform.manage_roles', 'platform.manage_approvals',
                 // ASSUMPTION A-101 (slice R8): document templates are tenant configuration (document.*, not accounting.*), so the §7.3 rule platform.manage_roles ✕ accounting.* is untouched.
-                'document.manage_templates']],
+                'document.manage_templates',
+                // ASSUMPTION A-87 (slice R5): underwriting limits are configuration like approval limits.
+                'underwriting.manage_limits']],
         ];
     }
 

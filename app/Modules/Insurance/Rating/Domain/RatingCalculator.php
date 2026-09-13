@@ -55,13 +55,21 @@ final class RatingCalculator
         $explain = function (string $code, string $kind, string $labelEn, string $labelBn, int $amount, int $total) use (&$explanation): void {
             $explanation[] = ['step_code' => $code, 'kind' => $kind, 'label_en' => $labelEn, 'label_bn' => $labelBn, 'amount_minor' => $amount, 'running_total_minor' => $total];
         };
-        $productMinimum = function () use ($request, &$running, &$minimumAdjustment, &$productMinimumDone, $explain): void {
+        $productMinimum = function () use ($request, &$running, &$minimumAdjustment, &$productMinimumDone, &$loadings, $explain): void {
             $productMinimumDone = true;
             if ($request->productMinimumMinor !== null && $running < $request->productMinimumMinor) {
                 $uplift = $request->productMinimumMinor - $running;
                 $running = $request->productMinimumMinor;
                 $minimumAdjustment += $uplift;
                 $explain('product_minimum', RatingStepKind::Minimum->value, 'Minimum premium of the product', 'পণ্যের ন্যূনতম প্রিমিয়াম', $uplift, $running);
+            }
+            // Slice R5 (D-32): an underwriter's manual loading, after the premium steps and minimums, before rounding and duties.
+            $loading = $request->manualLoading;
+            if ($loading !== null) {
+                $amount = RatingMath::pct($running, $loading->basisPoints);
+                $running = RatingMath::add($running, $amount);
+                $loadings[] = ['code' => 'manual_loading', 'label_en' => $loading->labelEn(), 'label_bn' => $loading->labelBn(), 'amount_minor' => $amount];
+                $explain('manual_loading', RatingStepKind::Loading->value, $loading->labelEn(), $loading->labelBn(), $amount, $running);
             }
         };
 
@@ -171,7 +179,7 @@ final class RatingCalculator
             productVersionId: $request->productVersionId,
             plan: ['id' => $plan->id, 'code' => $plan->code, 'version' => $plan->version, 'class_code' => $plan->classCode],
             inputsHash: hash('sha256', (string) json_encode(['plan' => [$plan->code, $plan->version, $plan->classCode], 'as_of' => $day, 'risk_inputs' => $riskInputs,
-                'coverages' => $coverageCodes], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)),
+                'coverages' => $coverageCodes, ...($request->manualLoading === null ? [] : ['manual_loading_bp' => $request->manualLoading->basisPoints])], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)),
             riskInputs: $riskInputs,
             coverages: $coverageCodes,
             basePremiumMinor: $base,

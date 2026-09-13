@@ -48,6 +48,7 @@ final class InsuranceServiceProvider extends ServiceProvider
         $approvals->register('claim_payment', ClaimPaymentApprovalHandler::class);
         $approvals->register('claim_payment_release', ClaimPaymentReleaseApprovalHandler::class);
         $approvals->register('claim_reopen', ClaimReopenApprovalHandler::class);
+        $approvals->register('proposal_referral', \App\Modules\Insurance\Underwriting\Application\ProposalReferralApprovalHandler::class); // slice R5
         Event::listen(PolicyCancelled::class, [CatchUpEarningOnCancellation::class, 'handle']);
         Event::listen(PolicyCancelled::class, [ClawBackCommissionOnCancellation::class, 'handle']);
         Event::listen(ReceiptAllocated::class, [EarnCommissionOnAllocation::class, 'handle']);

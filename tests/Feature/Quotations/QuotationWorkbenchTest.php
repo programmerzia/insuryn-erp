@@ -237,7 +237,7 @@ it('gives the queue and the workbench what they show', function (): void {
             'gross_premium' => '30,918.30', 'created_at' => '2026-09-15', 'created_by' => 'Test user']));
 
     actingAs($this->officer)->get('/quotations/create', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('quotations/Workbench')
-        ->where('quotation', null)->where('today', '2026-09-15')->where('validDays', 15)->where('can', ['edit' => true, 'issue' => true, 'decline' => false])
+        ->where('quotation', null)->where('today', '2026-09-15')->where('validDays', 15)->where('can', ['edit' => true, 'issue' => true, 'decline' => false, 'convert' => false])
         ->where('products', function (mixed $products): bool {
             $list = json_decode((string) json_encode($products), true);
             $motor = array_values(array_filter(is_array($list) ? $list : [], fn (array $p): bool => $p['code'] === 'MOTOR-PVT'))[0] ?? null;
@@ -251,5 +251,5 @@ it('gives the queue and the workbench what they show', function (): void {
     actingAs($this->officer)->get("/quotations/{$id}", $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('quotations/Workbench')
         ->where('quotation.number', 'QUO-HO-2026-000001')->where('quotation.customer.label', 'Rahima Akter')->where('quotation.producer.label', 'AG-001 · Jamal Agent')
         ->where('quotation.rating_result.gross_premium_minor', 3_091_830)->where('quotation.coverages', ['passenger_liability'])
-        ->where('can', ['edit' => false, 'issue' => false, 'decline' => true]));
+        ->where('can', ['edit' => false, 'issue' => false, 'decline' => true, 'convert' => true]));
 });

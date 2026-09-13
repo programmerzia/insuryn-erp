@@ -90,6 +90,8 @@ final class DemoBusinessSeeder extends Seeder
         }
 
         DemoRatingPlans::seed($users['finance_manager'], $users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify), drafted by finance, approved by the CFO
+        // Phase 3 R5: placeholder underwriting limits (A-90, flagged verify), set by the tenant admin.
+        app(\App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->acceptDefaults($day('2026-01-01')->max(CarbonImmutable::today()), $admin);
 
         $parties = app(PartyService::class);
         $holders = [];

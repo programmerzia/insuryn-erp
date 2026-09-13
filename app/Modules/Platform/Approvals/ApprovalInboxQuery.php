@@ -24,10 +24,11 @@ final class ApprovalInboxQuery
      */
     public function decidableBy(string $userId): array
     {
-        $pending = DB::table('approvals as a')->join('approval_policies as p', 'p.id', '=', 'a.policy_id')->leftJoin('users as u', 'u.id', '=', 'a.requested_by')
+        // Steps come from the approval policy, or from the approval itself when its module set them (D-31).
+        $pending = DB::table('approvals as a')->leftJoin('approval_policies as p', 'p.id', '=', 'a.policy_id')->leftJoin('users as u', 'u.id', '=', 'a.requested_by')
             ->where('a.status', ApprovalStatus::Pending->value)->where('a.requested_by', '<>', $userId)
             ->whereNotExists(fn ($q) => $q->from('approval_decisions as d')->whereColumn('d.approval_id', 'a.id')->where('d.decided_by', $userId))
-            ->orderBy('a.requested_at')->get(['a.id', 'a.object_type', 'a.object_id', 'a.current_step', 'p.steps', 'a.requested_at', 'u.name']);
+            ->orderBy('a.requested_at')->get(['a.id', 'a.object_type', 'a.object_id', 'a.current_step', DB::raw('coalesce(a.steps, p.steps) as steps'), 'a.requested_at', 'u.name']);
 
         $rows = [];
         foreach ($pending as $approval) {
