@@ -6,11 +6,12 @@ Written for a reader with no memory of earlier sessions. Read `CONTEXT.md`, `doc
 ## How to resume
 
 ```bash
-# Postgres 17 at 127.0.0.1:5440 (local dev container `prep-postgres`), roles erp_owner / erp_app (password erp),
-# databases erp and erp_test. With the repo's docker-compose instead: docker compose up -d and DB_PORT=5432.
-composer install && cp .env.example .env && php artisan key:generate   # set DB_PORT in .env
-php artisan migrate --database=pgsql_migrations --seed
-./vendor/bin/pest                    # PHP 8.5 default; also run: php8.4 vendor/bin/pest
+# Postgres 17 + Redis from the repo's docker-compose; host ports from ERP_DB_PORT / ERP_REDIS_PORT in .env (this machine: 5441 / 6383,
+# DB_PORT and REDIS_PORT equal to them). database/init creates roles erp_owner / erp_app (password erp) and databases erp and erp_test.
+composer install && cp .env.example .env && php artisan key:generate
+docker compose up -d
+composer db:fresh                    # migrate:fresh as erp_owner + seed + DemoBusinessSeeder (local demo users <role>@demo.local)
+composer test                        # Pest, serially (erp_owner cannot create databases, so no --parallel); also: php8.4 vendor/bin/pest
 ./vendor/bin/phpstan analyse         # level 8, 0 errors expected
 git log --oneline | head             # one commit per green slice: feat(<area>): slice N – <name>
 ```
@@ -74,6 +75,11 @@ code and in the register below, configurable.
 | U8 | UX: object pages with timeline | done | see git log |
 | U9 | UX: feedback, states, accessibility | done | see git log |
 | U10 | UX: performance | done | see git log |
+| 2.0a | Phase 1 carry-over: user and role administration screens | done | see git log |
+| 2.0b | Phase 1 carry-over: CI pipeline | todo | |
+| 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo | |
+| 2.0d | Phase 1 carry-over: claim reserve property test | todo | |
+| 2.1 | Design addendum v2 and Phase 2 customer questions | todo | |
 
 ## ASSUMPTION register
 
@@ -90,6 +96,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-7 | 1A.7 | When both the product version and the agent name a commission plan, which wins is not specified: product version first, then agent. | `config/erp.php` `commission.plan_precedence` (`ASSUMPTION:`), `CommissionPlanResolver`. |
 | A-8 | 1A.8, 1C.1 | Subledger balances are computed as of the reconciliation date from dated business rows (`policy_transactions.accounting_date`, `receipt_allocations.posted_on`, `suspense_items.aged_since`, `commission_entries.earned_on` / `paid_on` since 1C.1). Control accounts are those mapped to the subledger's `subledger_controls` roles on the date. | `Insurance\Collections\Application\Reconciliation\*Reconciler`, `Insurance\Commission\Application\CommissionReconciler`. |
 | A-9 | 1A.10 | Receivable ageing by installment uses each installment's *current* outstanding amount (payments and cancellation credits are not dated per installment); `as_of` sets days past due and buckets only. The premium subledger reconciliation (A-8) is dated, so control totals are unaffected. | `Insurance\Reports\Application\ReceivableAgeingQuery` (`ASSUMPTION:`). |
+| A-11 | 2.0a | Who may lock administration out is not specified: the tenant always keeps an active user holding `platform.manage_users` and one holding `platform.manage_roles` (removing a role, deactivating a user or editing a role's permissions that would leave none is refused), and nobody deactivates their own account. | `Platform\Authorization\AdministratorsRemain`, `UserAdministration::deactivate` (`ASSUMPTION:`). |
+| A-12 | 2.0a | Invitation flow is not specified: an invited user is active with an unknown random password and receives a password-set link (Fortify reset token, tenant-keyed, standard 60-minute expiry; the admin can resend). Roles are given after inviting. | `Platform\Administration\UserAdministration::invite`, `config/auth.php` `passwords.users.expire`. |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1246,3 +1254,22 @@ Scope: review only; only the critical finding was fixed.
   - Navigations that were not prefetched take one round trip (~600 ms) on Fast 3G; the full screen (LCP) on Fast 3G is 2.9–4.0 s.
   - Offline-tolerant reads and queued writes (§7) are LATER in the brief.
   - Toasts sit bottom-left per the brief and can briefly cover the allocation workbench's commit button.
+
+### 2.0a — User and role administration — done
+- Closes the exit checklist's go-live gap "users come only from seeders". Screens under `/admin` for the Tenant Admin, sidebar items Users and Roles.
+- Users (`platform.manage_users`):
+  - list, and invite with an emailed password-set link (`UserInvitation`);
+  - on the user page: roles by scope (whole organisation, one legal entity, one branch), remove a role, deactivate (signs the user out by deleting their
+    sessions), reactivate, resend the invitation, and a plain-language timeline ("Given Branch Officer for branch HO by Nadia Admin").
+- Roles (`platform.manage_roles`): list with permission and holder counts, create, choose permissions grouped by area, delete a role nobody holds.
+- Design §7.3 at every change of what a user holds: `HeldPermissionsPolicy` (extracted unchanged from `RoleAssignmentService`) runs for assignment
+  and, per holder, for the permissions a role edit adds; refusals name the person and both permissions. Warn-mode conflicts are shown with the success message.
+- `RoleAssignmentService::revoke` added (audited `user_role.revoked`). New audit actions: `user.invited`, `user.invitation_sent`, `user.deactivated`,
+  `user.reactivated`, `role.created`, `role.permissions_changed` (added/removed), `role.deleted`.
+- Assignment-time conflicts use reason `ROLE_CONFLICT`, so browser forms do not show the action-time SoD sentence ("you took part in an earlier step").
+- ASSUMPTIONS A-11 (administrators always remain, no self-deactivation) and A-12 (invitation flow).
+- Also in this stretch: local-only demo accounts dialog on the sign-in page (`DemoAccounts`), project docker compose on its own ports, composer
+  shortcuts `db:migrate`, `db:fresh`, `worker`, `scheduler`, and `composer test` fixed for Composer 2.2.
+- Tests: `UserAdministrationTest` (7), `RoleAdministrationTest` (5), `DemoAccountsTest` (2), `demo-accounts.test.ts` (2); existing tests unchanged.
+- Screenshots: `storage/ux-screenshots/admin/{users,user,roles,role}-{1366,1920}-{light,dark}.png`, `storage/ux-screenshots/demo-accounts/`.
+- Result: 1,013 Pest tests, 218 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.

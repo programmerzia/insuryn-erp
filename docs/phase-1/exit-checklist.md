@@ -87,7 +87,7 @@ go-live needs them.
 
 | Item | State |
 |---|---|
-| **User and role administration** (invite users, assign roles by branch) | **gap for go-live**: `RoleAssignmentService` enforces SoD on assignment, but there is no screen or API; users come only from seeders |
+| **User and role administration** (invite users, assign roles by branch) | built in slice 2.0a: `/admin/users` and `/admin/roles` (invite, roles by tenant/entity/branch with SoD checks, deactivate, role permissions) |
 | Attachments on transactions (KYC, claim documents) | not built |
 | Email / SMS notifications (dunning, claim status) | dunning notices queued on the outbox; no delivery |
 | English / Bangla | English only |

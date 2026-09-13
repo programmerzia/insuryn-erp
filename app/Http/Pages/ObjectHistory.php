@@ -149,8 +149,26 @@ final class ObjectHistory
                 .((int) ($after['suspense_minor'] ?? 0) > 0 ? ', '.$money($after['suspense_minor']).' held in suspense' : ''),
             'receipt.bounced' => 'Cheque bounced on '.$date($after['bounced_on'] ?? 'today').$why.$by,
             'suspense.allocated' => $money($after['amount_minor'] ?? 0).' allocated from suspense'.$by,
+            'user.invited' => 'Invited'.$by, 'user.invitation_sent' => 'Invitation sent again'.$by,
+            'user.deactivated' => 'Deactivated'.$by, 'user.reactivated' => 'Reactivated'.$by,
+            'user_role.assigned' => 'Given '.$this->roleAndScope($after).$by,
+            'user_role.revoked' => 'Removed from '.$this->roleAndScope($before).$by,
             default => ucfirst(str_replace(['_', '.'], ' ', (string) $event->action)).$why.$by,
         };
+    }
+
+    /** @param array<mixed> $assignment role_id, role_code, scope_type, scope_id → "Branch Officer for branch HO" */
+    private function roleAndScope(array $assignment): string
+    {
+        $role = DB::table('roles')->where('id', $assignment['role_id'] ?? null)->value('name') ?? str_replace('_', ' ', (string) ($assignment['role_code'] ?? 'a role'));
+        $scopeType = (string) ($assignment['scope_type'] ?? 'tenant');
+        $place = match ($scopeType) {
+            'entity' => DB::table('legal_entities')->where('id', $assignment['scope_id'] ?? null)->value('code'),
+            'branch' => DB::table('branches')->where('id', $assignment['scope_id'] ?? null)->value('code'),
+            default => null,
+        };
+
+        return $role.($scopeType === 'tenant' ? ' for the whole organisation' : " for {$scopeType} ".($place ?? 'no longer set up'));
     }
 
     private function claimDescription(\stdClass $event): ?string

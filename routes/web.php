@@ -17,6 +17,8 @@ use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Product\Http\Controllers\ProductPageController;
 use App\Modules\Insurance\Reports\Http\Controllers\ReportsPageController;
+use App\Modules\Platform\Administration\Http\RolesPageController;
+use App\Modules\Platform\Administration\Http\UsersPageController;
 use App\Modules\Platform\Approvals\Http\ApprovalsPageController;
 use App\Modules\Platform\Authentication\Http\SecurityPageController;
 use App\Modules\Platform\Preferences\Http\PreferencesController;
@@ -30,6 +32,23 @@ Route::middleware('auth')->get('search', GlobalSearchController::class)->name('s
 Route::middleware('auth')->get('lookup/{type}', [LookupController::class, 'search'])->where('type', '[a-z]+');
 Route::middleware('auth')->post('lookup/customer', [LookupController::class, 'createCustomer']);
 Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
+
+// Administration (phase 2.0): users need platform.manage_users, roles platform.manage_roles; the controllers authorize.
+Route::middleware('auth')->prefix('admin')->group(function (): void {
+    Route::get('users', [UsersPageController::class, 'index']);
+    Route::post('users', [UsersPageController::class, 'store']);
+    Route::get('users/{user}', [UsersPageController::class, 'show'])->whereUuid('user');
+    Route::post('users/{user}/roles', [UsersPageController::class, 'assign'])->whereUuid('user');
+    Route::post('users/{user}/roles/remove', [UsersPageController::class, 'revoke'])->whereUuid('user');
+    Route::post('users/{user}/deactivate', [UsersPageController::class, 'deactivate'])->whereUuid('user');
+    Route::post('users/{user}/reactivate', [UsersPageController::class, 'reactivate'])->whereUuid('user');
+    Route::post('users/{user}/invitation', [UsersPageController::class, 'resendInvitation'])->whereUuid('user');
+    Route::get('roles', [RolesPageController::class, 'index']);
+    Route::post('roles', [RolesPageController::class, 'store']);
+    Route::get('roles/{role}', [RolesPageController::class, 'show'])->whereUuid('role');
+    Route::put('roles/{role}', [RolesPageController::class, 'update'])->whereUuid('role');
+    Route::delete('roles/{role}', [RolesPageController::class, 'destroy'])->whereUuid('role');
+});
 
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);
 // sign-in, sign-out, password reset and two-factor routes come from Fortify (config/fortify.php).
