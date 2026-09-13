@@ -2,6 +2,7 @@
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, watch } from 'vue';
 import CommandPalette from '@/components/shell/CommandPalette.vue';
+import ConfirmHost from '@/components/shell/ConfirmHost.vue';
 import Sidebar from '@/components/shell/Sidebar.vue';
 import StatusBar from '@/components/shell/StatusBar.vue';
 import TabStrip from '@/components/shell/TabStrip.vue';
@@ -42,5 +43,6 @@ watch(status, (message) => message && toast(message, { tone: 'ok' }), { immediat
         <StatusBar class="col-span-2 col-start-1 row-start-4" />
         <Toaster />
         <CommandPalette />
+        <ConfirmHost />
     </div>
 </template>

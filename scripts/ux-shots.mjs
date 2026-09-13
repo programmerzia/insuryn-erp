@@ -36,7 +36,7 @@ const loginPage = await login.newPage();
 await loginPage.goto(`${base}/login`);
 await loginPage.fill('input[type=email]', user);
 await loginPage.fill('input[type=password]', password);
-await Promise.all([loginPage.waitForURL((url) => !url.pathname.startsWith('/login')), loginPage.click('button[type=submit]')]);
+await Promise.all([loginPage.waitForResponse((r) => r.url().endsWith('/login') && r.request().method() === 'POST'), loginPage.click('button[type=submit]')]);
 const storageState = await login.storageState();
 await login.close();
 for (const scheme of ['light', 'dark']) {

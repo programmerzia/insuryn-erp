@@ -68,7 +68,7 @@ code and in the register below, configurable.
 | U2 | UX: application shell | done | see git log |
 | U3 | UX: command palette and shortcuts registry | done | see git log |
 | U4 | UX: data table | done | see git log |
-| U5 | UX: form system | pending | |
+| U5 | UX: form system | done | see git log |
 | U6 | UX: role home queues and badges | pending | |
 | U7 | UX: rebuild existing screens | pending | |
 | U8 | UX: object pages with timeline | pending | |
@@ -997,3 +997,36 @@ Scope: review only; only the critical finding was fixed.
   receipts-context}-{1366,1920}-{light,dark}.png`. Self-critique fixes: the whole-grid focus ring doubled the active-row outline (ring now only
   when no row is active); date filter placeholder read like a value; inspector default width 400px so 1366 screens keep the amount column.
 - Result: 970 Pest tests, 172 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 183.7 KB gzip before route splitting).
+
+### U5 — UX: form system — done
+- Journal preview before money moves (brief §1.6, §4). Backend: `App\Http\Preview\PreviewJournal` (web middleware) and the `moves-money` route
+  marker. A POST to a marked route with `X-Journal-Preview` runs the real controller inside a transaction with
+  `RecordingPostingDispatcher` bound in place of the queue dispatcher, posts each submitted event through the real `PostingEngine`, reads the
+  journal lines (account, name, debit, credit, totals), then rolls back and restores the session. Refusals come back as JSON (validation
+  errors, `errors.form` for business rules and permissions). Unmarked routes answer 400, so a preview can never create data. Marked: policy
+  issue/endorse/cancel, record receipt, bounce, suspense allocation, refund release, agent deposit, claim reserve/payment approval/recovery/
+  close, claim payment release, commission pay, approval decisions, close tasks, manual journal approval, reversal decisions.
+- Lookups (brief §4): `GET /lookup/{customer|agent|policy|installment}?q=` (`App\Http\Search\LookupController`; area permissions; dates as
+  `12 Sep 2026`) and `POST /lookup/customer` for inline creation (PartyService, `party.manage`, customer + policyholder roles).
+- Components (`components/forms`): `Field` (label above, helper below, specific inline error, accessible ids via `lib/field.ts`),
+  `MoneyInput` (right-aligned tabular, formats on blur, ↑/↓ ±1,000 with BigInt), `DateInput` (`t`, `+3`, `-1`, "12 Sep 2026", "12 sep",
+  "12/09/2026", "1.1.27", ISO; shows 12 Sep 2026; unreadable input explains the accepted forms), `LookupInput` (typeahead with ↑↓ Enter, recent
+  picks per lookup, Ctrl+N inline customer in a `Drawer`), `FormLayout` (single column 560px, Ctrl+Enter submit, Ctrl+S save draft, Esc cancel
+  through the unsaved-changes guard, server and client business errors above the fields), `Stepper` (numbered steps with a sticky summary
+  rail), `JournalPreviewDialog` (DR/CR lines per journal with plain-language event names, totals, failures, confirm button naming the amount,
+  Ctrl+Enter / Esc). `lib/unsaved.ts` guards Inertia GET visits and tab close (never the form's own submit); `lib/confirm.ts` + `ConfirmHost`.
+- Screens on the form system: record a receipt (money, keyboard dates, installment lookups filling the outstanding amount, running allocated /
+  held-in-suspense balance with a specific over-allocation message, review-and-post with the journal preview); register a claim (three-step
+  stepper: policy lookup → the loss with cover-date checks → review, summary rail, drafts saved per user and restored with a toast).
+- Tests first: `tests/Feature/Pages/JournalPreviewTest.php` (policy issue preview equals the golden lines and changes nothing — events,
+  journals, receipts, number sequences, status; receipt split previews both events; business-rule and validation refusals as JSON with no
+  flash left; unmarked routes 400; normal post still posts); `tests/Feature/Pages/LookupTest.php`; `resources/js/tests/forms.test.ts` (date
+  entry forms, money stepping and blur formatting); `resources/js/tests/unsaved.test.ts` (dirty GET visit blocked until confirmed, POST never
+  blocked, clean form free).
+- Found while checking in the browser: (1) errors set on the client form did not show (FormLayout read only server errors) — fixed;
+  (2) Fortify's home `/accounting/journals` is a 403 for roles without journal access, so a branch manager signing in lands nowhere — fixed in
+  U6 with role home queues; the screenshot script now waits for the sign-in response instead.
+- Screenshots: `storage/ux-screenshots/U5/{receipt-form,receipt-preview,receipt-refused,claim-step1,claim-step2,date-error}-{1366,1920}-{light,dark}.png`
+  (`receipt-preview` as branch.manager@demo.local; the admin demo user holds no receipt permission, and the preview correctly refuses).
+- Not done: inline create exists for customers only (agents need a party and branch, policies need the quote flow).
+- Result: 977 Pest tests, 191 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.

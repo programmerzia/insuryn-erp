@@ -24,7 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [ResolveTenant::class, HandleInertiaRequests::class]);
+        $middleware->web(append: [ResolveTenant::class, HandleInertiaRequests::class, \App\Http\Preview\PreviewJournal::class]);
+        $middleware->alias(['moves-money' => \App\Http\Preview\MovesMoney::class]);
         $middleware->api(append: [ResolveTenant::class]);
         // Tenant must be known before auth loads a (tenant-scoped) user, and after the session exists.
         // Anchor on StartSession: Authenticate itself is not in the priority list, so anchoring on it

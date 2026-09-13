@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Search\GlobalSearchController;
+use App\Http\Search\LookupController;
 use App\Modules\Accounting\Http\Controllers\ClosePageController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
@@ -25,6 +26,8 @@ Route::redirect('/', '/accounting/journals');
 
 Route::middleware('auth')->get('account/security', SecurityPageController::class)->name('account.security');
 Route::middleware('auth')->get('search', GlobalSearchController::class)->name('search');
+Route::middleware('auth')->get('lookup/{type}', [LookupController::class, 'search'])->where('type', '[a-z]+');
+Route::middleware('auth')->post('lookup/customer', [LookupController::class, 'createCustomer']);
 Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
 
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);
@@ -33,10 +36,10 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
     Route::get('journals/create', [ManualJournalPageController::class, 'create'])->name('journals.create');
     Route::post('journals', [ManualJournalPageController::class, 'store'])->name('journals.store');
-    Route::post('journals/{journal}/approve', [ManualJournalPageController::class, 'approve'])->whereUuid('journal');
+    Route::post('journals/{journal}/approve', [ManualJournalPageController::class, 'approve'])->whereUuid('journal')->middleware('moves-money');
     Route::post('journals/{journal}/reject', [ManualJournalPageController::class, 'reject'])->whereUuid('journal');
     Route::post('journals/{journal}/reversal-requests', [ManualJournalPageController::class, 'requestReversal'])->whereUuid('journal');
-    Route::post('reversal-requests/{reversalRequest}/{decision}', [ManualJournalPageController::class, 'decideReversal'])->whereUuid('reversalRequest')->whereIn('decision', ['approve', 'reject']);
+    Route::post('reversal-requests/{reversalRequest}/{decision}', [ManualJournalPageController::class, 'decideReversal'])->whereUuid('reversalRequest')->whereIn('decision', ['approve', 'reject'])->middleware('moves-money');
     Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
     Route::get('imports', [ImportController::class, 'page'])->name('imports');
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
@@ -62,23 +65,23 @@ Route::middleware('auth')->group(function (): void {
     Route::get('policies/create', [PolicyPageController::class, 'create']);
     Route::post('policies', [PolicyPageController::class, 'store']);
     Route::get('policies/{policy}', [PolicyPageController::class, 'show'])->whereUuid('policy');
-    Route::post('policies/{policy}/issue', [PolicyPageController::class, 'issue'])->whereUuid('policy');
-    Route::post('policies/{policy}/endorse', [PolicyPageController::class, 'endorse'])->whereUuid('policy');
-    Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy');
+    Route::post('policies/{policy}/issue', [PolicyPageController::class, 'issue'])->whereUuid('policy')->middleware('moves-money');
+    Route::post('policies/{policy}/endorse', [PolicyPageController::class, 'endorse'])->whereUuid('policy')->middleware('moves-money');
+    Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/{action}', [PolicyPageController::class, 'transition'])->whereUuid('policy')->whereIn('action', ['lapse', 'reinstate', 'renew']);
 
     Route::get('receipts', [CollectionsPageController::class, 'index']);
     Route::get('receipts/create', [CollectionsPageController::class, 'create']);
-    Route::post('receipts', [CollectionsPageController::class, 'store']);
+    Route::post('receipts', [CollectionsPageController::class, 'store'])->middleware('moves-money');
     Route::get('receipts/{receipt}', [CollectionsPageController::class, 'show'])->whereUuid('receipt');
-    Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt');
+    Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt')->middleware('moves-money');
     Route::get('suspense', [CollectionsPageController::class, 'suspense']);
-    Route::post('suspense/{suspenseItem}/allocate', [CollectionsPageController::class, 'allocate'])->whereUuid('suspenseItem');
+    Route::post('suspense/{suspenseItem}/allocate', [CollectionsPageController::class, 'allocate'])->whereUuid('suspenseItem')->middleware('moves-money');
     Route::get('refunds', [CollectionsPageController::class, 'refunds']);
     Route::post('refunds', [CollectionsPageController::class, 'requestRefund']);
-    Route::post('refunds/{refund}/{decision}', [CollectionsPageController::class, 'decideRefund'])->whereUuid('refund')->whereIn('decision', ['release', 'reject']);
+    Route::post('refunds/{refund}/{decision}', [CollectionsPageController::class, 'decideRefund'])->whereUuid('refund')->whereIn('decision', ['release', 'reject'])->middleware('moves-money');
     Route::get('agent-cash', [CollectionsPageController::class, 'agentCash']);
-    Route::post('agent-cash/deposits', [CollectionsPageController::class, 'deposit']);
+    Route::post('agent-cash/deposits', [CollectionsPageController::class, 'deposit'])->middleware('moves-money');
     Route::get('cheques', [CollectionsPageController::class, 'cheques']);
     Route::get('dunning', [CollectionsPageController::class, 'dunning']);
 
@@ -94,27 +97,27 @@ Route::middleware('auth')->group(function (): void {
     Route::get('claims/create', [ClaimPageController::class, 'create']);
     Route::post('claims', [ClaimPageController::class, 'store']);
     Route::get('claims/{claim}', [ClaimPageController::class, 'show'])->whereUuid('claim');
-    Route::post('claims/{claim}/reserve', [ClaimPageController::class, 'reserve'])->whereUuid('claim');
-    Route::post('claims/{claim}/payments', [ClaimPageController::class, 'approvePayment'])->whereUuid('claim');
-    Route::post('claims/{claim}/recover', [ClaimPageController::class, 'recover'])->whereUuid('claim');
-    Route::post('claims/{claim}/{action}', [ClaimPageController::class, 'decision'])->whereUuid('claim')->whereIn('action', ['close', 'reject', 'reopen']);
+    Route::post('claims/{claim}/reserve', [ClaimPageController::class, 'reserve'])->whereUuid('claim')->middleware('moves-money');
+    Route::post('claims/{claim}/payments', [ClaimPageController::class, 'approvePayment'])->whereUuid('claim')->middleware('moves-money');
+    Route::post('claims/{claim}/recover', [ClaimPageController::class, 'recover'])->whereUuid('claim')->middleware('moves-money');
+    Route::post('claims/{claim}/{action}', [ClaimPageController::class, 'decision'])->whereUuid('claim')->whereIn('action', ['close', 'reject', 'reopen'])->middleware('moves-money');
     Route::post('claim-payments/{payment}/request-release', [ClaimPageController::class, 'requestRelease'])->whereUuid('payment');
-    Route::post('claim-payments/{payment}/release', [ClaimPageController::class, 'release'])->whereUuid('payment');
+    Route::post('claim-payments/{payment}/release', [ClaimPageController::class, 'release'])->whereUuid('payment')->middleware('moves-money');
 
     Route::get('commission', [CommissionPageController::class, 'index']);
     Route::post('commission/plans', [CommissionPageController::class, 'storePlan']);
     Route::post('commission/statements', [CommissionPageController::class, 'approve']);
-    Route::post('commission/statements/{statement}/pay', [CommissionPageController::class, 'pay'])->whereUuid('statement');
+    Route::post('commission/statements/{statement}/pay', [CommissionPageController::class, 'pay'])->whereUuid('statement')->middleware('moves-money');
     Route::get('commission/agents/{agent}', [CommissionPageController::class, 'statement'])->whereUuid('agent');
 
     Route::get('approvals', [ApprovalsPageController::class, 'index']);
-    Route::post('approvals/{approval}/decide', [ApprovalsPageController::class, 'decide'])->whereUuid('approval');
+    Route::post('approvals/{approval}/decide', [ApprovalsPageController::class, 'decide'])->whereUuid('approval')->middleware('moves-money');
 
     Route::get('close', [ClosePageController::class, 'index']);
     Route::post('close/periods/{period}', [ClosePageController::class, 'start'])->whereUuid('period');
     Route::post('close/periods/{period}/reopen', [ClosePageController::class, 'reopen'])->whereUuid('period');
     Route::get('close/runs/{run}', [ClosePageController::class, 'run'])->whereUuid('run');
-    Route::post('close/tasks/{task}/execute', [ClosePageController::class, 'execute'])->whereUuid('task');
+    Route::post('close/tasks/{task}/execute', [ClosePageController::class, 'execute'])->whereUuid('task')->middleware('moves-money');
     Route::post('close/tasks/{task}/skip', [ClosePageController::class, 'skip'])->whereUuid('task');
 
     Route::get('reports', [ReportsPageController::class, 'index']);

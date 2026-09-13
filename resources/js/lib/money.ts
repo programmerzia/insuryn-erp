@@ -36,3 +36,19 @@ export function formatMinor(minor: bigint, options: { parentheses?: boolean } = 
 export function sumMoney(values: (string | null | undefined)[]): bigint {
     return values.reduce<bigint>((total, value) => total + (parseMoney(value) ?? 0n), 0n);
 }
+
+/** Arrow keys in a money input (brief §4): add `delta` minor units; below zero only when negatives are allowed. */
+export function stepMoney(text: string, delta: bigint, allowNegative = false): string {
+    const current = parseMoney(text) ?? 0n;
+    let next = current + delta;
+    if (!allowNegative && next < 0n) next = 0n;
+    return formatMinor(next, { parentheses: false });
+}
+
+/** Format on blur: "50000" → "50,000.00". Text that is not an amount stays as typed so validation can say what is wrong. */
+export function normaliseMoneyInput(text: string, allowNegative = false): string {
+    if (text.trim() === '') return '';
+    const minor = parseMoney(text);
+    if (minor === null || (!allowNegative && minor < 0n)) return text;
+    return formatMinor(minor, { parentheses: false });
+}
