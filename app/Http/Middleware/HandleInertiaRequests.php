@@ -22,7 +22,8 @@ final class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
-            'auth' => ['user' => $user instanceof User ? ['id' => $user->id, 'name' => $user->name, 'email' => $user->email] : null],
+            'auth' => ['user' => $user instanceof User ? ['id' => $user->id, 'name' => $user->name, 'email' => $user->email] : null,
+                'permissions' => fn (): array => $user instanceof User ? app(\App\Modules\Platform\Authorization\PermissionChecker::class)->permissionsOf($user->id) : []],
             'tenant' => fn (): ?array => self::tenant(),
             'status' => fn (): mixed => $request->hasSession() ? $request->session()->get('status') : null,
         ];

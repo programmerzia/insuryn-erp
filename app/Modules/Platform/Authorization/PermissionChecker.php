@@ -32,6 +32,24 @@ final class PermissionChecker
     }
 
     /**
+     * Read access to a screen area: the user holds at least one of $permissions.
+     *
+     * @param list<string> $permissions
+     *
+     * @throws PermissionDenied naming the permissions, any of which would do
+     */
+    public function authorizeAny(string $userId, array $permissions, ?AuthorizationScope $scope = null): void
+    {
+        foreach ($permissions as $permission) {
+            if ($this->has($userId, $permission, $scope)) {
+                return;
+            }
+        }
+
+        throw new PermissionDenied($userId, implode('|', $permissions));
+    }
+
+    /**
      * Every permission the user holds through any role, regardless of scope (role-assignment SoD checks).
      *
      * @return list<string>

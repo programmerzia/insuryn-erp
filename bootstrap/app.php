@@ -39,7 +39,17 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         // Business rule outcomes map to HTTP: missing permission or segregation of duties → 403,
         // a broken business rule → 422, both with the machine-readable reason code.
-        $exceptions->render(fn (PermissionDenied $e) => response()->json(['message' => $e->getMessage(), 'reason' => 'PERMISSION_DENIED', 'permission' => $e->permission], 403));
-        $exceptions->render(fn (SodViolation $e) => response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403));
-        $exceptions->render(fn (AccountingException|BusinessRuleViolation|ApprovalException|NumberingException $e) => response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode], 422));
+        // API and JSON requests get the machine-readable body; browser (Inertia) forms go back to the form with the reason as a `form` error.
+        $wantsJson = fn (Request $request): bool => $request->is('api/*') || $request->expectsJson();
+        $backToForm = fn (Request $request, string $message, string $reason) => back()->withInput($request->except(['password', 'password_confirmation', 'current_password']))
+            ->withErrors(['form' => $message, 'reason' => $reason]);
+        $exceptions->render(fn (PermissionDenied $e, Request $request) => $wantsJson($request)
+            ? response()->json(['message' => $e->getMessage(), 'reason' => 'PERMISSION_DENIED', 'permission' => $e->permission], 403)
+            : response('You do not have permission for this page or action.', 403));
+        $exceptions->render(fn (SodViolation $e, Request $request) => $wantsJson($request)
+            ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403)
+            : $backToForm($request, $e->getMessage(), $e->reasonCode));
+        $exceptions->render(fn (AccountingException|BusinessRuleViolation|ApprovalException|NumberingException $e, Request $request) => $wantsJson($request)
+            ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode], 422)
+            : $backToForm($request, $e->getMessage(), $e->reasonCode));
     })->create();

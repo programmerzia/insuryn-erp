@@ -54,7 +54,7 @@ code and in the register below, configurable.
 | 1C.5 | Multi-payer policies | done | see git log |
 | 1C.6 | Hardening: posting/lock race, isolation on every tenant table | done | see git log |
 | 1C.7 | Account security page (2FA, password) | done | see git log |
-| 1C.8 | Operations UI: parties, products, policies | pending | |
+| 1C.8 | Operations UI: parties, products, policies | done | see git log |
 | 1C.9 | Operations UI: receipts, suspense, refunds, bank | pending | |
 | 1C.10 | Operations UI: claims and commission | pending | |
 | 1C.11 | Operations UI: month-end close and reports | pending | |
@@ -769,3 +769,26 @@ Scope: review only; only the critical finding was fixed.
 - Tests `tests/Feature/Platform/AccountSecurityTest.php`: page for signed-in users only with 2FA state; password change refused with a wrong current
   password and applied with the right one; 2FA requires password confirmation, a wrong code is refused, a valid TOTP confirms, 8 recovery codes, turn off.
 - Result: 939 tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### 1C.8 — Operations UI: parties, products, policies — done
+- Why: daily operations were API-only; spec §11 Phase 1 outcome is "customer can run daily operations".
+- Shared screen foundation:
+  - `PermissionChecker::authorizeAny` — a page is readable by users holding any permission of its area (interpretation: §7.1 has no read
+    permissions for insurance areas; `reports.financial` lets auditors read). Each controller names its `AREA`; `resources/js/lib/navigation.ts`
+    mirrors them so the top bar only shows reachable pages (`auth.permissions` is shared with every page).
+  - `bootstrap/app.php`: for browser (Inertia) requests, business-rule and SoD refusals return to the form with `errors.form` (+ `errors.reason`)
+    and the input; permission refusals are a plain 403. API/JSON responses are unchanged (422/403 JSON with reason codes).
+  - `App\Http\Pages\PageSupport`: actor, single entity (design §9.2 MVP single-entity UI), money typed in major units parsed with string
+    arithmetic (`Platform\Money\MinorUnits`, never a float), formatted money, pagination props.
+  - Vue: `PageHeader`, `Pagination`, `forms/Field`, `forms/SelectInput`, `forms/FormBanner`; `AppLayout` groups navigation (Operations,
+    Accounting) and shows the flash status.
+- Screens (each action calls the same application service as the API):
+  - `/parties` (search, create with roles), `/parties/{id}` (bank accounts, policies held), `/agents` (list, create with branch, plan, parent).
+  - `/products` (products with versions; create product; add version with term, earning method, tax profile, commission plan).
+  - `/policies` (filter by status, search number/policyholder), `/policies/create` (quote with installments and payers in percent),
+    `/policies/{id}` (premium, installments per payer, payers, transactions; issue, endorse ±, cancel, lapse, reinstate, renew — buttons only
+    for allowed transitions the user may perform).
+- Tests `tests/Feature/Pages/PartiesProductsPoliciesPagesTest.php`: area access (guest, wrong area, right area); parties search/create/bank
+  account/agents; products and versions; quote with major-unit premium → issue → endorsement refused back to the form, then accepted →
+  detail props and allowed actions → cancel → status filter; the JSON API still answers 422 with the reason.
+- Result: 944 tests green, PHPStan 0 errors, vue-tsc and build green.

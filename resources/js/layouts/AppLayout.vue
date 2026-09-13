@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { visibleNavigation } from '@/lib/navigation';
 import type { SharedProps } from '@/types/shared';
 
 defineProps<{ title: string }>();
@@ -9,11 +10,8 @@ const page = usePage<SharedProps>();
 const user = computed(() => page.props.auth.user);
 const tenant = computed(() => page.props.tenant);
 
-const nav = [
-    { label: 'Journals', href: '/accounting/journals' },
-    { label: 'Trial balance', href: '/accounting/trial-balance' },
-    { label: 'Imports', href: '/accounting/imports' },
-];
+const groups = computed(() => visibleNavigation(page.props.auth.permissions ?? []));
+const status = computed(() => page.props.status);
 </script>
 
 <template>
@@ -25,16 +23,19 @@ const nav = [
                     <span class="inline-block size-2.5 bg-brick" aria-hidden="true" />
                     Insuryn
                 </Link>
-                <nav class="flex gap-5 text-sm" aria-label="Accounting">
-                    <Link
-                        v-for="item in nav"
-                        :key="item.href"
-                        :href="item.href"
-                        class="text-ivory-dim hover:text-ivory"
-                        :class="{ 'text-ivory underline decoration-blueprint underline-offset-8': page.url.startsWith(item.href) }"
-                    >
-                        {{ item.label }}
-                    </Link>
+                <nav class="flex flex-wrap gap-x-6 gap-y-1 text-sm" aria-label="Main">
+                    <div v-for="group in groups" :key="group.label" class="flex items-center gap-4">
+                        <span class="text-xs font-semibold tracking-wider text-ivory-dim/70 uppercase">{{ group.label }}</span>
+                        <Link
+                            v-for="item in group.items"
+                            :key="item.href"
+                            :href="item.href"
+                            class="text-ivory-dim hover:text-ivory"
+                            :class="{ 'text-ivory underline decoration-blueprint underline-offset-8': page.url.startsWith(item.href) }"
+                        >
+                            {{ item.label }}
+                        </Link>
+                    </div>
                 </nav>
                 <div class="ml-auto flex items-center gap-4 text-sm">
                     <span v-if="tenant" class="text-xs font-semibold uppercase tracking-wider text-blueprint" title="Organisation">{{ tenant.name }}</span>
@@ -52,6 +53,7 @@ const nav = [
             </div>
         </header>
         <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+            <p v-if="status" class="mb-4 rounded-md border border-green/40 bg-green/10 px-3 py-2 text-sm text-green" role="status">{{ status }}</p>
             <slot />
         </main>
     </div>
