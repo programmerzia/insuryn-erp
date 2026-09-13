@@ -17,3 +17,14 @@ Schedule::job(new PremiumEarningJob(), 'batch')->dailyAt('01:00')->withoutOverla
 Schedule::job(new ReconciliationJob(), 'recon')->dailyAt('02:00')->withoutOverlapping();
 Schedule::job(new DunningJob(), 'batch')->dailyAt('01:30')->withoutOverlapping();
 Schedule::job(new LicenceExpiryAlertJob(), 'batch')->dailyAt('01:45')->withoutOverlapping();
+
+// Slice D9: regenerate the producer portal's OpenAPI document from the routes and their PortalOperation attributes.
+Illuminate\Support\Facades\Artisan::command('portal:openapi', function (App\Http\Portal\OpenApi\PortalOpenApi $openApi): void {
+    $path = base_path('docs/api/producer-portal.openapi.json');
+    if (! is_dir(dirname($path))) {
+        mkdir(dirname($path), 0755, true);
+    }
+    file_put_contents($path, json_encode($openApi->document(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n");
+    $this->info("Wrote {$path}");
+})->purpose('Write docs/api/producer-portal.openapi.json from the portal routes');
+

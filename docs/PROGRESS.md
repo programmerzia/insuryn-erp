@@ -89,7 +89,7 @@ code and in the register below, configurable.
 | D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | done | see git log |
 | D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | done | see git log |
 | D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | done | see git log |
-| D9 | Distribution: producer portal REST with Sanctum and OpenAPI | todo | |
+| D9 | Distribution: producer portal REST with Sanctum and OpenAPI | done | see git log |
 
 ## ASSUMPTION register
 
@@ -120,6 +120,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-23 | D6 | Persistency is not defined: the 13th-month persistency on a date is the share of the producer's new policies with inception 25 to 13 months before that date that are not cancelled or lapsed; with no such policies it is not measurable, and a minimum-persistency condition stays unmet (commission stays conditional). | `Insurance\Policy\Application\PersistencyQuery` (`ASSUMPTION:`). |
 | A-24 | D7 | Target and incentive periods are not specified: calendar months, quarters (from January, April, July, October) and years; fiscal periods are LATER. | `Distribution\Domain\Incentives\IncentivePeriod` (`ASSUMPTION:`). |
 | A-25 | D7 | A producer without a target for the plan's period and metric earns no incentive; the highest tier reached pays; a bonus carries the plan's withholding tax, none when the plan names none (payroll handles tax for salaried producers). Production: gross written premium dated in the period (new, renewal, endorsement and cancellation transactions), new and renewal policies, collections by value date net of reversed allocations. | `IncentiveRun`, `ProductionQuery` (`ASSUMPTION:`). |
+| A-26 | D9 | Producer portal access is not specified beyond "read-only in MVP except collection recording": one portal user per producer, of user kind `portal` (never signs in to the staff web app), whose `producer_portal` role holds receipt.create and receipt.allocate scoped to the producer's branch; every portal read and the collection endpoint are limited to the producer's own policies; only active producers use the portal. Tokens carry abilities `portal:read` and `portal:collect`. | `ProducerPortalAccess` (`ASSUMPTION:`), `EnsureProducerPortal`, Fortify `authenticateUsing`. |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1498,4 +1499,22 @@ Scope: review only; only the critical finding was fixed.
 - Not achieved: no sidebar badge for expiring licences (the shell badges come from role work queues, and there is no distribution queue yet); drag-transfer has no touch support.
 - Tests: `tests/Feature/Distribution/DistributionScreensTest.php` (6), `resources/js/tests/hierarchy-tree.test.ts` (4).
 - Result: 1,071 Pest tests, 231 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### D9 — Distribution: producer portal REST — done
+- Laravel Sanctum 4.3 (composer). `personal_access_tokens` is a tenant table (tenant_id, forced RLS, UUIDv7 ids, uuid morphs) with the model
+  `Platform\Authentication\PersonalAccessToken`; the tenant is resolved before authentication, so a token only authenticates in the tenant that issued it (D-16).
+- `users.kind` (`staff` | `portal`): Fortify web sign-in accepts staff only; the token endpoint accepts portal users only. `producers.portal_user_id` links a producer to
+  its portal user; `Distribution\Application\Portal\ProducerPortalAccess::grant` (`agent.manage`) creates it through `Platform\Administration\PortalAccounts`
+  (portal role scoped to the producer's branch, invitation e-mail to set a password) (A-26).
+- Endpoints under `/api/portal` (composition in `App\Http\Portal`, middleware `auth:sanctum` + `producer-portal` + Sanctum abilities):
+  - `POST tokens` (sign in, throttled) and `DELETE tokens/current` (sign out);
+  - `portal:read`: `GET me`, `licence`, `customers`, `policies[?status]`, `policies/{id}` (with installments and outstanding), `renewals-due[?within_days]`, `collections-to-deposit`,
+    `statements`, `statements/{id}` (with entries), `targets[?period_type&period_start]`;
+  - `portal:collect`: `POST collections`, a cash collection for an installment of the producer's own policy, recorded through `ReceiptService` as an agent collection
+    (allocation limits, numbering, posting and agent cash all as for staff).
+  - Another producer's record is 404; a suspended producer gets 403 `PRODUCER_NOT_ACTIVE`.
+- OpenAPI 3.1 generated from the routes and a `PortalOperation` attribute on each controller method plus `PortalSchemas`: `php artisan portal:openapi` writes
+  `docs/api/producer-portal.openapi.json`. `ProducerPortalTest` fails when a portal route is undocumented or the file is out of date. No UI (design note §5 LATER).
+- Test setup change: `TenantIsolationEveryTableTest` grants portal access and creates a token so `personal_access_tokens` has rows.
+- Tests: `tests/Feature/Distribution/ProducerPortalTest.php` (5).
 

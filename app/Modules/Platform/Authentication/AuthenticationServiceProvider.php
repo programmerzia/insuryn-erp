@@ -28,11 +28,13 @@ final class AuthenticationServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        \Laravel\Sanctum\Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
         Fortify::authenticateUsing(static function (Request $request): ?User {
             if (! TenantContext::has()) {
                 return null;
             }
-            $user = User::query()->where('email', (string) $request->input(Fortify::username()))->where('status', 'active')->first();
+            // Portal users (slice D9) only obtain API tokens; they never sign in to the staff web app.
+            $user = User::query()->where('email', (string) $request->input(Fortify::username()))->where('status', 'active')->where('kind', 'staff')->first();
 
             return $user !== null && Hash::check((string) $request->input('password'), (string) $user->getAuthPassword()) ? $user : null;
         });

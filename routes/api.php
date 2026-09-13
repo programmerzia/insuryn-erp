@@ -30,6 +30,27 @@ Route::middleware('auth')->prefix('accounting')->group(function (): void {
     Route::post('close-tasks/{task}/skip', [PeriodCloseController::class, 'skip'])->whereUuid('task');
 });
 
+// Producer portal (Distribution design note §5, slice D9): Sanctum tokens for portal users; docs/api/producer-portal.openapi.json (php artisan portal:openapi).
+Route::prefix('portal')->group(function (): void {
+    Route::post('tokens', [\App\Http\Portal\PortalTokenController::class, 'issue'])->middleware('throttle:10,1');
+    Route::middleware(['auth:sanctum', 'producer-portal'])->group(function (): void {
+        Route::delete('tokens/current', [\App\Http\Portal\PortalTokenController::class, 'revoke']);
+        Route::middleware('abilities:portal:read')->group(function (): void {
+            Route::get('me', [\App\Http\Portal\PortalController::class, 'me']);
+            Route::get('licence', [\App\Http\Portal\PortalController::class, 'licence']);
+            Route::get('customers', [\App\Http\Portal\PortalController::class, 'customers']);
+            Route::get('policies', [\App\Http\Portal\PortalController::class, 'policies']);
+            Route::get('policies/{policy}', [\App\Http\Portal\PortalController::class, 'policy'])->whereUuid('policy');
+            Route::get('renewals-due', [\App\Http\Portal\PortalController::class, 'renewalsDue']);
+            Route::get('collections-to-deposit', [\App\Http\Portal\PortalController::class, 'collectionsToDeposit']);
+            Route::get('statements', [\App\Http\Portal\PortalController::class, 'statements']);
+            Route::get('statements/{statement}', [\App\Http\Portal\PortalController::class, 'statement'])->whereUuid('statement');
+            Route::get('targets', [\App\Http\Portal\PortalController::class, 'targets']);
+        });
+        Route::post('collections', [\App\Http\Portal\PortalController::class, 'recordCollection'])->middleware('abilities:portal:collect');
+    });
+});
+
 Route::middleware('auth')->prefix('distribution')->group(function (): void {
     Route::get('producers/{producer}/licences', [LicenceController::class, 'index'])->whereUuid('producer');
     Route::post('producers/{producer}/licences', [LicenceController::class, 'store'])->whereUuid('producer');

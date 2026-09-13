@@ -17,6 +17,7 @@ use App\Modules\Distribution\Application\Compensation\CompensationRuleRequest;
 use App\Modules\Distribution\Application\Compensation\CompensationSchemeService;
 use App\Modules\Distribution\Application\Hierarchy\HierarchyService;
 use App\Modules\Distribution\Application\Incentives\IncentivePlanService;
+use App\Modules\Distribution\Application\Portal\ProducerPortalAccess;
 use App\Modules\Distribution\Application\Targets\TargetService;
 use App\Modules\Insurance\Commission\Application\IncentiveRun;
 use App\Modules\Distribution\Application\Licences\LicenceExpiryAlerts;
@@ -139,6 +140,8 @@ function populateEveryTenantTable(array $ctx): void
         app(IncentivePlanService::class)->create(['code' => 'AG-MONTHLY', 'name' => 'Agent bonus', 'period_type' => 'monthly', 'metric' => 'premium', 'applies_to' => ['producer_type' => 'agent'],
             'tiers' => [['achievement_bp_from' => 1, 'bonus' => ['type' => 'fixed_minor', 'value' => 1_000]]], 'effective_from' => '2026-01-01'], $world['admin']);
         app(IncentiveRun::class)->run($ctx['entity_id'], $d('2026-07-31'), $world['admin']);
+        $portalUser = app(ProducerPortalAccess::class)->grant($world['agent_id'], 'portal-'.Str::lower(Str::random(6)).'@agents.test', $world['admin']); // slice D9
+        App\Models\User::query()->findOrFail($portalUser)->createToken('isolation', ['portal:read']);
     });
 }
 

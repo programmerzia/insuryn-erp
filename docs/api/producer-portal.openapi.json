@@ -1,0 +1,1447 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Insuryn producer portal",
+        "version": "1.0.0",
+        "description": "Read-only producer portal (my customers and policies, renewals due, collections to deposit, statements, licence, targets) plus recording cash collections. Every request names the tenant (X-Tenant header or tenant subdomain); tokens only work in the tenant that issued them."
+    },
+    "servers": [
+        {
+            "url": "/"
+        }
+    ],
+    "paths": {
+        "/api/portal/collections": {
+            "post": {
+                "operationId": "recordCollection",
+                "summary": "Record cash I collected for one of my policies",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CollectionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CollectionResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:collect"
+            }
+        },
+        "/api/portal/collections-to-deposit": {
+            "get": {
+                "operationId": "collectionsToDeposit",
+                "summary": "Cash I collected and have not deposited yet",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CollectionsToDepositResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/customers": {
+            "get": {
+                "operationId": "customers",
+                "summary": "My customers: policyholders of my policies",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomerList"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/licence": {
+            "get": {
+                "operationId": "licence",
+                "summary": "My licence status",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LicenceResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/me": {
+            "get": {
+                "operationId": "me",
+                "summary": "Who I am: producer, channel, branch and place in the hierarchy",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProducerResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/policies": {
+            "get": {
+                "operationId": "policies",
+                "summary": "My policies",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "issued, active, lapsed, cancelled, expired, renewed"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PolicyList"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/policies/{policy}": {
+            "get": {
+                "operationId": "policy",
+                "summary": "One of my policies, with its installments",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "policy",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PolicyDetailResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/renewals-due": {
+            "get": {
+                "operationId": "renewalsDue",
+                "summary": "My policies due for renewal",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "within_days",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Days ahead, default 60"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PolicyList"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/statements": {
+            "get": {
+                "operationId": "statements",
+                "summary": "My commission statements",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StatementList"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/statements/{statement}": {
+            "get": {
+                "operationId": "statement",
+                "summary": "One of my statements, with its entries",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "statement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StatementDetailResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/targets": {
+            "get": {
+                "operationId": "targets",
+                "summary": "My targets and achievement for a period",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "period_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "monthly, quarterly or annual (default monthly)"
+                    },
+                    {
+                        "name": "period_start",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "First day of the period (default: this month)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TargetList"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-token-ability": "portal:read"
+            }
+        },
+        "/api/portal/tokens": {
+            "post": {
+                "operationId": "issue",
+                "summary": "Sign in: get a token for this device",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/portal/tokens/current": {
+            "delete": {
+                "operationId": "revoke",
+                "summary": "Sign out: revoke the token used for this request",
+                "tags": [
+                    "Producer portal"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Done"
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearer": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Sanctum personal access token from POST /api/portal/tokens"
+            }
+        },
+        "parameters": {
+            "Tenant": {
+                "name": "X-Tenant",
+                "in": "header",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Tenant id or slug, when not given by the subdomain"
+            }
+        },
+        "schemas": {
+            "Error": {
+                "type": "object",
+                "required": [
+                    "message",
+                    "reason"
+                ],
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TokenRequest": {
+                "type": "object",
+                "required": [
+                    "email",
+                    "password",
+                    "device_name"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "password": {
+                        "type": "string"
+                    },
+                    "device_name": {
+                        "type": "string"
+                    },
+                    "abilities": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "portal:read",
+                                "portal:collect"
+                            ]
+                        }
+                    }
+                }
+            },
+            "Token": {
+                "type": "object",
+                "required": [
+                    "token",
+                    "abilities"
+                ],
+                "properties": {
+                    "token": {
+                        "type": "string"
+                    },
+                    "abilities": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "TokenResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/Token"
+                    }
+                }
+            },
+            "Producer": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "code",
+                    "name",
+                    "type",
+                    "status",
+                    "channel",
+                    "branch",
+                    "level",
+                    "reports_to"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "channel": {
+                        "type": "string"
+                    },
+                    "branch": {
+                        "type": "string"
+                    },
+                    "level": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "reports_to": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            },
+            "ProducerResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/Producer"
+                    }
+                }
+            },
+            "Licence": {
+                "type": "object",
+                "required": [
+                    "licence_no",
+                    "authority",
+                    "class",
+                    "issued_on",
+                    "expires_on",
+                    "status"
+                ],
+                "properties": {
+                    "licence_no": {
+                        "type": "string"
+                    },
+                    "authority": {
+                        "type": "string"
+                    },
+                    "class": {
+                        "type": "string"
+                    },
+                    "issued_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "expires_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LicenceStatus": {
+                "type": "object",
+                "required": [
+                    "valid",
+                    "expires_on",
+                    "licences"
+                ],
+                "properties": {
+                    "valid": {
+                        "type": "boolean"
+                    },
+                    "expires_on": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "licences": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Licence"
+                        }
+                    }
+                }
+            },
+            "LicenceResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/LicenceStatus"
+                    }
+                }
+            },
+            "Customer": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "policies"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "policies": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "CustomerList": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Customer"
+                        }
+                    }
+                }
+            },
+            "Policy": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "number",
+                    "product",
+                    "policyholder",
+                    "status",
+                    "inception",
+                    "expiry",
+                    "gross_premium_minor",
+                    "currency"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "number": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "product": {
+                        "type": "string"
+                    },
+                    "policyholder": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "inception": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "expiry": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "gross_premium_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "currency": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PolicyList": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Policy"
+                        }
+                    }
+                }
+            },
+            "Installment": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "no",
+                    "due_date",
+                    "amount_minor",
+                    "outstanding_minor"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "no": {
+                        "type": "integer"
+                    },
+                    "due_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "outstanding_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    }
+                }
+            },
+            "PolicyDetail": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Policy"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "installments"
+                        ],
+                        "properties": {
+                            "installments": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/Installment"
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "PolicyDetailResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/PolicyDetail"
+                    }
+                }
+            },
+            "CollectionsToDeposit": {
+                "type": "object",
+                "required": [
+                    "undeposited_minor",
+                    "currency",
+                    "collections"
+                ],
+                "properties": {
+                    "undeposited_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "collections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "receipt_number",
+                                "value_date",
+                                "amount_minor"
+                            ],
+                            "properties": {
+                                "receipt_number": {
+                                    "type": "string"
+                                },
+                                "value_date": {
+                                    "type": "string",
+                                    "format": "date"
+                                },
+                                "amount_minor": {
+                                    "type": "integer",
+                                    "description": "Minor units"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "CollectionsToDepositResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CollectionsToDeposit"
+                    }
+                }
+            },
+            "CollectionRequest": {
+                "type": "object",
+                "required": [
+                    "installment_id",
+                    "amount_minor",
+                    "value_date"
+                ],
+                "properties": {
+                    "installment_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "value_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "reference": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            },
+            "Collection": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "number",
+                    "amount_minor",
+                    "currency",
+                    "value_date"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "number": {
+                        "type": "string"
+                    },
+                    "amount_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "value_date": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                }
+            },
+            "CollectionResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/Collection"
+                    }
+                }
+            },
+            "Statement": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "number",
+                    "period_end",
+                    "earned_minor",
+                    "override_minor",
+                    "bonus_minor",
+                    "clawback_minor",
+                    "withholding_minor",
+                    "advances_recovered_minor",
+                    "net_minor",
+                    "currency",
+                    "status",
+                    "paid_via",
+                    "paid_on"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "number": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "period_end": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "earned_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "override_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "bonus_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "clawback_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "withholding_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "advances_recovered_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "net_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "paid_via": {
+                        "type": "string"
+                    },
+                    "paid_on": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    }
+                }
+            },
+            "StatementList": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Statement"
+                        }
+                    }
+                }
+            },
+            "StatementEntry": {
+                "type": "object",
+                "required": [
+                    "earned_on",
+                    "kind",
+                    "role",
+                    "policy_number",
+                    "amount_minor",
+                    "withholding_minor"
+                ],
+                "properties": {
+                    "earned_on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "role": {
+                        "type": "string"
+                    },
+                    "policy_number": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "amount_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    },
+                    "withholding_minor": {
+                        "type": "integer",
+                        "description": "Minor units"
+                    }
+                }
+            },
+            "StatementDetail": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Statement"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "entries"
+                        ],
+                        "properties": {
+                            "entries": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StatementEntry"
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "StatementDetailResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/StatementDetail"
+                    }
+                }
+            },
+            "Target": {
+                "type": "object",
+                "required": [
+                    "metric",
+                    "period_type",
+                    "period_start",
+                    "target",
+                    "actual",
+                    "achievement_bp"
+                ],
+                "properties": {
+                    "metric": {
+                        "type": "string"
+                    },
+                    "period_type": {
+                        "type": "string"
+                    },
+                    "period_start": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "target": {
+                        "type": "integer"
+                    },
+                    "actual": {
+                        "type": "integer"
+                    },
+                    "achievement_bp": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "TargetList": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Target"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "security": [
+        {
+            "bearer": []
+        }
+    ]
+}

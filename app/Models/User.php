@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
 /**
@@ -23,14 +24,16 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $email
  * @property string $name
  * @property string $status
+ * @property string $kind staff (web app) | portal (API tokens only, slice D9)
  * @property string|null $two_factor_secret
  * @property \Carbon\CarbonImmutable|null $two_factor_confirmed_at
  */
-#[Fillable(['name', 'email', 'password', 'oidc_subject', 'status'])]
+#[Fillable(['name', 'email', 'password', 'oidc_subject', 'status', 'kind'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
     use BelongsToTenant;
+    use HasApiTokens;
     /** @use HasFactory<UserFactory> */
     use HasFactory;
     use HasUuid7;
