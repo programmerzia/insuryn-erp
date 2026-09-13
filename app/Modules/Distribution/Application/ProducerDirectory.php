@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 /** Read-only producer lookups for other contexts (Insurance commission, collections, policy screens). */
 final class ProducerDirectory
 {
-    private const COLUMNS = ['p.id', 'p.party_id', 'p.code', 'p.type', 'p.status', 'p.channel_id', 'p.branch_id', 'p.commission_plan_id', 'p.joined_on'];
+    private const COLUMNS = ['p.id', 'p.party_id', 'p.code', 'p.type', 'p.status', 'p.channel_id', 'p.branch_id', 'p.commission_plan_id', 'p.joined_on', 'p.employee_id'];
 
     public function find(string $producerId): ?ProducerSummary
     {

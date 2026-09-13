@@ -23,6 +23,8 @@ final class AccountRolesSeeder extends Seeder
         'commission_expense' => 'Commission expense',
         'commission_payable' => 'Commission payable control',
         'commission_withholding_payable' => 'Withholding tax on commission',
+        'producer_advances' => 'Advances paid to producers, recovered from their commission (Distribution D6)',
+        'accounts_payable' => 'Amounts owed to suppliers and producers paid through payables (Distribution D6)',
         'dac_asset' => 'Deferred acquisition cost (LATER)',
         'claims_outstanding' => 'Outstanding claims reserve',
         'claims_expense' => 'Claims incurred',

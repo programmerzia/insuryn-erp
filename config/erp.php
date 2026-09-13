@@ -31,6 +31,8 @@ return [
         'licence_required_types' => ['agent', 'agency_org', 'bdo', 'broker', 'partner'],
         // Distribution design note §3: licence-expiry alerts this many days before expiry.
         'licence_alert_days' => [60, 30, 7],
+        // ASSUMPTION: A-22 — payout route: producers with an employee record are paid through payroll; others by type (default accounts payable).
+        'payout_route_by_type' => ['agent' => 'ap', 'agency_org' => 'ap', 'broker' => 'ap', 'partner' => 'ap', 'bdo' => 'payroll'],
         // ASSUMPTION: A-16 — IDRA's register file format is not specified: CSV with these columns, in this order.
         'idra_register_columns' => ['licence_no', 'authority', 'producer_code', 'producer_name', 'producer_type', 'class', 'issued_on', 'expires_on', 'status', 'branch_code'],
     ],

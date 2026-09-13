@@ -1,0 +1,1 @@
+{"event_type": "PRODUCER_ADVANCE_RECOVERED", "payload": {"amount": 1000000}, "dimensions": {"branch": "B1", "product": "P1", "product_code": "MOTOR", "lob": "motor", "channel": "agent", "policy": "POL1", "customer": "CU1", "agent": "AG1", "claim": "CL1"}, "expected": [["commission_payable", "debit", 1000000], ["producer_advances", "credit", 1000000]]}

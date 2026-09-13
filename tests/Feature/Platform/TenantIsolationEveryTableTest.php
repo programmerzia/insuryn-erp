@@ -10,6 +10,7 @@ use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Application\Reversals\ReversalRequestService;
 use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\Side;
+use App\Modules\Distribution\Application\Advances\AdvanceService;
 use App\Modules\Distribution\Application\Compensation\CompensationEngine;
 use App\Modules\Distribution\Application\Compensation\CompensationRequest;
 use App\Modules\Distribution\Application\Compensation\CompensationRuleRequest;
@@ -129,6 +130,8 @@ function populateEveryTenantTable(array $ctx): void
             'effective_from' => '2026-01-01', 'producer_type' => 'agent', 'rate_bp' => 1000]), $world['admin']);
         app(CompensationEngine::class)->calculate(new CompensationRequest($policy->id, $world['product_id'], 'non_life', $world['agent_id'], 'premium_received', 100_000, 1,
             $d('2026-09-30'), 'isolation', (string) Str::uuid7(), $scheme)); // slice D5: records a compliance exception (non-life commission disabled)
+        app(AdvanceService::class)->issue($world['agent_id'], 500_000, ['type' => 'full'], $d('2026-09-01'), $world['admin']); // slice D6
+        DB::transaction(fn () => app(AdvanceService::class)->recover($world['agent_id'], $ctx['entity_id'], 100_000, (string) Str::uuid7(), $d('2026-09-30')));
     });
 }
 

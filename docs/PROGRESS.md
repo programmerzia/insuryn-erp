@@ -86,7 +86,7 @@ code and in the register below, configurable.
 | D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | done | see git log |
 | D4 | Distribution: compensation schemes, rules, compliance profile | done | see git log |
 | D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | done | see git log |
-| D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | todo | |
+| D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | done | see git log |
 | D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | todo | |
 | D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | todo | |
 | D9 | Distribution: producer portal REST with Sanctum and OpenAPI | todo | |
@@ -116,6 +116,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-19 | D4 | Design note OPEN 3 (renewal commission after termination) is unanswered: rule flag `pays_after_termination`, default false. Rule flag `renewal_requires_valid_licence` defaults to true (design note §3). Both applied in D5. | `compensation_rules` columns, `CompensationRuleRequest`. |
 | A-20 | D5 | Phase 1 commission plans predate compensation schemes: a product version without a scheme falls back to its plan (A-7 precedence), treated as a flat scheme (one direct rate on premium received, every product, type and year, no overrides or caps); non-life commission is allowed for plan terms because attaching a plan was an explicit configuration. Producers still need to be active and licensed. | `FlatCommissionTerms`, `CommissionAccrual` (`ASSUMPTION:`). |
 | A-21 | D5 | Policy year is not defined beyond "1..1 = first year, 2..99 = renewal": 1 + renewals in the policy's renewal chain + whole years from inception to the premium's installment due date (inception for written premium). | `Insurance\Policy\Application\PolicyYear`. |
+| A-22 | D6 | Payout route is not specified beyond "payroll (BDO/agent on payroll) or AP (agencies, brokers)": a producer with an employee record is paid through payroll; otherwise by type, default accounts payable (BDOs payroll). Payroll and AP modules are Phase 2, so the payout moves the net to salary_payable or accounts_payable and queues `CommissionPayrollEarning` / `CommissionPayableToAp` outbox messages for them. | `config/erp.php` `distribution.payout_route_by_type` (`ASSUMPTION:`), `CommissionStatementRun::route`. |
+| A-23 | D6 | Persistency is not defined: the 13th-month persistency on a date is the share of the producer's new policies with inception 25 to 13 months before that date that are not cancelled or lapsed; with no such policies it is not measurable, and a minimum-persistency condition stays unmet (commission stays conditional). | `Insurance\Policy\Application\PersistencyQuery` (`ASSUMPTION:`). |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1409,4 +1411,33 @@ Scope: review only; only the critical finding was fixed.
 - Test setup change: `TenantIsolationEveryTableTest` runs the engine once on a non-life trigger so `compliance_exceptions` has rows.
 - Tests: `CompensationGoldenTest` (6), `CompensationEngineTest` (7).
 - Result: 1,051 Pest tests green, PHPStan 0 errors.
+
+### D6 — Distribution: advances and monthly statement run — done
+- `Insurance\Commission\Application\CommissionStatementRun` (design note §2 step 6):
+  - **prepare** (`commission.approve`): releases conditional commission whose rule's minimum persistency the producer meets on the period end (A-23; posted then, dated the
+    period end, with the stored `withholding_bp`), then gives each producer with accrued commission up to the period end one draft statement.
+    The draft's split is earned (direct) + override + bonus + clawback − withholding − proposed advance recovery = net, with the payout route (A-22).
+    Rerunning rebuilds the period's drafts, and producers netting to nothing carry forward.
+  - **approve** (`commission.approve`): numbers the statement, recovers advances (posting PRODUCER_ADVANCE_RECOVERED) and approves its entries.
+- `CommissionPayoutService::pay` (`commission.pay`, SoD: the approver never pays — `SodGuard` on the statement) posts by route:
+  - `bank` (Phase 1) → COMMISSION_PAID;
+  - `payroll` → COMMISSION_PAYOUT_TO_PAYROLL (DR commission_payable / CR salary_payable) + outbox `CommissionPayrollEarning`;
+  - `ap` → COMMISSION_PAYOUT_TO_AP (DR commission_payable / CR accounts_payable) + outbox `CommissionPayableToAp`.
+- `Distribution\Application\Advances\AdvanceService`:
+  - **issue** (`commission.pay`): PRODUCER_ADVANCE_ISSUED (DR producer_advances / CR bank_main, bank account override);
+  - **recovery**: rule `full` or `percent_of_net` (bp of the statement net), oldest advance first, never beyond the balance; recoveries recorded per advance and statement.
+- `commission_statements` is the producer statement (D-15). Changes:
+  - new columns: `period_end`, the split, `paid_via`, `prepared_by`;
+  - a `draft` status, with number and approver required once not draft;
+  - one statement per producer per period, and `net = gross − withholding − advances recovered ≥ 0`.
+- New tables `producer_advances` and `producer_advance_recoveries` (RLS). New account roles `producer_advances` and `accounts_payable`:
+  - demo chart accounts 1160 and 2500;
+  - existing tenants map the roles before issuing advances or paying through AP.
+- New posting rules with golden fixtures:
+  - `05d_producer_advance_issued`, `05e_producer_advance_recovered`;
+  - `05f_commission_payout_to_payroll`, `05g_commission_payout_to_ap`.
+- ASSUMPTIONS A-22, A-23. Phase 1 per-agent `approve` and bank payment keep working unchanged (CommissionPayoutTest green).
+- Test setup change: `TenantIsolationEveryTableTest` issues and recovers an advance.
+- Tests: `tests/Feature/Distribution/StatementRunTest.php` (4), `GoldenRulesTest` (+4 fixtures).
+- Result: 1,059 Pest tests green, PHPStan 0 errors. Local demo database rebuilt with the new accounts.
 

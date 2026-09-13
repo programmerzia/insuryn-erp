@@ -58,7 +58,7 @@ final class CommissionAccrual
                 'receipt_allocation_id' => $source['receipt_allocation_id'] ?? null, 'policy_transaction_id' => $source['policy_transaction_id'] ?? null,
                 'commission_plan_id' => $outcome->planId, 'scheme_id' => $outcome->schemeId, 'rule_id' => $award->ruleId, 'beneficiary_role' => $award->role,
                 'level_code' => $award->levelCode, 'hierarchy_snapshot' => json_encode($outcome->hierarchySnapshot, JSON_THROW_ON_ERROR), 'kind' => 'earned',
-                'base_minor' => $baseMinor, 'rate_bp' => $award->rateBp, 'amount_minor' => $award->amountMinor, 'withholding_minor' => $award->withholdingMinor,
+                'base_minor' => $baseMinor, 'rate_bp' => $award->rateBp, 'withholding_bp' => $outcome->withholdingBp, 'amount_minor' => $award->amountMinor, 'withholding_minor' => $award->withholdingMinor,
                 'currency' => $policy->currency, 'earned_on' => $on->toDateString(), 'status' => $award->conditional ? 'conditional' : 'accrued',
             ]);
             if (! $award->conditional) {

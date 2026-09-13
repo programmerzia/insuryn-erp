@@ -18,6 +18,7 @@ final readonly class ProducerSummary
         public ?string $parentProducerId,
         public ?string $commissionPlanId,
         public ?string $joinedOn,
+        public ?string $employeeId = null,
     ) {}
 
     public function isActive(): bool
@@ -29,6 +30,7 @@ final readonly class ProducerSummary
     {
         return new self((string) $row->id, (string) $row->party_id, (string) $row->code, (string) $row->type, (string) $row->status, (string) $row->channel_id,
             (string) $row->branch_id, $row->parent_producer_id === null ? null : (string) $row->parent_producer_id,
-            $row->commission_plan_id === null ? null : (string) $row->commission_plan_id, $row->joined_on === null ? null : substr((string) $row->joined_on, 0, 10));
+            $row->commission_plan_id === null ? null : (string) $row->commission_plan_id, $row->joined_on === null ? null : substr((string) $row->joined_on, 0, 10),
+            $row->employee_id === null ? null : (string) $row->employee_id);
     }
 }
