@@ -26,6 +26,18 @@ return [
         // business is listed here is life unless its class is given explicitly, every other product is non-life.
         'life_lobs' => ['life'],
     ],
+    'approvals' => [
+        // Fix F3: object types the approval engine requests (ApprovalService::request), with the name on the Approval limits screen and the
+        // approval duty a step records for segregation of duties. Refunds and commission payouts do not go through the engine (maker-checker only).
+        'object_types' => [
+            'claim_payment' => ['label' => 'Claim payment approval', 'permission' => 'claim.approve'],
+            'claim_payment_release' => ['label' => 'Claim payment release', 'permission' => 'claim.pay_release'],
+            'journal' => ['label' => 'Manual journal', 'permission' => 'accounting.approve_journal'],
+            'journal_reversal' => ['label' => 'Journal reversal', 'permission' => 'accounting.approve_journal'],
+            'claim_reopen' => ['label' => 'Claim reopening', 'permission' => 'claim.approve'],
+            'fiscal_period_reopen' => ['label' => 'Period reopening', 'permission' => 'periods.reopen'],
+        ],
+    ],
     'setup' => [
         // Session S1 setup wizard: the jurisdiction a first product's premium tax (VAT) is recorded under, and the template offered first.
         'tax_jurisdiction' => env('ERP_TAX_JURISDICTION', 'BD'),

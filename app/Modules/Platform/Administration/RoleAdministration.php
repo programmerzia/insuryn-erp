@@ -110,6 +110,13 @@ final class RoleAdministration
             if ($holders > 0) {
                 throw new BusinessRuleViolation('ROLE_IN_USE', "{$role->name} is held by {$holders} ".Str::plural('user', $holders).'. Remove it from them first.');
             }
+            // Fix F3: an approval limit in force or scheduled names this role as an approver, and nobody else could decide that step.
+            $today = now()->toDateString();
+            $namedByLimit = DB::table('approval_policies')->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', $today))
+                ->whereRaw("exists (select 1 from jsonb_array_elements(steps::jsonb) s where s->>'role' = ?)", [(string) $role->code])->exists();
+            if ($namedByLimit) {
+                throw new BusinessRuleViolation('ROLE_IN_USE', "{$role->name} approves under an approval limit. Change or end that limit first.");
+            }
             DB::table('role_permissions')->where('role_id', $roleId)->delete();
             DB::table('roles')->where('id', $roleId)->delete();
             $this->audit->record('role.deleted', AuditSubject::of('role', $roleId), ['code' => (string) $role->code, 'name' => (string) $role->name], null,

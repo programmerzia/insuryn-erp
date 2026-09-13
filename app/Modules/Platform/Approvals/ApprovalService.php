@@ -8,6 +8,7 @@ use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Authorization\PermissionDenied;
 use App\Modules\Platform\Authorization\SodGuard;
 use App\Modules\Platform\Authorization\SodViolation;
 use App\Modules\Platform\Tenancy\TenantContext;
@@ -19,6 +20,10 @@ use Illuminate\Support\Str;
  * Design §2.1 approval_policies / approvals / approval_decisions; spec §7 "Phase 1 = maker-checker +
  * amount-threshold approval". A policy applies to an object type, is effective-dated, and has a condition
  * and sequential steps, each naming the permission its approver must hold.
+ *
+ * A step may also name a role (fix F3, DECISION D-26): then the decider must hold that role, which is the authority to approve (design §7.2
+ * "CFO: approve above thresholds", §7.3 "> 500,000 → Finance Manager + CFO"), and the step's permission is the approval duty used for the
+ * segregation-of-duties check and the audit trail. Steps without a role behave as before.
  *
  * Every decision enforces: the step permission; the decider is not the requester (maker ≠ checker);
  * nobody decides two steps of one approval; and SodGuard on the approved object. The owning module's
@@ -86,9 +91,10 @@ final class ApprovalService
             $subject = AuditSubject::of((string) $approval->object_type, (string) $approval->object_id);
             $steps = $this->steps((string) $approval->policy_id);
             $stepNo = (int) $approval->current_step;
-            $permission = $steps[$stepNo - 1] ?? throw new ApprovalException('INVALID_POLICY', "Approval {$approvalId} has no step {$stepNo}.");
+            $step = $steps[$stepNo - 1] ?? throw new ApprovalException('INVALID_POLICY', "Approval {$approvalId} has no step {$stepNo}.");
+            $permission = $step['permission'];
 
-            $this->assertMayDecide($approvalId, (string) $approval->requested_by, $deciderId, $permission, $subject);
+            $this->assertMayDecide($approvalId, (string) $approval->requested_by, $deciderId, $step, $subject);
             if ($decision === Decision::Rejected && trim((string) $reason) === '') {
                 throw new ApprovalException('REASON_REQUIRED', 'Rejecting requires a reason.');
             }
@@ -104,9 +110,15 @@ final class ApprovalService
         });
     }
 
-    private function assertMayDecide(string $approvalId, string $requestedBy, string $deciderId, string $permission, AuditSubject $subject): void
+    /** @param array{permission: string, role: string|null} $step */
+    private function assertMayDecide(string $approvalId, string $requestedBy, string $deciderId, array $step, AuditSubject $subject): void
     {
-        $this->permissions->authorize($deciderId, $permission);
+        $permission = $step['permission'];
+        if ($step['role'] === null) {
+            $this->permissions->authorize($deciderId, $permission);
+        } elseif (! self::holdsRole($deciderId, $step['role'])) {
+            throw new PermissionDenied($deciderId, $permission, "User {$deciderId} does not hold role {$step['role']}, which decides this approval step.");
+        }
         if ($deciderId === $requestedBy) {
             throw new SodViolation('SOD_CONFLICT', $deciderId, $permission, 'request', 'MAKER_CHECKER',
                 "The requester of {$subject->type} {$subject->id} cannot approve it.");
@@ -146,7 +158,13 @@ final class ApprovalService
         DB::table('approvals')->where('id', $approvalId)->update(['status' => $status->value, 'decided_at' => CarbonImmutable::now()]);
     }
 
-    /** @return array{id: string, steps: list<string>, min_amount: int}|null */
+    /** A role the user holds in any scope (an approval step names who decides, not where). */
+    public static function holdsRole(string $userId, string $roleCode): bool
+    {
+        return DB::table('user_roles as ur')->join('roles as r', 'r.id', '=', 'ur.role_id')->where('ur.user_id', $userId)->where('r.code', $roleCode)->exists();
+    }
+
+    /** @return array{id: string, steps: list<array{permission: string, role: string|null}>, min_amount: int}|null */
     private function matchingPolicy(string $objectType, ApprovalFacts $facts, CarbonImmutable $on): ?array
     {
         $candidates = [];
@@ -179,22 +197,23 @@ final class ApprovalService
             && (! is_array($kinds) || in_array($facts->attributes['kind'] ?? null, $kinds, true));
     }
 
-    /** @return list<string> step permissions in order */
+    /** @return list<array{permission: string, role: string|null}> steps in order */
     private function steps(string $policyId): array
     {
         return $this->parseSteps((string) DB::table('approval_policies')->where('id', $policyId)->value('steps'), $policyId);
     }
 
-    /** @return list<string> */
+    /** @return list<array{permission: string, role: string|null}> */
     private function parseSteps(string $json, string $policyId): array
     {
         $steps = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
-        $permissions = is_array($steps) ? array_values(array_filter(array_map(
-            fn (mixed $step): ?string => is_array($step) && is_string($step['permission'] ?? null) ? $step['permission'] : null, $steps))) : [];
-        if ($permissions === [] || count($permissions) !== count((array) $steps)) {
+        $parsed = is_array($steps) ? array_values(array_filter(array_map(
+            fn (mixed $step): ?array => is_array($step) && is_string($step['permission'] ?? null)
+                ? ['permission' => $step['permission'], 'role' => is_string($step['role'] ?? null) ? $step['role'] : null] : null, $steps))) : [];
+        if ($parsed === [] || count($parsed) !== count((array) $steps)) {
             throw new ApprovalException('INVALID_POLICY', "Approval policy {$policyId} needs at least one step, each with a permission.");
         }
 
-        return $permissions;
+        return $parsed;
     }
 }

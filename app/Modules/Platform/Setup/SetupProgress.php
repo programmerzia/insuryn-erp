@@ -16,7 +16,7 @@ use InvalidArgumentException;
  */
 final class SetupProgress
 {
-    public const STEPS = ['company', 'fiscal_year', 'chart_of_accounts', 'product', 'users', 'done'];
+    public const STEPS = ['company', 'fiscal_year', 'chart_of_accounts', 'product', 'users', 'approvals', 'done'];
 
     public function complete(string $step, string $actorUserId): void
     {

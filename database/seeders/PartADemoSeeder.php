@@ -33,6 +33,7 @@ use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
 use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Policy\Application\QuoteRequest;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
+use App\Modules\Platform\Approvals\ApprovalPolicyService;
 use App\Modules\Platform\Authorization\RoleTemplates;
 use App\Modules\Platform\Setup\SetupProgress;
 use App\Modules\Platform\Tax\TaxRateSetup;
@@ -103,6 +104,10 @@ final class PartADemoSeeder extends Seeder
                 }
             });
             (new AdminUserSeeder())->run();
+            // Fix F3: the default approval limits (A-55), set by the tenant admin after the story, so the story's approvals stay as they were and the
+            // next claim payment from 500,000 routes to the finance manager and then the CFO.
+            TenantContext::run($context['tenant_id'], fn (): int => app(ApprovalPolicyService::class)->acceptDefaults(CarbonImmutable::today(),
+                (string) DB::table('users')->where('email', "admin@{$slug}.local")->value('id')));
         });
         dispatch_sync(new OutboxRelayJob());
 

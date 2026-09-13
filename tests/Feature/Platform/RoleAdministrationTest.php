@@ -81,7 +81,7 @@ it('refuses a permission change that would give a holder a forbidden combination
 it('never removes the last way to manage users or roles', function (): void {
     actingAs($this->admin)->put('/admin/roles/'.($this->role)('tenant_admin'), ['permissions' => ['platform.manage_users']], $this->headers)
         ->assertSessionHasErrors(['form' => 'Nobody active would be left who can manage roles. Give that permission to someone else first.']);
-    expect(($this->permissionsOf)('tenant_admin'))->toBe(['platform.manage_roles', 'platform.manage_users']);
+    expect(($this->permissionsOf)('tenant_admin'))->toBe(['platform.manage_approvals', 'platform.manage_roles', 'platform.manage_users']); // + A-54 (fix F3)
 });
 
 it('deletes a role only when nobody holds it', function (): void {

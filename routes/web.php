@@ -71,6 +71,7 @@ Route::middleware('auth')->prefix('setup')->group(function (): void {
     Route::post('chart-of-accounts', [\App\Http\Setup\SetupPageController::class, 'chartOfAccounts']);
     Route::post('product', [\App\Http\Setup\SetupPageController::class, 'product']);
     Route::post('users', [\App\Http\Setup\SetupPageController::class, 'users']);
+    Route::post('approvals', [\App\Http\Setup\SetupPageController::class, 'approvals']);
     Route::post('finish', [\App\Http\Setup\SetupPageController::class, 'finish']);
 });
 
@@ -89,6 +90,11 @@ Route::middleware('auth')->prefix('admin')->group(function (): void {
     Route::get('roles/{role}', [RolesPageController::class, 'show'])->whereUuid('role');
     Route::put('roles/{role}', [RolesPageController::class, 'update'])->whereUuid('role');
     Route::delete('roles/{role}', [RolesPageController::class, 'destroy'])->whereUuid('role');
+    // Fix F3: approval limits need platform.manage_approvals.
+    Route::get('approval-limits', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'index']);
+    Route::post('approval-limits', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'store']);
+    Route::put('approval-limits/{policy}', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'update'])->whereUuid('policy');
+    Route::post('approval-limits/{policy}/end', [\App\Modules\Platform\Approvals\Http\ApprovalLimitsPageController::class, 'end'])->whereUuid('policy');
 });
 
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);

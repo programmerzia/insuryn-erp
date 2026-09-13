@@ -31,10 +31,13 @@ final class ApprovalInboxQuery
 
         $rows = [];
         foreach ($pending as $approval) {
-            /** @var list<array{permission?: string}> $steps */
+            /** @var list<array{permission?: string, role?: string}> $steps */
             $steps = json_decode((string) $approval->steps, true) ?? [];
-            $permission = (string) ($steps[(int) $approval->current_step - 1]['permission'] ?? '');
-            if ($permission === '' || ! $this->permissions->has($userId, $permission)) {
+            $step = $steps[(int) $approval->current_step - 1] ?? [];
+            $permission = (string) ($step['permission'] ?? '');
+            $role = $step['role'] ?? null;
+            // A step naming a role is decided by holders of that role (D-26); otherwise by holders of the permission.
+            if ($permission === '' || ($role === null ? ! $this->permissions->has($userId, $permission) : ! ApprovalService::holdsRole($userId, $role))) {
                 continue;
             }
             $rows[] = ['id' => (string) $approval->id, 'object_type' => (string) $approval->object_type, 'object_id' => (string) $approval->object_id,

@@ -64,7 +64,8 @@ it('sends the first sign-in of a tenant without products to the wizard, and stop
         ->where('current', 'fiscal_year')
         ->where('steps.0.id', 'company')->where('steps.0.done', true)
         ->where('steps.1.id', 'fiscal_year')->where('steps.1.done', false)
-        ->where('steps.5.id', 'done')
+        // Fix F3 inserted the optional approval limits step before Done (was: steps.5.id done).
+        ->where('steps.5.id', 'approvals')->where('steps.6.id', 'done')
         ->where('company.branches', fn ($branches): bool => count($branches) === 2));
 });
 
@@ -164,7 +165,7 @@ it('invites the first users with their roles, and the segregation of duties stil
     actingAs($this->admin)->post('/setup/users', ['users' => [
         ['name' => 'Rafiq Branch', 'email' => 'rafiq@acme.test', 'role' => 'branch_officer'],
         ['name' => 'Sadia Accounts', 'email' => 'sadia@acme.test', 'role' => 'accountant'],
-    ]], $this->headers)->assertRedirect('/setup?step=done');
+    ]], $this->headers)->assertRedirect('/setup?step=approvals'); // fix F3: the approval limits step now follows (was: step=done)
 
     ($this->in)(function (): void {
         expect(DB::table('users')->whereIn('email', ['rafiq@acme.test', 'sadia@acme.test'])->count())->toBe(2)
@@ -187,6 +188,28 @@ it('gates each step by the permission that owns the data', function (): void {
     expect(($this->in)(fn () => [DB::table('fiscal_periods')->count(), DB::table('products')->count()]))->toBe([0, 0]);
 
     actingAs(($this->person)(['branch_officer']))->get('/setup', $this->headers)->assertForbidden();
+});
+
+it('offers the default approval limits to the tenant admin, who accepts them once, and nobody else', function (): void {
+    ($this->company)();
+    actingAs($this->admin)->get('/setup?step=approvals', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('current', 'approvals')->where('steps.5.label', 'Approval limits')->where('steps.5.allowed', true)->where('steps.5.owner', 'Tenant Admin')
+        ->where('approvals.existing', 0)
+        ->where('approvals.defaults.0', ['label' => 'Claim payment approval', 'amount' => '500,000.00 and above', 'approvers' => 'Finance Manager → CFO'])
+        ->where('approvals.defaults', fn ($defaults): bool => count($defaults) === 4));
+
+    actingAs(($this->person)(['finance_manager']))->get('/setup', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('steps.5.allowed', false));
+    actingAs(($this->person)(['finance_manager']))->post('/setup/approvals', [], $this->headers)->assertSessionHasErrors('form');
+    expect(($this->in)(fn () => DB::table('approval_policies')->count()))->toBe(0);
+
+    actingAs($this->admin)->post('/setup/approvals', [], $this->headers)->assertRedirect('/setup?step=done')
+        ->assertSessionHas('status', '4 approval limits set. Change them any time in Admin → Approval limits.');
+    actingAs($this->admin)->post('/setup/approvals', [], $this->headers)->assertRedirect('/setup?step=done');
+    ($this->in)(function (): void {
+        expect(DB::table('approval_policies')->count())->toBe(4)
+            ->and(DB::table('setup_progress')->where('step', 'approvals')->exists())->toBeTrue()
+            ->and(DB::table('audit_events')->where('action', 'approval_policy.created')->count())->toBe(4);
+    });
 });
 
 it('finishes, and can be reopened from Admin later', function (): void {

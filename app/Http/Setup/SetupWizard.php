@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Setup;
 
 use App\Modules\Accounting\Application\Setup\FiscalYearSetup;
+use App\Modules\Platform\Approvals\ApprovalPolicyService;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Setup\CompanySetup;
 use App\Modules\Platform\Setup\SetupProgress;
@@ -24,6 +25,8 @@ final class SetupWizard
         'chart_of_accounts' => ['Chart of accounts', 'accounting.manage_coa', 'Finance Manager'],
         'product' => ['First product', 'product.manage', 'Finance Manager'],
         'users' => ['Users and roles', 'platform.manage_users', 'Tenant Admin'],
+        // Fix F3: optional; accepts the default approval limits (A-55) or skips.
+        'approvals' => ['Approval limits', ApprovalPolicyService::PERMISSION, 'Tenant Admin'],
         'done' => ['Done', null, null],
     ];
 

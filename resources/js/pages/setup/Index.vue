@@ -28,6 +28,7 @@ const props = defineProps<{
     chartOfAccounts: { template: string; templates: { id: string; name: string; description: string }[]; rows: AccountRow[]; imported: number | null; roles: Record<string, string> };
     product: { linesOfBusiness: Record<string, string>; existing: { code: string; name: string; insurance_class: string }[]; vatInForce: number | null };
     users: { roles: { code: string; name: string }[]; existing: { name: string; email: string }[] };
+    approvals: { defaults: { label: string; amount: string; approvers: string }[]; existing: number };
 }>();
 
 const page = usePage<SharedProps>();
@@ -182,6 +183,35 @@ function addAccount(): void {
                 </div>
                 <div><Button variant="ghost" size="sm" @click="people.users.push({ name: '', email: '', role: 'branch_officer' })"><Plus :size="16" /> Add a person</Button></div>
             </FormLayout>
+
+            <div v-else-if="current === 'approvals'" class="grid max-w-[720px] gap-3">
+                <h2 class="text-section font-semibold">Approval limits</h2>
+                <p class="text-ui text-ink-2">Who approves money above which amount. Without a limit, one person other than the one who prepared it approves. These are suggested starting points: agree the real amounts with your management, then change them in Admin → Approval limits.</p>
+                <div class="overflow-x-auto border border-line">
+                    <table class="w-full min-w-[560px] border-separate border-spacing-0 text-dense">
+                        <thead class="bg-surface-2 text-ink-2">
+                            <tr class="h-8 text-left">
+                                <th class="border-b border-line px-2 font-medium">What it approves</th>
+                                <th class="border-b border-line px-2 font-medium">Amount ({{ fiscalYear.base_currency }})</th>
+                                <th class="border-b border-line px-2 font-medium">Approved by, in order</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(limit, i) in approvals.defaults" :key="i">
+                                <td class="border-b border-line px-2 py-1.5">{{ limit.label }}</td>
+                                <td class="border-b border-line px-2 py-1.5 tabular-nums">{{ limit.amount }}</td>
+                                <td class="border-b border-line px-2 py-1.5">{{ limit.approvers }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p v-if="approvals.existing > 0" class="text-ui">{{ approvals.existing }} approval limits are already set; a suggestion that overlaps one is left out.</p>
+                <p v-if="errors.form" class="text-ui text-danger" role="alert">{{ errors.form }}</p>
+                <div class="flex gap-2">
+                    <Button @click="router.post('/setup/approvals')">Use these limits</Button>
+                    <Button variant="ghost" @click="skip">Skip for now</Button>
+                </div>
+            </div>
 
             <div v-else class="grid max-w-[560px] gap-4">
                 <h2 class="text-section font-semibold">{{ finished ? 'Setup is finished' : 'Ready to start' }}</h2>

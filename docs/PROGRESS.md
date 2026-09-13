@@ -129,6 +129,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-60 | F5 | "Class" in the unearned premium report and the premium register totals is not defined: the product's line of business (`products.lob`: motor, fire, marine, …), not `products.insurance_class` (life / non-life), which would put all non-life business in one group. | `UnearnedPremiumQuery` (`ASSUMPTION:` docblock), `PremiumRegisterQuery`. |
 | A-61 | F5 | How unearned premium is dated is not specified: as the ledger posts it (A-8) — net written premium on the issue or endorsement accounting date, each earning row on its posting date (a scheduled row on its period end, a cancellation catch-up on the cancellation date), the released remainder on the cancellation date. Postings to the control from anywhere else (a manual journal, a reversal) are not in the register and show as the reconciliation variance. | `UnearnedPremiumQuery`. |
 | A-62 | F6 | The as-of date of the agency register downloaded from the producers queue is not specified: today (the route and the API still take `as_of`). The XLSX holds the same columns as the CSV (A-16), every cell as text. | `resources/js/pages/distribution/producers/Index.vue` (`ASSUMPTION:` comment), `LicenceController::register`. |
+| A-54 | F3 | Who sets approval limits is not specified: a new permission `platform.manage_approvals`, held by the Tenant Admin template (existing tenants' `tenant_admin` role gets it by migration). It is platform configuration, not `accounting.*`, so the §7.3 rule `platform.manage_roles` ✕ `accounting.*` is untouched; the Tenant Admin could already give anyone any role. | `RoleTemplates`, `PermissionsSeeder`, migration `2026_09_19_000030`, `ApprovalPolicyService::PERMISSION` (`ASSUMPTION:`). |
+| A-55 | F3 | **Verify with the customer** (design §7.3 OPEN: actual thresholds). Default limits offered by the setup wizard and seeded in the Part A demo: claim payment approval from 500,000 BDT → Finance Manager, then CFO (below it the Claims Manager's own approval stands, no policy); claim payment release from 500,000 → CFO; manual journal and journal reversal, any amount → Finance Manager. "> 500,000" is read as "500,000 and above" (the engine's `min_amount_minor` is inclusive). Refunds and commission payouts are not routed through the approval engine (maker-checker only), so they have no limit to set. A policy's end date is not included (`effective_to` exclusive, as the engine matches). | `ApprovalPolicyService::DEFAULTS`, `config/erp.php` `approvals.object_types` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1727,3 +1729,30 @@ Scope: review only; only the critical finding was fixed.
 - ASSUMPTION A-62.
 - Tests: `tests/Feature/Distribution/AgencyRegisterExportTest.php` (4: the web CSV equals the API CSV; the XLSX is a valid zip whose sheet holds the same rows, including
   quotes and markup; refusal without `reports.regulatory`, an unknown format, and the toolbar permission prop; column letters past Z and XML escaping).
+### F3 — Approval limits screen — done
+- Market cross-check Part A step 7 ("approve within their limit, otherwise it routes up"): approval limits existed in the engine (`approval_policies`) but no screen set them.
+- **Admin → Approval limits** `/admin/approval-limits` (sidebar, secondary, after Roles; `platform.manage_approvals`, A-54): a queue of policies by what they approve —
+  Claim payment approval, Claim payment release, Manual journal, Journal reversal, Claim reopening, Period reopening (`config/erp.php` `approvals.object_types`, the object types
+  the engine requests) — with the amount band in BDT, the approvers in order, from / until and status (in force, scheduled, ended). A drawer adds or changes a policy (what it approves,
+  from amount (included), below amount (not included), one to five steps each with a tenant role, dates) and another ends it.
+- `Platform\Approvals\ApprovalPolicyService`, every change audited (`approval_policy.created | updated | ended`):
+  - effective-dated, history never rewritten: a policy in force ends the day its change starts and a successor takes over (the audit links it with `replaces`); a scheduled policy is
+    edited in place; an ended policy does not change; new policies and changes start today or later;
+  - refused: no step, a role the tenant does not have, amounts the wrong way round, and a policy overlapping another of the same object type on amount band and dates
+    (journal `kinds` conditions are kept on change and only overlap when they meet);
+  - a step is stored as `{permission, role}` in the engine's existing steps array. The engine now also honours `role`: the decider must hold the role, the permission stays the
+    duty for SoD and audit; steps without a role are unchanged (D-26). `ApprovalInboxQuery` follows the same rule, so the inbox and the sidebar badge show role steps to role holders.
+  - a role named by a policy in force or scheduled cannot be deleted (`RoleAdministration`, ROLE_IN_USE).
+- Defaults (A-55, placeholders to verify): claim payment approval from 500,000 → Finance Manager then CFO; claim payment release from 500,000 → CFO; manual journal and journal
+  reversal → Finance Manager. Not seeded in `DemoTenantSeeder` (used by nearly every test); set by the setup wizard and seeded at the end of `PartADemoSeeder` (after the story, whose
+  approvals are unchanged).
+- **Setup wizard:** new optional step *Approval limits* between *Users and roles* and *Done* (owner Tenant Admin): lists the defaults, *Use these limits* creates those that do not
+  overlap an existing policy (running it twice adds nothing), *Skip for now* moves on. `SetupProgress::STEPS` gains `approvals`.
+- Refunds and commission payouts are not routed through the approval engine (maker-checker only), so the screen offers no limit for them; routing them would need their services to
+  request approvals and handlers for the pending state — a change beyond this fix.
+- Migration `2026_09_19_000030_add_manage_approvals_permission` (permission + grant to existing tenants' `tenant_admin`).
+- Test changes: `SetupWizardTest` — the step indices after *Users and roles* moved by one (`steps.5.id` is now `approvals`, `steps.6.id` `done`; the users step redirects to
+  `step=approvals`), plus a new wizard test; `PermissionsTest` and `RoleAdministrationTest` expect `platform.manage_approvals` in the Tenant Admin template; `PartADemoTest` also checks the
+  four default limits.
+- Tests: `tests/Feature/Platform/ApprovalLimitsTest.php` (6: screen and permission, validation and overlap, effective dating and audit, claim payment routed to Finance Manager then CFO
+  through `ClaimPaymentService` and the inbox, role deletion guard, defaults), `SetupWizardTest` (+1).

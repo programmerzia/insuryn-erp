@@ -67,6 +67,10 @@ it('seeds the Part A story through the services', function (): void {
     });
     expect(File::exists(storage_path('app/demo/city-bank-2026-09.csv')))->toBeTrue()
         ->and(substr_count((string) File::get(storage_path('app/demo/city-bank-2026-09.csv')), "\n"))->toBeGreaterThanOrEqual(5);
+
+    // Fix F3: the default approval limits are set after the story (which kept its own approvals).
+    expect(asTenant($tenantId, fn (): array => DB::table('approval_policies')->orderBy('object_type')->pluck('effective_from', 'object_type')->all()))
+        ->toBe(['claim_payment' => '2026-09-13', 'claim_payment_release' => '2026-09-13', 'journal' => '2026-09-13', 'journal_reversal' => '2026-09-13']);
 });
 
 it('changes nothing when run again', function (): void {

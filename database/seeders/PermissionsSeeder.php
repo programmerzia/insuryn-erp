@@ -21,6 +21,8 @@ final class PermissionsSeeder extends Seeder
         'platform.manage_users','platform.manage_roles','audit.view','reports.financial','reports.regulatory',
         // Catalogue extensions for Phase 1A/1B configuration and CRUD (docs/PROGRESS.md "Catalogue extensions")
         'party.manage','agent.manage','product.manage','bank.manage_accounts','commission.manage_plans','claim.close',
+        // Fix F3 (A-54): approval limits
+        'platform.manage_approvals',
     ];
 
     /**

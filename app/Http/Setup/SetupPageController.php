@@ -10,6 +10,8 @@ use App\Modules\Accounting\Application\Setup\ChartOfAccountsSetup;
 use App\Modules\Accounting\Application\Setup\FiscalYearSetup;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
 use App\Modules\Platform\Administration\UserAdministration;
+use App\Modules\Platform\Approvals\ApprovalPolicyRequest;
+use App\Modules\Platform\Approvals\ApprovalPolicyService;
 use App\Modules\Platform\Authorization\PermissionDenied;
 use App\Modules\Platform\Authorization\RoleAssignmentService;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
@@ -40,7 +42,7 @@ final class SetupPageController
         private readonly SetupProgress $progress,
     ) {}
 
-    public function show(Request $request, ChartOfAccountsSetup $coa): Response
+    public function show(Request $request, ChartOfAccountsSetup $coa, ApprovalPolicyService $approvalPolicies): Response
     {
         $actor = PageSupport::actor($request);
         if (! $this->wizard->canUse($actor)) {
@@ -73,7 +75,33 @@ final class SetupPageController
                 'vatInForce' => DB::table('tax_rates')->where('tax_type', 'VAT')->where('withholding', false)->value('rate_bp')],
             'users' => ['roles' => DB::table('roles')->orderBy('name')->get(['code', 'name'])->map(fn (object $r): array => (array) $r)->values()->all(),
                 'existing' => DB::table('users')->where('kind', 'staff')->orderBy('name')->get(['name', 'email'])->map(fn (object $u): array => (array) $u)->values()->all()],
+            'approvals' => $this->approvalDefaults($approvalPolicies),
         ]);
+    }
+
+    /**
+     * Fix F3: the default approval limits (A-55) as the step shows them, and how many limits the tenant already has.
+     *
+     * @return array{defaults: list<array{label: string, amount: string, approvers: string}>, existing: int}
+     */
+    private function approvalDefaults(ApprovalPolicyService $policies): array
+    {
+        $types = ApprovalPolicyService::objectTypes();
+        $roleNames = DB::table('roles')->pluck('name', 'code')->map(fn (mixed $n): string => (string) $n)->all();
+        $currency = $policies->currency();
+
+        return ['defaults' => array_map(fn (ApprovalPolicyRequest $r): array => ['label' => $types[$r->objectType]['label'] ?? $r->objectType,
+            'amount' => ApprovalPolicyService::band($r->minAmountMinor, $r->maxAmountMinor, $currency),
+            'approvers' => implode(' → ', array_map(fn (string $code): string => $roleNames[$code] ?? $code, $r->roles))], $policies->defaults(CarbonImmutable::today())),
+            'existing' => DB::table('approval_policies')->count()];
+    }
+
+    public function approvals(Request $request, ApprovalPolicyService $policies): RedirectResponse
+    {
+        $created = $policies->acceptDefaults(CarbonImmutable::today(), PageSupport::actor($request));
+
+        return $this->saved($request, 'approvals', $created === 0 ? 'Approval limits kept as they were: they already cover these cases.'
+            : $created.' approval '.($created === 1 ? 'limit' : 'limits').' set. Change them any time in Admin → Approval limits.');
     }
 
     public function company(Request $request, CompanySetup $company): RedirectResponse
