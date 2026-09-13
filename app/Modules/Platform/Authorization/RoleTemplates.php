@@ -25,7 +25,9 @@ final class RoleTemplates
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
         'commission.approve', 'claim.pay_release', 'receipt.refund_release', 'product.manage', 'bank.manage_accounts', 'commission.manage_plans',
         // Interpretation: the finance manager signs off financial statements in the close (§5.7 tasks 14–15), so holds reports.financial.
-        'reports.financial'];
+        'reports.financial',
+        // Interpretation (A-28, session S1): no template could maintain the chart of accounts; the finance manager owns it (setup wizard, COA import).
+        'accounting.manage_coa'];
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */

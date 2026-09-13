@@ -26,6 +26,11 @@ return [
         // business is listed here is life unless its class is given explicitly, every other product is non-life.
         'life_lobs' => ['life'],
     ],
+    'setup' => [
+        // Session S1 setup wizard: the jurisdiction a first product's premium tax (VAT) is recorded under, and the template offered first.
+        'tax_jurisdiction' => env('ERP_TAX_JURISDICTION', 'BD'),
+        'chart_of_accounts_template' => 'non-life-insurance',
+    ],
     'distribution' => [
         // ASSUMPTION: A-14 — which producer types need a licence to write new business is not specified: all of them.
         'licence_required_types' => ['agent', 'agency_org', 'bdo', 'broker', 'partner'],

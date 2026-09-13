@@ -60,6 +60,17 @@ Route::middleware('auth')->prefix('distribution')->group(function (): void {
     Route::put('targets', [\App\Http\Distribution\TargetsPageController::class, 'save']);
 });
 
+// Setup wizard (session S1): steps authorize by the permission that owns their data; reopened from Admin → Setup.
+Route::middleware('auth')->prefix('setup')->group(function (): void {
+    Route::get('/', [\App\Http\Setup\SetupPageController::class, 'show']);
+    Route::post('company', [\App\Http\Setup\SetupPageController::class, 'company']);
+    Route::post('fiscal-year', [\App\Http\Setup\SetupPageController::class, 'fiscalYear']);
+    Route::post('chart-of-accounts', [\App\Http\Setup\SetupPageController::class, 'chartOfAccounts']);
+    Route::post('product', [\App\Http\Setup\SetupPageController::class, 'product']);
+    Route::post('users', [\App\Http\Setup\SetupPageController::class, 'users']);
+    Route::post('finish', [\App\Http\Setup\SetupPageController::class, 'finish']);
+});
+
 // Administration (phase 2.0): users need platform.manage_users, roles platform.manage_roles; the controllers authorize.
 Route::middleware('auth')->prefix('admin')->group(function (): void {
     Route::get('users', [UsersPageController::class, 'index']);

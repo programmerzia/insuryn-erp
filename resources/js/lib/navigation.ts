@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Target, UserCog, UsersRound } from 'lucide-vue-next';
+import { Banknote, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -49,6 +49,7 @@ export const navigation: NavItem[] = [
     { id: 'cheques', label: 'Cheques', href: '/cheques', icon: Receipt, any: collections, secondary: true },
     { id: 'dunning', label: 'Reminders', href: '/dunning', icon: BellRing, any: collections, secondary: true },
     { id: 'imports', label: 'Imports', href: '/accounting/imports', icon: Upload, any: ['accounting.view_journals'], secondary: true },
+    { id: 'setup', page: 'setup/Index', label: 'Setup', href: '/setup', icon: Settings2, any: ['platform.manage_roles', 'periods.lock', 'accounting.manage_coa', 'product.manage', 'platform.manage_users'], secondary: true },
     { id: 'users', detail: 'admin/users/Show', page: 'admin/users/Index', label: 'Users', href: '/admin/users', icon: UserCog, any: ['platform.manage_users'], secondary: true },
     { id: 'roles', detail: 'admin/roles/Show', page: 'admin/roles/Index', label: 'Roles', href: '/admin/roles', icon: KeyRound, any: ['platform.manage_roles'], secondary: true },
 ];

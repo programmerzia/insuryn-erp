@@ -121,6 +121,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-24 | D7 | Target and incentive periods are not specified: calendar months, quarters (from January, April, July, October) and years; fiscal periods are LATER. | `Distribution\Domain\Incentives\IncentivePeriod` (`ASSUMPTION:`). |
 | A-25 | D7 | A producer without a target for the plan's period and metric earns no incentive; the highest tier reached pays; a bonus carries the plan's withholding tax, none when the plan names none (payroll handles tax for salaried producers). Production: gross written premium dated in the period (new, renewal, endorsement and cancellation transactions), new and renewal policies, collections by value date net of reversed allocations. | `IncentiveRun`, `ProductionQuery` (`ASSUMPTION:`). |
 | A-26 | D9 | Producer portal access is not specified beyond "read-only in MVP except collection recording": one portal user per producer, of user kind `portal` (never signs in to the staff web app), whose `producer_portal` role holds receipt.create and receipt.allocate scoped to the producer's branch; every portal read and the collection endpoint are limited to the producer's own policies; only active producers use the portal. Tokens carry abilities `portal:read` and `portal:collect`. | `ProducerPortalAccess` (`ASSUMPTION:`), `EnsureProducerPortal`, Fortify `authenticateUsing`. |
+| A-27 | S1 | Who does each setup step is not specified: the permission that owns the data decides — company and branches `platform.manage_roles` (Tenant Admin), fiscal year `periods.lock` and chart of accounts `accounting.manage_coa` (Finance Manager), first product `product.manage`, users `platform.manage_users`. A step the user cannot do says who can and may be skipped. The fiscal year is twelve monthly periods from the chosen month, opened once; the base currency changes only while nothing is posted. Chart-of-accounts template accounts that carry an account role cannot be removed. A first product earns monthly (Part A: 1/12 each month); its VAT rate is recorded under jurisdiction `erp.setup.tax_jurisdiction` (BD) unless one is already in force. | `SetupWizard`, `CompanySetup`, `FiscalYearSetup`, `ChartOfAccountsSetup`, `TaxRateSetup`, `config/erp.php` `setup.*`. |
+| A-28 | S1 | No §7.2 role template held `accounting.manage_coa`, so nobody could import a chart of accounts: the Finance Manager (and CFO) now hold it. | `RoleTemplates` (interpretation comment). |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1543,3 +1545,22 @@ Scope: review only; only the critical finding was fixed.
 - Final gate: 1,077 Pest tests, 231 Vitest tests green, PHPStan 0 errors, vue-tsc and production build green; `composer db:fresh` builds the demo with both modes.
 - **Pending after Distribution:** 2.0c Playwright E2E happy path, 2.0d claim reserve property test, 2.1 design addendum v2 (rows above).
 
+
+### S1 — Onboarding: setup wizard — done
+- Market cross-check G9 / Part A. The first sign-in to a tenant with no products, while nobody has finished setup, goes from Home to `/setup` for any user who can do a step
+  (`App\Http\Setup\SetupWizard::shouldOpenFor`); others see Home. Admin → Setup reopens it at any time.
+- One page, six steps (company and branches → fiscal year and currency → chart of accounts → first product → users and roles → done), each posting on its own and recorded in
+  `setup_progress` (tenant table, forced RLS). Step services, all audited:
+  - `Platform\Setup\CompanySetup`: the legal entity and branches; saving again renames by code and adds, never removes;
+  - `Accounting\Application\Setup\FiscalYearSetup`: LOCAL book, twelve open periods, tenant fiscal start month and base currency;
+  - `Accounting\Application\Setup\ChartOfAccountsSetup`: template `resources/setup/chart-of-accounts/non-life-insurance.csv` (32 accounts, the demo tenant's roles plus cash, advance tax,
+    share capital, rent and stationery) reviewed and edited in a table, imported through the ordinary `ChartOfAccountsImport` (validation errors land on the row and field),
+    then control accounts registered in `subledger_controls`, which the import alone never did;
+  - first product through `ProductCatalogue` (term, class, monthly earning) with `Platform\Tax\TaxRateSetup` for VAT;
+  - users through `UserAdministration::invite` and `RoleAssignmentService::assign` (so SoD holds).
+  Gating and defaults: A-27, A-28. Decision D-17.
+- `php artisan erp:tenant <slug> "<name>"` creates a tenant on its first day (`BlankTenantSeeder`: roles and SoD rules only) plus `admin@<slug>.local`; sign in at `http://<slug>.localhost:8000`.
+- `Stepper` gains `free` (any step opens, ticks show saved steps) and `wide`.
+- Test setup change: `TenantIsolationEveryTableTest` records a setup step so `setup_progress` has rows.
+- Screenshots: `storage/ux-screenshots/s1-wizard/` (company, chart of accounts, product, users, done; 1366/1920, light/dark).
+- Tests: `tests/Feature/Setup/SetupWizardTest.php` (9).

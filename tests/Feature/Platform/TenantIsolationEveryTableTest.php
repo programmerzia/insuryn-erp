@@ -142,6 +142,7 @@ function populateEveryTenantTable(array $ctx): void
         app(IncentiveRun::class)->run($ctx['entity_id'], $d('2026-07-31'), $world['admin']);
         $portalUser = app(ProducerPortalAccess::class)->grant($world['agent_id'], 'portal-'.Str::lower(Str::random(6)).'@agents.test', $world['admin']); // slice D9
         App\Models\User::query()->findOrFail($portalUser)->createToken('isolation', ['portal:read']);
+        app(App\Modules\Platform\Setup\SetupProgress::class)->complete('company', $world['admin']); // session S1 setup wizard
     });
 }
 

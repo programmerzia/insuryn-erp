@@ -28,3 +28,18 @@ Illuminate\Support\Facades\Artisan::command('portal:openapi', function (App\Http
     $this->info("Wrote {$path}");
 })->purpose('Write docs/api/producer-portal.openapi.json from the portal routes');
 
+
+// Session S1: a tenant on its first day (roles and segregation-of-duties rules, no company or products) and its admin, admin@<slug>.local.
+// Sign in at http://<slug>.localhost:8000; the setup wizard opens.
+Illuminate\Support\Facades\Artisan::command('erp:tenant {slug : subdomain, letters and digits} {name : the company name shown in the app}', function (string $slug, string $name): int {
+    if (preg_match('/^[a-z0-9-]{2,32}$/', $slug) !== 1) {
+        $this->error('The slug is 2–32 lowercase letters, digits or dashes.');
+
+        return 1;
+    }
+    (new Database\Seeders\BlankTenantSeeder())->run($slug, $name);
+    (new Database\Seeders\AdminUserSeeder())->run();
+    $this->info("Tenant {$slug} is ready. Sign in as admin@{$slug}.local at http://{$slug}.localhost:8000 (password: config erp.seed.admin_password).");
+
+    return 0;
+})->purpose('Create a blank tenant whose first sign-in opens the setup wizard');
