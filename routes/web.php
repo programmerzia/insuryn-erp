@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Search\GlobalSearchController;
 use App\Modules\Accounting\Http\Controllers\ClosePageController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\Route;
 Route::redirect('/', '/accounting/journals');
 
 Route::middleware('auth')->get('account/security', SecurityPageController::class)->name('account.security');
+Route::middleware('auth')->get('search', GlobalSearchController::class)->name('search');
 Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
 
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);

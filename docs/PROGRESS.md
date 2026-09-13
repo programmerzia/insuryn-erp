@@ -66,7 +66,7 @@ code and in the register below, configurable.
 | 1C.12 | Phase 1 exit pack (customer questions, exit checklist, Phase 2 kickoff) | done | see git log |
 | U1 | UX: theme tokens and design system | done | see git log |
 | U2 | UX: application shell | done | see git log |
-| U3 | UX: command palette and shortcuts registry | pending | |
+| U3 | UX: command palette and shortcuts registry | done | see git log |
 | U4 | UX: data table | pending | |
 | U5 | UX: form system | pending | |
 | U6 | UX: role home queues and badges | pending | |
@@ -937,3 +937,29 @@ Scope: review only; only the critical finding was fixed.
 - Not yet: the branch choice is stored and shown but lists do not filter by it until their queries take a branch (U6/U7); sidebar badges are
   zero until U6; the command field opens nothing until U3.
 - Result: 967 Pest tests, 146 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 147.9 KB gzip, before route splitting in U10).
+
+### U3 — UX: command palette and shortcuts registry — done
+- Backend (thin): `GET /search?q=` → `App\Http\Search\GlobalSearchQuery` (app-level composition, read-only): policies by number or policyholder,
+  claims by number or description, receipts by number, reference or cheque number, customers by name or TIN, journals by number, each limited
+  to five and only from areas the user may open (the page controllers' `AREA` permissions). Short document numbers work: "POL-1042" finds
+  POL-2026-001042. Period actions: "lock period sep 2026", "close aug", "reopen jul 2026" return the period's next close action the user may
+  take ("Lock period Sep 2026", with status and whether a close is running; locked periods offer reopen only to `periods.reopen`).
+- Palette (`components/shell/CommandPalette.vue`, Ctrl+K anywhere, also the top bar field): groups Recent · Actions · Go to · Settings ·
+  Records; fuzzy match (`lib/fuzzy.ts`: in-order characters, word starts and prefixes rank higher), recent-first (`lib/commands.ts`, recents
+  saved per user, 20, newest first, once each); "cheque 88231", "policy …" prefixes search the reference itself; ↑↓ move, Enter runs, Esc
+  closes; results fetched 150ms after typing stops with the previous request aborted; empty result says what can be searched. Commands:
+  navigation from `lib/navigation.ts` (permission-filtered), actions (new quote, record a receipt, register a claim, new manual journal,
+  import a bank statement, import chart of accounts, start month-end close, approve or pay commission), settings (theme, density, sidebar,
+  keyboard shortcuts list).
+- Shortcuts registry (`lib/shortcuts.ts`) is the single source for keys: menu items (`MenuItem shortcut=`), the palette's settings commands,
+  the inspector's primary action, tooltips and the "Keyboard shortcuts" list all read from it. New handlers: Alt+T theme, Alt+D density.
+- Tests first: `tests/Feature/Pages/GlobalSearchTest.php` (guests, minimum length; policy by number, short number, customer; claims hidden
+  without claim permissions; cheque found by a cashier, not by a claims officer; period action only for `periods.lock`);
+  `resources/js/tests/palette.test.ts` (fuzzy ranking; commands by permission with registry shortcuts; recent-first ordering; recents cap).
+  An initial expectation that "POL-1042" should not fuzzy-match "POL-2026-001042" was my own mistake (the brief wants it to match); corrected
+  and the server now supports the short form too.
+- Screenshots: `storage/ux-screenshots/U3/{palette,find-policy,find-cheque,lock-period,go-claims,shortcuts}-{1366,1920}-{light,dark}.png`.
+  Self-critique fixes: stray focus outline on the dialog container removed; empty palette lists actions before navigation.
+- Not achievable now: customer search by phone (parties have no phone column); fuzzy matching of records is server-side substring/number
+  matching, not fuzzy.
+- Result: 970 Pest tests, 153 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.

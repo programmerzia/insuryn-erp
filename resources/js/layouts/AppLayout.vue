@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, watch } from 'vue';
+import CommandPalette from '@/components/shell/CommandPalette.vue';
 import Sidebar from '@/components/shell/Sidebar.vue';
 import StatusBar from '@/components/shell/StatusBar.vue';
 import TabStrip from '@/components/shell/TabStrip.vue';
 import Toaster from '@/components/shell/Toaster.vue';
 import TopBar from '@/components/shell/TopBar.vue';
+import { openPalette } from '@/lib/palette';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useShortcut } from '@/lib/shortcuts';
 import { toast } from '@/lib/toasts';
@@ -20,6 +22,9 @@ defineProps<{ title: string; fill?: boolean }>();
 const page = usePage<SharedProps>();
 const preferences = usePreferences();
 useShortcut('app.sidebar', () => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed));
+useShortcut('app.palette', openPalette, { allowInInputs: true });
+useShortcut('app.theme', () => savePreference('theme', preferences.theme === 'dark' ? 'light' : 'dark', 0), { allowInInputs: true });
+useShortcut('app.density', () => savePreference('density', preferences.density === 'compact' ? 'comfortable' : 'compact', 0), { allowInInputs: true });
 
 const status = computed(() => page.props.status);
 watch(status, (message) => message && toast(message, { tone: 'ok' }), { immediate: true });
@@ -36,5 +41,6 @@ watch(status, (message) => message && toast(message, { tone: 'ok' }), { immediat
         </main>
         <StatusBar class="col-span-2 col-start-1 row-start-4" />
         <Toaster />
+        <CommandPalette />
     </div>
 </template>
