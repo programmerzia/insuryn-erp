@@ -61,7 +61,7 @@ final class PolicyPageController
             'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'products' => DB::table('products')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
-            'agents' => DB::table('agents as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')->orderBy('a.code')
+            'agents' => DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')->orderBy('a.code')
                 ->get(['a.id', 'a.code', 'p.display_name'])->map(fn (object $a): array => (array) $a)->values()->all(),
         ]);
     }
@@ -95,7 +95,7 @@ final class PolicyPageController
         return Inertia::render('policies/Show', [
             'policy' => ['id' => $model->id, 'number' => $model->number, 'status' => $status->value, 'version' => $model->version, 'inception' => $model->inception->toDateString(),
                 'expiry' => $model->expiry->toDateString(), 'channel' => $model->channel, 'currency' => $model->currency, 'policyholder' => (string) ($names[$model->policyholder_party_id] ?? ''),
-                'product_code' => (string) DB::table('products')->where('id', $model->product_id)->value('code'), 'agent_code' => $model->agent_id === null ? null : (string) DB::table('agents')->where('id', $model->agent_id)->value('code'),
+                'product_code' => (string) DB::table('products')->where('id', $model->product_id)->value('code'), 'agent_code' => $model->agent_id === null ? null : (string) DB::table('producers')->where('id', $model->agent_id)->value('code'),
                 'gross_premium' => $money($model->gross_premium_minor), 'net_premium' => $money($model->net_premium_minor), 'tax' => $money($model->tax_minor),
                 'cancel_date' => $model->cancel_date?->toDateString()],
             'transactions' => $model->transactions()->get()->map(fn (PolicyTransaction $t): array => ['id' => $t->id, 'type' => $t->type->value, 'effective_date' => $t->effective_date->toDateString(),

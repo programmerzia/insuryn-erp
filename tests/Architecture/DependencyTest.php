@@ -48,5 +48,13 @@ arch('finance does not use the insurance domain')->expect('App\Modules\Finance')
     'App\Modules\Insurance\Collections\Domain', 'App\Modules\Insurance\Commission\Domain', 'App\Modules\Insurance\Claims\Domain',
 ]);
 
+/** Distribution design note §0 (DECISION D-12): Distribution feeds Insurance's commission subledger; Insurance uses its application layer only. */
+arch('distribution depends on platform and the accounting application layer only')->expect('App\Modules\Distribution')->not->toUse([
+    'App\Modules\Insurance', 'App\Modules\Finance', 'App\Modules\People', 'App\Modules\Compliance',
+    'App\Modules\Accounting\Domain', 'App\Modules\Accounting\Infrastructure', 'App\Modules\Accounting\Http',
+]);
+arch('other contexts do not use the distribution domain')->expect(['App\Modules\Insurance', 'App\Modules\Finance', 'App\Modules\People'])
+    ->not->toUse(['App\Modules\Distribution\Domain', 'App\Modules\Distribution\Infrastructure', 'App\Modules\Distribution\Http']);
+
 arch('strict types everywhere')->expect('App')->toUseStrictTypes();
 arch('no floats in accounting')->expect('App\Modules\Accounting')->not->toUse(['floatval', 'round', 'number_format']);

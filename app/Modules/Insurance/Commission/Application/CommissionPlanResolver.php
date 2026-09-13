@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Commission\Application;
 
 use App\Modules\Insurance\Commission\Domain\Models\CommissionPlan;
-use App\Modules\Insurance\Party\Domain\Models\Agent;
+use App\Modules\Distribution\Application\ProducerDirectory;
 use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
@@ -27,7 +27,7 @@ final class CommissionPlanResolver
         foreach ($precedence as $source) {
             $planId = match ($source) {
                 'product_version' => ProductVersion::query()->whereKey($policy->product_version_id)->value('commission_plan_id'),
-                'agent' => Agent::query()->whereKey($policy->agent_id)->value('commission_plan_id'),
+                'agent' => app(ProducerDirectory::class)->find($policy->agent_id)?->commissionPlanId,
                 default => null,
             };
             if ($planId !== null) {

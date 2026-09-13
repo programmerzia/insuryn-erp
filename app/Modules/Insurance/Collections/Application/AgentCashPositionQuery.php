@@ -39,7 +39,7 @@ final class AgentCashPositionQuery
             ->groupBy('agent_id')->selectRaw('agent_id, sum(amount_minor) as total')->pluck('total', 'agent_id');
         $gl = $this->ledger->roleMovementByDimension($entityId, 'agent_receivable', CarbonImmutable::parse('1900-01-01'), $asOf, 'agent')['by_dimension'];
         $agentIds = array_values(array_unique([...$collections->keys()->map(fn ($id): string => (string) $id)->all(), ...$deposits->keys()->map(fn ($id): string => (string) $id)->all()]));
-        $codes = DB::table('agents')->whereIn('id', $agentIds)->pluck('code', 'id');
+        $codes = DB::table('producers')->whereIn('id', $agentIds)->pluck('code', 'id');
 
         $rows = [];
         foreach ($agentIds as $agentId) {

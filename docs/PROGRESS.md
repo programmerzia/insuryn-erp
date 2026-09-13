@@ -16,7 +16,8 @@ composer test                        # Pest, serially (erp_owner cannot create d
 git log --oneline | head             # one commit per green slice: feat(<area>): slice N – <name>
 ```
 
-Next slice to pick up: the first row below whose status is not `done`, in table order. All Phase 1 rows are done;
+Next slice to pick up: the first Distribution row (D1–D9, docs/distribution-module-design.md) whose status is not `done`; the pending
+2.0c, 2.0d and 2.1 rows follow once D9 is done. Otherwise the first row below whose status is not `done`, in table order. All Phase 1 rows are done;
 Phase 2 starts from `docs/phase-2/kickoff.md` (slice 2.0 carry-over, then 2.1 design addendum).
 UX rebuild U1–U10 (docs/ux-design-brief.md is the authority for everything visual and interactive): frontend only, backend added thinly
 where a screen needs it; existing tests unchanged. Per slice: screenshots with `node scripts/ux-shots.mjs <slice> name=/path …` at 1366×768
@@ -77,9 +78,18 @@ code and in the register below, configurable.
 | U10 | UX: performance | done | see git log |
 | 2.0a | Phase 1 carry-over: user and role administration screens | done | see git log |
 | 2.0b | Phase 1 carry-over: CI pipeline | done | see git log |
-| 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo | |
-| 2.0d | Phase 1 carry-over: claim reserve property test | todo | |
-| 2.1 | Design addendum v2 and Phase 2 customer questions | todo | |
+| 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo (pending, after Distribution D1–D9) | |
+| 2.0d | Phase 1 carry-over: claim reserve property test | todo (pending, after Distribution D1–D9) | |
+| 2.1 | Design addendum v2 and Phase 2 customer questions | todo (pending, after Distribution D1–D9) | |
+| D1 | Distribution: agents → producers with channels | done | see git log |
+| D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | todo | |
+| D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | todo | |
+| D4 | Distribution: compensation schemes, rules, compliance profile | todo | |
+| D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | todo | |
+| D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | todo | |
+| D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | todo | |
+| D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | todo | |
+| D9 | Distribution: producer portal REST with Sanctum and OpenAPI | todo | |
 
 ## ASSUMPTION register
 
@@ -1286,4 +1296,23 @@ Scope: review only; only the critical finding was fixed.
   green (1,013 Pest tests, PHPStan 0 errors). A deliberately failing test made `backend.sh` exit 1 before PHPStan.
 - Not in this slice: the Playwright E2E job (2.0c adds it to the same workflow); the k6 performance smoke is not CI-blocking by design.
 - To do once the repo has a GitHub remote: branch protection on `main` requiring `backend` and `frontend` (A-13). The workflow has not run on GitHub yet.
+
+### D1 — Distribution: agents → producers with channels — done
+- New business context `App\Modules\Distribution` (D-12). Tables `channels` (agency, bdo, broker, bancassurance, partner, direct) and `producers`
+  (agent, agency_org, bdo, broker, partner; applicant → active → suspended → terminated; employee_id, joined_on, terminated_on, termination_reason),
+  both tenant tables with forced RLS and CHECK constraints on type and status.
+- Migration `2026_09_18_000001_create_distribution_producers`: Phase 1 `agents` rows copied into `producers` per tenant with their ids
+  (`LegacyAgentBackfill`), type agent, standard AGENCY channel, `inactive` → `suspended`, joined_on = creation date; then `agents` dropped. `down()` restores `agents`.
+  Checked on the local demo database: 3 agents in, 3 producers out with an identical hash over id, code, party, parent and plan; no policy or journal line
+  points at a missing producer; rollback and re-migrate both work.
+- `agent_id` columns (policies, receipts `collected_by_agent_id`, agent deposits, commission entries and statements) and the `dim_agent` dimension keep their names
+  and now hold producer ids (D-13). The journal page labels the dimension "Producer".
+- Insurance no longer has an Agent model: it reads producers through `Distribution\Application\ProducerDirectory` (a read-only contract returning
+  `ProducerSummary`). `Insurance\Party\Application\AgentService` stays as the agent-flavoured façade over `ProducerService` and still adds the party's
+  agent role, so the agent API (`/api/insurance/agents`, Phase 1 `inactive` accepted as `suspended`), screens and seeders are unchanged.
+- Each producer type joins its standard channel when none is chosen (`ChannelDirectory::standard`, created on first use): agent and agency_org → AGENCY, bdo → BDO, broker → BROKER, partner → PARTNER.
+- Architecture tests: Distribution uses no Insurance, Finance or People code and only the accounting application layer; no other context uses the Distribution domain, infrastructure or HTTP layers.
+- Tests: `tests/Feature/Distribution/ProducersTest.php` (4). One existing test changed mechanically, not weakened: `CommissionTest` updated `commission_plan_id` through
+  `DB::table('agents')`, now `DB::table('producers')` (the table was renamed; assertions unchanged).
+- Result: 1,019 Pest tests green, PHPStan 0 errors.
 

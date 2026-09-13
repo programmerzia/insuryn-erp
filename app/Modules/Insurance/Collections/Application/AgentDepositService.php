@@ -7,7 +7,7 @@ namespace App\Modules\Insurance\Collections\Application;
 use App\Modules\Accounting\Application\SubmitAccountingEvent;
 use App\Modules\Finance\Bank\Application\BankAccountQuery;
 use App\Modules\Insurance\Collections\Domain\Models\AgentDeposit;
-use App\Modules\Insurance\Party\Domain\Models\Agent;
+use App\Modules\Distribution\Application\ProducerDirectory;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
@@ -37,23 +37,23 @@ final class AgentDepositService
     /** @throws BusinessRuleViolation INVALID_AMOUNT | DEPOSIT_EXCEEDS_UNDEPOSITED_CASH | INVALID_BANK_ACCOUNT */
     public function record(string $agentId, int $amountMinor, ?string $bankAccountId, ?string $reference, string $actorUserId, CarbonImmutable $depositedOn): AgentDeposit
     {
-        $agent = Agent::query()->findOrFail($agentId);
-        $entityId = (string) DB::table('branches')->where('id', $agent->branch_id)->value('entity_id');
+        $agent = app(ProducerDirectory::class)->get($agentId);
+        $entityId = (string) DB::table('branches')->where('id', $agent->branchId)->value('entity_id');
         $currency = (string) DB::table('legal_entities')->where('id', $entityId)->value('base_currency');
-        $this->permissions->authorize($actorUserId, 'receipt.create', AuthorizationScope::branch($entityId, $agent->branch_id));
+        $this->permissions->authorize($actorUserId, 'receipt.create', AuthorizationScope::branch($entityId, $agent->branchId));
         if ($amountMinor <= 0) {
             throw new BusinessRuleViolation('INVALID_AMOUNT', 'A deposit must be a positive amount.');
         }
         $bankGl = $bankAccountId === null ? null : $this->bankAccounts->glAccountFor($bankAccountId, $entityId, $currency);
-        $number = $this->numbers->reserve(new DocumentNumberScope($entityId, $agent->branch_id, 'agent_deposit', 'ADP', $depositedOn), $actorUserId);
+        $number = $this->numbers->reserve(new DocumentNumberScope($entityId, $agent->branchId, 'agent_deposit', 'ADP', $depositedOn), $actorUserId);
 
         return DB::transaction(function () use ($agent, $entityId, $currency, $amountMinor, $bankAccountId, $bankGl, $reference, $actorUserId, $depositedOn, $number): AgentDeposit {
-            Agent::query()->whereKey($agent->id)->lockForUpdate()->firstOrFail(); // serialises deposits per agent
+            app(ProducerDirectory::class)->lock($agent->id); // serialises deposits per agent
             $undeposited = $this->position->undepositedMinor($agent->id);
             if ($amountMinor > $undeposited) {
                 throw new BusinessRuleViolation('DEPOSIT_EXCEEDS_UNDEPOSITED_CASH', "Agent {$agent->code} holds {$undeposited} undeposited, less than {$amountMinor}.");
             }
-            $deposit = AgentDeposit::query()->create(['entity_id' => $entityId, 'branch_id' => $agent->branch_id, 'agent_id' => $agent->id, 'number' => $number->number,
+            $deposit = AgentDeposit::query()->create(['entity_id' => $entityId, 'branch_id' => $agent->branchId, 'agent_id' => $agent->id, 'number' => $number->number,
                 'amount_minor' => $amountMinor, 'currency' => $currency, 'deposited_on' => $depositedOn->toDateString(), 'bank_account_id' => $bankAccountId,
                 'reference' => $reference, 'recorded_by' => $actorUserId]);
             $this->numbers->markUsed($number->id, 'agent_deposit', $deposit->id);
@@ -62,7 +62,7 @@ final class AgentDepositService
                 idempotencyKey: 'AGENT_DEPOSIT_RECORDED:'.$deposit->id, transactionDate: $depositedOn, effectiveDate: $depositedOn, currency: $currency,
                 payload: ['amount' => $amountMinor, 'agent_deposit_id' => $deposit->id, 'reference' => $reference, 'receipt_number' => $deposit->number, 'bank_account_id' => $bankAccountId]
                     + ($bankGl === null ? [] : ['account_overrides' => ['bank_main' => $bankGl]]),
-                dimensions: ['branch' => $agent->branch_id, 'agent' => $agent->id],
+                dimensions: ['branch' => $agent->branchId, 'agent' => $agent->id],
             );
             $this->audit->record('agent_deposit.recorded', AuditSubject::of('agent_deposit', $deposit->id), null,
                 ['agent_id' => $agent->id, 'amount_minor' => $amountMinor, 'deposited_on' => $depositedOn->toDateString()], null, 'receipt.create', Actor::user($actorUserId));

@@ -91,7 +91,7 @@ it('earns nothing for direct business or when no plan applies', function (): voi
         ($this->receive)(1_000_000, [new AllocationLine($direct[0], 1_000_000)]);
 
         DB::table('product_versions')->update(['commission_plan_id' => null]);
-        DB::table('agents')->update(['commission_plan_id' => null]);
+        DB::table('producers')->update(['commission_plan_id' => null]);
         [, $unplanned] = ($this->issue)($this->world['agent_id']);
         ($this->receive)(1_000_000, [new AllocationLine($unplanned[0], 1_000_000)]);
 
@@ -105,7 +105,7 @@ it('takes the product version plan before the agent plan by default, configurabl
 
     asTenant($this->ctx['tenant_id'], function () use ($planner): void {
         $agentPlan = app(CommissionPlanService::class)->create('AGENT-7', 'Agent 7%', 700, null, null, $planner);
-        DB::table('agents')->update(['commission_plan_id' => $agentPlan->id]);
+        DB::table('producers')->update(['commission_plan_id' => $agentPlan->id]);
         [, $installments] = ($this->issue)($this->world['agent_id'], 3);
 
         ($this->receive)(1_000_000, [new AllocationLine($installments[0], 1_000_000)]);

@@ -80,7 +80,7 @@ final class LookupController
     /** @return list<array<string, string>> */
     private function agents(string $like): array
     {
-        $rows = DB::table('agents as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')
+        $rows = DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')
             ->where(fn ($q) => $q->where('a.code', 'ilike', $like)->orWhere('p.display_name', 'ilike', $like))->orderBy('a.code')->limit(self::LIMIT)->get(['a.id', 'a.code', 'p.display_name']);
         $results = [];
         foreach ($rows as $row) {

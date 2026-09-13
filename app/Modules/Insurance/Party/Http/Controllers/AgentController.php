@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Party\Http\Controllers;
 
+use App\Modules\Distribution\Application\ProducerDirectory;
+use App\Modules\Distribution\Application\ProducerSummary;
 use App\Modules\Insurance\Party\Application\AgentService;
-use App\Modules\Insurance\Party\Domain\Models\Agent;
+use App\Modules\Insurance\Party\Domain\Models\Party;
 use App\Modules\Insurance\Party\Http\Requests\StoreAgentRequest;
 use App\Modules\Insurance\Party\Http\Requests\UpdateAgentRequest;
 use Illuminate\Http\JsonResponse;
@@ -13,11 +15,11 @@ use Illuminate\Http\Request;
 
 final class AgentController
 {
-    public function __construct(private readonly AgentService $agents) {}
+    public function __construct(private readonly AgentService $agents, private readonly ProducerDirectory $producers) {}
 
     public function index(): JsonResponse
     {
-        return response()->json(['data' => Agent::query()->orderBy('code')->get()->map(fn (Agent $agent): array => $this->present($agent, false))->values()->all()]);
+        return response()->json(['data' => array_map(fn (ProducerSummary $agent): array => $this->present($agent, false), $this->producers->all('agent'))]);
     }
 
     public function store(StoreAgentRequest $request): JsonResponse
@@ -32,7 +34,7 @@ final class AgentController
 
     public function show(string $agent): JsonResponse
     {
-        return response()->json(['data' => $this->present(Agent::query()->with('party.roles')->findOrFail($agent), true)]);
+        return response()->json(['data' => $this->present($this->producers->get($agent), true)]);
     }
 
     public function update(UpdateAgentRequest $request, string $agent): JsonResponse
@@ -44,13 +46,14 @@ final class AgentController
     }
 
     /** @return array<string, mixed> */
-    private function present(Agent $agent, bool $withHierarchy): array
+    private function present(ProducerSummary $agent, bool $withHierarchy): array
     {
-        $data = ['id' => $agent->id, 'code' => $agent->code, 'party_id' => $agent->party_id, 'branch_id' => $agent->branch_id,
-            'parent_agent_id' => $agent->parent_agent_id, 'commission_plan_id' => $agent->commission_plan_id, 'status' => $agent->status];
+        $data = ['id' => $agent->id, 'code' => $agent->code, 'party_id' => $agent->partyId, 'branch_id' => $agent->branchId,
+            'parent_agent_id' => $agent->parentProducerId, 'commission_plan_id' => $agent->commissionPlanId, 'status' => $agent->status];
         if ($withHierarchy) {
             $data['ancestors'] = $this->agents->ancestors($agent->id);
-            $data['party'] = $agent->party === null ? null : PartyController::present($agent->party->loadMissing(['roles', 'bankAccounts']));
+            $party = Party::query()->with(['roles', 'bankAccounts'])->find($agent->partyId);
+            $data['party'] = $party === null ? null : PartyController::present($party);
         }
 
         return $data;

@@ -135,7 +135,7 @@ final class ReportsPageController
     private function lossRatio(string $entityId, CarbonImmutable $from, CarbonImmutable $to, string $by, callable $money): array
     {
         $result = app(LossRatioQuery::class)->lossRatio($entityId, $from, $to, $by);
-        $labels = \Illuminate\Support\Facades\DB::table(match ($by) { 'agent' => 'agents', 'branch' => 'branches', default => 'products' })->pluck('code', 'id');
+        $labels = \Illuminate\Support\Facades\DB::table(match ($by) { 'agent' => 'producers', 'branch' => 'branches', default => 'products' })->pluck('code', 'id');
         $ratio = fn (?int $bp): string => $bp === null ? '—' : sprintf('%d.%02d%%', intdiv($bp, 100), $bp % 100);
 
         return self::table("Loss ratio by {$by}", 'range_by', [['group', ucfirst($by)], ['earned', 'Earned premium', 'right'], ['incurred', 'Incurred claims', 'right'], ['ratio', 'Loss ratio', 'right']],

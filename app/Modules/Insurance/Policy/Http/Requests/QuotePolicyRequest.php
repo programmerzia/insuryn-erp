@@ -16,7 +16,7 @@ final class QuotePolicyRequest extends FormRequest
             'branch_id' => ['required', 'uuid', Rule::exists('branches', 'id')],
             'product_id' => ['required', 'uuid', Rule::exists('products', 'id')],
             'policyholder_party_id' => ['required', 'uuid', Rule::exists('parties', 'id')],
-            'agent_id' => ['nullable', 'uuid', Rule::exists('agents', 'id')],
+            'agent_id' => ['nullable', 'uuid', Rule::exists('producers', 'id')],
             'inception' => ['required', 'date_format:Y-m-d'],
             'premium_minor' => ['required', 'integer', 'min:1'],
             'installment_count' => ['sometimes', 'integer', 'min:1', 'max:12'],

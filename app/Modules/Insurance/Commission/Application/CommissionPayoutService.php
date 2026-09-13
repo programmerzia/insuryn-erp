@@ -8,7 +8,7 @@ use App\Modules\Accounting\Application\SubmitAccountingEvent;
 use App\Modules\Finance\Bank\Application\BankAccountQuery;
 use App\Modules\Insurance\Commission\Domain\Models\CommissionEntry;
 use App\Modules\Insurance\Commission\Domain\Models\CommissionStatement;
-use App\Modules\Insurance\Party\Domain\Models\Agent;
+use App\Modules\Distribution\Application\ProducerDirectory;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
@@ -41,9 +41,9 @@ final class CommissionPayoutService
     /** @throws BusinessRuleViolation NOTHING_TO_PAY when no accrued entries up to the date net to a positive amount */
     public function approve(string $agentId, CarbonImmutable $upTo, string $actorUserId, CarbonImmutable $on): CommissionStatement
     {
-        $agent = Agent::query()->findOrFail($agentId);
-        $entityId = (string) DB::table('branches')->where('id', $agent->branch_id)->value('entity_id');
-        $this->permissions->authorize($actorUserId, 'commission.approve', AuthorizationScope::branch($entityId, $agent->branch_id));
+        $agent = app(ProducerDirectory::class)->get($agentId);
+        $entityId = (string) DB::table('branches')->where('id', $agent->branchId)->value('entity_id');
+        $this->permissions->authorize($actorUserId, 'commission.approve', AuthorizationScope::branch($entityId, $agent->branchId));
         $this->assertSomethingToPay($agent->id, $entityId, $upTo);
         $number = $this->numbers->reserve(new DocumentNumberScope($entityId, null, 'commission_statement', 'CST', $on), $actorUserId);
 
@@ -71,8 +71,8 @@ final class CommissionPayoutService
     public function pay(string $statementId, ?string $bankAccountId, string $actorUserId, CarbonImmutable $paidOn): CommissionStatement
     {
         $statement = CommissionStatement::query()->findOrFail($statementId);
-        $agent = Agent::query()->findOrFail($statement->agent_id);
-        $this->permissions->authorize($actorUserId, 'commission.pay', AuthorizationScope::branch($statement->entity_id, $agent->branch_id));
+        $agent = app(ProducerDirectory::class)->get($statement->agent_id);
+        $this->permissions->authorize($actorUserId, 'commission.pay', AuthorizationScope::branch($statement->entity_id, $agent->branchId));
         $this->sod->assert($actorUserId, 'commission.pay', AuditSubject::of('commission_statement', $statement->id));
         $bankGl = $bankAccountId === null ? null : $this->bankAccounts->glAccountFor($bankAccountId, $statement->entity_id, $statement->currency);
 
@@ -88,7 +88,7 @@ final class CommissionPayoutService
                 idempotencyKey: 'COMMISSION_PAID:'.$statement->id, transactionDate: $paidOn, effectiveDate: $paidOn, currency: $statement->currency,
                 payload: ['amount' => $statement->net_minor, 'commission_statement_id' => $statement->id, 'bank_account_id' => $bankAccountId]
                     + ($bankGl === null ? [] : ['account_overrides' => ['bank_main' => $bankGl]]),
-                dimensions: ['branch' => $agent->branch_id, 'agent' => $agent->id],
+                dimensions: ['branch' => $agent->branchId, 'agent' => $agent->id],
             );
             $this->audit->record('commission_statement.paid', AuditSubject::of('commission_statement', $statement->id), ['status' => 'approved'],
                 ['status' => 'paid', 'paid_on' => $paidOn->toDateString()], null, 'commission.pay', Actor::user($actorUserId));

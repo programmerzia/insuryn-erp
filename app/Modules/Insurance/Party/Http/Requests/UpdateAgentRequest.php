@@ -13,10 +13,10 @@ final class UpdateAgentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'parent_agent_id' => ['sometimes', 'nullable', 'uuid', Rule::exists('agents', 'id')],
+            'parent_agent_id' => ['sometimes', 'nullable', 'uuid', Rule::exists('producers', 'id')],
             'branch_id' => ['sometimes', 'required', 'uuid', Rule::exists('branches', 'id')],
             'commission_plan_id' => ['sometimes', 'nullable', 'uuid'],
-            'status' => ['sometimes', 'required', 'in:active,inactive'],
+            'status' => ['sometimes', 'required', 'in:active,suspended,inactive'], // `inactive` is the Phase 1 word for suspended
         ];
     }
 }

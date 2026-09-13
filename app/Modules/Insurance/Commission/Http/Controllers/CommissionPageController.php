@@ -33,12 +33,12 @@ final class CommissionPageController
             'plans' => DB::table('commission_plans')->orderBy('code')->get(['id', 'code', 'name', 'rate_bp', 'withholding_jurisdiction', 'withholding_tax_type', 'status'])
                 ->map(fn (object $p): array => ['id' => (string) $p->id, 'code' => (string) $p->code, 'name' => (string) $p->name, 'rate_percent' => self::percent((int) $p->rate_bp),
                     'withholding' => $p->withholding_tax_type === null ? null : "{$p->withholding_tax_type} ({$p->withholding_jurisdiction})", 'status' => (string) $p->status])->values()->all(),
-            'statements' => DB::table('commission_statements as s')->join('agents as a', 'a.id', '=', 's.agent_id')->where('s.entity_id', $entity['id'])->orderByDesc('s.approved_on')->limit(100)
+            'statements' => DB::table('commission_statements as s')->join('producers as a', 'a.id', '=', 's.agent_id')->where('s.entity_id', $entity['id'])->orderByDesc('s.approved_on')->limit(100)
                 ->get(['s.id', 's.number', 'a.code', 's.agent_id', 's.up_to', 's.gross_minor', 's.withholding_minor', 's.net_minor', 's.currency', 's.status', 's.paid_on'])
                 ->map(fn (object $s): array => ['id' => (string) $s->id, 'number' => (string) $s->number, 'agent_code' => (string) $s->code, 'agent_id' => (string) $s->agent_id, 'up_to' => (string) $s->up_to,
                     'gross' => PageSupport::money((int) $s->gross_minor, (string) $s->currency), 'withholding' => PageSupport::money((int) $s->withholding_minor, (string) $s->currency),
                     'net' => PageSupport::money((int) $s->net_minor, (string) $s->currency), 'status' => (string) $s->status, 'paid_on' => $s->paid_on])->values()->all(),
-            'agents' => DB::table('agents')->where('status', 'active')->orderBy('code')->get(['id', 'code'])->map(fn (object $a): array => (array) $a)->values()->all(),
+            'agents' => DB::table('producers')->where('status', 'active')->orderBy('code')->get(['id', 'code'])->map(fn (object $a): array => (array) $a)->values()->all(),
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'can' => ['plans' => $this->permissions->has($actor, 'commission.manage_plans'), 'approve' => $this->permissions->has($actor, 'commission.approve'), 'pay' => $this->permissions->has($actor, 'commission.pay')],
         ]);
@@ -84,7 +84,7 @@ final class CommissionPageController
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
 
         return Inertia::render('commission/Statement', [
-            'agent' => ['id' => $agent, 'code' => (string) DB::table('agents')->where('id', $agent)->value('code')],
+            'agent' => ['id' => $agent, 'code' => (string) DB::table('producers')->where('id', $agent)->value('code')],
             'from' => $from->toDateString(), 'to' => $to->toDateString(),
             'statement' => ['opening_payable' => $money($result['opening_payable_minor']), 'closing_payable' => $money($result['closing_payable_minor']),
                 'entries' => array_map(fn (array $e): array => ['id' => $e['id'], 'earned_on' => $e['earned_on'], 'kind' => $e['kind'], 'policy_number' => $e['policy_number'],

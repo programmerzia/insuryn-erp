@@ -18,7 +18,7 @@ use Inertia\Response;
 final class JournalPageController
 {
     private const DIMENSIONS = [
-        'dim_branch' => ['Branch', 'branches', 'code'], 'dim_product' => ['Product', 'products', 'code'], 'dim_agent' => ['Agent', 'agents', 'code'],
+        'dim_branch' => ['Branch', 'branches', 'code'], 'dim_product' => ['Product', 'products', 'code'], 'dim_agent' => ['Producer', 'producers', 'code'],
         'dim_policy' => ['Policy', 'policies', 'number'], 'dim_claim' => ['Claim', 'claims', 'number'], 'dim_customer' => ['Customer', 'parties', 'display_name'],
         'dim_lob' => ['Line of business', null, null], 'dim_channel' => ['Channel', null, null], 'dim_cost_centre' => ['Cost centre', null, null],
         'dim_employee' => ['Employee', null, null], 'dim_reinsurer' => ['Reinsurer', 'parties', 'display_name'],

@@ -6,7 +6,7 @@ namespace App\Modules\Insurance\Collections\Application;
 
 use App\Modules\Finance\Bank\Application\BankAccountQuery;
 use App\Modules\Insurance\Collections\Domain\Enums\ReceiptStatus;
-use App\Modules\Insurance\Party\Domain\Models\Agent;
+use App\Modules\Distribution\Application\ProducerDirectory;
 use App\Modules\Insurance\Collections\Domain\Enums\SuspenseStatus;
 use App\Modules\Insurance\Collections\Domain\Models\Receipt;
 use App\Modules\Insurance\Collections\Domain\Models\SuspenseItem;
@@ -116,7 +116,7 @@ final class ReceiptService
         if ($request->allocatedMinor() !== $request->amountMinor) {
             throw new BusinessRuleViolation('AGENT_COLLECTION_UNALLOCATED', 'Cash an agent collects must be allocated to installments in full.');
         }
-        if (! Agent::query()->whereKey($request->collectedByAgentId)->where('status', 'active')->exists()) {
+        if (app(ProducerDirectory::class)->find($request->collectedByAgentId)?->isActive() !== true) {
             throw new BusinessRuleViolation('UNKNOWN_AGENT', "Agent {$request->collectedByAgentId} is not an active agent.");
         }
     }

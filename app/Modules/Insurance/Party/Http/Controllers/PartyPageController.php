@@ -9,7 +9,6 @@ use App\Modules\Insurance\Party\Application\AgentService;
 use App\Modules\Insurance\Party\Application\PartyService;
 use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
 use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
-use App\Modules\Insurance\Party\Domain\Models\Agent;
 use App\Modules\Insurance\Party\Domain\Models\Party;
 use App\Modules\Insurance\Party\Domain\Models\PartyBankAccount;
 use App\Modules\Platform\Authorization\PermissionChecker;
@@ -86,12 +85,12 @@ final class PartyPageController
     public function agents(Request $request): Response
     {
         $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
-        $agents = Agent::query()->orderBy('code')->get();
+        $agents = DB::table('producers')->where('type', 'agent')->orderBy('code')->get(['id', 'code', 'party_id', 'branch_id', 'parent_agent_id', 'commission_plan_id', 'status']);
         $names = DB::table('parties')->whereIn('id', $agents->pluck('party_id'))->pluck('display_name', 'id');
 
         return Inertia::render('agents/Index', [
-            'agents' => $agents->map(fn (Agent $a): array => ['id' => $a->id, 'code' => $a->code, 'name' => (string) ($names[$a->party_id] ?? ''), 'party_id' => $a->party_id,
-                'branch_id' => $a->branch_id, 'parent_agent_id' => $a->parent_agent_id, 'commission_plan_id' => $a->commission_plan_id, 'status' => $a->status])->values()->all(),
+            'agents' => $agents->map(fn (object $a): array => ['id' => (string) $a->id, 'code' => (string) $a->code, 'name' => (string) ($names[$a->party_id] ?? ''), 'party_id' => (string) $a->party_id,
+                'branch_id' => (string) $a->branch_id, 'parent_agent_id' => $a->parent_agent_id, 'commission_plan_id' => $a->commission_plan_id, 'status' => (string) $a->status])->values()->all(),
             'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'commissionPlans' => DB::table('commission_plans')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
