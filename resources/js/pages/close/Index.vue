@@ -8,9 +8,11 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
+import { useOnboarding } from '@/lib/onboarding';
 
 interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null }
 const props = defineProps<{ periods: Period[]; can: { start: boolean; reopen: boolean } }>();
+const onboarding = useOnboarding();
 
 const active = ref<string | null>(null);
 const reason = ref('');
@@ -46,6 +48,7 @@ async function reopen(p: Period): Promise<void> {
             :row-key="(p) => p.id"
             :url-sync="false"
             empty-text="No fiscal periods are set up."
+            :empty-action="onboarding.canSetup ? { label: 'Open the fiscal year', href: '/setup?step=fiscal_year' } : { label: 'Back to Home', href: '/home' }"
             :inspector-title="(p) => month(p)"
             :inspector-subtitle="(p) => `${formatDate(p.starts)} to ${formatDate(p.ends)}`"
             :primary-label="(p) => (p.run && p.run.status !== 'reopened' ? 'Open the checklist' : canStart(p) ? 'Start close' : undefined)"

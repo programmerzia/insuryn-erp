@@ -37,7 +37,7 @@ const columns: DataColumn<PartyRow>[] = [
             :columns="columns"
             :rows="parties.data"
             :row-key="(p) => p.id"
-            empty-text="No parties yet. Add the first customer."
+            empty-text="No parties yet: add the first customer."
             :action="can('party.manage') ? { label: 'New party' } : null"
             :inspector-title="(p) => p.display_name"
             :inspector-subtitle="(p) => words(p.kind)"

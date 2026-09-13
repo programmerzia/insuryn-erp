@@ -7,12 +7,14 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+import { useOnboarding } from '@/lib/onboarding';
 import { usePermissions } from '@/lib/permissions';
 
 interface PolicyRow { id: string; number: string | null; status: string; inception: string; expiry: string; policyholder: string; product_code: string; gross_premium: string }
 const props = defineProps<{ filters: { status: string; search: string }; statuses: string[]; policies: { data: PolicyRow[]; current_page: number; last_page: number; total: number } }>();
 
 const { can } = usePermissions();
+const onboarding = useOnboarding();
 const active = ref<string | null>(null);
 const columns: DataColumn<PolicyRow>[] = [
     { id: 'number', header: 'Policy', value: (p) => p.number ?? 'Quote', href: (p) => `/policies/${p.id}`, width: 160 },
@@ -36,8 +38,8 @@ const columns: DataColumn<PolicyRow>[] = [
             :row-key="(p) => p.id"
             currency="BDT"
             selectable
-            empty-text="No policies yet."
-            :empty-action="can('policy.create') ? { label: 'New quote', href: '/policies/create' } : null"
+            :empty-text="onboarding.setupNeeded ? 'No policies yet: a product has to be set up first.' : 'No policies yet.'"
+            :empty-action="onboarding.setupNeeded && onboarding.canSetup ? { label: 'Set up a product', href: '/setup?step=product' } : can('policy.create') ? { label: 'New quote', href: '/policies/create' } : null"
             :action="can('policy.create') ? { label: 'New quote', href: '/policies/create' } : null"
             :inspector-title="(p) => p.number ?? 'Quote'"
             :inspector-subtitle="(p) => p.policyholder"

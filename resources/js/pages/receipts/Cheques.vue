@@ -24,7 +24,7 @@ const columns: DataColumn<Row>[] = [
 
 <template>
     <AppLayout title="Cheque register" fill>
-        <QueueView id="cheques" v-model:active="active" title="Cheque register" :columns="columns" :rows="register.rows" :row-key="(r) => r.receipt_id" currency="BDT" empty-text="No cheques in this period.">
+        <QueueView id="cheques" v-model:active="active" title="Cheque register" :columns="columns" :rows="register.rows" :row-key="(r) => r.receipt_id" currency="BDT" empty-text="No cheques in this period." :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }">
             <template #toolbar>
                 <DateRangeFilter url="/cheques" :from="from" :to="to" />
                 <span class="ml-3 text-ui text-ink-2">Presented <span class="tabular-nums text-ink">{{ formatMoney(register.totals.presented) }}</span> · bounced <span class="tabular-nums text-ink">{{ formatMoney(register.totals.bounced) }}</span></span>

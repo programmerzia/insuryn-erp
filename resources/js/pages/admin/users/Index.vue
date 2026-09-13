@@ -34,7 +34,7 @@ const columns: DataColumn<UserRow>[] = [
             :columns="columns"
             :rows="users"
             :row-key="(u) => u.id"
-            empty-text="No users yet. Invite the first one."
+            empty-text="No users yet."
             :action="{ label: 'Invite user' }"
             :inspector-title="(u) => u.name"
             :inspector-subtitle="(u) => u.email"

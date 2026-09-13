@@ -33,7 +33,7 @@ const columns: DataColumn<RoleRow>[] = [
             :columns="columns"
             :rows="roles"
             :row-key="(r) => r.id"
-            empty-text="No roles yet. Create the first one."
+            empty-text="No roles yet."
             :action="{ label: 'New role' }"
             :inspector-title="(r) => r.name"
             @action="creating = true"

@@ -70,7 +70,7 @@ function payStatement(s: Statement): void {
             :rows="statements"
             :row-key="(s) => s.id"
             currency="BDT"
-            empty-text="No payout statements yet. Approve one for an agent's earned commission."
+            empty-text="No payout statements yet."
             :action="action"
             :inspector-title="(s) => s.number"
             :inspector-subtitle="(s) => `Agent ${s.agent_code} · earned up to ${formatDate(s.up_to)}`"

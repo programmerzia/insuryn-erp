@@ -8,7 +8,8 @@ import type { DataColumn, ServerPage } from '@/components/table/types';
 
 /**
  * Brief §6.1 queue list shared by every list: toolbar (title, primary action, views, filter, density, columns, export) → table → status bar,
- * inspector on the right while a row is open. The inspector's tabs, actions and primary action come from slots and props.
+ * inspector on the right while a row is open. The inspector's tabs, actions and primary action come from slots and props. An empty queue shows one
+ * sentence and one action (brief §4): `emptyAction`, or else the queue's own primary action.
  */
 const props = withDefaults(
     defineProps<{
@@ -26,12 +27,13 @@ const props = withDefaults(
         inspectorSubtitle?: (row: T) => string | undefined;
         primaryLabel?: (row: T) => string | undefined;
         urlSync?: boolean;
-        emptyAction?: { label: string; href: string } | null;
+        emptyAction?: { label: string; href?: string } | null;
     }>(),
     { currency: undefined, page: undefined, selectable: false, action: null, inspectorTitle: undefined, inspectorSubtitle: undefined, primaryLabel: undefined, urlSync: true, emptyAction: null },
 );
 const emit = defineEmits<{ action: []; primary: [row: T] }>();
 const active = defineModel<string | null>('active', { default: null });
+const emptyState = computed(() => props.emptyAction ?? props.action ?? null);
 const selected = computed(() => (active.value === null ? null : (props.rows.find((row) => props.rowKey(row) === active.value) ?? null)));
 </script>
 
@@ -48,10 +50,11 @@ const selected = computed(() => (active.value === null ? null : (props.rows.find
             :page="page"
             :selectable="selectable"
             :empty-text="emptyText"
-            :empty-action="emptyAction"
+            :empty-action="emptyState"
             :url-sync="urlSync"
             :export-name="id"
             @close="active = null"
+            @empty-action="emit('action')"
         >
             <template #toolbar>
                 <h1 class="mr-3 text-section font-semibold">{{ title }}</h1>

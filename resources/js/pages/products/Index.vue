@@ -11,6 +11,7 @@ import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate } from '@/lib/format';
+import { useOnboarding } from '@/lib/onboarding';
 import { usePermissions } from '@/lib/permissions';
 
 interface Version { id: string; version: number; effective_from: string; effective_to: string | null; term_months: number; earning_method: string; tax_profile: { tax_type: string | null; jurisdiction: string | null; inclusive: boolean; refund_tax_on_cancellation: boolean } }
@@ -18,6 +19,7 @@ interface Product { id: string; code: string; name: string; lob: string; version
 const props = defineProps<{ products: Product[]; earningMethods: string[]; commissionPlans: { id: string; code: string; name: string }[] }>();
 
 const { can } = usePermissions();
+const onboarding = useOnboarding();
 const active = ref<string | null>(null);
 const drawer = ref<'product' | 'version' | null>(null);
 const productForm = useForm({ code: '', name: '', lob: '' });
@@ -45,6 +47,7 @@ const columns: DataColumn<Product>[] = [
             :rows="products"
             :row-key="(p) => p.id"
             empty-text="No products yet."
+            :empty-action="onboarding.canSetup ? { label: 'Set up the first product', href: '/setup?step=product' } : null"
             :action="can('product.manage') ? { label: 'New product' } : null"
             :inspector-title="(p) => `${p.code} · ${p.name}`"
             :inspector-subtitle="(p) => p.lob"

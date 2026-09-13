@@ -37,7 +37,10 @@ final class HandleInertiaRequests extends Middleware
      * Application shell data (UX brief §3): the entity and its branches for the switcher, and approvals waiting for this user (notifications).
      * Sidebar badge counts join here in slice U6.
      *
-     * @return array{entity: array{code: string, name: string, currency: string}|null, branches: list<array{id: string, code: string, name: string}>, approvals: int, badges: array<string, int>}
+     * Session S6 `onboarding`: the tenant has no products yet (setup needed), whether this user can do a setup step, and locally, while there are no
+     * policies, the command that seeds the Part A demo story.
+     *
+     * @return array{entity: array{code: string, name: string, currency: string}|null, branches: list<array{id: string, code: string, name: string}>, approvals: int, badges: array<string, int>, onboarding: array{setupNeeded: bool, canSetup: bool, demoCommand: string|null}}
      */
     private static function shell(string $userId): array
     {
@@ -52,6 +55,8 @@ final class HandleInertiaRequests extends Middleware
             'branches' => $branches,
             'approvals' => count(app(\App\Modules\Platform\Approvals\ApprovalInboxQuery::class)->decidableBy($userId)),
             'badges' => app(\App\Http\Home\WorkQueues::class)->badges($userId),
+            'onboarding' => ['setupNeeded' => ! DB::table('products')->exists(), 'canSetup' => app(\App\Http\Setup\SetupWizard::class)->canUse($userId),
+                'demoCommand' => app()->environment('local') && ! DB::table('policies')->exists() ? 'php artisan erp:demo' : null],
         ];
     }
 

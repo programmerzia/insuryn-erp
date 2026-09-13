@@ -42,11 +42,12 @@ const props = withDefaults(
         /** Icon-only toolbar with tooltips, for tables sharing the screen. */
         compactToolbar?: boolean;
         /** Empty state's one primary action (brief §4 "one sentence + one primary action"). */
-        emptyAction?: { label: string; href: string } | null;
+        /** Brief §4 empty state: one sentence and one action — a link, or (without href) the `emptyAction` event. */
+        emptyAction?: { label: string; href?: string } | null;
     }>(),
     { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false, emptyAction: null },
 );
-const emit = defineEmits<{ open: [row: T]; close: [] }>();
+const emit = defineEmits<{ open: [row: T]; close: []; emptyAction: [] }>();
 const active = defineModel<string | null>('active', { default: null });
 
 const state = useDataTable<T>({
@@ -369,7 +370,10 @@ defineExpose({ state, focusRow });
                                 <td :colspan="columns.length + (selectable ? 2 : 1)" class="px-3 py-10 text-center text-ui text-ink-2">
                                     <slot name="empty">
                                         <p>{{ activeFilters ? 'No rows match these filters.' : emptyText }}</p>
-                                        <Link v-if="!activeFilters && emptyAction" :href="emptyAction.href" class="mt-3 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">{{ emptyAction.label }}</Link>
+                                        <template v-if="!activeFilters && emptyAction">
+                                            <Link v-if="emptyAction.href" :href="emptyAction.href" class="mt-3 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">{{ emptyAction.label }}</Link>
+                                            <button v-else type="button" class="mt-3 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="emit('emptyAction')">{{ emptyAction.label }}</button>
+                                        </template>
                                     </slot>
                                     <button v-if="activeFilters" type="button" class="mt-2 text-accent-text hover:underline" @click="state.columnFilters.value = []">Clear filters</button>
                                 </td>

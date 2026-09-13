@@ -21,7 +21,7 @@ const columns: DataColumn<Notice>[] = [
 
 <template>
     <AppLayout title="Reminders" fill>
-        <QueueView id="dunning" v-model:active="active" title="Payment reminders" :columns="columns" :rows="notices" :row-key="(n) => n.id" currency="BDT" empty-text="No reminders were issued in this period.">
+        <QueueView id="dunning" v-model:active="active" title="Payment reminders" :columns="columns" :rows="notices" :row-key="(n) => n.id" currency="BDT" empty-text="No reminders were issued in this period." :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }">
             <template #toolbar><DateRangeFilter url="/dunning" :from="from" :to="to" /></template>
         </QueueView>
     </AppLayout>

@@ -88,28 +88,29 @@ final class WorkQueues
     private function block(string $key, string $userId): array
     {
         $today = CarbonImmutable::today();
-        [$title, $href, $empty] = match ($key) {
-            'installments_due' => ['Installments due this week', '/receipts/create', 'No installments fall due in the next seven days.'],
-            'lapsing_policies' => ['Lapsing policies', '/dunning', 'No policy is close to lapsing.'],
-            'receipts_to_record' => ['Receipts to record', '/bank', 'Every credit on the bank statements has a receipt.'],
-            'quotes' => ['Quotes to follow up', '/policies?status=quote', 'No open quotes.'],
-            'unallocated_receipts' => ['Unallocated receipts', '/suspense', 'No unallocated receipts. Import a bank statement to find more.'],
-            'unmatched_bank_lines' => ['Unmatched bank lines', '/bank', 'Every statement line is matched or explained.'],
-            'journals_to_approve' => ['Journals awaiting my approval', '/accounting/journals?f.status=pending_approval', 'No journals are waiting for you.'],
-            'failed_events' => ['Failed accounting events', null, 'Every accounting event posted.'],
-            'claims_awaiting_reserve' => ['Claims awaiting reserve', '/claims?status=registered', 'Every open claim has a reserve.'],
-            'claim_approvals' => ['Awaiting my approval', '/approvals', 'No claim approvals are waiting for you.'],
-            'payments_to_release' => ['Payments to release', '/claims', 'No approved payments are waiting to be paid.'],
-            'close_progress' => ['Close progress', '/close', 'No month-end close is running.'],
-            'reconciliation_variances' => ['Reconciliation variances', '/close', 'Every subledger reconciles to the ledger.'],
-            'approvals_over_threshold' => ['Approvals over threshold', '/approvals', 'Nothing over a limit is waiting for you.'],
-            'cash_position' => ['Cash position', '/bank', 'No bank account is set up.'],
-            'recent_reversals' => ['Recent reversals and adjustments', '/accounting/journals', 'No reversals or adjustments in the last 30 days.'],
-            'period_reopens' => ['Period reopen events', '/close', 'No period has been reopened.'],
-            'control_manual_postings' => ['Control-account manual postings', '/accounting/journals', 'No manual postings to control accounts.'],
+        // Brief §4 empty state: one sentence and one action (label, href).
+        [$title, $href, $empty, $action] = match ($key) {
+            'installments_due' => ['Installments due this week', '/receipts/create', 'No installments fall due in the next seven days.', ['Record a receipt', '/receipts/create']],
+            'lapsing_policies' => ['Lapsing policies', '/dunning', 'No policy is close to lapsing.', ['See payment reminders', '/dunning']],
+            'receipts_to_record' => ['Receipts to record', '/bank', 'Every credit on the bank statements has a receipt.', ['Import a bank statement', '/bank']],
+            'quotes' => ['Quotes to follow up', '/policies?status=quote', 'No open quotes.', ['New quote', '/policies/create']],
+            'unallocated_receipts' => ['Unallocated receipts', '/suspense', 'No unallocated receipts.', ['Import a bank statement', '/bank']],
+            'unmatched_bank_lines' => ['Unmatched bank lines', '/bank', 'Every statement line is matched or explained.', ['Import a bank statement', '/bank']],
+            'journals_to_approve' => ['Journals awaiting my approval', '/accounting/journals?f.status=pending_approval', 'No journals are waiting for you.', ['Open journals', '/accounting/journals']],
+            'failed_events' => ['Failed accounting events', null, 'Every accounting event posted.', ['Open journals', '/accounting/journals']],
+            'claims_awaiting_reserve' => ['Claims awaiting reserve', '/claims?status=registered', 'Every open claim has a reserve.', ['Register a claim', '/claims/create']],
+            'claim_approvals' => ['Awaiting my approval', '/approvals', 'No claim approvals are waiting for you.', ['Open claims', '/claims']],
+            'payments_to_release' => ['Payments to release', '/claims', 'No approved payments are waiting to be paid.', ['Open claims', '/claims']],
+            'close_progress' => ['Close progress', '/close', 'No month-end close is running.', ['Start the close', '/close']],
+            'reconciliation_variances' => ['Reconciliation variances', '/close', 'Every subledger reconciles to the ledger.', ['Open the close', '/close']],
+            'approvals_over_threshold' => ['Approvals over threshold', '/approvals', 'Nothing over a limit is waiting for you.', ['Open approvals', '/approvals']],
+            'cash_position' => ['Cash position', '/bank', 'No bank account is set up.', ['Add a bank account', '/bank']],
+            'recent_reversals' => ['Recent reversals and adjustments', '/accounting/journals', 'No reversals or adjustments in the last 30 days.', ['Open journals', '/accounting/journals']],
+            'period_reopens' => ['Period reopen events', '/close', 'No period has been reopened.', ['Open the close', '/close']],
+            'control_manual_postings' => ['Control-account manual postings', '/accounting/journals', 'No manual postings to control accounts.', ['Open journals', '/accounting/journals']],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
-        $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'count' => 0, 'columns' => [], 'rows' => []];
+        $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
 
         return match ($key) {
             'claim_approvals', 'approvals_over_threshold' => $this->approvalBlock($block, $this->approvals($userId, $key === 'claim_approvals')),

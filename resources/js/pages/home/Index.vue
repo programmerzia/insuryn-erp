@@ -7,6 +7,7 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatMinor, parseMoney } from '@/lib/money';
+import { useOnboarding } from '@/lib/onboarding';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { tourAction, tourSteps } from '@/lib/tour';
 import type { SharedProps } from '@/types/shared';
@@ -18,6 +19,7 @@ interface Queue {
     title: string;
     href: string | null;
     empty: string;
+    emptyAction: { label: string; href: string };
     count: number;
     columns: { id: string; label: string; type: 'text' | 'money' | 'date' | 'status' }[];
     rows: { href: string | null; cells: Record<string, string | null> }[];
@@ -29,6 +31,7 @@ const props = defineProps<{ queues: Queue[] }>();
 const page = usePage<SharedProps>();
 const currency = computed(() => page.props.shell?.entity?.currency ?? 'BDT');
 const preferences = usePreferences();
+const onboarding = useOnboarding();
 // Session S4: start the guided tour, or resume it where it was ended.
 const tourLabel = computed(() => preferences.tour?.status === 'dismissed' ? `Resume the tour (step ${preferences.tour.step + 1} of ${tourSteps.length})`
     : preferences.tour?.status === 'finished' ? 'Take the tour again' : 'Take the guided tour');
@@ -69,6 +72,12 @@ function bars(days: { date: string; net: string }[]): { date: string; net: strin
                 </p>
             </header>
 
+            <section v-if="onboarding.setupNeeded && onboarding.canSetup" class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-panel border border-line bg-surface-2 px-4 py-3 text-ui" aria-label="Setup">
+                <p>No products are set up yet, so policies cannot be issued.</p>
+                <Link href="/setup" class="font-medium text-accent-text hover:underline">Continue setup</Link>
+            </section>
+            <p v-if="onboarding.demoCommand" class="text-ui text-ink-2">Want to look around first? Run <code class="rounded-control bg-surface-2 px-1">{{ onboarding.demoCommand }}</code> and sign in at nonlife.localhost to walk through a week in a non-life insurer.</p>
+
             <section v-for="queue in queues" :key="queue.key" class="rounded-panel border border-line" :aria-labelledby="`queue-${queue.key}`">
                 <div class="flex h-11 items-center gap-3 border-b border-line bg-surface-2 px-4">
                     <h2 :id="`queue-${queue.key}`" class="text-ui font-semibold">{{ queue.title }}</h2>
@@ -98,7 +107,10 @@ function bars(days: { date: string; net: string }[]): { date: string; net: strin
                     </figure>
                 </div>
 
-                <p v-else-if="queue.rows.length === 0" class="px-4 py-3 text-ui text-ink-2">{{ queue.empty }}</p>
+                <div v-else-if="queue.rows.length === 0" class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-ui">
+                    <p class="text-ink-2">{{ queue.empty }}</p>
+                    <Link :href="queue.emptyAction.href" class="text-accent-text hover:underline">{{ queue.emptyAction.label }}</Link>
+                </div>
 
                 <table v-else class="w-full table-fixed border-separate border-spacing-0 text-dense">
                     <thead>

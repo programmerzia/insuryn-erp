@@ -38,7 +38,7 @@ const columns: DataColumn<Account>[] = [
             :columns="columns"
             :rows="accounts"
             :row-key="(a) => a.id"
-            empty-text="No bank accounts yet. Add one to import statements."
+            empty-text="No bank accounts yet: add one to import its statements."
             :action="can('bank.manage_accounts') ? { label: 'Add a bank account' } : null"
             :inspector-title="(a) => `${a.bank_name} ${a.account_no_masked}`"
             :inspector-subtitle="(a) => `${a.gl_code} ${a.gl_name}`"

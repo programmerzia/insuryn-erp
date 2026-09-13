@@ -45,6 +45,7 @@ void props;
             :row-key="(a) => a.id"
             currency="BDT"
             empty-text="Nothing is waiting for your decision."
+            :empty-action="{ label: 'Back to Home', href: '/home' }"
             :inspector-title="(a) => a.title"
             :inspector-subtitle="(a) => `${words(a.object_type)} · step ${a.step}`"
             :primary-label="() => 'Approve'"

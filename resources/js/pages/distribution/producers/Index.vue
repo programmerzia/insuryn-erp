@@ -59,7 +59,7 @@ const columns: DataColumn<ProducerRow>[] = [
             :rows="producers"
             :row-key="(p) => p.id"
             currency="BDT"
-            empty-text="No producers yet. Add the first agent, BDO or broker."
+            empty-text="No producers yet: add the first agent, BDO or broker."
             :action="can.manage ? { label: 'New producer' } : null"
             :inspector-title="(p) => `${p.code} · ${p.name}`"
             :inspector-subtitle="(p) => `${producerTypeLabel(p.type)} · ${p.channel} · ${p.branch}`"

@@ -10,6 +10,7 @@ export interface SharedProps {
         branches: { id: string; code: string; name: string }[];
         approvals: number;
         badges: Record<string, number>;
+        onboarding: { setupNeeded: boolean; canSetup: boolean; demoCommand: string | null };
     } | null;
     status: string | null;
     errors: Record<string, string>;

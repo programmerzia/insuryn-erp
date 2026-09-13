@@ -41,7 +41,7 @@ const columns: DataColumn<SchemeRow>[] = [
             :columns="columns"
             :rows="schemes"
             :row-key="(s) => s.id"
-            empty-text="No schemes yet. Create one for each way producers are paid."
+            empty-text="No schemes yet: create one for each way producers are paid."
             :action="can.manage ? { label: 'New scheme' } : null"
             :inspector-title="(s) => s.code"
             :inspector-subtitle="(s) => s.name"

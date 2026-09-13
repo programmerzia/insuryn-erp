@@ -46,7 +46,7 @@ function visit(params: Record<string, unknown>): void {
                 :row-key="(j) => j.id"
                 :currency="entity.currency"
                 :page="{ current: journals.currentPage, last: journals.lastPage, total: journals.total, go: (page) => visit({ page }) }"
-                empty-text="No journals yet. Postings from policies, receipts and claims appear here."
+                empty-text="No journals yet: they appear as policies, receipts and claims are posted."
                 :empty-action="{ label: 'New manual journal', href: '/accounting/journals/create' }"
                 export-name="journals"
                 @close="active = null"

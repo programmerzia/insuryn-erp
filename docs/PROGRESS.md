@@ -1612,3 +1612,17 @@ Scope: review only; only the critical finding was fixed.
 - Test change: the two exact line assertions in `JournalPreviewTest` and `ObjectPagesTest` now also expect `role`.
 - Screenshots: `storage/ux-screenshots/s5-captions/` (the *View accounting* drawer and the Accounting tab of the demo motor policy).
 - Tests: `tests/Feature/Help/AccountingCaptionsTest.php` (3), `resources/js/tests/captions.test.ts` (2).
+
+### S6 — Onboarding: empty states — done
+- UX brief §4: every queue's empty state is one sentence and one action. `QueueView` falls back to the queue's own primary action when no `emptyAction` is given, and
+  `DataTable` empty actions can be a link or a button (the page's handler), so "Add a bank account", "New party", "Prepare statements" open the same form or run the same step.
+- Rewritten: journals, roles, users, approvals (Back to Home), bank accounts, close (Open the fiscal year in the setup wizard), payout statements, producers, schemes, statement run
+  (Prepare statements), parties, cheques and reminders (Record a receipt), refunds (Open policies). Policies say "a product has to be set up first" with *Set up a product* while the
+  tenant has none; products offer *Set up the first product*.
+- Home queues carry `emptyAction` (e.g. "No unallocated receipts." → *Import a bank statement*, the brief's own example). Home also shows *Continue setup* while the tenant has no
+  products and the user can do a setup step, and locally, while there are no policies, how to load the Part A demo (`php artisan erp:demo`).
+- Shared `shell.onboarding` (`setupNeeded`, `canSetup`, `demoCommand`; `lib/onboarding.ts`).
+- Tables inside a workbench (`:url-sync="false"`: bank matching panes, allocation candidates, report rows, scheme rules, commission entries and plans) keep their sentence without an
+  action: the action is already beside them.
+- Screenshots: `storage/ux-screenshots/s6-empty/` (a tenant with company, periods and chart of accounts but no products: Home, policies, products, receipts, claims).
+- Tests: `tests/Feature/Help/EmptyStatesTest.php` (2), `resources/js/tests/empty-states.test.ts` (one per queue screen, parsed from the templates).
