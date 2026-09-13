@@ -66,8 +66,9 @@
             "@php artisan schedule:work"
         ],
         "test": [
-            "@php artisan config:clear --ansi @no_additional_args",
-            "@php artisan test"
+            "Composer\\Config::disableProcessTimeout",
+            "@php -r \"@unlink('bootstrap/cache/config.php');\" --",
+            "@php vendor/bin/pest"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
