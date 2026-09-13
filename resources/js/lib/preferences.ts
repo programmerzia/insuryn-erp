@@ -34,10 +34,19 @@ export interface Preferences {
     views: Record<string, SavedView[]>;
     recents: Recent[];
     drafts: Record<string, unknown>;
+    /** Session S3: the "How this works" panel's language and whether it is open. */
+    locale: 'en' | 'bn';
+    help_open: boolean;
+    /** Session S4: guided tour progress; null until the user starts or dismisses it. */
+    tour: TourState | null;
+}
+export interface TourState {
+    status: 'active' | 'dismissed' | 'finished';
+    step: number;
 }
 
 export function defaultPreferences(): Preferences {
-    return { theme: 'system', density: 'compact', sidebar_collapsed: false, branch_id: null, splits: {}, tabs: [], tables: {}, views: {}, recents: [], drafts: {} };
+    return { theme: 'system', density: 'compact', sidebar_collapsed: false, branch_id: null, splits: {}, tabs: [], tables: {}, views: {}, recents: [], drafts: {}, locale: 'en', help_open: false, tour: null };
 }
 
 /** Sets `theme` or a grouped key such as `splits.receipts` on a preferences object. */

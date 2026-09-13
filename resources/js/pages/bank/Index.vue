@@ -30,7 +30,7 @@ const columns: DataColumn<Account>[] = [
 </script>
 
 <template>
-    <AppLayout title="Bank" fill>
+    <AppLayout help="bank" title="Bank" fill>
         <QueueView
             id="bank-accounts"
             v-model:active="active"

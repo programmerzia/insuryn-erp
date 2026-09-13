@@ -12,13 +12,13 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Per-user interface state (UX brief §3, §4): theme, density, sidebar, inspector widths, pinned tabs, table layouts and saved views,
- * command-palette recents and form drafts. A preference is a key — `theme`, or `<group>.<id>` such as `splits.receipts` — and a validated
+ * command-palette recents, form drafts, the help panel's language and state, and the guided tour's progress. A preference is a key — `theme`, or `<group>.<id>` such as `splits.receipts` — and a validated
  * value; anything unknown is refused so the document never collects junk. Stored as one JSON document per user (tenant + RLS).
  */
 final class UserPreferences
 {
     public const DEFAULTS = ['theme' => 'system', 'density' => 'compact', 'sidebar_collapsed' => false, 'branch_id' => null,
-        'splits' => [], 'tabs' => [], 'tables' => [], 'views' => [], 'recents' => [], 'drafts' => []];
+        'splits' => [], 'tabs' => [], 'tables' => [], 'views' => [], 'recents' => [], 'drafts' => [], 'locale' => 'en', 'help_open' => false, 'tour' => null];
 
     private const GROUPS = ['splits', 'tables', 'views', 'drafts'];
 
@@ -71,6 +71,10 @@ final class UserPreferences
             'theme' => ['value' => ['required', 'in:system,light,dark']],
             'density' => ['value' => ['required', 'in:compact,comfortable']],
             'sidebar_collapsed' => ['value' => ['required', 'boolean:strict']],
+            // Session S3/S4: help panel language and whether it is open; the guided tour's state (null = never started).
+            'locale' => ['value' => ['required', 'in:en,bn']],
+            'help_open' => ['value' => ['required', 'boolean:strict']],
+            'tour' => ['value' => ['present', 'nullable', 'array'], 'value.status' => ['required_with:value', 'in:active,dismissed,finished'], 'value.step' => ['required_with:value', 'integer', 'between:0,50']],
             'branch_id' => ['value' => ['nullable', 'uuid']],
             'splits' => ['value' => ['required', 'integer', 'between:240,1400']],
             'tabs' => ['value' => ['present', 'array', 'list', 'max:8'], 'value.*.href' => ['required', 'string', 'max:255', 'regex:#^/(?!/)#'], 'value.*.title' => ['required', 'string', 'max:80']],

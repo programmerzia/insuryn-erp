@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Help;
+
+use App\Http\Pages\PageSupport;
+use App\Modules\Platform\Preferences\UserPreferences;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/** GET /help/{module}[?locale=bn]: the "How this works" panel's words (session S3) in the requested language, else the user's saved language. */
+final class HelpController
+{
+    public function __invoke(Request $request, string $module, HelpContent $help, UserPreferences $preferences): JsonResponse
+    {
+        abort_unless(in_array($module, HelpContent::MODULES, true), 404);
+        $requested = $request->query('locale');
+        $saved = $preferences->of(PageSupport::actor($request))['locale'] ?? 'en';
+        $locale = is_string($requested) && in_array($requested, HelpContent::LOCALES, true) ? $requested : (is_string($saved) ? $saved : 'en');
+
+        return response()->json(['module' => $module, 'locale' => $locale, ...$help->for($module, $locale)]);
+    }
+}

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Bell, ChevronDown, CircleUser, LogOut, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-vue-next';
+import { Bell, ChevronDown, CircleHelp, CircleUser, LogOut, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-vue-next';
 import { computed } from 'vue';
 import Logo from '@/components/Logo.vue';
 import Kbd from '@/components/ui/Kbd.vue';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
+import { helpModule } from '@/lib/help';
 import { openPalette } from '@/lib/palette';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { shortcutKeys } from '@/lib/shortcuts';
@@ -56,6 +57,19 @@ const signOut = () => router.post('/logout');
             <Search :size="16" :stroke-width="1.5" aria-hidden="true" />
             <span class="truncate">Search or run a command</span>
             <Kbd class="ml-auto" :keys="shortcutKeys('app.palette')" />
+        </button>
+
+        <button
+            v-if="helpModule"
+            type="button"
+            class="inline-flex h-8 items-center gap-1.5 rounded-control px-2 text-ui hover:bg-surface-2 hover:text-ink"
+            :class="preferences.help_open ? 'bg-surface-2 text-ink' : 'text-ink-2'"
+            aria-controls="help-panel"
+            :aria-expanded="preferences.help_open"
+            data-tour="help-toggle"
+            @click="savePreference('help_open', !preferences.help_open, 0)"
+        >
+            <CircleHelp :size="16" :stroke-width="1.5" aria-hidden="true" /><span class="max-lg:sr-only">How this works</span>
         </button>
 
         <Link href="/approvals" class="relative inline-flex size-8 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink" :aria-label="`Approvals waiting for you: ${shell?.approvals ?? 0}`" :title="`Approvals waiting for you: ${shell?.approvals ?? 0}`">

@@ -25,7 +25,7 @@ void props;
 </script>
 
 <template>
-    <AppLayout title="Suspense" fill>
+    <AppLayout help="receipts" title="Suspense" fill>
         <QueueView
             id="suspense"
             v-model:active="active"

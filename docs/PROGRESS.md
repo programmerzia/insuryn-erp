@@ -1578,3 +1578,13 @@ Scope: review only; only the critical finding was fixed.
 - Idempotent: a tenant that already has policies is left unchanged ("already has the Part A story"). The story is one transaction, so a failure leaves nothing; inside it
   the demo posts queued accounting events itself after each step that needs them (bank matching, each close task), because the after-commit dispatch waits for the commit.
 - Tests: `tests/Feature/Setup/PartADemoTest.php` (3).
+
+### S3 — Onboarding: "How this works" panel (English and Bangla) — done
+- Words in `resources/help/<module>.<en|bn>.md` for policies, receipts (with suspense), bank, claims, commission, accounting, close and reports: a title and three parts
+  (what the screen is for, what happens in the accounting, the next step), five to eight sentences, taken from market cross-check Part A and its Bangla version.
+- `GET /help/{module}[?locale=bn]` (`App\Http\Help\HelpController`, `HelpContent`) renders the Markdown with raw HTML escaped and unsafe links dropped; without `locale` it uses the
+  user's saved language.
+- `AppLayout` takes `help="<module>"`; 23 module screens set it. The top bar shows *How this works* when the screen has help; the panel opens as a right-hand column with an
+  English / বাংলা switch. Open or closed and the language are user preferences (`help_open`, `locale`; `tour` is added for S4).
+- Screenshots: `storage/ux-screenshots/s3-help/` (policies and receipts in English, claims in Bangla).
+- Tests: `tests/Feature/Help/HowThisWorksTest.php` (4: files and sentence counts, endpoint and language, escaping, every module screen opens its help).

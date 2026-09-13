@@ -10,7 +10,7 @@ startTrail();
 </script>
 
 <template>
-    <AppLayout title="Reports">
+    <AppLayout help="reports" title="Reports">
         <div class="max-w-[760px]">
             <h1 class="text-title font-semibold">Reports</h1>
             <p class="mb-4 text-ui text-ink-2">Every figure links to the account activity or record behind it.</p>

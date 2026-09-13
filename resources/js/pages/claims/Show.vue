@@ -61,7 +61,7 @@ function openRelease(id: string): void {
 </script>
 
 <template>
-    <AppLayout :title="claim.number">
+    <AppLayout help="claims" :title="claim.number">
         <ObjectPage
             :title="claim.number"
             :subtitle="`${claim.description} · policy ${claim.policy.number} · ${claim.policy.policyholder}${claim.status_reason ? ` · ${claim.status_reason}` : ''}`"

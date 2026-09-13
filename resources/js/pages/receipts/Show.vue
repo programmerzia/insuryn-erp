@@ -35,7 +35,7 @@ const facts = computed(() => [
 </script>
 
 <template>
-    <AppLayout :title="receipt.number">
+    <AppLayout help="receipts" :title="receipt.number">
         <ObjectPage
             :title="receipt.number"
             :subtitle="[receipt.reference, receipt.cheque_no ? `cheque ${receipt.cheque_no} ${receipt.cheque_bank}` : null, receipt.bounced_on ? `bounced ${formatDate(receipt.bounced_on)}: ${receipt.bounce_reason}` : null].filter(Boolean).join(' · ')"

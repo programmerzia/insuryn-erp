@@ -26,7 +26,7 @@ const columns: DataColumn<PolicyRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Policies" fill>
+    <AppLayout help="policies" title="Policies" fill>
         <QueueView
             id="policies"
             v-model:active="active"

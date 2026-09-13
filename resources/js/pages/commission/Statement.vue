@@ -27,7 +27,7 @@ void props;
 </script>
 
 <template>
-    <AppLayout :title="`Agent ${agent.code} commission`" fill>
+    <AppLayout help="commission" :title="`Agent ${agent.code} commission`" fill>
         <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Commission', href: '/commission' }]" /></div>
         <DataTable id="commission-entries" v-model:active="active" :label="`Commission for agent ${agent.code}`" :columns="columns" :rows="statement.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false" empty-text="No commission in this period.">
             <template #toolbar>

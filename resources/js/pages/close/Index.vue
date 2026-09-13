@@ -36,7 +36,7 @@ async function reopen(p: Period): Promise<void> {
 </script>
 
 <template>
-    <AppLayout title="Month-end close" fill>
+    <AppLayout help="close" title="Month-end close" fill>
         <QueueView
             id="close-periods"
             v-model:active="active"

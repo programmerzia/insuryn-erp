@@ -50,7 +50,7 @@ function open(row: Row): void {
 </script>
 
 <template>
-    <AppLayout :title="title" fill>
+    <AppLayout help="reports" :title="title" fill>
         <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Reports', href: '/reports' }]" /></div>
         <div class="flex min-h-0 flex-1 flex-col" @click.capture="(e) => (e.target as HTMLElement).closest('tbody a[href]') && drillFrom(title)">
         <DataTable id="report" v-model:active="active" :label="title" :columns="columns" :rows="rows" :row-key="(r) => r.__key" currency="BDT" :url-sync="false" empty-text="Nothing in this period." @open="open">

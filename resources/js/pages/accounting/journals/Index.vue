@@ -35,7 +35,7 @@ function visit(params: Record<string, unknown>): void {
 </script>
 
 <template>
-    <AppLayout title="Journals" fill>
+    <AppLayout help="accounting" title="Journals" fill>
         <SplitPane id="journals" :open="selected !== null">
             <DataTable
                 id="journals"

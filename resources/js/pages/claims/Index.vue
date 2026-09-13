@@ -26,7 +26,7 @@ const columns: DataColumn<ClaimRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Claims" fill>
+    <AppLayout help="claims" title="Claims" fill>
         <QueueView
             id="claims"
             v-model:active="active"

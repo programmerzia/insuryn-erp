@@ -56,7 +56,7 @@ async function lockPeriod(): Promise<void> {
 </script>
 
 <template>
-    <AppLayout :title="`Close ${month}`">
+    <AppLayout help="close" :title="`Close ${month}`">
         <div class="grid max-w-[1040px] gap-4">
             <header class="flex flex-wrap items-end gap-x-6 gap-y-2">
                 <div>

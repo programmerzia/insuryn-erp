@@ -84,7 +84,7 @@ function saveDraft(): void {
 </script>
 
 <template>
-    <AppLayout title="New quote">
+    <AppLayout help="policies" title="New quote">
         <h1 class="mb-4 text-title font-semibold">New quote</h1>
         <Stepper :steps="steps" :current="step" @go="step = $event">
             <FormLayout :submit-label="step < steps.length - 1 ? 'Continue' : 'Create quote'" cancel-href="/policies" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" drafts @submit="next" @save-draft="saveDraft">

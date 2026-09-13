@@ -72,7 +72,7 @@ const primaryLabel = (s: Statement): string | undefined =>
 </script>
 
 <template>
-    <AppLayout title="Statement run" fill>
+    <AppLayout help="commission" title="Statement run" fill>
         <QueueView
             id="distribution-statements"
             v-model:active="active"

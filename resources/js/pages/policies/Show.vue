@@ -54,7 +54,7 @@ async function renew(): Promise<void> {
 </script>
 
 <template>
-    <AppLayout :title="title">
+    <AppLayout help="policies" :title="title">
         <ObjectPage
             :title="title"
             :subtitle="`${policy.policyholder} · ${policy.product_code}${policy.agent_code ? ` · agent ${policy.agent_code}` : ' · direct'} · version ${policy.version}${policy.cancel_date ? ` · cancelled from ${formatDate(policy.cancel_date)}` : ''}`"

@@ -38,7 +38,7 @@ const columns: DataColumn<ReceiptRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Receipts" fill>
+    <AppLayout help="receipts" title="Receipts" fill>
         <SplitPane id="receipts" :open="selected !== null">
             <DataTable
                 id="receipts"

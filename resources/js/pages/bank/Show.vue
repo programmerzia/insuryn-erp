@@ -95,7 +95,7 @@ function importFile(event: Event): void {
 </script>
 
 <template>
-    <AppLayout :title="`${account.bank_name} ${account.account_no_masked}`" fill>
+    <AppLayout help="bank" :title="`${account.bank_name} ${account.account_no_masked}`" fill>
         <div class="flex h-11 items-center gap-2 border-b border-line px-4">
             <p class="text-ui text-ink-2"><Link href="/bank" class="hover:underline">Bank</Link> ›</p>
             <h1 class="text-section font-semibold">{{ account.bank_name }} {{ account.account_no_masked }}</h1>

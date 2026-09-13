@@ -76,7 +76,7 @@ useShortcut('inspector.primary', () => void review(), { allowInInputs: true });
 </script>
 
 <template>
-    <AppLayout :title="`Allocate ${receipt.number}`" fill>
+    <AppLayout help="receipts" :title="`Allocate ${receipt.number}`" fill>
         <div class="grid min-h-0 flex-1 grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
             <section class="flex min-h-0 flex-col border-r border-line" aria-label="Receipt">
                 <div class="border-b border-line px-4 py-3">

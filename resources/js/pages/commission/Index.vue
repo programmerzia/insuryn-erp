@@ -54,7 +54,7 @@ function payStatement(s: Statement): void {
 </script>
 
 <template>
-    <AppLayout title="Commission" fill>
+    <AppLayout help="commission" title="Commission" fill>
         <div class="flex h-9 items-end gap-4 border-b border-line px-4" role="tablist" aria-label="Commission">
             <button v-for="tab in [{ id: 'statements', label: 'Payout statements' }, { id: 'plans', label: 'Plans' }] as const" :key="tab.id" type="button" role="tab" :aria-selected="view === tab.id"
                 class="-mb-px h-8 border-b-2 text-ui" :class="view === tab.id ? 'border-accent text-ink' : 'border-transparent text-ink-2 hover:text-ink'" @click="view = tab.id; active = null">

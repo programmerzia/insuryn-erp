@@ -79,7 +79,7 @@ function rejectReversal(): void {
 </script>
 
 <template>
-    <AppLayout :title="title">
+    <AppLayout help="accounting" :title="title">
         <div class="grid max-w-[1100px] gap-4">
             <Breadcrumb :base="[{ label: 'Journals', href: '/accounting/journals' }]" />
             <header class="flex flex-wrap items-start gap-x-6 gap-y-2 border-b border-line pb-3">

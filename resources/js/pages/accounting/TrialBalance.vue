@@ -35,7 +35,7 @@ startTrail();
 </script>
 
 <template>
-    <AppLayout title="Trial balance" fill>
+    <AppLayout help="accounting" title="Trial balance" fill>
         <div class="flex h-11 items-center gap-3 border-b border-line px-4">
             <h1 class="text-section font-semibold">Trial balance</h1>
             <DateRangeFilter url="/accounting/trial-balance" :as-of="asOf" />
