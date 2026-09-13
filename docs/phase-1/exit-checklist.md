@@ -63,7 +63,7 @@ cautious way, needs a customer answer) · **gap** (not built and needed before g
 | Static: PHPStan L8, architecture test | done | `phpstan.neon`, `tests/Architecture/DependencyTest.php` | |
 | **E2E (Playwright): issue policy → receive → earn → close month** | **gap** | — | Required by §9.1 and CI-blocking. The HTTP page tests cover the same flow without a browser |
 | Performance smoke (k6, 10k events < 60s) | gap | — | Not CI-blocking (§9.1 DECISION) |
-| **CI pipeline that blocks merge** | **gap** | no CI configuration in the repo | §9.1 DECISION: CI blocks merge on all layers except the performance smoke |
+| **CI pipeline that blocks merge** | built in slice 2.0b | `.github/workflows/ci.yml` + `scripts/ci/`; required checks to set once hosted | §9.1 DECISION: CI blocks merge on all layers except the performance smoke |
 
 ## 3. Kernel non-negotiables (CONTEXT.md)
 

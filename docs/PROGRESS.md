@@ -76,7 +76,7 @@ code and in the register below, configurable.
 | U9 | UX: feedback, states, accessibility | done | see git log |
 | U10 | UX: performance | done | see git log |
 | 2.0a | Phase 1 carry-over: user and role administration screens | done | see git log |
-| 2.0b | Phase 1 carry-over: CI pipeline | todo | |
+| 2.0b | Phase 1 carry-over: CI pipeline | done | see git log |
 | 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo | |
 | 2.0d | Phase 1 carry-over: claim reserve property test | todo | |
 | 2.1 | Design addendum v2 and Phase 2 customer questions | todo | |
@@ -98,6 +98,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-9 | 1A.10 | Receivable ageing by installment uses each installment's *current* outstanding amount (payments and cancellation credits are not dated per installment); `as_of` sets days past due and buckets only. The premium subledger reconciliation (A-8) is dated, so control totals are unaffected. | `Insurance\Reports\Application\ReceivableAgeingQuery` (`ASSUMPTION:`). |
 | A-11 | 2.0a | Who may lock administration out is not specified: the tenant always keeps an active user holding `platform.manage_users` and one holding `platform.manage_roles` (removing a role, deactivating a user or editing a role's permissions that would leave none is refused), and nobody deactivates their own account. | `Platform\Authorization\AdministratorsRemain`, `UserAdministration::deactivate` (`ASSUMPTION:`). |
 | A-12 | 2.0a | Invitation flow is not specified: an invited user is active with an unknown random password and receives a password-set link (Fortify reset token, tenant-keyed, standard 60-minute expiry; the admin can resend). Roles are given after inviting. | `Platform\Administration\UserAdministration::invite`, `config/auth.php` `passwords.users.expire`. |
+| A-13 | 2.0b | The CI host is not named (the repo has no remote yet): GitHub Actions. Every step lives in `scripts/ci/*.sh`, so another CI runs the same gate by calling the scripts. "Blocks merge" needs the `backend` and `frontend` checks made required in the branch protection of `main` once the repo is hosted. | `.github/workflows/ci.yml`, `scripts/ci/`. |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1273,3 +1274,16 @@ Scope: review only; only the critical finding was fixed.
 - Tests: `UserAdministrationTest` (7), `RoleAdministrationTest` (5), `DemoAccountsTest` (2), `demo-accounts.test.ts` (2); existing tests unchanged.
 - Screenshots: `storage/ux-screenshots/admin/{users,user,roles,role}-{1366,1920}-{light,dark}.png`, `storage/ux-screenshots/demo-accounts/`.
 - Result: 1,013 Pest tests, 218 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### 2.0b — CI pipeline — done
+- Design §9.1 DECISION "CI blocks merge on all but performance smoke". `.github/workflows/ci.yml` on push to `main` and every pull request:
+  - `frontend`: `scripts/ci/frontend.sh`, which runs vue-tsc, Vitest and the production build;
+  - `backend`: Postgres 17 service, PHP 8.4 (the design's version), `scripts/ci/prepare-database.sh` (runs `database/init/01-roles.sql`, the
+    same roles and databases as docker compose), then `scripts/ci/backend.sh`, which runs Pest (all layers in the suite, including architecture tests)
+    and PHPStan level 8.
+- The backend job builds the frontend first because pages render through the Vite manifest.
+- Verified by running the scripts in a clean clone with PHP 8.4.25 and a new Postgres 17 container: frontend green (218 Vitest tests, build), backend
+  green (1,013 Pest tests, PHPStan 0 errors). A deliberately failing test made `backend.sh` exit 1 before PHPStan.
+- Not in this slice: the Playwright E2E job (2.0c adds it to the same workflow); the k6 performance smoke is not CI-blocking by design.
+- To do once the repo has a GitHub remote: branch protection on `main` requiring `backend` and `frontend` (A-13). The workflow has not run on GitHub yet.
+
