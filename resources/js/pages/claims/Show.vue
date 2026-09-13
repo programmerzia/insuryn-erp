@@ -9,7 +9,7 @@ import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
-import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
+import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -27,6 +27,8 @@ const props = defineProps<{
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
     audit?: AuditRow[];
+    documents?: StoredDocumentRow[];
+    documentUpload: string | null;
 }>();
 
 type DrawerName = 'reserve' | 'payment' | 'recover' | 'close' | 'reject' | 'reopen' | 'release';
@@ -72,6 +74,8 @@ function openRelease(id: string): void {
             :timeline="timeline"
             :accounting="accounting"
             :audit="audit"
+            :documents="documents"
+            :document-upload="documentUpload"
             transactions-label="Reserves and payments"
         >
             <template #actions>

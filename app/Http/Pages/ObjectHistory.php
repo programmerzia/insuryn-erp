@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 final class ObjectHistory
 {
     private const ACTION_WORDS = ['policy.quoted' => 'Policy quoted', 'policy.issued' => 'Policy issued', 'policy.endorsed' => 'Policy endorsed', 'policy.cancelled' => 'Policy cancelled',
-        'claim.registered' => 'Claim registered', 'claim.reserved' => 'Reserve changed', 'claim_payment.approved' => 'Claim payment approved', 'receipt.recorded' => 'Receipt recorded'];
+        'claim.registered' => 'Claim registered', 'claim.reserved' => 'Reserve changed', 'claim_payment.approved' => 'Claim payment approved', 'receipt.recorded' => 'Receipt recorded',
+        'document.attached' => 'Document attached', 'document.downloaded' => 'Document downloaded'];
 
     /**
      * @param list<array{0: string, 1: string}> $subjects [object_type, object_id] pairs
@@ -23,7 +24,8 @@ final class ObjectHistory
     public function timeline(array $subjects): array
     {
         $timeline = [];
-        foreach ($this->events($subjects) as $event) {
+        // Reading a document is an access record for the Audit tab, not part of the object's story (fix F2).
+        foreach ($this->events($subjects, ['document.downloaded']) as $event) {
             // A payment below every approval limit is requested and approved in one step: only an approval that exists is "sent for approval".
             if ($event->action === 'claim_payment.approval_requested' && ! DB::table('approvals')->where('object_type', 'claim_payment')->where('object_id', DB::table('audit_events')->where('id', $event->id)->value('object_id'))->exists()) {
                 continue;
@@ -104,9 +106,10 @@ final class ObjectHistory
 
     /**
      * @param list<array{0: string, 1: string}> $subjects
+     * @param list<string> $exceptActions
      * @return list<\stdClass>
      */
-    private function events(array $subjects): array
+    private function events(array $subjects, array $exceptActions = []): array
     {
         if ($subjects === []) {
             return [];
@@ -117,6 +120,7 @@ final class ObjectHistory
                     $q->orWhere(fn ($s) => $s->where('a.object_type', $type)->where('a.object_id', $id));
                 }
             })
+            ->when($exceptActions !== [], fn ($q) => $q->whereNotIn('a.action', $exceptActions))
             ->orderByDesc('a.occurred_at')->orderByDesc('a.id')->limit(200);
 
         return array_values($query->get(['a.id', 'a.action', 'a.object_type', 'a.occurred_at', 'a.actor_type', 'a.before', 'a.after', 'a.reason', 'u.name'])->all());
@@ -151,7 +155,8 @@ final class ObjectHistory
                 .((int) ($after['suspense_minor'] ?? 0) > 0 ? ', '.$money($after['suspense_minor']).' held in suspense' : ''),
             'receipt.bounced' => 'Cheque bounced on '.$date($after['bounced_on'] ?? 'today').$why.$by,
             'suspense.allocated' => $money($after['amount_minor'] ?? 0).' allocated from suspense'.$by,
-            'user.invited' => 'Invited'.$by, 'user.invitation_sent' => 'Invitation sent again'.$by,
+            'document.attached' => 'Document '.($after['name'] ?? '').' attached'.$by,
+            'user.invited' =>'Invited'.$by, 'user.invitation_sent' => 'Invitation sent again'.$by,
             'user.deactivated' => 'Deactivated'.$by, 'user.reactivated' => 'Reactivated'.$by,
             'user_role.assigned' => 'Given '.$this->roleAndScope($after).$by,
             'user_role.revoked' => 'Removed from '.$this->roleAndScope($before).$by,

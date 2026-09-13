@@ -143,6 +143,8 @@ function populateEveryTenantTable(array $ctx): void
         $portalUser = app(ProducerPortalAccess::class)->grant($world['agent_id'], 'portal-'.Str::lower(Str::random(6)).'@agents.test', $world['admin']); // slice D9
         App\Models\User::query()->findOrFail($portalUser)->createToken('isolation', ['portal:read']);
         app(App\Modules\Platform\Setup\SetupProgress::class)->complete('company', $world['admin']); // session S1 setup wizard
+        Illuminate\Support\Facades\Storage::fake('documents'); // fix F2: a document attached to the claim
+        app(App\Modules\Platform\Documents\DocumentStore::class)->attach('claim', $claim->id, new App\Modules\Platform\Documents\DocumentContents('survey.pdf', '%PDF isolation'), $officer);
     });
 }
 

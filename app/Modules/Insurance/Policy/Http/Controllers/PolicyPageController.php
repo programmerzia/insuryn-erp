@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Policy\Http\Controllers;
 
+use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Policy\Application\PayerShare;
 use App\Modules\Insurance\Policy\Application\PayerStatementQuery;
@@ -21,11 +22,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** Policies screens (design §5.4): list and filter, quote (with payers), detail with transactions, installments and the lifecycle actions. */
 final class PolicyPageController
 {
     public const AREA = ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', 'reports.financial'];
+
+    /** ASSUMPTION: A-53 — who may attach documents to a policy is not specified: the people who quote, issue or endorse it. Reading follows AREA. */
+    public const ATTACH_DOCUMENTS = ['policy.create', 'policy.issue', 'policy.endorse'];
 
     public function __construct(
         private readonly PolicyLifecycle $lifecycle,
@@ -105,6 +110,7 @@ final class PolicyPageController
                 'credited' => $money($i->cancelled_minor), 'outstanding' => $money($i->outstanding()), 'status' => $i->status->value])->values()->all(),
             'payers' => array_map(fn (array $p): array => ['name' => $p['name'], 'share_percent' => sprintf('%d.%02d', intdiv($p['share_bp'], 100), $p['share_bp'] % 100), 'billed' => $money($p['billed_minor']),
                 'paid' => $money($p['paid_minor']), 'outstanding' => $money($p['outstanding_minor'])], $this->payers->forPolicy($model->id)['payers']),
+            'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/policies/{$model->id}/documents" : null,
             'actions' => [
                 'issue' => $status === PolicyStatus::Quote && $can('policy.issue'),
                 'endorse' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
@@ -181,5 +187,21 @@ final class PolicyPageController
         [$whole, $fraction] = array_pad(explode('.', trim($percent), 2), 2, '');
 
         return (int) $whole * 100 + (int) str_pad(substr($fraction, 0, 2), 2, '0');
+    }
+
+    public function attachDocument(Request $request, string $policy, ObjectDocuments $documents): RedirectResponse
+    {
+        $model = Policy::query()->findOrFail($policy);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::ATTACH_DOCUMENTS, \App\Modules\Platform\Authorization\AuthorizationScope::branch($model->entity_id, $model->branch_id));
+
+        return $documents->attach($request, 'policy', $model->id, "/policies/{$model->id}");
+    }
+
+    public function downloadDocument(Request $request, string $policy, string $document, ObjectDocuments $documents): StreamedResponse
+    {
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $model = Policy::query()->findOrFail($policy);
+
+        return $documents->download($request, 'policy', $model->id, $document);
     }
 }

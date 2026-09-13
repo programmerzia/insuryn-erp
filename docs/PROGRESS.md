@@ -124,6 +124,8 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-27 | S1 | Who does each setup step is not specified: the permission that owns the data decides — company and branches `platform.manage_roles` (Tenant Admin), fiscal year `periods.lock` and chart of accounts `accounting.manage_coa` (Finance Manager), first product `product.manage`, users `platform.manage_users`. A step the user cannot do says who can and may be skipped. The fiscal year is twelve monthly periods from the chosen month, opened once; the base currency changes only while nothing is posted. Chart-of-accounts template accounts that carry an account role cannot be removed. A first product earns monthly (Part A: 1/12 each month); its VAT rate is recorded under jurisdiction `erp.setup.tax_jurisdiction` (BD) unless one is already in force. | `SetupWizard`, `CompanySetup`, `FiscalYearSetup`, `ChartOfAccountsSetup`, `TaxRateSetup`, `config/erp.php` `setup.*`. |
 | A-28 | S1 | No §7.2 role template held `accounting.manage_coa`, so nobody could import a chart of accounts: the Finance Manager (and CFO) now hold it. | `RoleTemplates` (interpretation comment). |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
+| A-52 | F2 | Upload limit and accepted document types are not specified: 10 MB per file; PDF, JPG/JPEG, PNG, DOC/DOCX, XLS/XLSX. The file type is judged by its extension and served with that extension's content type, always as a download. PHP `upload_max_filesize` / `post_max_size` must be at least the limit. | `config/erp.php` `documents.max_upload_kb`, `documents.allowed_extensions` (`ASSUMPTION:`), `DocumentStore`; hint text in `DocumentList.vue`. |
+| A-53 | F2 | Who may attach documents is not specified: claims `claim.register`, `claim.reserve` or `claim.approve`; receipts `receipt.create` or `receipt.allocate`; policies `policy.create`, `policy.issue` or `policy.endorse` — for the object's branch. Listing and downloading follow the page's own area permissions (whoever can open the object page). No one can remove or replace a document. | `ATTACH_DOCUMENTS` in `ClaimPageController`, `CollectionsPageController`, `PolicyPageController` (`ASSUMPTION:`). |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -1677,3 +1679,25 @@ Scope: review only; only the critical finding was fixed.
 - Test changes: `PolicyLifecycleTest` now expects exactly `POL-HO-2026-000001` (was a `POL-2026-` prefix); `GlobalSearchTest` derives the short form from the new format and also
   searches the branch form.
 - Tests: `DocumentNumbererTest` (+2).
+
+### F2 — Documents on claims, receipts and policies — done
+- Market cross-check Part A step 5 ("register the claim with documents", G2). The Documents tab of the claim, receipt and policy pages lists the object's documents
+  (name and description, size, uploaded by, date, *Download*) and, for people who may attach, a file and an optional description. Empty state: "No documents yet." + *Attach a document*.
+- `Platform\Documents\DocumentStore` (generic; Platform knows no business object): `attach(objectType, objectId, UploadedFile|DocumentContents, actor, description)`,
+  `list`, `find` (only through the object the document is attached to) and `download` (streamed as an attachment under the original name, `nosniff`).
+  - Files go to the private `documents` disk (`storage/app/private/documents`, `serve` off, config `erp.documents.disk`) at `<tenant>/<first two hash characters>/<sha256>`:
+    the same bytes are stored once, and an existing file is never written again.
+  - Rows in `stored_documents` (tenant table, forced RLS): object type and id, original name, content type, size, SHA-256, disk, path, description, uploaded by (null = the system), uploaded at.
+    Append-only by trigger (`DOCUMENT_APPEND_ONLY`), and CHECKs keep the hash hexadecimal and inside the path. Decision D-25.
+  - Audit on the object itself: `document.attached` (name, size, hash, description; same transaction as the row) and `document.downloaded`. The timeline reads
+    "Document survey-report.pdf attached by Rafiq Islam"; downloads show in the Audit tab only.
+  - Refusals: `DOCUMENT_TYPE_NOT_ALLOWED`, `DOCUMENT_TOO_LARGE`, `DOCUMENT_EMPTY`, `DOCUMENT_DESCRIPTION_TOO_LONG`, `DOCUMENT_FILE_MISSING`; forms validate the same limits first. ASSUMPTION A-52.
+- HTTP (authorized by the business controllers, A-53): `POST /claims|receipts|policies/{id}/documents` (multipart, back to `?tab=documents`) and
+  `GET …/{id}/documents/{document}`. Page props: `documentUpload` (the POST URL, or null) and `documents` (deferred group `history`, with accounting and audit).
+  Composition helper `App\Http\Pages\ObjectDocuments`.
+- UI: `components/object/DocumentList.vue` inside `ObjectPage`; `formatFileSize` in `lib/format.ts`. The Documents tab no longer says documents cannot be attached.
+- Test setup change: `TenantIsolationEveryTableTest` attaches a document to the claim so `stored_documents` has rows.
+- Not done: no removal or replacement of a document (append-only by design), no preview in the browser, no virus scan, no documents on other objects (parties, refunds, bank lines);
+  the Phase 3 generated PDFs will reuse `DocumentStore` (docs/rating-quotation-documents-design.md §3, `generated_documents.pdf_document_id`).
+- Tests: `tests/Feature/Documents/ObjectDocumentsTest.php` (11: attach with hash, file and audit; page list and download; permissions; validation; append-only;
+  tenant isolation; receipts and policies; one file per hash on the real local disk), `resources/js/tests/documents.test.ts` (3).

@@ -6,17 +6,18 @@ import { ref, watch } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
 import AccountingList from '@/components/object/AccountingList.vue';
 import AuditList from '@/components/object/AuditList.vue';
+import DocumentList from '@/components/object/DocumentList.vue';
 import SkeletonRows from '@/components/object/SkeletonRows.vue';
 import Timeline from '@/components/object/Timeline.vue';
-import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
+import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import type { Crumb } from '@/lib/drill';
 
 /**
  * UX brief §6.2 object page: header strip (number, status, key amounts, actions), tabs Overview · Transactions · Timeline · Accounting ·
- * Documents · Audit. "View accounting" opens the journals in a side panel (brief §1.5). Accounting and audit load after the page with
- * skeleton rows in place. The open tab is kept in the URL.
+ * Documents · Audit. "View accounting" opens the journals in a side panel (brief §1.5). Accounting, audit and documents load after the page with
+ * skeleton rows in place; `documentUpload` is where the Documents tab posts a file, null when the user may not attach. The open tab is kept in the URL.
  */
 const props = defineProps<{
     title: string;
@@ -28,6 +29,8 @@ const props = defineProps<{
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
     audit?: AuditRow[];
+    documents?: StoredDocumentRow[];
+    documentUpload?: string | null;
     transactionsLabel?: string;
 }>();
 
@@ -93,7 +96,7 @@ const tabs = [
                     <Deferred data="accounting"><template #fallback><SkeletonRows /></template><AccountingList :journals="accounting ?? []" :currency="currency" :from="title" /></Deferred>
                 </TabsContent>
                 <TabsContent value="documents" class="outline-none">
-                    <p class="text-ui text-ink-2">Documents cannot be attached yet. Keep them in your document store and note the reference on the record.</p>
+                    <Deferred data="documents"><template #fallback><SkeletonRows /></template><DocumentList :documents="documents ?? []" :upload-url="documentUpload" /></Deferred>
                 </TabsContent>
                 <TabsContent value="audit" class="outline-none">
                     <Deferred data="audit"><template #fallback><SkeletonRows /></template><AuditList :rows="audit ?? []" /></Deferred>

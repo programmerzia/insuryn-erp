@@ -81,4 +81,15 @@ return [
             'account_code' => 'account_code', 'debit' => 'debit', 'credit' => 'credit', 'branch_code' => 'branch_code', 'memo' => 'memo',
         ],
     ],
+
+    /*
+     * Fix F2: documents attached to claims, receipts and policies (Platform\Documents\DocumentStore), kept on a private disk.
+     * ASSUMPTION: A-52 — the upload limit and the accepted file types are not specified: 10 MB, PDF, JPEG/PNG images, Word and Excel.
+     * PHP's upload_max_filesize and post_max_size must be at least as large.
+     */
+    'documents' => [
+        'disk' => env('ERP_DOCUMENTS_DISK', 'documents'),
+        'max_upload_kb' => (int) env('ERP_DOCUMENT_MAX_UPLOAD_KB', 10240),
+        'allowed_extensions' => ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'],
+    ],
 ];

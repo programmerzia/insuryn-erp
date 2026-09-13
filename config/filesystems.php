@@ -38,6 +38,16 @@ return [
             'report' => false,
         ],
 
+        // Fix F2: attached documents. Private (never served or linked publicly); downloads go through the object's page controller.
+        'documents' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/documents'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

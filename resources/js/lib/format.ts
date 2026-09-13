@@ -16,3 +16,16 @@ export function formatMoney(value: string | null | undefined): string {
     const minor = parseMoney(value);
     return minor === null ? value : formatMinor(minor);
 }
+
+/** File size for people: "512 B", "12.4 KB", "2.1 MB" (1 KB = 1,024 bytes, as the upload limit is counted). */
+export function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB'];
+    let value = bytes / 1024;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit += 1;
+    }
+    return `${value >= 100 ? Math.round(value) : Math.round(value * 10) / 10} ${units[unit]}`;
+}

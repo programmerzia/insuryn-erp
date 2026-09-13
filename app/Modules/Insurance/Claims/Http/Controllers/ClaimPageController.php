@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Claims\Http\Controllers;
 
+use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Claims\Application\ClaimPaymentService;
 use App\Modules\Insurance\Claims\Application\ClaimService;
@@ -19,11 +20,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** Claims screens (design §5.5): list, register, and a claim page with reserve history, payments, recoveries and the lifecycle actions. */
 final class ClaimPageController
 {
     public const AREA = ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_request', 'claim.pay_release', 'claim.close', 'reports.financial'];
+
+    /** ASSUMPTION: A-53 — who may attach documents to a claim is not specified: the people who register, reserve or approve it. Reading follows AREA. */
+    public const ATTACH_DOCUMENTS = ['claim.register', 'claim.reserve', 'claim.approve'];
 
     public function __construct(
         private readonly ClaimService $claims,
@@ -97,6 +102,7 @@ final class ClaimPageController
                 ->map(fn (object $r): array => ['type' => (string) $r->type, 'amount' => $money((int) $r->amount_minor), 'received_on' => (string) $r->received_on, 'reference' => $r->reference])->values()->all(),
             'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $model->entity_id)->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
+            'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/claims/{$model->id}/documents" : null,
             'actions' => [
                 'reserve' => in_array($status, [ClaimStatus::Registered, ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true) && $can('claim.reserve'),
                 'approve' => in_array($status, [ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true) && $can('claim.approve'),
@@ -178,5 +184,21 @@ final class ClaimPageController
             $data['reference'] ?? null, PageSupport::actor($request), CarbonImmutable::parse($data['received_on']));
 
         return redirect("/claims/{$claim}")->with('status', 'Recovery recorded.');
+    }
+
+    public function attachDocument(Request $request, string $claim, ObjectDocuments $documents): RedirectResponse
+    {
+        $model = Claim::query()->findOrFail($claim);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::ATTACH_DOCUMENTS, AuthorizationScope::branch($model->entity_id, $model->branch_id));
+
+        return $documents->attach($request, 'claim', $model->id, "/claims/{$model->id}");
+    }
+
+    public function downloadDocument(Request $request, string $claim, string $document, ObjectDocuments $documents): StreamedResponse
+    {
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $model = Claim::query()->findOrFail($claim);
+
+        return $documents->download($request, 'claim', $model->id, $document);
     }
 }

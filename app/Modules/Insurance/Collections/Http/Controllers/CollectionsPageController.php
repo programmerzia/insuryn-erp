@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Collections\Http\Controllers;
 
+use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Collections\Application\AgentCashPositionQuery;
 use App\Modules\Insurance\Collections\Application\AgentDepositService;
@@ -20,6 +21,7 @@ use App\Modules\Insurance\Collections\Application\SuspenseService;
 use App\Modules\Insurance\Collections\Domain\Enums\ReceiptStatus;
 use App\Modules\Insurance\Collections\Domain\Models\Receipt;
 use App\Modules\Insurance\Collections\Domain\Models\SuspenseItem;
+use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -27,11 +29,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** Collections screens: receipts, suspense, refunds, agent cash, cheque register and dunning notices (design §2.4, §4.2, §4.9; spec §4). */
 final class CollectionsPageController
 {
     public const AREA = ['receipt.create', 'receipt.allocate', 'receipt.refund_request', 'receipt.refund_release', 'reports.financial'];
+
+    /** ASSUMPTION: A-53 — who may attach documents to a receipt is not specified: the people who record or allocate receipts. Reading follows AREA. */
+    public const ATTACH_DOCUMENTS = ['receipt.create', 'receipt.allocate'];
+
     private const CHANNELS = ['bank_transfer', 'cash', 'cheque', 'card', 'mobile_money'];
 
     public function __construct(private readonly PermissionChecker $permissions) {}
@@ -104,6 +111,8 @@ final class CollectionsPageController
                 ->map(fn (object $a): array => ['id' => (string) $a->id, 'policy_number' => $a->number, 'amount' => $money((int) $a->amount_minor), 'posted_on' => (string) $a->posted_on,
                     'reversed_on' => $a->reversed_on === null ? null : (string) $a->reversed_on])->values()->all(),
             'suspense' => $item === null ? null : ['id' => $item->id, 'amount' => $money($item->amount_minor), 'open' => $money($item->openMinor()), 'status' => $item->status->value],
+            'documentUpload' => array_any(self::ATTACH_DOCUMENTS, fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id)))
+                ? "/receipts/{$model->id}/documents" : null,
             'actions' => ['bounce' => $model->channel === 'cheque' && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate')],
         ]);
     }
@@ -313,6 +322,22 @@ final class CollectionsPageController
         }
 
         return $options;
+    }
+
+    public function attachDocument(Request $request, string $receipt, ObjectDocuments $documents): RedirectResponse
+    {
+        $model = Receipt::query()->findOrFail($receipt);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::ATTACH_DOCUMENTS, AuthorizationScope::branch($model->entity_id, $model->branch_id));
+
+        return $documents->attach($request, 'receipt', $model->id, "/receipts/{$model->id}");
+    }
+
+    public function downloadDocument(Request $request, string $receipt, string $document, ObjectDocuments $documents): StreamedResponse
+    {
+        $this->authorize($request);
+        $model = Receipt::query()->findOrFail($receipt);
+
+        return $documents->download($request, 'receipt', $model->id, $document);
     }
 
     private function authorize(Request $request): string

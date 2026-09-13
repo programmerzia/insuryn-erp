@@ -124,6 +124,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('policies/create', [PolicyPageController::class, 'create']);
     Route::post('policies', [PolicyPageController::class, 'store']);
     Route::get('policies/{policy}', [\App\Http\Pages\ObjectPageController::class, 'policy'])->whereUuid('policy');
+    Route::post('policies/{policy}/documents', [PolicyPageController::class, 'attachDocument'])->whereUuid('policy');
+    Route::get('policies/{policy}/documents/{document}', [PolicyPageController::class, 'downloadDocument'])->whereUuid(['policy', 'document']);
     Route::post('policies/{policy}/issue', [PolicyPageController::class, 'issue'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/endorse', [PolicyPageController::class, 'endorse'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy')->middleware('moves-money');
@@ -133,6 +135,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('receipts/create', [CollectionsPageController::class, 'create']);
     Route::post('receipts', [CollectionsPageController::class, 'store'])->middleware('moves-money');
     Route::get('receipts/{receipt}', [\App\Http\Pages\ObjectPageController::class, 'receipt'])->whereUuid('receipt');
+    Route::post('receipts/{receipt}/documents', [CollectionsPageController::class, 'attachDocument'])->whereUuid('receipt');
+    Route::get('receipts/{receipt}/documents/{document}', [CollectionsPageController::class, 'downloadDocument'])->whereUuid(['receipt', 'document']);
     Route::get('receipts/{receipt}/allocate', [CollectionsPageController::class, 'allocateWorkbench'])->whereUuid('receipt');
     Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt')->middleware('moves-money');
     Route::get('suspense', [CollectionsPageController::class, 'suspense']);
@@ -159,6 +163,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('claims/create', [ClaimPageController::class, 'create']);
     Route::post('claims', [ClaimPageController::class, 'store']);
     Route::get('claims/{claim}', [\App\Http\Pages\ObjectPageController::class, 'claim'])->whereUuid('claim');
+    Route::post('claims/{claim}/documents', [ClaimPageController::class, 'attachDocument'])->whereUuid('claim');
+    Route::get('claims/{claim}/documents/{document}', [ClaimPageController::class, 'downloadDocument'])->whereUuid(['claim', 'document']);
     Route::post('claims/{claim}/reserve', [ClaimPageController::class, 'reserve'])->whereUuid('claim')->middleware('moves-money');
     Route::post('claims/{claim}/payments', [ClaimPageController::class, 'approvePayment'])->whereUuid('claim')->middleware('moves-money');
     Route::post('claims/{claim}/recover', [ClaimPageController::class, 'recover'])->whereUuid('claim')->middleware('moves-money');
