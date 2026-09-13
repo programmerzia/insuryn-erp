@@ -143,6 +143,58 @@ final class CollectionsPageController
         return back()->with('status', 'Suspense allocated.');
     }
 
+    /** UX brief §6.3 allocation workbench: the receipt and its open suspense on the left, candidate installments (the payer's first) on the right. */
+    public function allocateWorkbench(Request $request, string $receipt): Response
+    {
+        $this->authorize($request);
+        $entity = PageSupport::entity();
+        $r = DB::table('receipts as r')->leftJoin('parties as p', 'p.id', '=', 'r.party_id')->where('r.id', $receipt)
+            ->first(['r.id', 'r.number', 'r.party_id', 'r.amount_minor', 'r.currency', 'r.value_date', 'r.reference', 'r.channel', 'r.status', 'p.display_name']) ?? abort(404);
+        $item = DB::table('suspense_items')->where('receipt_id', $receipt)->where('status', 'open')->first(['id', 'amount_minor', 'allocated_minor']);
+        $candidates = [];
+        $rows = DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
+            ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
+            ->orderByRaw('case when i.payer_party_id = ? then 0 else 1 end', [$r->party_id])->orderBy('i.due_date')->orderBy('p.number')->limit(500)
+            ->get(['i.id', 'i.no', 'i.due_date', 'i.payer_party_id', 'p.number', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
+        foreach ($rows as $row) {
+            $candidates[] = ['id' => (string) $row->id, 'policy_number' => (string) $row->number, 'no' => (int) $row->no, 'due_date' => (string) $row->due_date,
+                'payer' => (string) $row->display_name, 'outstanding' => PageSupport::money((int) $row->outstanding, $entity['currency']),
+                'payer_matches' => $r->party_id !== null && $row->payer_party_id === $r->party_id];
+        }
+
+        return Inertia::render('receipts/Allocate', [
+            'receipt' => ['id' => (string) $r->id, 'number' => (string) $r->number, 'amount' => PageSupport::money((int) $r->amount_minor, (string) $r->currency), 'currency' => (string) $r->currency,
+                'value_date' => (string) $r->value_date, 'reference' => $r->reference, 'channel' => (string) $r->channel, 'status' => (string) $r->status, 'payer' => $r->display_name,
+                'open' => PageSupport::money($item === null ? 0 : (int) $item->amount_minor - (int) $item->allocated_minor, (string) $r->currency)],
+            'suspenseItemId' => $item === null ? null : (string) $item->id,
+            'candidates' => $candidates,
+        ]);
+    }
+
+    /** One commit for the workbench: every line is allocated, or none is (the first refusal rolls the others back). */
+    public function allocateMany(Request $request, string $suspenseItem, SuspenseService $suspense): RedirectResponse
+    {
+        /** @var array{on: string, lines: list<array{installment_id: string, amount: string}>} $data */
+        $data = $request->validate(['on' => ['required', 'date_format:Y-m-d'], 'lines' => ['required', 'array', 'min:1', 'max:100'],
+            'lines.*.installment_id' => ['required', 'uuid'], 'lines.*.amount' => ['required', 'string']]);
+        $entity = PageSupport::entity();
+        $actor = PageSupport::actor($request);
+        $total = 0;
+        DB::transaction(function () use ($data, $entity, $actor, $suspenseItem, $suspense, &$total): void {
+            foreach ($data['lines'] as $index => $line) {
+                $amount = PageSupport::minor("lines.{$index}.amount", $line['amount'], $entity['currency']);
+                $suspense->allocate($suspenseItem, $line['installment_id'], $amount, $actor, CarbonImmutable::parse($data['on']));
+                $total += $amount;
+            }
+        });
+        $open = DB::table('suspense_items')->where('id', $suspenseItem)->first(['amount_minor', 'allocated_minor']);
+        $left = $open === null ? 0 : (int) $open->amount_minor - (int) $open->allocated_minor;
+        $count = count($data['lines']);
+
+        return back()->with('status', 'Allocated '.PageSupport::money($total, $entity['currency'])." to {$count} ".($count === 1 ? 'installment' : 'installments')
+            .($left > 0 ? '; '.PageSupport::money($left, $entity['currency']).' is still unallocated.' : '; nothing is left in suspense.'));
+    }
+
     public function refunds(Request $request, RefundableQuery $refundable): Response
     {
         $actor = $this->authorize($request);

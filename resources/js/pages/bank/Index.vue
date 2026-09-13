@@ -1,54 +1,63 @@
 <script setup lang="ts">
 import { Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
-import FormBanner from '@/components/forms/FormBanner.vue';
+import FormLayout from '@/components/forms/FormLayout.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
-import PageHeader from '@/components/PageHeader.vue';
+import TextInput from '@/components/forms/TextInput.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import DetailList from '@/components/table/DetailList.vue';
+import QueueView from '@/components/table/QueueView.vue';
+import type { DataColumn } from '@/components/table/types';
+import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { usePermissions } from '@/lib/permissions';
 
-const props = defineProps<{
-    entity: { currency: string };
-    accounts: { id: string; bank_name: string; account_no_masked: string; currency: string; status: string; gl_code: string; gl_name: string; unmatched_lines: number }[];
-    glAccounts: { id: string; code: string; name: string }[];
-}>();
+interface Account { id: string; bank_name: string; account_no_masked: string; currency: string; status: string; gl_code: string; gl_name: string; unmatched_lines: number }
+const props = defineProps<{ entity: { currency: string }; accounts: Account[]; glAccounts: { id: string; code: string; name: string }[] }>();
 
+const { can } = usePermissions();
+const active = ref<string | null>(null);
+const adding = ref(false);
 const form = useForm({ gl_account_id: '', bank_name: '', account_no_masked: '', currency: props.entity.currency });
+const columns: DataColumn<Account>[] = [
+    { id: 'bank', header: 'Bank account', value: (a) => `${a.bank_name} ${a.account_no_masked}`, href: (a) => `/bank/${a.id}`, width: 220 },
+    { id: 'ledger', header: 'Ledger account', value: (a) => `${a.gl_code} ${a.gl_name}`, width: 220, muted: true },
+    { id: 'currency', header: 'Currency', value: (a) => a.currency, width: 90 },
+    { id: 'unmatched', header: 'Unmatched lines', type: 'number', value: (a) => a.unmatched_lines, width: 130 },
+    { id: 'status', header: 'Status', type: 'status', value: (a) => a.status },
+];
 </script>
 
 <template>
-    <AppLayout title="Bank">
-        <PageHeader eyebrow="Finance" title="Bank accounts" description="Each bank account posts to its own ledger account. Open one to import statements and match." />
-        <FormBanner />
-        <div class="grid gap-6 lg:grid-cols-3">
-            <div class="lg:col-span-2">
-                <Table>
-                    <TableHeader><TableRow><TableHead>Bank</TableHead><TableHead>Ledger account</TableHead><TableHead class="text-right">Unmatched lines</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="account in accounts" :key="account.id">
-                            <TableCell><Link :href="`/bank/${account.id}`" class="text-accent-text hover:underline">{{ account.bank_name }} {{ account.account_no_masked }}</Link></TableCell>
-                            <TableCell><span class="">{{ account.gl_code }}</span> {{ account.gl_name }}</TableCell>
-                            <TableCell class="text-right tabular-nums" :class="account.unmatched_lines > 0 ? 'text-warn' : 'text-ink-2'">{{ account.unmatched_lines }}</TableCell>
-                            <TableCell><StatusBadge :status="account.status" /></TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="accounts.length === 0" :colspan="4">No bank accounts yet.</TableEmpty>
-                    </TableBody>
-                </Table>
-            </div>
-            <Card>
-                <h2 class="text-section font-semibold">Add a bank account</h2>
-                <form class="mt-4 grid gap-4" @submit.prevent="form.post('/bank', { onSuccess: () => form.reset('bank_name', 'account_no_masked') })">
-                    <Field id="gl_account_id" label="Ledger account" :error="form.errors.gl_account_id"><SelectInput id="gl_account_id" v-model="form.gl_account_id" placeholder="Choose an asset account" :options="glAccounts.map((a) => ({ value: a.id, label: `${a.code} · ${a.name}` }))" /></Field>
-                    <Field id="bank_name" label="Bank" :error="form.errors.bank_name"><Input id="bank_name" v-model="form.bank_name" /></Field>
-                    <Field id="account_no_masked" label="Account number (masked)" :error="form.errors.account_no_masked"><Input id="account_no_masked" v-model="form.account_no_masked" placeholder="****4471" /></Field>
-                    <Field id="currency" label="Currency" :error="form.errors.currency"><Input id="currency" v-model="form.currency" maxlength="3" /></Field>
-                    <Button type="submit" :disabled="form.processing">Add bank account</Button>
-                </form>
-            </Card>
-        </div>
+    <AppLayout title="Bank" fill>
+        <QueueView
+            id="bank-accounts"
+            v-model:active="active"
+            title="Bank accounts"
+            :columns="columns"
+            :rows="accounts"
+            :row-key="(a) => a.id"
+            empty-text="No bank accounts yet. Add one to import statements."
+            :action="can('bank.manage_accounts') ? { label: 'Add a bank account' } : null"
+            :inspector-title="(a) => `${a.bank_name} ${a.account_no_masked}`"
+            :inspector-subtitle="(a) => `${a.gl_code} ${a.gl_name}`"
+            @action="adding = true"
+        >
+            <template #details="{ row }">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Unmatched lines', value: row.unmatched_lines }, { label: 'Currency', value: row.currency }]">
+                    <template #Status><StatusBadge :status="row.status" /></template>
+                </DetailList>
+                <Link :href="`/bank/${row.id}`" class="mt-4 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Match statement lines</Link>
+            </template>
+        </QueueView>
+        <Drawer v-model:open="adding" title="Add a bank account">
+            <FormLayout submit-label="Add bank account" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="form.post('/bank', { onSuccess: () => (adding = false) })" @cancel="adding = false">
+                <Field id="gl_account_id" label="Ledger account" :error="form.errors.gl_account_id"><SelectInput id="gl_account_id" v-model="form.gl_account_id" placeholder="Choose an asset account" :options="glAccounts.map((a) => ({ value: a.id, label: `${a.code} ${a.name}` }))" /></Field>
+                <Field id="bank_name" label="Bank" :error="form.errors.bank_name"><TextInput v-model="form.bank_name" /></Field>
+                <Field id="account_no_masked" label="Account number" hint="Show only the last four digits, like ****4471." :error="form.errors.account_no_masked"><TextInput v-model="form.account_no_masked" placeholder="****4471" /></Field>
+                <Field id="currency" label="Currency" :error="form.errors.currency"><TextInput v-model="form.currency" :maxlength="3" /></Field>
+            </FormLayout>
+        </Drawer>
     </AppLayout>
 </template>

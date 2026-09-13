@@ -11,7 +11,6 @@ use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\Side;
 use App\Modules\Accounting\Infrastructure\Jobs\OutboxRelayJob;
 use App\Modules\Finance\Bank\Application\BankAccountService;
-use App\Modules\Finance\Bank\Application\BankMatcher;
 use App\Modules\Finance\Bank\Application\StatementImport;
 use App\Modules\Insurance\Claims\Application\ClaimPaymentService;
 use App\Modules\Insurance\Claims\Application\ClaimService;
@@ -135,10 +134,15 @@ final class DemoBusinessSeeder extends Seeder
         }
 
         $bank = app(BankAccountService::class)->create($entityId, $accounts['1010'], 'City Bank', '****4471', 'BDT', $users['finance_manager']);
-        $csv = "date,description,reference,amount\n2026-09-03,Transfer,REF-0,".$this->major(4_500_000)."\n2026-09-05,Deposit,unknown,18000.00\n"
-            ."2026-09-08,Bank charges,,-350.00\n2026-09-09,Transfer,TT 9921,52000.00\n2026-09-10,Card settlement,CS-771,7300.00\n";
-        app(StatementImport::class)->import($bank->id, $csv, 'city-sep.csv', $users['accountant']);
-        app(BankMatcher::class)->autoMatch($bank->id);
+        // Statement lines near real receipts so matching has work: one strong suggestion (reference), one possible (amount and date), one fee, one unknown.
+        $recent = DB::table('receipts')->where('value_date', '>=', '2026-08-25')->whereNotNull('reference')->orderBy('value_date')->get(['reference', 'value_date', 'amount_minor']);
+        $lines = ['date,description,reference,amount'];
+        foreach ($recent->take(2) as $index => $receipt) {
+            $lines[] = $day((string) $receipt->value_date)->addDay()->toDateString().','.($index === 0 ? 'Transfer,'.$receipt->reference : 'Deposit,').','.$this->major((int) $receipt->amount_minor);
+        }
+        $lines[] = '2026-09-08,Bank charges,,-350.00';
+        $lines[] = '2026-09-09,Transfer,TT 9921,52000.00';
+        app(StatementImport::class)->import($bank->id, implode("\n", $lines)."\n", 'city-sep.csv', $users['accountant']);
 
         $claims = app(ClaimService::class);
         $payments = app(ClaimPaymentService::class);

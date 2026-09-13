@@ -36,8 +36,12 @@ const props = withDefaults(
         urlSync?: boolean;
         exportName?: string;
         label: string;
+        /** false: a click only makes the row active; Enter opens it (screens where opening acts, like accepting a match). */
+        openOnClick?: boolean;
+        /** Icon-only toolbar with tooltips, for tables sharing the screen. */
+        compactToolbar?: boolean;
     }>(),
-    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined },
+    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false },
 );
 const emit = defineEmits<{ open: [row: T]; close: [] }>();
 const active = defineModel<string | null>('active', { default: null });
@@ -210,6 +214,7 @@ defineExpose({ state, focusRow });
             :active-filters="activeFilters"
             :selected="selectedRows.length"
             :selected-sum="selectedSum"
+            :compact="compactToolbar"
             @toggle-filters="showFilters = !showFilters"
             @toggle-column="(id, visible) => table.getColumn(id)?.toggleVisibility(visible)"
             @reset-columns="state.resetLayout()"
@@ -326,7 +331,7 @@ defineExpose({ state, focusRow });
                                 ]"
                                 :aria-selected="selectable ? row.getIsSelected() : row.id === active"
                                 :aria-rowindex="index + 1"
-                                @click="open(index)"
+                                @click="openOnClick ? open(index) : ((activeIndex = index), (active = row.id))"
                                 @contextmenu="contextRow = index; activeIndex = index"
                             >
                                 <td v-if="selectable" class="border-b border-line px-2" @click.stop>

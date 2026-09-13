@@ -59,14 +59,29 @@ final class ClosePageController
     {
         $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
         $detail = $runs->find($run) ?? abort(404);
-        $period = DB::table('fiscal_periods')->where('id', $detail['period_id'])->first(['year', 'period', 'status']);
+        $period = DB::table('fiscal_periods')->where('id', $detail['period_id'])->first(['year', 'period', 'status', 'starts', 'ends']);
+
+        $label = fn (string $code): string => ucfirst(str_replace('_', ' ', $code));
+        $statusByCode = array_column($detail['tasks'], 'status', 'code');
+        $settled = fn (string $code): bool => in_array($statusByCode[$code] ?? '', ['done', 'skipped'], true);
+        $open = count(array_filter($detail['tasks'], fn (array $t): bool => $t['code'] !== 'period_lock' && ! $settled($t['code'])));
+        $variance = DB::table('reconciliation_runs')->where('period_id', $detail['period_id'])->where('status', 'variance')->pluck('subledger')->map(fn ($s): string => (string) $s)->all();
 
         return Inertia::render('close/Run', [
             'run' => ['id' => $detail['id'], 'status' => $detail['status'], 'started_at' => $detail['started_at'], 'completed_at' => $detail['completed_at'],
-                'period' => $period === null ? '' : sprintf('%d-%02d', (int) $period->year, (int) $period->period), 'period_status' => (string) ($period->status ?? '')],
+                'period' => $period === null ? '' : sprintf('%d-%02d', (int) $period->year, (int) $period->period), 'period_status' => (string) ($period->status ?? ''),
+                'starts' => (string) ($period->starts ?? ''), 'ends' => (string) ($period->ends ?? '')],
             'tasks' => array_map(fn (array $t): array => ['id' => $t['id'], 'code' => $t['code'], 'order_no' => $t['order_no'], 'owner_role' => $t['owner_role'], 'status' => $t['status'],
                 'depends_on' => $t['depends_on'], 'summary' => is_array($t['result']) ? (string) ($t['result']['summary'] ?? ($t['result']['skip_reason'] ?? '')) : null,
-                'done_at' => $t['done_at']], $detail['tasks']),
+                'done_at' => $t['done_at'],
+                'blocked_by' => array_values(array_map($label, array_filter($t['depends_on'], fn (string $code): bool => ! $settled($code))))], $detail['tasks']),
+            // UX brief §6.5: the lock button stays disabled with the reason until the close is clean (the lock itself re-checks everything, design §5.7).
+            'lock' => match (true) {
+                $detail['status'] !== 'running' => ['ready' => false, 'reason' => 'This close is not running.'],
+                $open > 0 => ['ready' => false, 'reason' => "Finish or skip {$open} open ".($open === 1 ? 'task' : 'tasks').' before locking.'],
+                $variance !== [] => ['ready' => false, 'reason' => 'Resolve the reconciliation variance in '.implode(', ', $variance).' before locking.'],
+                default => ['ready' => true, 'reason' => null],
+            },
         ]);
     }
 

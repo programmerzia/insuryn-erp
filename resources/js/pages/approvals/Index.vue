@@ -1,43 +1,64 @@
 <script setup lang="ts">
-import { Link, useForm } from '@inertiajs/vue3';
-import FormBanner from '@/components/forms/FormBanner.vue';
-import PageHeader from '@/components/PageHeader.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { router } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import DetailList from '@/components/table/DetailList.vue';
+import QueueView from '@/components/table/QueueView.vue';
+import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatMoney } from '@/lib/format';
+import { useJournalConfirm } from '@/lib/journalConfirm';
 
-defineProps<{ approvals: { id: string; object_type: string; title: string; step: number; requested_by: string; requested_at: string; link: string | null; amount: string | null }[] }>();
-const form = useForm({ decision: 'approved', reason: '' });
+interface ApprovalRow { id: string; object_type: string; title: string; step: number; requested_by: string; requested_at: string; link: string | null; amount: string | null }
+const props = defineProps<{ approvals: ApprovalRow[] }>();
 
-function decide(id: string, decision: 'approved' | 'rejected'): void {
-    form.decision = decision;
-    form.post(`/approvals/${id}/decide`, { preserveScroll: true, onSuccess: () => form.reset() });
+const active = ref<string | null>(null);
+const reason = ref('');
+const confirm = useJournalConfirm();
+const words = (value: string) => value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+const columns: DataColumn<ApprovalRow>[] = [
+    { id: 'title', header: 'Waiting for approval', value: (a) => a.title, href: (a) => a.link, width: 280 },
+    { id: 'type', header: 'Kind', value: (a) => words(a.object_type), width: 170 },
+    { id: 'amount', header: 'Amount', type: 'money', value: (a) => a.amount, total: true },
+    { id: 'requested_by', header: 'Requested by', value: (a) => a.requested_by, width: 160 },
+    { id: 'requested_at', header: 'Requested', type: 'date', value: (a) => a.requested_at },
+    { id: 'step', header: 'Step', type: 'number', value: (a) => a.step, width: 72 },
+];
+
+function approve(row: ApprovalRow): void {
+    void confirm.request(`/approvals/${row.id}/decide`, { decision: 'approved' }, `Approve ${row.title}?`, 'Approve');
 }
+function reject(row: ApprovalRow): void {
+    router.post(`/approvals/${row.id}/decide`, { decision: 'rejected', reason: reason.value }, { preserveScroll: true, onSuccess: () => { reason.value = ''; active.value = null; } });
+}
+void props;
 </script>
 
 <template>
-    <AppLayout title="Approvals">
-        <PageHeader eyebrow="Inbox" title="Approvals" description="Requests waiting for your decision. You never see your own requests." />
-        <FormBanner />
-        <Table>
-            <TableHeader><TableRow><TableHead>Request</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>Requested by</TableHead><TableHead>Step</TableHead><TableHead /></TableRow></TableHeader>
-            <TableBody>
-                <TableRow v-for="approval in approvals" :key="approval.id">
-                    <TableCell><Link v-if="approval.link" :href="approval.link" class="text-accent-text hover:underline">{{ approval.title }}</Link><span v-else>{{ approval.title }}</span></TableCell>
-                    <TableCell class="text-right tabular-nums">{{ approval.amount }}</TableCell>
-                    <TableCell>{{ approval.requested_by }} <span class="text-dense text-ink-2">{{ approval.requested_at }}</span></TableCell>
-                    <TableCell>{{ approval.step }}</TableCell>
-                    <TableCell>
-                        <span class="flex items-center justify-end gap-2">
-                            <Button @click="decide(approval.id, 'approved')">Approve</Button>
-                            <Input v-model="form.reason" placeholder="Reason to reject" class="w-44" aria-label="Reason to reject" />
-                            <Button variant="ghost" @click="decide(approval.id, 'rejected')">Reject</Button>
-                        </span>
-                    </TableCell>
-                </TableRow>
-                <TableEmpty v-if="approvals.length === 0" :colspan="5">Nothing is waiting for you.</TableEmpty>
-            </TableBody>
-        </Table>
+    <AppLayout title="Approvals" fill>
+        <QueueView
+            id="approvals"
+            v-model:active="active"
+            title="Approvals"
+            :columns="columns"
+            :rows="approvals"
+            :row-key="(a) => a.id"
+            currency="BDT"
+            empty-text="Nothing is waiting for your decision."
+            :inspector-title="(a) => a.title"
+            :inspector-subtitle="(a) => `${words(a.object_type)} · step ${a.step}`"
+            :primary-label="() => 'Approve'"
+            @primary="approve"
+        >
+            <template #details="{ row }">
+                <DetailList :items="[{ label: 'Amount', value: row.amount ? `${formatMoney(row.amount)} BDT` : null, num: true }, { label: 'Requested by', value: row.requested_by }, { label: 'Requested', value: row.requested_at }, { label: 'Step', value: row.step }]" />
+                <p class="mt-4 text-ui text-ink-2">You never see your own requests here. Approving may post to the ledger; you see the entries first.</p>
+            </template>
+            <template #actions="{ row }">
+                <input v-model="reason" class="h-8 w-44 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="Reason to reject" aria-label="Reason to reject" />
+                <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui text-ink hover:bg-surface-2" :disabled="reason.trim() === ''" @click="reject(row)">Reject</button>
+            </template>
+        </QueueView>
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

@@ -6,6 +6,7 @@ import SplitPane from '@/components/shell/SplitPane.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { type DataColumn, DataTable } from '@/components/table';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { eventLabel } from '@/lib/events';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { EntityRef, JournalListItem } from '@/types/accounting';
 
@@ -23,7 +24,7 @@ const columns: DataColumn<JournalListItem>[] = [
     { id: 'number', header: 'Number', value: (j) => j.number ?? 'Draft', href: (j) => `/accounting/journals/${j.id}`, width: 150 },
     { id: 'postingDate', header: 'Posting date', type: 'date', value: (j) => j.postingDate },
     { id: 'kind', header: 'Kind', value: (j) => j.kind, width: 96, filterOptions: ['system', 'manual', 'adjustment', 'reversal', 'opening'] },
-    { id: 'description', header: 'Description', value: (j) => j.description, width: 320, muted: true },
+    { id: 'description', header: 'Description', value: (j) => (j.description && /^[A-Z_]+$/.test(j.description) ? eventLabel(j.description) : j.description), width: 320, muted: true },
     { id: 'status', header: 'Status', type: 'status', value: (j) => j.status, filterOptions: props.statuses },
     { id: 'total', header: 'Total', type: 'money', value: (j) => j.total, width: 140 },
 ];

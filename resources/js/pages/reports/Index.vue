@@ -1,22 +1,30 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import PageHeader from '@/components/PageHeader.vue';
-import { Card } from '@/components/ui/card';
+import { ArrowRight } from 'lucide-vue-next';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { startTrail } from '@/lib/drill';
 
+/** Report catalogue as a plain list (brief §9: no card grids). Every figure in a report drills to the activity or record behind it. */
 defineProps<{ reports: { key: string | null; title: string; description: string; filter: string | null; href?: string }[] }>();
+startTrail();
 </script>
 
 <template>
     <AppLayout title="Reports">
-        <PageHeader eyebrow="Accounting" title="Reports" description="Every figure links to the account activity or journal behind it." />
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Link v-for="report in reports" :key="report.title" :href="report.href ?? `/reports/${report.key}`">
-                <Card class="h-full hover:border-line-control">
-                    <h2 class="font-semibold text-ink">{{ report.title }}</h2>
-                    <p class="mt-1 text-ui text-ink-2">{{ report.description }}</p>
-                </Card>
-            </Link>
+        <div class="max-w-[760px]">
+            <h1 class="text-title font-semibold">Reports</h1>
+            <p class="mb-4 text-ui text-ink-2">Every figure links to the account activity or record behind it.</p>
+            <ul class="rounded-panel border border-line">
+                <li v-for="report in reports" :key="report.title" class="border-b border-line last:border-b-0">
+                    <Link :href="report.href ?? `/reports/${report.key}`" class="group flex items-center gap-4 px-4 py-3 hover:bg-surface-2">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-ui font-medium text-ink">{{ report.title }}</p>
+                            <p class="text-ui text-ink-2">{{ report.description }}</p>
+                        </div>
+                        <ArrowRight :size="16" :stroke-width="1.5" class="text-ink-2 group-hover:text-ink" aria-hidden="true" />
+                    </Link>
+                </li>
+            </ul>
         </div>
     </AppLayout>
 </template>

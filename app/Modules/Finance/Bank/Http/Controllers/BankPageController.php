@@ -52,7 +52,7 @@ final class BankPageController
         return redirect('/bank')->with('status', 'Bank account added.');
     }
 
-    public function show(Request $request, string $bankAccount, BankReconciliationQuery $reconciliation): Response
+    public function show(Request $request, string $bankAccount, BankReconciliationQuery $reconciliation, \App\Modules\Finance\Bank\Application\BankMatcher $matcher): Response
     {
         $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
         $account = BankAccount::query()->findOrFail($bankAccount);
@@ -68,6 +68,7 @@ final class BankPageController
                 'statement_lines' => array_map(fn (array $l): array => $l + ['amount' => $money($l['amount_minor'])], $queue['statement_lines']),
                 'journal_lines' => array_map(fn (array $l): array => $l + ['amount' => $money($l['amount_minor'])], $queue['journal_lines']),
             ],
+            'suggestions' => $matcher->suggestions($account->id, $asOf),
         ]);
     }
 

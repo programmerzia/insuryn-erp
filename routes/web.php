@@ -41,7 +41,7 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     Route::post('journals/{journal}/reject', [ManualJournalPageController::class, 'reject'])->whereUuid('journal');
     Route::post('journals/{journal}/reversal-requests', [ManualJournalPageController::class, 'requestReversal'])->whereUuid('journal');
     Route::post('reversal-requests/{reversalRequest}/{decision}', [ManualJournalPageController::class, 'decideReversal'])->whereUuid('reversalRequest')->whereIn('decision', ['approve', 'reject'])->middleware('moves-money');
-    Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+    Route::get('journals/{journal}', \App\Http\Pages\JournalPageController::class)->name('journals.show');
     Route::get('imports', [ImportController::class, 'page'])->name('imports');
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
 });
@@ -75,9 +75,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('receipts/create', [CollectionsPageController::class, 'create']);
     Route::post('receipts', [CollectionsPageController::class, 'store'])->middleware('moves-money');
     Route::get('receipts/{receipt}', [CollectionsPageController::class, 'show'])->whereUuid('receipt');
+    Route::get('receipts/{receipt}/allocate', [CollectionsPageController::class, 'allocateWorkbench'])->whereUuid('receipt');
     Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt')->middleware('moves-money');
     Route::get('suspense', [CollectionsPageController::class, 'suspense']);
     Route::post('suspense/{suspenseItem}/allocate', [CollectionsPageController::class, 'allocate'])->whereUuid('suspenseItem')->middleware('moves-money');
+    Route::post('suspense/{suspenseItem}/allocations', [CollectionsPageController::class, 'allocateMany'])->whereUuid('suspenseItem')->middleware('moves-money');
     Route::get('refunds', [CollectionsPageController::class, 'refunds']);
     Route::post('refunds', [CollectionsPageController::class, 'requestRefund']);
     Route::post('refunds/{refund}/{decision}', [CollectionsPageController::class, 'decideRefund'])->whereUuid('refund')->whereIn('decision', ['release', 'reject'])->middleware('moves-money');

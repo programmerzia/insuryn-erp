@@ -43,7 +43,7 @@ final class PolicyPageController
             ->where('p.entity_id', $entity['id'])->when($status !== '', fn ($q) => $q->where('p.status', $status))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->whereRaw('p.number ilike ?', ["%{$search}%"])->orWhereRaw('h.display_name ilike ?', ["%{$search}%"])))
             ->orderByDesc('p.created_at')->select(['p.id', 'p.number', 'p.status', 'p.inception', 'p.expiry', 'p.gross_premium_minor', 'p.currency', 'h.display_name as policyholder', 'pr.code as product_code'])
-            ->paginate(25)->withQueryString();
+            ->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
 
         return Inertia::render('policies/Index', [
             'filters' => ['status' => $status, 'search' => $search],

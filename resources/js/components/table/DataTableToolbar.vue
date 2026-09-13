@@ -17,6 +17,7 @@ defineProps<{
     activeFilters: number;
     selected: number;
     selectedSum: string | null;
+    compact?: boolean;
 }>();
 const emit = defineEmits<{
     toggleFilters: [];
@@ -48,11 +49,11 @@ function save(): void {
         <div class="ml-2 flex items-center gap-2"><slot name="bulk" /></div>
         <button type="button" :class="[button, 'ml-auto']" @click="emit('clearSelection')"><X :size="16" :stroke-width="1.5" />Clear selection</button>
     </div>
-    <div v-else class="flex h-11 items-center gap-1 border-b border-line px-3" role="toolbar" aria-label="Table">
+    <div v-else class="flex h-11 items-center gap-1 border-b border-line px-3 whitespace-nowrap" role="toolbar" aria-label="Table">
         <slot name="start" />
         <div class="ml-auto flex items-center gap-1">
             <Menu>
-                <MenuTrigger :class="button"><Bookmark :size="16" :stroke-width="1.5" />Views</MenuTrigger>
+                <MenuTrigger :class="button" title="Saved views"><Bookmark :size="16" :stroke-width="1.5" /><span :class="{ 'sr-only': compact }">Views</span></MenuTrigger>
                 <MenuContent width="w-64">
                     <MenuLabel>Saved views</MenuLabel>
                     <p v-if="views.length === 0" class="px-2 pb-2 text-dense text-ink-2">No saved views yet. Filter and sort the table, then save it as a view.</p>
@@ -67,13 +68,13 @@ function save(): void {
                 </MenuContent>
             </Menu>
             <button type="button" :class="[button, filtersShown && 'bg-surface-2 text-ink']" :aria-pressed="filtersShown" :title="`Filter the table (${shortcutKeys('table.filter')})`" @click="emit('toggleFilters')">
-                <Filter :size="16" :stroke-width="1.5" />Filter<span v-if="activeFilters" class="num">({{ activeFilters }})</span>
+                <Filter :size="16" :stroke-width="1.5" /><span :class="{ 'sr-only': compact }">Filter</span><span v-if="activeFilters" class="num">({{ activeFilters }})</span>
             </button>
             <button type="button" :class="button" :title="`Row density (${shortcutKeys('app.density')})`" @click="savePreference('density', preferences.density === 'compact' ? 'comfortable' : 'compact', 0)">
-                <Rows3 :size="16" :stroke-width="1.5" />{{ preferences.density === 'compact' ? 'Compact' : 'Comfortable' }}
+                <Rows3 :size="16" :stroke-width="1.5" /><span :class="{ 'sr-only': compact }">{{ preferences.density === 'compact' ? 'Compact' : 'Comfortable' }}</span>
             </button>
             <Menu>
-                <MenuTrigger :class="button"><Columns3 :size="16" :stroke-width="1.5" />Columns</MenuTrigger>
+                <MenuTrigger :class="button" title="Show or hide columns"><Columns3 :size="16" :stroke-width="1.5" /><span :class="{ 'sr-only': compact }">Columns</span></MenuTrigger>
                 <MenuContent width="w-56">
                     <MenuLabel>Show columns</MenuLabel>
                     <DropdownMenuCheckboxItem
@@ -92,7 +93,7 @@ function save(): void {
                     <MenuItem @select="emit('resetColumns')">Reset columns</MenuItem>
                 </MenuContent>
             </Menu>
-            <button type="button" :class="button" @click="emit('exportCsv')"><Download :size="16" :stroke-width="1.5" />Export</button>
+            <button type="button" :class="button" title="Export the rows as CSV" @click="emit('exportCsv')"><Download :size="16" :stroke-width="1.5" /><span :class="{ 'sr-only': compact }">Export</span></button>
         </div>
     </div>
 

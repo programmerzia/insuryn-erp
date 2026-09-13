@@ -70,7 +70,7 @@ code and in the register below, configurable.
 | U4 | UX: data table | done | see git log |
 | U5 | UX: form system | done | see git log |
 | U6 | UX: role home queues and badges | done | see git log |
-| U7 | UX: rebuild existing screens | pending | |
+| U7 | UX: rebuild existing screens | done | see git log |
 | U8 | UX: object pages with timeline | pending | |
 | U9 | UX: feedback, states, accessibility | pending | |
 | U10 | UX: performance | pending | |
@@ -1060,3 +1060,52 @@ Scope: review only; only the critical finding was fixed.
   Self-critique fixes: centred column left a gap at 1920 (now left-aligned like every page); close progress listed all eleven tasks (now the
   first five open ones); greeting replaced by a plain "Home" title; column headers made visible so dates are not ambiguous.
 - Result: 988 Pest tests, 192 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
+
+### U7 — UX: rebuild existing screens — done
+- Shared: `components/table/QueueView.vue` (brief §6.1: toolbar with title and primary action → DataTable → status bar, inspector on the right),
+  `DetailList`, `DateRangeFilter` (keyboard dates in the toolbar, kept in the URL), `TextInput`, `lib/permissions.ts` (actions shown only to people who
+  may take them), `lib/journalConfirm.ts` (money actions from lists and inspectors go through the journal preview), `lib/drill.ts` + `Breadcrumb`
+  (drill path), shell toast for server business-rule refusals. DataTable gained `openOnClick` (click selects, Enter acts) and an icon-only toolbar
+  for screens with two tables.
+- Lists on the queue view with inspectors and drawers for create forms: policies, claims, parties, agents, products (versions in the inspector,
+  new version in a drawer), approvals (approve with journal preview, reject with reason), refunds (request drawer; pay with preview; reject),
+  suspense (ageing buckets in the toolbar, rows open the workbench), agent cash (deposit drawer with preview), cheque register, payment reminders,
+  bank accounts, month-end close periods (start, open checklist, reopen with reason and a confirmation), commission (statements and plans tabs,
+  approve and new-plan drawers, pay with preview), agent commission statement, journals, receipts. Server list page size 5,000 for policies,
+  parties and claims (brief §7).
+- Allocation workbench §6.3 (`/receipts/{receipt}/allocate`, `receipts/Allocate`): receipt facts and lines on the left with a running remaining
+  balance and allocation date; candidate installments on the right (the receipt's payer first); ↑↓ + Enter adds the active installment for what it
+  needs up to what is left; amounts editable; one commit `POST /suspense/{item}/allocations` (all lines in one transaction, first refusal rolls
+  back all) after the journal preview.
+- Bank matching §6.4 (`bank/Show`): statement lines beside ledger lines; each statement line shows its best suggestion as "Strong match" (amount,
+  date window and reference, 100) or "Possible match" (amount and date window, 60) with the reason (`BankMatcher::suggestions`, recorded nowhere);
+  Enter accepts; clicking only selects; ledger lines sort the chosen line's suggestions first; several ledger lines selected with Space and
+  Ctrl+Enter match one statement line when they add up (merge); explain a line with no ledger entry; import statement and "Accept strong matches".
+- Month-end close §6.5 (`close/Run`): checklist in order with owners, status, results and "Waits for …" from unfinished dependencies (`blocked_by`),
+  progress bar, a link from each task to its exception queue (suspense, bank matching, ageing, outstanding claims, commission, manual journal,
+  trial balance, balance sheet), "Work on it" to run or skip with a reason, and the lock disabled with the server's reason until the close is clean
+  (`lock.ready/reason`) and confirmed before locking.
+- Trial balance §6.6: collapsible tree by account type with group subtotals, balance at the date and at the previous month end with the change
+  (`compare` prop), every figure drills to account activity; reports catalogue as a list (no card grid); reports on the DataTable with a breadcrumb,
+  event codes shown as words, row links drilling to journals.
+- Journal viewer §6.7 (`App\Http\Pages\JournalPageController` adds `dimensions` as labels — branch code, product, agent, policy and claim numbers,
+  customer name — and `sourceLink` to the policy, receipt, claim, refund, deposit or commission page): header strip with status, total and actions;
+  lines with account codes, dimension labels and memo; where it came from (event in words, posting rule, source document link, reason); reversal
+  and correction chain; approve-and-post and reversal approval confirm with the journal's own lines (manual journals and reversals do not post
+  through accounting events, so the server preview would show nothing); reversal requested in a drawer.
+- Forms: new quote as a four-step stepper (customer lookup with inline create, product, agent lookup, branch → cover date, premium, installments →
+  payers with a 100% check → review; summary rail; drafts); manual journal with lines, live debit/credit difference and a specific imbalance message;
+  imports as a stepper (file → check → dry run → commit with a confirmation).
+- Tests first: `tests/Feature/Pages/WorkbenchScreensTest.php` — workbench props (open amount, candidates, payer first); multi-line allocation commits
+  all or nothing with a specific status message; bank suggestions with confidence and reasons; close run lock readiness and `blocked_by`; trial
+  balance comparison with the previous month end; journal dimension labels and source link. Two of my assertions first cast Inertia's Collection
+  with `(array)` (always false) — corrected to decode the values; the code was right.
+- Found and fixed while reviewing screenshots: clicking a statement line accepted its suggested match (now click selects, Enter accepts); a
+  successful match showed the server toast and a client toast (client one removed); "As of" labels wrapped; two tables' toolbars crowded at 1366
+  (icon-only with tooltips); trial balance figures were all accent-coloured (now ink, accent on hover); raw event codes as descriptions; account
+  activity showed a start date that the report had not applied; demo statement lines now sit near real receipts so suggestions appear.
+- Not achieved: splitting one ledger line across several statement lines (BankMatcher matches one statement line to many ledger lines only);
+  undo on a bank match (there is no unmatch operation); toasts are bottom-left per the brief and can briefly cover the workbench's commit button.
+- Screenshots: `storage/ux-screenshots/U7/{allocate,bank-matching,close-run,close-periods,trial-balance,account-activity,journal,journals,commission,
+  policies,claims,suspense,reports,imports,policy-create}-{1366,1920}-{light,dark}.png` (finance.manager@demo.local).
+- Result: 994 Pest tests, 201 Vitest tests green, PHPStan 0 errors, vue-tsc and build green (JS 206.8 KB gzip before route splitting).

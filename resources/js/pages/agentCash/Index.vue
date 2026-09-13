@@ -1,62 +1,97 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import DateInput from '@/components/forms/DateInput.vue';
+import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
 import Field from '@/components/forms/Field.vue';
-import FormBanner from '@/components/forms/FormBanner.vue';
+import FormLayout from '@/components/forms/FormLayout.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
-import PageHeader from '@/components/PageHeader.vue';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import TextInput from '@/components/forms/TextInput.vue';
+import DetailList from '@/components/table/DetailList.vue';
+import QueueView from '@/components/table/QueueView.vue';
+import type { DataColumn } from '@/components/table/types';
+import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatDate, formatMoney } from '@/lib/format';
+import { type PreviewResult, previewJournal } from '@/lib/preview';
+import { usePermissions } from '@/lib/permissions';
 
-const props = defineProps<{
-    asOf: string;
-    position: { rows: { agent_id: string; agent_code: string; collected: string; deposited: string; undeposited: string; gl: string; difference: string; oldest_undeposited_on: string | null; days_undeposited: number | null }[]; totals: Record<string, string> };
-    agents: { id: string; code: string }[];
-    bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
-}>();
+interface Row { agent_id: string; agent_code: string; collected: string; deposited: string; undeposited: string; gl: string; difference: string; oldest_undeposited_on: string | null; days_undeposited: number | null }
+const props = defineProps<{ asOf: string; position: { rows: Row[]; totals: Record<string, string> }; agents: { id: string; code: string }[]; bankAccounts: { id: string; bank_name: string; account_no_masked: string }[] }>();
 
-const asOf = ref(props.asOf);
+const { can } = usePermissions();
+const active = ref<string | null>(null);
+const depositing = ref(false);
 const form = useForm({ agent_id: '', amount: '', deposited_on: '', bank_account_id: '', reference: '' });
+const preview = ref<PreviewResult | null>(null);
+const previewOpen = ref(false);
+const columns: DataColumn<Row>[] = [
+    { id: 'agent', header: 'Agent', value: (r) => r.agent_code, width: 110 },
+    { id: 'collected', header: 'Collected', type: 'money', value: (r) => r.collected, total: true },
+    { id: 'deposited', header: 'Deposited', type: 'money', value: (r) => r.deposited, total: true },
+    { id: 'undeposited', header: 'Not deposited', type: 'money', value: (r) => r.undeposited, total: true },
+    { id: 'gl', header: 'Ledger', type: 'money', value: (r) => r.gl },
+    { id: 'difference', header: 'Difference', type: 'money', value: (r) => r.difference },
+    { id: 'oldest', header: 'Oldest cash held', type: 'date', value: (r) => r.oldest_undeposited_on },
+    { id: 'days', header: 'Days held', type: 'number', value: (r) => r.days_undeposited, width: 90 },
+];
+
+function openDeposit(agentId = ''): void {
+    form.agent_id = agentId;
+    depositing.value = true;
+}
+async function review(): Promise<void> {
+    form.clearErrors();
+    const outcome = await previewJournal('/agent-cash/deposits', form.data());
+    if (!outcome.ok) return void form.setError(outcome.errors as never);
+    preview.value = outcome.result;
+    previewOpen.value = true;
+}
+function post(): void {
+    form.post('/agent-cash/deposits', { onSuccess: () => { depositing.value = false; form.reset(); }, onFinish: () => (previewOpen.value = false) });
+}
+void props;
 </script>
 
 <template>
-    <AppLayout title="Agent cash">
-        <PageHeader eyebrow="Collections" title="Agent cash" :description="`Cash agents collected and have not yet deposited: ${position.totals.undeposited_minor} as of ${asOf}.`">
-            <form class="flex gap-2" @submit.prevent="router.get('/agent-cash', { as_of: asOf }, { preserveState: true })">
-                <Input v-model="asOf" type="date" class="w-40" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
-            </form>
-        </PageHeader>
-        <FormBanner />
-        <div class="grid gap-6 lg:grid-cols-3">
-            <div class="lg:col-span-2">
-                <Table>
-                    <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead class="text-right">Collected</TableHead><TableHead class="text-right">Deposited</TableHead><TableHead class="text-right">Undeposited</TableHead><TableHead class="text-right">Ledger</TableHead><TableHead class="text-right">Difference</TableHead><TableHead>Oldest held</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="row in position.rows" :key="row.agent_id">
-                            <TableCell class="">{{ row.agent_code }}</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ row.collected }}</TableCell><TableCell class="text-right tabular-nums">{{ row.deposited }}</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ row.undeposited }}</TableCell><TableCell class="text-right tabular-nums">{{ row.gl }}</TableCell>
-                            <TableCell class="text-right tabular-nums" :class="row.difference !== '0.00' ? 'text-danger' : 'text-ok'">{{ row.difference }}</TableCell>
-                            <TableCell class="text-ink-2">{{ row.oldest_undeposited_on ? `${row.oldest_undeposited_on} (${row.days_undeposited} days)` : '—' }}</TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="position.rows.length === 0" :colspan="7">No agent collections.</TableEmpty>
-                    </TableBody>
-                </Table>
-            </div>
-            <Card>
-                <h2 class="text-section font-semibold">Record a deposit</h2>
-                <form class="mt-4 grid gap-4" @submit.prevent="form.post('/agent-cash/deposits', { onSuccess: () => form.reset('amount', 'reference') })">
-                    <Field id="deposit_agent" label="Agent" :error="form.errors.agent_id"><SelectInput id="deposit_agent" v-model="form.agent_id" placeholder="Choose an agent" :options="agents.map((a) => ({ value: a.id, label: a.code }))" /></Field>
-                    <Field id="deposit_amount" label="Amount" :error="form.errors.amount"><Input id="deposit_amount" v-model="form.amount" inputmode="decimal" /></Field>
-                    <Field id="deposited_on" label="Deposited on" :error="form.errors.deposited_on"><Input id="deposited_on" v-model="form.deposited_on" type="date" /></Field>
-                    <Field id="deposit_bank" label="Bank account" :error="form.errors.bank_account_id"><SelectInput id="deposit_bank" v-model="form.bank_account_id" placeholder="Default bank" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" /></Field>
-                    <Field id="deposit_reference" label="Deposit slip" :error="form.errors.reference"><Input id="deposit_reference" v-model="form.reference" /></Field>
-                    <Button type="submit" :disabled="form.processing">Record deposit</Button>
-                </form>
-            </Card>
-        </div>
+    <AppLayout title="Agent cash" fill>
+        <QueueView
+            id="agent-cash"
+            v-model:active="active"
+            title="Agent cash"
+            :columns="columns"
+            :rows="position.rows"
+            :row-key="(r) => r.agent_id"
+            currency="BDT"
+            empty-text="No agent collections."
+            :action="can('receipt.create') ? { label: 'Record a deposit' } : null"
+            :inspector-title="(r) => `Agent ${r.agent_code}`"
+            :inspector-subtitle="(r) => `${formatMoney(r.undeposited)} BDT not deposited`"
+            :primary-label="(r) => (can('receipt.create') && r.undeposited !== '0.00' ? 'Record a deposit' : undefined)"
+            @action="openDeposit()"
+            @primary="(r) => openDeposit(r.agent_id)"
+        >
+            <template #toolbar><DateRangeFilter url="/agent-cash" :as-of="asOf" /></template>
+            <template #details="{ row }">
+                <DetailList :items="[
+                    { label: 'Collected', value: `${formatMoney(row.collected)} BDT`, num: true }, { label: 'Deposited', value: `${formatMoney(row.deposited)} BDT`, num: true },
+                    { label: 'Not deposited', value: `${formatMoney(row.undeposited)} BDT`, num: true }, { label: 'Ledger balance', value: `${formatMoney(row.gl)} BDT`, num: true },
+                    { label: 'Difference', value: formatMoney(row.difference), num: true }, { label: 'Oldest cash held', value: row.oldest_undeposited_on ? `${formatDate(row.oldest_undeposited_on)} (${row.days_undeposited} days)` : null },
+                ]" />
+                <p v-if="row.difference !== '0.00'" class="mt-3 text-ui text-danger" role="alert">The agent ledger does not match the collections by {{ formatMoney(row.difference) }}. Check deposits recorded outside this screen.</p>
+            </template>
+        </QueueView>
+        <Drawer v-model:open="depositing" title="Record a deposit">
+            <FormLayout submit-label="Review and post" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review" @cancel="depositing = false">
+                <Field id="agent_id" label="Agent" :error="form.errors.agent_id"><SelectInput id="agent_id" v-model="form.agent_id" placeholder="Choose an agent" :options="agents.map((a) => ({ value: a.id, label: a.code }))" /></Field>
+                <Field id="amount" label="Amount (BDT)" :error="form.errors.amount"><MoneyInput v-model="form.amount" /></Field>
+                <Field id="deposited_on" label="Deposited on" :error="form.errors.deposited_on"><DateInput v-model="form.deposited_on" /></Field>
+                <Field id="bank_account_id" label="Bank account" optional :error="form.errors.bank_account_id"><SelectInput id="bank_account_id" v-model="form.bank_account_id" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" /></Field>
+                <Field id="reference" label="Deposit slip" optional :error="form.errors.reference"><TextInput v-model="form.reference" /></Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-model:open="previewOpen" :result="preview" title="Post this deposit?" :confirm-label="`Post deposit of ${form.amount} BDT`" currency="BDT" :processing="form.processing" @confirm="post" />
     </AppLayout>
 </template>

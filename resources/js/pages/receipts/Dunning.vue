@@ -1,34 +1,28 @@
 <script setup lang="ts">
-import { Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
-import PageHeader from '@/components/PageHeader.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ref } from 'vue';
+import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
+import QueueView from '@/components/table/QueueView.vue';
+import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 
-const props = defineProps<{ from: string; to: string; notices: { id: string; policy_id: string; policy_number: string | null; payer: string; level: number; days_overdue: number; outstanding: string; issued_on: string }[] }>();
-const range = reactive({ from: props.from, to: props.to });
+interface Notice { id: string; policy_id: string; policy_number: string | null; payer: string; level: number; days_overdue: number; outstanding: string; issued_on: string }
+defineProps<{ from: string; to: string; notices: Notice[] }>();
+
+const active = ref<string | null>(null);
+const columns: DataColumn<Notice>[] = [
+    { id: 'issued', header: 'Issued', type: 'date', value: (n) => n.issued_on },
+    { id: 'policy', header: 'Policy', value: (n) => n.policy_number, href: (n) => `/policies/${n.policy_id}`, width: 160 },
+    { id: 'payer', header: 'Payer', value: (n) => n.payer, width: 200 },
+    { id: 'level', header: 'Reminder', value: (n) => (n.level === 1 ? 'First' : n.level === 2 ? 'Second' : `Level ${n.level}`), width: 100, filterOptions: ['First', 'Second'] },
+    { id: 'days', header: 'Days overdue', type: 'number', value: (n) => n.days_overdue, width: 110 },
+    { id: 'outstanding', header: 'Outstanding', type: 'money', value: (n) => n.outstanding, total: true },
+];
 </script>
 
 <template>
-    <AppLayout title="Dunning notices">
-        <PageHeader eyebrow="Collections" title="Dunning notices" description="Payment reminders issued by the nightly run. Policies unpaid beyond the grace period lapse automatically.">
-            <form class="flex gap-2" @submit.prevent="router.get('/dunning', range, { preserveState: true })">
-                <Input v-model="range.from" type="date" class="w-40" aria-label="From" /><Input v-model="range.to" type="date" class="w-40" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
-            </form>
-        </PageHeader>
-        <Table>
-            <TableHeader><TableRow><TableHead>Issued</TableHead><TableHead>Policy</TableHead><TableHead>Payer</TableHead><TableHead>Reminder</TableHead><TableHead>Days overdue</TableHead><TableHead class="text-right">Outstanding</TableHead></TableRow></TableHeader>
-            <TableBody>
-                <TableRow v-for="notice in notices" :key="notice.id">
-                    <TableCell>{{ notice.issued_on }}</TableCell>
-                    <TableCell><Link :href="`/policies/${notice.policy_id}`" class=" text-accent-text hover:underline">{{ notice.policy_number }}</Link></TableCell>
-                    <TableCell>{{ notice.payer }}</TableCell><TableCell>Level {{ notice.level }}</TableCell><TableCell>{{ notice.days_overdue }}</TableCell>
-                    <TableCell class="text-right tabular-nums">{{ notice.outstanding }}</TableCell>
-                </TableRow>
-                <TableEmpty v-if="notices.length === 0" :colspan="6">No reminders in this period.</TableEmpty>
-            </TableBody>
-        </Table>
+    <AppLayout title="Reminders" fill>
+        <QueueView id="dunning" v-model:active="active" title="Payment reminders" :columns="columns" :rows="notices" :row-key="(n) => n.id" currency="BDT" empty-text="No reminders were issued in this period.">
+            <template #toolbar><DateRangeFilter url="/dunning" :from="from" :to="to" /></template>
+        </QueueView>
     </AppLayout>
 </template>

@@ -34,6 +34,40 @@ final class BankMatcher
         private readonly Audit $audit,
     ) {}
 
+    /**
+     * Suggested matches for the matching screen (UX brief §6.4), never recorded: an unmatched journal line of the same amount within the auto-match
+     * window scores 60; one whose receipt number or reference appears on the statement line scores 100. Best first.
+     *
+     * @return list<array{statement_line_id: string, journal_line_id: string, confidence: int, why: string}>
+     */
+    public function suggestions(string $bankAccountId, CarbonImmutable $asOf): array
+    {
+        $bankAccount = BankAccount::query()->findOrFail($bankAccountId);
+        $statementLines = BankStatementLine::query()->where('bank_account_id', $bankAccountId)->where('match_status', 'unmatched')->where('posted_on', '<=', $asOf->toDateString())->orderBy('posted_on')->get();
+        if ($statementLines->isEmpty()) {
+            return [];
+        }
+        $window = (int) config('erp.bank.auto_match_date_window_days', 3);
+        $journalLines = $this->unmatchedJournalLines($bankAccount->gl_account_id, $statementLines->min('posted_on')?->subDays($window), $asOf);
+        $suggestions = [];
+        foreach ($statementLines as $statementLine) {
+            $text = self::normalise($statementLine->reference.' '.$statementLine->description);
+            foreach ($journalLines as $line) {
+                $days = abs((int) $statementLine->posted_on->diffInDays(CarbonImmutable::parse($line['posting_date']), false));
+                if ($line['amount_minor'] !== $statementLine->amount_minor || $days > $window) {
+                    continue;
+                }
+                $mentioned = self::mentions($text, $line['reference'], $line['receipt_number']);
+                $apart = $days === 0 ? 'same day' : ($days === 1 ? '1 day apart' : "{$days} days apart");
+                $suggestions[] = ['statement_line_id' => $statementLine->id, 'journal_line_id' => $line['journal_line_id'], 'confidence' => $mentioned ? 100 : 60,
+                    'why' => 'Same amount, '.$apart.($mentioned ? ', reference '.($line['reference'] ?? $line['receipt_number']) : '')];
+            }
+        }
+        usort($suggestions, fn (array $a, array $b): int => $b['confidence'] <=> $a['confidence']);
+
+        return $suggestions;
+    }
+
     /** Returns how many statement lines were matched. Run by the import screen and safe to repeat. */
     public function autoMatch(string $bankAccountId): int
     {

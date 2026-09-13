@@ -1,38 +1,51 @@
 <script setup lang="ts">
-import { Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
-import SelectInput from '@/components/forms/SelectInput.vue';
-import PageHeader from '@/components/PageHeader.vue';
-import Pagination from '@/components/Pagination.vue';
+import { Link } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import DetailList from '@/components/table/DetailList.vue';
+import QueueView from '@/components/table/QueueView.vue';
+import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatDate, formatMoney } from '@/lib/format';
+import { usePermissions } from '@/lib/permissions';
 
-const props = defineProps<{ filters: { status: string }; statuses: string[]; claims: { data: { id: string; number: string; status: string; loss_date: string; reported_on: string; reserve: string; policy_number: string | null; policyholder: string }[]; current_page: number; last_page: number; total: number } }>();
-const filters = reactive({ ...props.filters });
+interface ClaimRow { id: string; number: string; status: string; loss_date: string; reported_on: string; reserve: string; policy_number: string | null; policyholder: string }
+const props = defineProps<{ filters: { status: string }; statuses: string[]; claims: { data: ClaimRow[]; current_page: number; last_page: number; total: number } }>();
+
+const { can } = usePermissions();
+const active = ref<string | null>(null);
+const columns: DataColumn<ClaimRow>[] = [
+    { id: 'number', header: 'Claim', value: (c) => c.number, href: (c) => `/claims/${c.id}`, width: 150 },
+    { id: 'policy', header: 'Policy', value: (c) => c.policy_number, width: 150, muted: true },
+    { id: 'policyholder', header: 'Policyholder', value: (c) => c.policyholder, width: 200 },
+    { id: 'loss_date', header: 'Loss', type: 'date', value: (c) => c.loss_date },
+    { id: 'reported_on', header: 'Reported', type: 'date', value: (c) => c.reported_on },
+    { id: 'reserve', header: 'Reserve', type: 'money', value: (c) => c.reserve, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (c) => c.status, filterOptions: props.statuses },
+];
 </script>
 
 <template>
-    <AppLayout title="Claims">
-        <PageHeader eyebrow="Claims" title="Claims" description="Registered claims, most recently reported first.">
-            <Link href="/claims/create"><Button>Register claim</Button></Link>
-        </PageHeader>
-        <form class="mb-4 flex gap-2" @submit.prevent="router.get('/claims', filters, { preserveState: true })">
-            <SelectInput v-model="filters.status" placeholder="Any status" :options="statuses.map((s) => ({ value: s, label: s }))" class="w-44" aria-label="Status" />
-            <Button type="submit" variant="ghost">Filter</Button>
-        </form>
-        <Table>
-            <TableHeader><TableRow><TableHead>Claim</TableHead><TableHead>Policy</TableHead><TableHead>Policyholder</TableHead><TableHead>Loss</TableHead><TableHead class="text-right">Reserve</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>
-                <TableRow v-for="claim in claims.data" :key="claim.id">
-                    <TableCell><Link :href="`/claims/${claim.id}`" class=" text-accent-text hover:underline">{{ claim.number }}</Link></TableCell>
-                    <TableCell class="">{{ claim.policy_number }}</TableCell><TableCell>{{ claim.policyholder }}</TableCell><TableCell>{{ claim.loss_date }}</TableCell>
-                    <TableCell class="text-right tabular-nums">{{ claim.reserve }}</TableCell><TableCell><StatusBadge :status="claim.status" /></TableCell>
-                </TableRow>
-                <TableEmpty v-if="claims.data.length === 0" :colspan="6">No claims match.</TableEmpty>
-            </TableBody>
-        </Table>
-        <Pagination :page="claims" />
+    <AppLayout title="Claims" fill>
+        <QueueView
+            id="claims"
+            v-model:active="active"
+            title="Claims"
+            :columns="columns"
+            :rows="claims.data"
+            :row-key="(c) => c.id"
+            currency="BDT"
+            empty-text="No claims yet. Register one when a loss is reported."
+            :action="can('claim.register') ? { label: 'Register a claim', href: '/claims/create' } : null"
+            :inspector-title="(c) => c.number"
+            :inspector-subtitle="(c) => `${c.policy_number ?? ''} · ${c.policyholder}`"
+        >
+            <template #details="{ row }">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Date of loss', value: formatDate(row.loss_date) }, { label: 'Reported on', value: formatDate(row.reported_on) }, { label: 'Reserve', value: `${formatMoney(row.reserve)} BDT`, num: true }]">
+                    <template #Status><StatusBadge :status="row.status" /></template>
+                </DetailList>
+                <Link :href="`/claims/${row.id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the claim</Link>
+            </template>
+        </QueueView>
     </AppLayout>
 </template>

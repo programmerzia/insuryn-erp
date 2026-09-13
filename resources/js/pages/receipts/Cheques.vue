@@ -1,35 +1,34 @@
 <script setup lang="ts">
-import { Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
-import PageHeader from '@/components/PageHeader.vue';
-import StatusBadge from '@/components/StatusBadge.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ref } from 'vue';
+import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
+import QueueView from '@/components/table/QueueView.vue';
+import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatMoney } from '@/lib/format';
 
-const props = defineProps<{ from: string; to: string; register: { rows: { receipt_id: string; receipt_number: string; cheque_no: string; cheque_bank: string; cheque_date: string; value_date: string; amount: string; state: string; bounced_on: string | null; bounce_reason: string | null }[]; totals: { presented: string; bounced: string } } }>();
-const range = reactive({ from: props.from, to: props.to });
+interface Row { receipt_id: string; receipt_number: string; cheque_no: string; cheque_bank: string; cheque_date: string; value_date: string; amount: string; state: string; bounced_on: string | null; bounce_reason: string | null }
+defineProps<{ from: string; to: string; register: { rows: Row[]; totals: { presented: string; bounced: string } } }>();
+
+const active = ref<string | null>(null);
+const columns: DataColumn<Row>[] = [
+    { id: 'cheque', header: 'Cheque', value: (r) => r.cheque_no, width: 110 },
+    { id: 'bank', header: 'Drawee bank', value: (r) => r.cheque_bank, width: 160 },
+    { id: 'cheque_date', header: 'Cheque date', type: 'date', value: (r) => r.cheque_date },
+    { id: 'receipt', header: 'Receipt', value: (r) => r.receipt_number, href: (r) => `/receipts/${r.receipt_id}`, width: 150 },
+    { id: 'value_date', header: 'Value date', type: 'date', value: (r) => r.value_date },
+    { id: 'amount', header: 'Amount', type: 'money', value: (r) => r.amount, total: true },
+    { id: 'state', header: 'State', type: 'status', value: (r) => r.state, filterOptions: ['presented', 'bounced'] },
+    { id: 'reason', header: 'Bounce reason', value: (r) => r.bounce_reason, width: 200, muted: true },
+];
 </script>
 
 <template>
-    <AppLayout title="Cheque register">
-        <PageHeader eyebrow="Collections" title="Cheque register" :description="`Presented ${register.totals.presented} · bounced ${register.totals.bounced}`">
-            <form class="flex gap-2" @submit.prevent="router.get('/cheques', range, { preserveState: true })">
-                <Input v-model="range.from" type="date" class="w-40" aria-label="From" /><Input v-model="range.to" type="date" class="w-40" aria-label="To" /><Button type="submit" variant="ghost">Show</Button>
-            </form>
-        </PageHeader>
-        <Table>
-            <TableHeader><TableRow><TableHead>Cheque</TableHead><TableHead>Bank</TableHead><TableHead>Received</TableHead><TableHead>Receipt</TableHead><TableHead class="text-right">Amount</TableHead><TableHead>State</TableHead></TableRow></TableHeader>
-            <TableBody>
-                <TableRow v-for="row in register.rows" :key="row.receipt_id">
-                    <TableCell class="">{{ row.cheque_no }}</TableCell><TableCell>{{ row.cheque_bank }}</TableCell><TableCell>{{ row.value_date }}</TableCell>
-                    <TableCell><Link :href="`/receipts/${row.receipt_id}`" class=" text-accent-text hover:underline">{{ row.receipt_number }}</Link></TableCell>
-                    <TableCell class="text-right tabular-nums">{{ row.amount }}</TableCell>
-                    <TableCell><StatusBadge :status="row.state" /><span v-if="row.bounced_on" class="ml-2 text-dense text-ink-2">{{ row.bounced_on }} · {{ row.bounce_reason }}</span></TableCell>
-                </TableRow>
-                <TableEmpty v-if="register.rows.length === 0" :colspan="6">No cheques in this period.</TableEmpty>
-            </TableBody>
-        </Table>
+    <AppLayout title="Cheque register" fill>
+        <QueueView id="cheques" v-model:active="active" title="Cheque register" :columns="columns" :rows="register.rows" :row-key="(r) => r.receipt_id" currency="BDT" empty-text="No cheques in this period.">
+            <template #toolbar>
+                <DateRangeFilter url="/cheques" :from="from" :to="to" />
+                <span class="ml-3 text-ui text-ink-2">Presented <span class="tabular-nums text-ink">{{ formatMoney(register.totals.presented) }}</span> · bounced <span class="tabular-nums text-ink">{{ formatMoney(register.totals.bounced) }}</span></span>
+            </template>
+        </QueueView>
     </AppLayout>
 </template>

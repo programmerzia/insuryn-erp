@@ -10,17 +10,21 @@ import type { SharedProps } from '@/types/shared';
  * Brief §4 form: one column, 560px, labels above; Tab order is reading order. Ctrl+Enter submits, Ctrl+S saves a draft (when the form
  * offers drafts), Esc cancels with the unsaved-changes guard. Business-rule refusals from the server show above the fields.
  */
-const props = withDefaults(defineProps<{ submitLabel: string; cancelHref: string; dirty: boolean; processing?: boolean; drafts?: boolean; wide?: boolean; error?: string }>(), {
-    processing: false, drafts: false, wide: false, error: undefined,
+const props = withDefaults(defineProps<{ submitLabel: string; cancelHref?: string; dirty: boolean; processing?: boolean; drafts?: boolean; wide?: boolean; error?: string }>(), {
+    processing: false, drafts: false, wide: false, error: undefined, cancelHref: undefined,
 });
-const emit = defineEmits<{ submit: []; saveDraft: [] }>();
+const emit = defineEmits<{ submit: []; saveDraft: []; cancel: [] }>();
 const page = usePage<SharedProps>();
 const formError = computed(() => props.error ?? page.props.errors.form);
 const guard = useUnsavedGuard(() => props.dirty && !props.processing);
 
 useShortcut('form.submit', () => emit('submit'), { allowInInputs: true });
 useShortcut('form.save', () => props.drafts && emit('saveDraft'), { allowInInputs: true });
-useShortcut('form.cancel', () => void guard.leave(props.cancelHref), { allowInInputs: true });
+function cancel(): void {
+    if (props.cancelHref) void guard.leave(props.cancelHref);
+    else emit('cancel');
+}
+useShortcut('form.cancel', () => props.cancelHref && cancel(), { allowInInputs: true });
 </script>
 
 <template>
@@ -34,7 +38,7 @@ useShortcut('form.cancel', () => void guard.leave(props.cancelHref), { allowInIn
             <button v-if="drafts" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="emit('saveDraft')">
                 Save draft <Kbd :keys="shortcutKeys('form.save')" />
             </button>
-            <button type="button" class="ml-auto inline-flex h-8 items-center gap-1.5 rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="guard.leave(cancelHref)">
+            <button type="button" class="ml-auto inline-flex h-8 items-center gap-1.5 rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="cancel">
                 Cancel <Kbd :keys="shortcutKeys('form.cancel')" />
             </button>
         </div>

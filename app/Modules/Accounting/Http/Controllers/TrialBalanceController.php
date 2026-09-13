@@ -22,9 +22,17 @@ final class TrialBalanceController
         $debit = array_sum(array_column($rows, 'debit'));
         $credit = array_sum(array_column($rows, 'credit'));
 
+        // UX brief §6.6 period comparison: balances at the end of the previous month.
+        $compareAsOf = $asOf->startOfMonth()->subDay();
+        $previous = [];
+        foreach ($ledger->trialBalance($scope->entityId, $scope->bookId, $compareAsOf) as $row) {
+            $previous[$row['account_id']] = MinorUnits::format($row['debit'] - $row['credit'], $scope->currency);
+        }
+
         return Inertia::render('accounting/TrialBalance', [
             'entity' => $scope->entityProps(),
             'asOf' => $asOf->toDateString(),
+            'compare' => ['asOf' => $compareAsOf->toDateString(), 'balances' => $previous],
             'rows' => array_map(fn (array $row): array => [
                 'accountId' => $row['account_id'], 'code' => $row['code'], 'name' => $row['name'], 'type' => $row['type'],
                 'debit' => MinorUnits::format($row['debit'], $scope->currency), 'credit' => MinorUnits::format($row['credit'], $scope->currency),

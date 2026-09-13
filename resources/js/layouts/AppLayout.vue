@@ -30,6 +30,8 @@ useShortcut('app.density', () => savePreference('density', preferences.density =
 
 const status = computed(() => page.props.status);
 watch(status, (message) => message && toast(message, { tone: 'ok' }), { immediate: true });
+// Business-rule refusals from list and inspector actions (forms show theirs above the fields as well).
+watch(() => page.props.errors?.form, (message) => message && toast(message, { tone: 'danger', duration: 6000 }));
 </script>
 
 <template>

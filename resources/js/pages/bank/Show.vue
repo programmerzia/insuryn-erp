@@ -1,88 +1,155 @@
 <script setup lang="ts">
 import { Link, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
-import FormBanner from '@/components/forms/FormBanner.vue';
-import PageHeader from '@/components/PageHeader.vue';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Upload, Wand2 } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
+import Kbd from '@/components/ui/Kbd.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatMinor, parseMoney } from '@/lib/money';
+import { formatDate, formatMoney } from '@/lib/format';
+import { useShortcut } from '@/lib/shortcuts';
+import { usePermissions } from '@/lib/permissions';
 
+/**
+ * UX brief §6.4 bank matching: statement lines and ledger lines side by side; the best suggestion for each statement line with its
+ * confidence and why; Enter accepts it; several ledger lines selected with Space match one statement line (merge); a line with no ledger
+ * entry is explained. Matching posts nothing, so it is instant. Splitting one ledger line across statement lines is not supported yet.
+ */
 interface StatementLine { id: string; posted_on: string; amount: string; reference: string | null; description: string | null }
 interface LedgerLine { journal_line_id: string; journal_id: string; journal_number: string | null; posting_date: string; amount: string; reference: string | null; receipt_number: string | null }
-const props = defineProps<{ account: { id: string; bank_name: string; account_no_masked: string; currency: string }; asOf: string; unmatched: { statement_lines: StatementLine[]; journal_lines: LedgerLine[] } }>();
+interface Suggestion { statement_line_id: string; journal_line_id: string; confidence: number; why: string }
+const props = defineProps<{ account: { id: string; bank_name: string; account_no_masked: string; currency: string }; asOf: string; unmatched: { statement_lines: StatementLine[]; journal_lines: LedgerLine[] }; suggestions?: Suggestion[] }>();
 
-const asOf = ref(props.asOf);
-const selectedLine = ref<string | null>(null);
-const selectedJournalLines = ref<string[]>([]);
+const { can } = usePermissions();
+const activeStatement = ref<string | null>(null);
+const ledgerTable = ref<{ state: { selectedRows: { value: unknown[] }; clearSelection: () => void } } | null>(null);
+const explanation = ref('');
 const upload = useForm<{ file: File | null }>({ file: null });
-const explainForm = useForm({ reason: '' });
-const matchForm = useForm({ journal_line_ids: [] as string[] });
+const fileInput = ref<HTMLInputElement | null>(null);
+const ledgerById = computed(() => new Map(props.unmatched.journal_lines.map((l) => [l.journal_line_id, l])));
+const bestFor = (lineId: string) => (props.suggestions ?? []).find((s) => s.statement_line_id === lineId && ledgerById.value.has(s.journal_line_id)) ?? null;
+const statement = computed(() => props.unmatched.statement_lines.find((l) => l.id === activeStatement.value) ?? null);
+const confidenceWord = (value: number) => (value >= 100 ? 'Strong match' : 'Possible match');
 
-function match(): void {
-    if (!selectedLine.value) return;
-    matchForm.journal_line_ids = selectedJournalLines.value;
-    matchForm.post(`/bank/lines/${selectedLine.value}/match`, { preserveScroll: true, onSuccess: () => { selectedLine.value = null; selectedJournalLines.value = []; } });
+/** Ledger lines for the active statement line: its suggestions first. */
+const ledgerRows = computed(() => {
+    if (!statement.value) return props.unmatched.journal_lines;
+    const suggested = new Map((props.suggestions ?? []).filter((s) => s.statement_line_id === statement.value!.id).map((s) => [s.journal_line_id, s.confidence]));
+    return [...props.unmatched.journal_lines].sort((a, b) => (suggested.get(b.journal_line_id) ?? 0) - (suggested.get(a.journal_line_id) ?? 0));
+});
+const suggestionFor = (ledgerId: string) => (statement.value ? (props.suggestions ?? []).find((s) => s.statement_line_id === statement.value!.id && s.journal_line_id === ledgerId) : undefined);
+
+const statementColumns: DataColumn<StatementLine>[] = [
+    { id: 'date', header: 'Date', type: 'date', value: (l) => l.posted_on },
+    { id: 'details', header: 'Details', value: (l) => [l.reference, l.description].filter(Boolean).join(' · '), width: 200, muted: true },
+    { id: 'amount', header: 'Amount', type: 'money', value: (l) => l.amount, total: true },
+    { id: 'suggestion', header: 'Suggested match', value: (l) => bestFor(l.id)?.why ?? null, width: 220 },
+];
+const ledgerColumns: DataColumn<LedgerLine>[] = [
+    { id: 'date', header: 'Date', type: 'date', value: (l) => l.posting_date },
+    { id: 'journal', header: 'Journal', value: (l) => l.journal_number, href: (l) => `/accounting/journals/${l.journal_id}`, width: 150 },
+    { id: 'reference', header: 'Receipt · reference', value: (l) => [l.receipt_number, l.reference].filter(Boolean).join(' · '), width: 200, muted: true },
+    { id: 'amount', header: 'Amount', type: 'money', value: (l) => l.amount, total: true },
+];
+
+function match(statementLineId: string, journalLineIds: string[]): void {
+    router.post(`/bank/lines/${statementLineId}/match`, { journal_line_ids: journalLineIds }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            activeStatement.value = null;
+            ledgerTable.value?.state.clearSelection();
+        },
+    });
 }
 
+function acceptSuggestion(line: StatementLine): void {
+    activeStatement.value = line.id;
+    const best = bestFor(line.id);
+    if (!best || !can('bank.match')) return;
+    match(line.id, [best.journal_line_id]);
+}
+
+const selectedLedger = computed(() => (ledgerTable.value?.state.selectedRows.value ?? []) as LedgerLine[]);
+const selectedTotal = computed(() => selectedLedger.value.reduce((sum, l) => sum + (parseMoney(l.amount) ?? 0n), 0n));
+const mergeReady = computed(() => statement.value !== null && selectedLedger.value.length > 0 && selectedTotal.value === parseMoney(statement.value.amount));
+
+function mergeSelected(): void {
+    if (!statement.value || !mergeReady.value) return;
+    match(statement.value.id, selectedLedger.value.map((l) => l.journal_line_id));
+}
+
+useShortcut('inspector.primary', () => mergeSelected(), { allowInInputs: true });
+
 function explain(): void {
-    if (!selectedLine.value) return;
-    explainForm.post(`/bank/lines/${selectedLine.value}/explain`, { preserveScroll: true, onSuccess: () => { selectedLine.value = null; explainForm.reset(); } });
+    if (!statement.value || explanation.value.trim() === '') return;
+    router.post(`/bank/lines/${statement.value.id}/explain`, { reason: explanation.value }, { preserveScroll: true, onSuccess: () => { explanation.value = ''; activeStatement.value = null; } });
+}
+
+function importFile(event: Event): void {
+    upload.file = (event.target as HTMLInputElement).files?.[0] ?? null;
+    if (upload.file) upload.post(`/bank/${props.account.id}/statements`, { forceFormData: true, preserveScroll: true, onFinish: () => upload.reset() });
 }
 </script>
 
 <template>
-    <AppLayout :title="account.bank_name">
-        <PageHeader eyebrow="Bank reconciliation" :title="`${account.bank_name} ${account.account_no_masked}`" :description="`Unmatched as of ${asOf}. Pick a statement line, then the ledger lines it pays, or explain it.`">
-            <form class="flex gap-2" @submit.prevent="router.get(`/bank/${props.account.id}`, { as_of: asOf }, { preserveState: true })">
-                <Input v-model="asOf" type="date" class="w-40" aria-label="As of" /><Button type="submit" variant="ghost">Show</Button>
-            </form>
-            <Link href="/bank" class="text-ui text-accent-text hover:underline">All accounts</Link>
-        </PageHeader>
-        <FormBanner />
-        <Card class="mb-6 flex flex-wrap items-end gap-4">
-            <form class="flex flex-wrap items-end gap-2" @submit.prevent="upload.post(`/bank/${props.account.id}/statements`, { forceFormData: true, onSuccess: () => upload.reset() })">
-                <label class="grid gap-1 text-ui">Statement CSV <input type="file" accept=".csv,text/csv" class="text-ui text-ink-2" @change="upload.file = ($event.target as HTMLInputElement).files?.[0] ?? null" /></label>
-                <Button type="submit" :disabled="!upload.file || upload.processing">Import</Button>
-            </form>
-            <Button variant="ghost" @click="router.post(`/bank/${props.account.id}/auto-match`, {}, { preserveScroll: true })">Match automatically</Button>
-        </Card>
-        <div class="grid gap-6 lg:grid-cols-2">
-            <div>
-                <h2 class="mb-2 text-section font-semibold">Statement lines</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead /><TableHead>Date</TableHead><TableHead>Details</TableHead><TableHead class="text-right">Amount</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="line in unmatched.statement_lines" :key="line.id" :class="selectedLine === line.id ? 'bg-surface-2' : ''">
-                            <TableCell><input v-model="selectedLine" type="radio" :value="line.id" class="accent-brick" :aria-label="`Select statement line ${line.posted_on} ${line.amount}`" /></TableCell>
-                            <TableCell>{{ line.posted_on }}</TableCell><TableCell class="text-ink-2">{{ line.reference }} {{ line.description }}</TableCell>
-                            <TableCell class="text-right tabular-nums">{{ line.amount }}</TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="unmatched.statement_lines.length === 0" :colspan="4">Every statement line is matched or explained.</TableEmpty>
-                    </TableBody>
-                </Table>
-                <div v-if="selectedLine" class="mt-3 flex flex-wrap gap-2">
-                    <Input v-model="explainForm.reason" placeholder="Why it has no ledger line (e.g. bank fee)" class="w-72" aria-label="Explanation" />
-                    <Button variant="ghost" @click="explain">Explain</Button>
+    <AppLayout :title="`${account.bank_name} ${account.account_no_masked}`" fill>
+        <div class="flex h-11 items-center gap-2 border-b border-line px-4">
+            <p class="text-ui text-ink-2"><Link href="/bank" class="hover:underline">Bank</Link> ›</p>
+            <h1 class="text-section font-semibold">{{ account.bank_name }} {{ account.account_no_masked }}</h1>
+            <DateRangeFilter :url="`/bank/${account.id}`" :as-of="asOf" />
+            <div class="ml-auto flex items-center gap-2">
+                <template v-if="can('bank.import')">
+                    <input ref="fileInput" type="file" accept=".csv,text/csv" class="sr-only" aria-label="Statement CSV file" @change="importFile" />
+                    <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" :disabled="upload.processing" @click="fileInput?.click()">
+                        <Upload :size="16" :stroke-width="1.5" />{{ upload.processing ? 'Importing…' : 'Import statement' }}
+                    </button>
+                </template>
+                <button v-if="can('bank.match')" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="router.post(`/bank/${account.id}/auto-match`, {}, { preserveScroll: true })">
+                    <Wand2 :size="16" :stroke-width="1.5" />Accept strong matches
+                </button>
+            </div>
+        </div>
+        <div class="grid min-h-0 flex-1 grid-cols-2">
+            <section class="flex min-h-0 flex-col border-r border-line" aria-label="Statement lines">
+                <DataTable id="bank-statement-lines" :open-on-click="false" compact-toolbar v-model:active="activeStatement" label="Statement lines" :columns="statementColumns" :rows="unmatched.statement_lines" :row-key="(l) => l.id" :currency="account.currency" :url-sync="false" empty-text="Every statement line is matched or explained." @open="acceptSuggestion">
+                    <template #toolbar><h2 class="text-ui font-semibold">Statement lines</h2><span class="ml-2 text-dense text-ink-2 max-2xl:hidden">Enter accepts the suggestion</span></template>
+                    <template #cell-suggestion="{ row }">
+                        <span v-if="bestFor(row.id)" class="inline-flex items-center gap-1.5" :title="bestFor(row.id)!.why">
+                            <span class="size-1.5 rounded-full" :class="bestFor(row.id)!.confidence >= 100 ? 'bg-ok' : 'bg-warn'" aria-hidden="true" />
+                            {{ confidenceWord(bestFor(row.id)!.confidence) }} · {{ ledgerById.get(bestFor(row.id)!.journal_line_id)?.journal_number }}
+                        </span>
+                        <span v-else class="text-ink-2">No suggestion</span>
+                    </template>
+                </DataTable>
+                <div v-if="statement" class="flex items-center gap-2 border-t border-line bg-surface-2 px-4 py-2">
+                    <input v-model="explanation" class="h-8 min-w-0 flex-1 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="No ledger entry? Say why (e.g. bank charges)" aria-label="Explanation" @keydown.enter.prevent="explain" />
+                    <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="explanation.trim() === ''" @click="explain">Explain</button>
                 </div>
-            </div>
-            <div>
-                <h2 class="mb-2 text-section font-semibold">Ledger lines</h2>
-                <Table>
-                    <TableHeader><TableRow><TableHead /><TableHead>Date</TableHead><TableHead>Journal</TableHead><TableHead class="text-right">Amount</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                        <TableRow v-for="line in unmatched.journal_lines" :key="line.journal_line_id">
-                            <TableCell><input v-model="selectedJournalLines" type="checkbox" :value="line.journal_line_id" class="accent-brick" :aria-label="`Select ledger line ${line.posting_date} ${line.amount}`" /></TableCell>
-                            <TableCell>{{ line.posting_date }}</TableCell>
-                            <TableCell><Link :href="`/accounting/journals/${line.journal_id}`" class=" text-accent-text hover:underline">{{ line.journal_number }}</Link> <span class="text-ink-2">{{ line.receipt_number }} {{ line.reference }}</span></TableCell>
-                            <TableCell class="text-right tabular-nums">{{ line.amount }}</TableCell>
-                        </TableRow>
-                        <TableEmpty v-if="unmatched.journal_lines.length === 0" :colspan="4">No unmatched ledger lines.</TableEmpty>
-                    </TableBody>
-                </Table>
-                <Button class="mt-3" :disabled="!selectedLine || selectedJournalLines.length === 0 || matchForm.processing" @click="match">Match selected</Button>
-            </div>
+            </section>
+            <section class="flex min-h-0 flex-col" aria-label="Ledger lines">
+                <DataTable ref="ledgerTable" id="bank-ledger-lines" compact-toolbar label="Ledger lines" :columns="ledgerColumns" :rows="ledgerRows" :row-key="(l) => l.journal_line_id" :currency="account.currency" selectable :url-sync="false" empty-text="No unmatched ledger lines.">
+                    <template #toolbar><h2 class="text-ui font-semibold">Ledger lines</h2><span class="ml-2 text-dense text-ink-2 max-2xl:hidden">{{ statement ? 'Suggestions for the chosen statement line first' : 'Choose a statement line' }}</span></template>
+                    <template #cell-date="{ row }">
+                        <span class="inline-flex items-center gap-1.5">
+                            <span v-if="suggestionFor(row.journal_line_id)" class="size-1.5 rounded-full" :class="suggestionFor(row.journal_line_id)!.confidence >= 100 ? 'bg-ok' : 'bg-warn'" :title="suggestionFor(row.journal_line_id)!.why" aria-hidden="true" />
+                            {{ formatDate(row.posting_date) }}
+                        </span>
+                    </template>
+                    <template #bulk>
+                        <span class="text-ui text-ink-2" :class="{ 'text-danger': statement && !mergeReady }">
+                            <template v-if="!statement">Choose the statement line these pay.</template>
+                            <template v-else-if="!mergeReady">Selected {{ formatMinor(selectedTotal) }} does not equal the statement line {{ formatMoney(statement.amount) }}.</template>
+                            <template v-else>Equals the statement line.</template>
+                        </span>
+                        <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50" :disabled="!mergeReady" @click="mergeSelected">
+                            Match selected <Kbd keys="Ctrl+Enter" class="text-accent-ink" />
+                        </button>
+                    </template>
+                </DataTable>
+            </section>
         </div>
     </AppLayout>
 </template>
