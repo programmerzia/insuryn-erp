@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, UserCog } from 'lucide-vue-next';
+import { Banknote, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, Package, Percent, Receipt, Scale, ShieldAlert, Undo2, Upload, UserCheck, Users, Wallet, BellRing, KeyRound, Network, Target, UserCog, UsersRound } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -37,6 +37,11 @@ export const navigation: NavItem[] = [
     { id: 'close', detail: 'close/Run', page: 'close/Index', label: 'Close', href: '/close', icon: CalendarCheck, any: ['periods.soft_lock', 'periods.lock', 'periods.reopen', reader], badge: 'close' },
     { id: 'reports', detail: 'reports/Show', page: 'reports/Index', label: 'Reports', href: '/reports', icon: ChartColumn, any: [reader] },
     { id: 'parties', label: 'Parties', href: '/parties', icon: Users, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
+    { id: 'producers', detail: 'distribution/producers/Show', page: 'distribution/producers/Index', label: 'Producers', href: '/distribution/producers', icon: UsersRound, any: ['agent.manage', 'commission.approve', 'commission.pay', 'commission.manage_plans', reader, 'reports.regulatory'], secondary: true },
+    { id: 'hierarchy', page: 'distribution/hierarchy/Index', label: 'Hierarchy', href: '/distribution/hierarchy', icon: Network, any: ['agent.manage', 'commission.manage_plans', 'commission.approve', reader], secondary: true },
+    { id: 'schemes', detail: 'distribution/schemes/Show', page: 'distribution/schemes/Index', label: 'Schemes', href: '/distribution/schemes', icon: Percent, any: ['commission.manage_plans', 'commission.approve', reader], secondary: true },
+    { id: 'statement-run', page: 'distribution/statements/Index', label: 'Statement run', href: '/distribution/statements', icon: Receipt, any: ['commission.approve', 'commission.pay', reader], secondary: true },
+    { id: 'targets', page: 'distribution/targets/Index', label: 'Targets', href: '/distribution/targets', icon: Target, any: ['agent.manage', 'commission.approve', reader], secondary: true },
     { id: 'agents', label: 'Agents', href: '/agents', icon: UserCheck, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
     { id: 'products', label: 'Products', href: '/products', icon: Package, any: ['product.manage', 'policy.create', reader], secondary: true },
     { id: 'refunds', label: 'Refunds', href: '/refunds', icon: Undo2, any: collections, secondary: true },

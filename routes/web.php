@@ -33,6 +33,33 @@ Route::middleware('auth')->get('lookup/{type}', [LookupController::class, 'searc
 Route::middleware('auth')->post('lookup/customer', [LookupController::class, 'createCustomer']);
 Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
 
+// Distribution (slice D8): producers, hierarchy, schemes, statement run, targets. Controllers authorize per area; money movements get the journal preview.
+Route::middleware('auth')->prefix('distribution')->group(function (): void {
+    Route::get('producers', [\App\Http\Distribution\ProducersPageController::class, 'index']);
+    Route::post('producers', [\App\Http\Distribution\ProducersPageController::class, 'store']);
+    Route::get('producers/{producer}', [\App\Http\Distribution\ProducersPageController::class, 'show'])->whereUuid('producer');
+    Route::post('producers/{producer}/licences', [\App\Http\Distribution\ProducersPageController::class, 'storeLicence'])->whereUuid('producer');
+    Route::post('producers/{producer}/advances', [\App\Http\Distribution\ProducersPageController::class, 'issueAdvance'])->whereUuid('producer')->middleware('moves-money');
+    Route::post('producers/{producer}/status', [\App\Http\Distribution\ProducersPageController::class, 'updateStatus'])->whereUuid('producer');
+    Route::post('licences/{licence}/{action}', [\App\Http\Distribution\ProducersPageController::class, 'licenceStatus'])->whereUuid('licence')->whereIn('action', ['suspend', 'revoke', 'reinstate']);
+    Route::get('hierarchy', [\App\Modules\Distribution\Http\Controllers\HierarchyPageController::class, 'index']);
+    Route::post('hierarchy/moves', [\App\Modules\Distribution\Http\Controllers\HierarchyPageController::class, 'move']);
+    Route::get('schemes', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'index']);
+    Route::post('schemes', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'store']);
+    Route::get('schemes/{scheme}', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'show'])->whereUuid('scheme');
+    Route::put('schemes/{scheme}/compliance-profile', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'updateProfile'])->whereUuid('scheme');
+    Route::put('schemes/{scheme}/levels', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'defineLevels'])->whereUuid('scheme');
+    Route::post('schemes/{scheme}/rules', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'storeRule'])->whereUuid('scheme');
+    Route::post('rules/{rule}/end', [\App\Modules\Distribution\Http\Controllers\SchemesPageController::class, 'endRule'])->whereUuid('rule');
+    Route::get('statements', [\App\Modules\Insurance\Commission\Http\Controllers\StatementWorkbenchController::class, 'index']);
+    Route::post('statements/prepare', [\App\Modules\Insurance\Commission\Http\Controllers\StatementWorkbenchController::class, 'prepare']);
+    Route::post('statements/incentives', [\App\Modules\Insurance\Commission\Http\Controllers\StatementWorkbenchController::class, 'runIncentives']);
+    Route::post('statements/{statement}/approve', [\App\Modules\Insurance\Commission\Http\Controllers\StatementWorkbenchController::class, 'approve'])->whereUuid('statement')->middleware('moves-money');
+    Route::post('statements/{statement}/pay', [\App\Modules\Insurance\Commission\Http\Controllers\StatementWorkbenchController::class, 'pay'])->whereUuid('statement')->middleware('moves-money');
+    Route::get('targets', [\App\Http\Distribution\TargetsPageController::class, 'index']);
+    Route::put('targets', [\App\Http\Distribution\TargetsPageController::class, 'save']);
+});
+
 // Administration (phase 2.0): users need platform.manage_users, roles platform.manage_roles; the controllers authorize.
 Route::middleware('auth')->prefix('admin')->group(function (): void {
     Route::get('users', [UsersPageController::class, 'index']);

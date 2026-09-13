@@ -88,7 +88,7 @@ code and in the register below, configurable.
 | D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | done | see git log |
 | D6 | Distribution: advances and monthly statement run, SoD, payout to payroll or AP | done | see git log |
 | D7 | Distribution: targets, incentive plans, bonus, persistency and leaderboard | done | see git log |
-| D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | todo | |
+| D8 | Distribution: screens (producers queue, producer page, hierarchy tree, scheme editor, statement workbench, targets grid) | done | see git log |
 | D9 | Distribution: producer portal REST with Sanctum and OpenAPI | todo | |
 
 ## ASSUMPTION register
@@ -1464,4 +1464,38 @@ Scope: review only; only the critical finding was fixed.
 - ASSUMPTIONS A-24, A-25.
 - Test setup change: `TenantIsolationEveryTableTest` sets a target, a plan and runs incentives for July.
 - Tests: `tests/Feature/Distribution/IncentivesTest.php` (5), `GoldenRulesTest` (+1).
+- Result: 1,065 Pest tests green, PHPStan 0 errors.
+
+### D8 — Distribution: screens — done
+- Design note §6 on the UX brief's components (QueueView, DataTable, Drawer + FormLayout, JournalPreviewDialog, StatusBadge, tabs as on object pages).
+  Sidebar (secondary): Producers, Hierarchy, Schemes, Statement run, Targets; each link follows its area permissions.
+- **Producers** `/distribution/producers`: the queue has a "Needs attention" column (Licence expiring within 60 days, No valid licence, Advance outstanding,
+  Statement pending), level, parent, licence expiry, advance balance and pending statements, plus a "New producer" drawer for any type (standard channel by default).
+- **Producer page** `/distribution/producers/{id}`:
+  - header facts (type, channel, branch, level, licence, advances outstanding);
+  - tabs: Overview (licences, advances) · Hierarchy (chain, team, positions held, dated transfer) · Compensation (entries by direct, override or bonus, and "Not paid, and why"
+    from compliance exceptions) · Production (month, quarter and year premium with target, policies and collections, plus 13th and 25th-month persistency) · Statements ·
+    Documents (not built, says so) · Audit (deferred);
+  - actions: record licence, issue advance (journal preview), change status.
+- **Hierarchy tree** `/distribution/hierarchy?scheme&on`: tree on a date with scheme level names, and drag a producer onto its new manager or onto "Top of the tree".
+  The keyboard does the same (arrows, Left/Right to collapse, M to move) and a "Move…" button is on each row; every move asks for its effective date.
+  Server refusals (cycles on any later date, rank order) come back as form errors. Tree logic lives in `lib/hierarchyTree.ts` (Vitest).
+- **Schemes** `/distribution/schemes`, **scheme editor** `/distribution/schemes/{id}`:
+  - compliance profile (producer types, non-life switch, caps in percent) and levels (rank, code, name), each saved as a whole;
+  - rules table, an "Add rule" drawer with rates in percent (stored as basis points exactly, `PageSupport::basisPoints`) and flags, and end a rule from a date;
+  - refusals show the service's message ("In policy year 1 commission could reach 3750 basis points … above the cap of 3500.").
+- **Statement run** `/distribution/statements?period_end`: month picker, Run incentives, Prepare statements (asks before rebuilding drafts), and the split per producer with zeros left
+  blank and footer totals. The inspector shows the entries, and Approve / Pay go through the journal preview.
+  The approver is told someone else pays; the server enforces it (SodGuard).
+- **Targets grid** `/distribution/targets?period_type&period_start&metric`: tabs Producers · Branches · Channels, editable target cells (Enter or leaving the cell saves; money, count or
+  percent as the metric needs), actual and achievement; branch and channel actuals add up their producers.
+- Composition controllers at the app layer where a screen needs both contexts (`App\Http\Distribution\ProducersPageController`, `TargetsPageController`); the scheme and
+  hierarchy screens live in Distribution, the workbench in the Insurance commission module. Money movements (advance, approve, pay) use the `moves-money` preview.
+- Screenshots: `storage/ux-screenshots/D8/{producers,producer,hierarchy,schemes,scheme,statements,targets}-{1366,1920}-{light,dark}.png`, against the demo data of the End step.
+  Self-critique fixed: producer type words (BDO, Agency), zero amounts blank in the statement split, entry kinds in sentence case, duplicate toolbar links removed,
+  the statement title shortened (wrapped at 1366 with the inspector open), and the "end rule" label.
+- axe-core on all seven screens in light and dark: one critical finding (cap product selects without a name) fixed; no violations remain.
+- Not achieved: no sidebar badge for expiring licences (the shell badges come from role work queues, and there is no distribution queue yet); drag-transfer has no touch support.
+- Tests: `tests/Feature/Distribution/DistributionScreensTest.php` (6), `resources/js/tests/hierarchy-tree.test.ts` (4).
+- Result: 1,071 Pest tests, 231 Vitest tests green, PHPStan 0 errors, vue-tsc and build green.
 

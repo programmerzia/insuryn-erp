@@ -41,6 +41,23 @@ final class PageSupport
         return $minor;
     }
 
+    /** "25", "25.5" or "12.50" percent → basis points; a validation error on $field otherwise. Exact: at most two decimals, never a float. */
+    public static function basisPoints(string $field, mixed $percent): int
+    {
+        $text = trim((string) $percent);
+        if (preg_match('/^(\d{1,3})(?:\.(\d{1,2}))?$/', $text, $parts) !== 1 || (int) $parts[1] > 100 || ((int) $parts[1] === 100 && (int) ($parts[2] ?? 0) > 0)) {
+            throw ValidationException::withMessages([$field => 'Enter a percentage between 0 and 100, like 12.50.']);
+        }
+
+        return (int) $parts[1] * 100 + (int) str_pad($parts[2] ?? '', 2, '0');
+    }
+
+    /** Basis points → "12.50". */
+    public static function percent(int $basisPoints): string
+    {
+        return intdiv($basisPoints, 100).'.'.str_pad((string) ($basisPoints % 100), 2, '0', STR_PAD_LEFT);
+    }
+
     public static function money(int $minor, string $currency): string
     {
         return MinorUnits::format($minor, $currency);
