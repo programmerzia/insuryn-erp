@@ -21,6 +21,19 @@ return [
         // ASSUMPTION: A-7 — whose commission plan applies when both the product version and the agent name one is not specified.
         'plan_precedence' => ['product_version', 'agent'],
     ],
+    'products' => [
+        // ASSUMPTION: A-17 — products carry an insurance class (life | non_life) that producer licences must cover; a product whose line of
+        // business is listed here is life unless its class is given explicitly, every other product is non-life.
+        'life_lobs' => ['life'],
+    ],
+    'distribution' => [
+        // ASSUMPTION: A-14 — which producer types need a licence to write new business is not specified: all of them.
+        'licence_required_types' => ['agent', 'agency_org', 'bdo', 'broker', 'partner'],
+        // Distribution design note §3: licence-expiry alerts this many days before expiry.
+        'licence_alert_days' => [60, 30, 7],
+        // ASSUMPTION: A-16 — IDRA's register file format is not specified: CSV with these columns, in this order.
+        'idra_register_columns' => ['licence_no', 'authority', 'producer_code', 'producer_name', 'producer_type', 'class', 'issued_on', 'expires_on', 'status', 'branch_code'],
+    ],
     'collections' => [
         // ASSUMPTION: A-10 — dunning schedule and grace period are not specified (spec §4 names the feature only).
         'dunning_notice_days' => [7, 21],

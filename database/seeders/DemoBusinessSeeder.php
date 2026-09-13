@@ -19,6 +19,8 @@ use App\Modules\Insurance\Collections\Application\ChequeDetails;
 use App\Modules\Insurance\Collections\Application\ReceiptService;
 use App\Modules\Insurance\Collections\Application\RecordReceiptRequest;
 use App\Modules\Insurance\Commission\Application\CommissionPlanService;
+use App\Modules\Distribution\Application\Licences\LicenceService;
+use App\Modules\Distribution\Application\Licences\RecordLicence;
 use App\Modules\Insurance\Party\Application\AgentService;
 use App\Modules\Insurance\Party\Application\PartyService;
 use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
@@ -96,7 +98,9 @@ final class DemoBusinessSeeder extends Seeder
         $agents = [];
         foreach ([['Jamal Uddin', 'AG-001'], ['Rokeya Begum', 'AG-002'], ['Selim Reza', 'AG-003']] as [$name, $code]) {
             $party = $parties->create(PartyKind::Individual, $name, null, [PartyRoleType::Agent], $users['branch_manager']);
-            $agents[] = app(AgentService::class)->create($party->id, $code, $branchId, null, $plan->id, $users['branch_manager'])->id;
+            $agent = app(AgentService::class)->create($party->id, $code, $branchId, null, $plan->id, $users['branch_manager']);
+            app(LicenceService::class)->record(new RecordLicence($agent->id, 'IDRA-'.$code, 'both', $day('2026-01-01'), $day('2026-12-31')), $users['branch_manager']);
+            $agents[] = $agent->id;
         }
 
         $lifecycle = app(PolicyLifecycle::class);

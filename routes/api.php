@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Http\Controllers\FinancialReportController;
 use App\Modules\Accounting\Http\Controllers\ImportController;
 use App\Modules\Accounting\Http\Controllers\PeriodCloseController;
+use App\Modules\Distribution\Http\Controllers\LicenceController;
 use App\Modules\Finance\Bank\Http\Controllers\BankController;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimController;
 use App\Modules\Insurance\Collections\Http\Controllers\ReceiptController;
@@ -26,6 +27,13 @@ Route::middleware('auth')->prefix('accounting')->group(function (): void {
     Route::get('close-runs/{run}', [PeriodCloseController::class, 'show'])->whereUuid('run');
     Route::post('close-tasks/{task}/execute', [PeriodCloseController::class, 'execute'])->whereUuid('task');
     Route::post('close-tasks/{task}/skip', [PeriodCloseController::class, 'skip'])->whereUuid('task');
+});
+
+Route::middleware('auth')->prefix('distribution')->group(function (): void {
+    Route::get('producers/{producer}/licences', [LicenceController::class, 'index'])->whereUuid('producer');
+    Route::post('producers/{producer}/licences', [LicenceController::class, 'store'])->whereUuid('producer');
+    Route::post('licences/{licence}/{action}', [LicenceController::class, 'changeStatus'])->whereUuid('licence')->whereIn('action', ['suspend', 'revoke', 'reinstate']);
+    Route::get('licences/register', [LicenceController::class, 'register']);
 });
 
 Route::middleware('auth')->prefix('insurance')->group(function (): void {

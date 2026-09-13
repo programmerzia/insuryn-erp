@@ -82,7 +82,7 @@ code and in the register below, configurable.
 | 2.0d | Phase 1 carry-over: claim reserve property test | todo (pending, after Distribution D1–D9) | |
 | 2.1 | Design addendum v2 and Phase 2 customer questions | todo (pending, after Distribution D1–D9) | |
 | D1 | Distribution: agents → producers with channels | done | see git log |
-| D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | todo | |
+| D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | done | see git log |
 | D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | todo | |
 | D4 | Distribution: compensation schemes, rules, compliance profile | todo | |
 | D5 | Distribution: calculation engine replacing the Phase 1A calculator, golden fixtures | todo | |
@@ -109,6 +109,9 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-11 | 2.0a | Who may lock administration out is not specified: the tenant always keeps an active user holding `platform.manage_users` and one holding `platform.manage_roles` (removing a role, deactivating a user or editing a role's permissions that would leave none is refused), and nobody deactivates their own account. | `Platform\Authorization\AdministratorsRemain`, `UserAdministration::deactivate` (`ASSUMPTION:`). |
 | A-12 | 2.0a | Invitation flow is not specified: an invited user is active with an unknown random password and receives a password-set link (Fortify reset token, tenant-keyed, standard 60-minute expiry; the admin can resend). Roles are given after inviting. | `Platform\Administration\UserAdministration::invite`, `config/auth.php` `passwords.users.expire`. |
 | A-13 | 2.0b | The CI host is not named (the repo has no remote yet): GitHub Actions. Every step lives in `scripts/ci/*.sh`, so another CI runs the same gate by calling the scripts. "Blocks merge" needs the `backend` and `frontend` checks made required in the branch protection of `main` once the repo is hosted. | `.github/workflows/ci.yml`, `scripts/ci/`. |
+| A-14 | D2 | Which producer types need a licence to write new business is not specified: every type (agent, agency_org, bdo, broker, partner); a producer that is not active writes no new business. Checked when a quote is issued, on the issue date; renewals are not checked (not new business). | `config/erp.php` `distribution.licence_required_types` (`ASSUMPTION:`), `LicenceRegistry`. |
+| A-16 | D2 | IDRA's register file format is not specified: CSV with a header row, one row per licence, status as of the chosen date (valid, expired, not_yet_valid, suspended, revoked). | `config/erp.php` `distribution.idra_register_columns` (`ASSUMPTION:`), `IdraRegisterExport`. |
+| A-17 | D2 | Products had no life / non-life class: `products.insurance_class`; a product whose line of business is listed as life is life, everything else non-life, unless given when the product is created. Existing products backfilled the same way. | `config/erp.php` `products.life_lobs` (`ASSUMPTION:`), `ProductCatalogue::createProduct`, migration `2026_09_18_000002`. |
 | A-10 | 1C.4 | Dunning schedule and grace period are not specified (spec §4 names dunning, grace and auto-lapse only): reminders at 7 and 21 days overdue, automatic lapse of an active policy after 30 days unpaid (counted from the later of due date and reinstatement), auto-lapse on. Notices are recorded and queued; delivery channels are LATER. | `config/erp.php` `collections.*` (`ASSUMPTION:`), `DunningRun`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
@@ -1315,4 +1318,22 @@ Scope: review only; only the critical finding was fixed.
 - Tests: `tests/Feature/Distribution/ProducersTest.php` (4). One existing test changed mechanically, not weakened: `CommissionTest` updated `commission_plan_id` through
   `DB::table('agents')`, now `DB::table('producers')` (the table was renamed; assertions unchanged).
 - Result: 1,019 Pest tests green, PHPStan 0 errors.
+
+### D2 — Distribution: licences, blocking, expiry alerts, IDRA register — done
+- Tables `producer_licences` (authority default IDRA, licence number unique per authority, class life | non_life | both, issued/expires dates, status active |
+  suspended | revoked with reason, optional document id) and `producer_licence_alerts` (one row per licence and threshold); `products.insurance_class`. All RLS.
+- Blocking (design note §3): `PolicyLifecycle::issue` asks `Distribution\Application\Licences\LicenceRegistry` before issuing a policy that has a
+  producer and is not a renewal. Refusals: `PRODUCER_NOT_ACTIVE`, `LICENCE_REQUIRED` ("AG-001 has no valid non-life licence on 2026-09-01, so it cannot write new
+  business."). A licence is valid from its issue date to its expiry date inclusive while active; `both` covers either class; direct business needs none.
+- The design's `renewal_requires_valid_licence` is a compensation-rule flag (design note §3 "→ rule flag"): renewals are never blocked here, and D4
+  adds the flag to compensation rules and D5 applies it with `LicenceRegistry::validLicenceId`.
+- Expiry alerts: `LicenceExpiryAlerts` (nightly `LicenceExpiryAlertJob`, 01:45, batch queue) raises every crossed threshold of `erp.distribution.licence_alert_days`
+  (60, 30, 7) once, catching up missed days, skips licences already followed by a covering licence, and queues `ProducerLicenceExpiring` outbox messages (delivery LATER).
+- IDRA register export: `GET /api/distribution/licences/register?as_of=` (CSV, `reports.regulatory`). Licence API: `GET|POST /api/distribution/producers/{id}/licences`,
+  `POST /api/distribution/licences/{id}/{suspend|revoke|reinstate}` (`agent.manage`; a revoked licence stays revoked).
+- ASSUMPTIONS A-14, A-16, A-17.
+- Test fixture changes (the new invariant needs licensed producers; no assertion changed): `seedInsuranceWorld` records a both-class licence 2020–2030 for AG-001;
+  `DemoBusinessSeeder` licences its three agents for 2026; `TenantIsolationEveryTableTest` runs the licence alerts once so `producer_licence_alerts` has rows.
+- Tests: `tests/Feature/Distribution/LicencesTest.php` (7). Local demo database rebuilt with `composer db:fresh`: 3 licences, 32 policies issued.
+- Result: 1,026 Pest tests green, PHPStan 0 errors.
 

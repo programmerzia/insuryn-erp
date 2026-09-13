@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $code
  * @property string $name
  * @property string $lob
+ * @property string $insurance_class life | non_life (licence class, slice D2)
  * @property string $status
  */
 final class Product extends Model

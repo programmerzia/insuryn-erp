@@ -26,13 +26,21 @@ final class ProductCatalogue
         private readonly Audit $audit,
     ) {}
 
-    public function createProduct(string $code, string $name, string $lob, string $actorUserId): Product
+    /** @param string|null $insuranceClass life | non_life; null = from the line of business (A-17, erp.products.life_lobs) */
+    public function createProduct(string $code, string $name, string $lob, string $actorUserId, ?string $insuranceClass = null): Product
     {
         $this->permissions->authorize($actorUserId, 'product.manage');
+        /** @var list<string> $lifeLobs */
+        $lifeLobs = config('erp.products.life_lobs', ['life']);
+        $insuranceClass ??= in_array(strtolower($lob), array_map('strtolower', $lifeLobs), true) ? 'life' : 'non_life';
+        if (! in_array($insuranceClass, ['life', 'non_life'], true)) {
+            throw new BusinessRuleViolation('INVALID_INSURANCE_CLASS', "Insurance class {$insuranceClass} is not life or non_life.");
+        }
 
-        return DB::transaction(function () use ($code, $name, $lob, $actorUserId): Product {
-            $product = Product::query()->create(['code' => $code, 'name' => $name, 'lob' => $lob, 'status' => 'active']);
-            $this->audit->record('product.created', AuditSubject::of('product', $product->id), null, ['code' => $code, 'name' => $name, 'lob' => $lob], null, 'product.manage', Actor::user($actorUserId));
+        return DB::transaction(function () use ($code, $name, $lob, $insuranceClass, $actorUserId): Product {
+            $product = Product::query()->create(['code' => $code, 'name' => $name, 'lob' => $lob, 'insurance_class' => $insuranceClass, 'status' => 'active']);
+            $this->audit->record('product.created', AuditSubject::of('product', $product->id), null, ['code' => $code, 'name' => $name, 'lob' => $lob, 'insurance_class' => $insuranceClass],
+                null, 'product.manage', Actor::user($actorUserId));
 
             return $product;
         });

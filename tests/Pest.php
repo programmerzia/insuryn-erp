@@ -111,6 +111,9 @@ function seedInsuranceWorld(array $ctx, string $earningMethod = 'monthly', bool 
             [App\Modules\Insurance\Party\Domain\Enums\PartyRoleType::Customer, App\Modules\Insurance\Party\Domain\Enums\PartyRoleType::Policyholder], $admin);
         $agentParty = $parties->create(App\Modules\Insurance\Party\Domain\Enums\PartyKind::Individual, 'Jamal Agent', null, [App\Modules\Insurance\Party\Domain\Enums\PartyRoleType::Agent], $admin);
         $agent = app(App\Modules\Insurance\Party\Application\AgentService::class)->create($agentParty->id, 'AG-001', $ctx['branch_id'], null, $commissionPlanId, $admin);
+        // Slice D2: new business needs a licensed producer; the world's agent holds a licence for both classes for the whole test calendar.
+        app(App\Modules\Distribution\Application\Licences\LicenceService::class)->record(new App\Modules\Distribution\Application\Licences\RecordLicence($agent->id, 'IDRA-TEST-001', 'both',
+            Carbon\CarbonImmutable::parse('2020-01-01'), Carbon\CarbonImmutable::parse('2030-12-31')), $admin);
 
         return ['admin' => $admin, 'product_id' => $product->id, 'product_version_id' => $version->id, 'policyholder_id' => $holder->id,
             'agent_id' => $agent->id, 'agent_party_id' => $agentParty->id];

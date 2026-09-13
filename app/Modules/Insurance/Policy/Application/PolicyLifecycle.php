@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Policy\Application;
 
+use App\Modules\Distribution\Application\Licences\LicenceRegistry;
 use App\Modules\Insurance\Policy\Domain\EarningSchedule;
 use App\Modules\Insurance\Policy\Domain\Enums\PolicyStatus;
 use App\Modules\Insurance\Policy\Domain\Enums\PolicyTransactionType;
@@ -82,6 +83,10 @@ final class PolicyLifecycle
         $policy = Policy::query()->findOrFail($policyId);
         $this->authorize($actorUserId, 'policy.issue', $policy);
         $this->assertStatus($policy, [PolicyStatus::Quote], 'issue');
+        if ($policy->agent_id !== null && $policy->renewal_of_policy_id === null) {
+            // Distribution design note §3: new business needs a producer licensed for the product's class on the issue date; renewals are not new business.
+            app(LicenceRegistry::class)->assertMayWriteNewBusiness($policy->agent_id, (string) DB::table('products')->where('id', $policy->product_id)->value('insurance_class'), $on);
+        }
         $number = $this->numbers->reserve(new DocumentNumberScope($policy->entity_id, $policy->branch_id, 'policy', 'POL', $on), $actorUserId);
 
         return DB::transaction(function () use ($policyId, $on, $actorUserId, $number): Policy {
