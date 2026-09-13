@@ -22,5 +22,7 @@ final readonly class QuoteRequest
         public int $premiumMinor,
         public string $currency,
         public int $installmentCount = 1,
+        /** @var list<PayerShare> payers and shares (spec §4 multi-payer); empty = the policyholder pays 100% */
+        public array $payers = [],
     ) {}
 }

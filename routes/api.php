@@ -47,6 +47,7 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('policies', [PolicyController::class, 'store']);
     Route::get('dunning-notices', [PolicyController::class, 'dunningNotices']);
     Route::get('policies/{policy}', [PolicyController::class, 'show'])->whereUuid('policy');
+    Route::get('policies/{policy}/payers', [PolicyController::class, 'payers'])->whereUuid('policy');
     foreach (['issue', 'endorse', 'cancel', 'lapse', 'reinstate', 'renew'] as $action) {
         Route::post("policies/{policy}/{$action}", [PolicyController::class, $action])->whereUuid('policy');
     }

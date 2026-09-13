@@ -53,6 +53,7 @@ final class PolicyLifecycle
         if ($request->premiumMinor <= 0 || $request->installmentCount < 1) {
             throw new BusinessRuleViolation('INVALID_PREMIUM', 'A quote needs a positive premium and at least one installment.');
         }
+        $this->assertPayers($request->payers);
         $version = $this->products->versionOn($request->productId, $request->inception);
         $premium = PremiumMath::splitTax($request->premiumMinor, $this->taxRate($version, $request->inception), (bool) $version->tax_profile['inclusive']);
 
@@ -65,7 +66,12 @@ final class PolicyLifecycle
                 'currency' => $request->currency, 'gross_premium_minor' => $premium['gross'], 'tax_minor' => $premium['tax'], 'net_premium_minor' => $premium['net'],
                 'installment_count' => $request->installmentCount, 'version' => 1, 'created_by' => $actorUserId,
             ]);
-            $this->audit->record('policy.quoted', AuditSubject::of('policy', $policy->id), null, ['premium' => $premium, 'product_version' => $version->version], null, 'policy.create', Actor::user($actorUserId));
+            foreach ($request->payers as $payer) {
+                DB::table('policy_payers')->insert(['id' => (string) \Illuminate\Support\Str::uuid7(), 'tenant_id' => $policy->tenant_id, 'policy_id' => $policy->id,
+                    'party_id' => $payer->partyId, 'share_bp' => $payer->shareBp, 'created_at' => now()]);
+            }
+            $this->audit->record('policy.quoted', AuditSubject::of('policy', $policy->id), null, ['premium' => $premium, 'product_version' => $version->version,
+                'payers' => array_map(fn (PayerShare $p): array => ['party_id' => $p->partyId, 'share_bp' => $p->shareBp], $request->payers)], null, 'policy.create', Actor::user($actorUserId));
 
             return $policy;
         });
@@ -193,7 +199,8 @@ final class PolicyLifecycle
         return DB::transaction(function () use ($policy, $actorUserId): Policy {
             $this->simpleTransition($policy->id, [PolicyStatus::Active, PolicyStatus::Expired], PolicyStatus::Renewed, 'renew', 'policy.create', null, $actorUserId);
             $renewal = $this->quote(new QuoteRequest($policy->entity_id, $policy->branch_id, $policy->product_id, $policy->policyholder_party_id, $policy->agent_id,
-                $policy->expiry->addDay(), $policy->gross_premium_minor, $policy->currency, $policy->installment_count), $actorUserId);
+                $policy->expiry->addDay(), $policy->gross_premium_minor, $policy->currency, $policy->installment_count,
+                DB::table('policy_payers')->where('policy_id', $policy->id)->exists() ? $this->installments->payers($policy) : []), $actorUserId);
             $renewal->forceFill(['renewal_of_policy_id' => $policy->id])->save();
 
             return $renewal;
@@ -229,6 +236,27 @@ final class PolicyLifecycle
 
         return ['earned_to_date' => $earned, 'unearned_remaining' => $unearned, 'tax_reversal' => $taxReversal,
             'receivable_outstanding' => $receivableCredit, 'refund_due' => $unearned + $taxReversal - $receivableCredit];
+    }
+
+    /**
+     * @param list<PayerShare> $payers
+     *
+     * @throws BusinessRuleViolation PAYER_SHARES_INVALID | UNKNOWN_PAYER
+     */
+    private function assertPayers(array $payers): void
+    {
+        if ($payers === []) {
+            return;
+        }
+        $ids = array_map(fn (PayerShare $p): string => $p->partyId, $payers);
+        $positive = array_filter($payers, fn (PayerShare $p): bool => $p->shareBp > 0);
+        if (count($positive) !== count($payers) || count(array_unique($ids)) !== count($ids) || array_sum(array_map(fn (PayerShare $p): int => $p->shareBp, $payers)) !== 10_000) {
+            throw new BusinessRuleViolation('PAYER_SHARES_INVALID', 'Payers must be distinct parties with positive shares totalling 10000 basis points.');
+        }
+        $valid = array_values(array_filter($ids, fn (string $id): bool => \Illuminate\Support\Str::isUuid($id)));
+        if (count($valid) !== count($ids) || DB::table('parties')->whereIn('id', $valid)->count() !== count($ids)) {
+            throw new BusinessRuleViolation('UNKNOWN_PAYER', 'Every payer must be a party of this tenant.');
+        }
     }
 
     /** @param list<PolicyStatus> $from */

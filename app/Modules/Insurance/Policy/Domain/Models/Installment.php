@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $id
  * @property string $policy_id
  * @property int $no
+ * @property string $payer_party_id
  * @property CarbonImmutable $due_date
  * @property int $amount_minor
  * @property int $paid_minor

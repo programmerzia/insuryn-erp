@@ -20,6 +20,7 @@ final class QuotePolicyRequest extends FormRequest
             'inception' => ['required', 'date_format:Y-m-d'],
             'premium_minor' => ['required', 'integer', 'min:1'],
             'installment_count' => ['sometimes', 'integer', 'min:1', 'max:12'],
+            'payers' => ['sometimes', 'array', 'max:10'], 'payers.*.party_id' => ['required', 'uuid'], 'payers.*.share_bp' => ['required', 'integer', 'min:1', 'max:10000'],
         ];
     }
 }

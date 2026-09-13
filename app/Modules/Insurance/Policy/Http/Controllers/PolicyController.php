@@ -21,12 +21,13 @@ final class PolicyController
 
     public function store(QuotePolicyRequest $request): JsonResponse
     {
-        /** @var array{branch_id: string, product_id: string, policyholder_party_id: string, agent_id?: string|null, inception: string, premium_minor: int, installment_count?: int} $data */
+        /** @var array{branch_id: string, product_id: string, policyholder_party_id: string, agent_id?: string|null, inception: string, premium_minor: int, installment_count?: int, payers?: list<array{party_id: string, share_bp: int}>} $data */
         $data = $request->validated();
         $branch = DB::table('branches')->where('id', $data['branch_id'])->first(['entity_id']);
         $currency = (string) DB::table('legal_entities')->where('id', $branch?->entity_id)->value('base_currency');
         $policy = $this->lifecycle->quote(new QuoteRequest((string) $branch?->entity_id, $data['branch_id'], $data['product_id'], $data['policyholder_party_id'],
-            $data['agent_id'] ?? null, CarbonImmutable::parse($data['inception']), (int) $data['premium_minor'], $currency, (int) ($data['installment_count'] ?? 1)), self::actor($request));
+            $data['agent_id'] ?? null, CarbonImmutable::parse($data['inception']), (int) $data['premium_minor'], $currency, (int) ($data['installment_count'] ?? 1),
+            array_map(fn (array $p): \App\Modules\Insurance\Policy\Application\PayerShare => new \App\Modules\Insurance\Policy\Application\PayerShare($p['party_id'], (int) $p['share_bp']), $data['payers'] ?? [])), self::actor($request));
 
         return response()->json(['data' => $this->present($policy)], 201);
     }
@@ -94,12 +95,17 @@ final class PolicyController
         if ($withDetail) {
             $data['transactions'] = $policy->transactions()->get()->map(fn (PolicyTransaction $t): array => ['id' => $t->id, 'type' => $t->type->value,
                 'effective_date' => $t->effective_date->toDateString(), 'premium_delta_minor' => $t->premium_delta_minor, 'amounts' => $t->amounts])->values()->all();
-            $data['installments'] = $policy->installments()->get()->map(fn (Installment $i): array => ['id' => $i->id, 'no' => $i->no,
+            $data['installments'] = $policy->installments()->get()->map(fn (Installment $i): array => ['id' => $i->id, 'no' => $i->no, 'payer_party_id' => $i->payer_party_id,
                 'due_date' => $i->due_date->toDateString(), 'amount_minor' => $i->amount_minor, 'paid_minor' => $i->paid_minor,
                 'cancelled_minor' => $i->cancelled_minor, 'status' => $i->status->value])->values()->all();
         }
 
         return $data;
+    }
+
+    public function payers(string $policy, \App\Modules\Insurance\Policy\Application\PayerStatementQuery $statements): JsonResponse
+    {
+        return response()->json(['data' => $statements->forPolicy($policy)]);
     }
 
     public function dunningNotices(Request $request, \App\Modules\Platform\Authorization\PermissionChecker $permissions): JsonResponse

@@ -51,7 +51,7 @@ code and in the register below, configurable.
 | 1C.2 | Cheque register and bounce handling | done | see git log |
 | 1C.3 | Agent cash collection and deposit reconciliation | done | see git log |
 | 1C.4 | Dunning, grace and auto-lapse | done | see git log |
-| 1C.5 | Multi-payer policies | pending | |
+| 1C.5 | Multi-payer policies | done | see git log |
 | 1C.6 | Hardening: posting/lock race, isolation on every tenant table | pending | |
 | 1C.7 | Account security page (2FA, password) | pending | |
 | 1C.8 | Operations UI: parties, products, policies | pending | |
@@ -726,3 +726,20 @@ Scope: review only; only the critical finding was fixed.
 - Tests `tests/Feature/Insurance/DunningTest.php`: levels and idempotency with outbox messages; paid installments; lapse only beyond grace, only with
   auto-lapse, as the system with reason; fresh grace after reinstatement; nightly job; API.
 - Result: 930 tests green, PHPStan 0 errors.
+
+### 1C.5 — Multi-payer policies — done
+- Why: spec §4 "Multi-payer" was outside the 1A slice list.
+- Migration `2026_09_16_000005_multi_payer_policies`: `policy_payers` (tenant + RLS, share 1..10000 bp, unique policy + party) and
+  `installments.payer_party_id` (backfilled from the policyholder, NOT NULL; unique now policy + no + payer).
+- `QuoteRequest::$payers` (list of `PayerShare`); `PolicyLifecycle::quote` validates (`PAYER_SHARES_INVALID`: distinct, positive, total 10000;
+  `UNKNOWN_PAYER`) and stores them; `renew` carries them to the renewal. No payers = the policyholder pays 100% (unchanged behaviour).
+- `InstallmentPlanner`: every installment (plan and endorsement increase) is split per payer by share, half-even, the last payer absorbing rounding;
+  `credit` (decrease, cancellation) is shared by payer the same way — each payer's unpaid installments from the last backwards, any payer's shortfall
+  passed to the others — so totals are unchanged and the premium subledger still reconciles.
+- `PayerStatementQuery::forPolicy(policy)`: per payer share, billed, paid, credited, outstanding. API: quote `payers[]`, installments show
+  `payer_party_id`, `GET /api/insurance/policies/{id}/payers`.
+- Interpretations: the general ledger's customer dimension stays the policyholder (events unchanged; per-payer balances come from installments);
+  refunds on cancellation still go to the policyholder (open question for the customer: refund split between payers).
+- Tests `tests/Feature/Insurance/MultiPayerTest.php`: share validation; split with rounding and single-payer default; increase split, shared credit on
+  cancellation, payer statement totals and clean reconciliation over three month ends; API.
+- Result: 934 tests green, PHPStan 0 errors.
