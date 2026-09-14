@@ -8,7 +8,12 @@ import { type DataColumn, DataTable } from '@/components/table';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { eventLabel } from '@/lib/events';
 import { formatDate, formatMoney } from '@/lib/format';
+import { usePermissions } from '@/lib/permissions';
 import type { EntityRef, JournalListItem } from '@/types/accounting';
+
+// A reader without accounting.create_manual_journal (the auditor) sees who prepares journals instead of a link that ends in a 403.
+const { can } = usePermissions();
+const canCreate = can('accounting.create_manual_journal');
 
 const props = defineProps<{
     entity: EntityRef;
@@ -47,13 +52,15 @@ function visit(params: Record<string, unknown>): void {
                 :currency="entity.currency"
                 :page="{ current: journals.currentPage, last: journals.lastPage, total: journals.total, go: (page) => visit({ page }) }"
                 empty-text="No journals yet: they appear as policies, receipts and claims are posted."
-                :empty-action="{ label: 'New manual journal', href: '/accounting/journals/create' }"
+                :empty-action="canCreate ? { label: 'New manual journal', href: '/accounting/journals/create' } : null"
+                :empty-hint="canCreate ? null : 'Only the accountant, finance manager or CFO can prepare a manual journal.'"
                 export-name="journals"
                 @close="active = null"
             >
                 <template #toolbar>
                     <h1 class="mr-3 text-section font-semibold">Journals</h1>
-                    <Link href="/accounting/journals/create" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">New manual journal</Link>
+                    <Link v-if="canCreate" href="/accounting/journals/create" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">New manual journal</Link>
+                    <span v-else class="text-ui text-ink-2" data-testid="permission-hint">Only the accountant, finance manager or CFO can prepare a manual journal.</span>
                 </template>
             </DataTable>
             <template #inspector>

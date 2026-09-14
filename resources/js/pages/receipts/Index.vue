@@ -8,7 +8,12 @@ import { type DataColumn, DataTable } from '@/components/table';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
+import { usePermissions } from '@/lib/permissions';
 import type { SharedProps } from '@/types/shared';
+
+// A reader without receipt.create (the auditor, the finance manager) sees who records receipts instead of a link that ends in a 403.
+const { can } = usePermissions();
+const canRecord = can('receipt.create');
 
 interface ReceiptRow {
     id: string;
@@ -52,13 +57,15 @@ const columns: DataColumn<ReceiptRow>[] = [
                 :currency="currency"
                 selectable
                 empty-text="No receipts yet."
-                :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }"
+                :empty-action="canRecord ? { label: 'Record a receipt', href: '/receipts/create' } : null"
+                :empty-hint="canRecord ? null : 'Only the branch officer, branch manager or accountant can record a receipt.'"
                 export-name="receipts"
                 @close="active = null"
             >
                 <template #toolbar>
                     <h1 class="mr-3 text-section font-semibold">Receipts</h1>
-                    <Link href="/receipts/create" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Record a receipt</Link>
+                    <Link v-if="canRecord" href="/receipts/create" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Record a receipt</Link>
+                    <span v-else class="text-ui text-ink-2" data-testid="permission-hint">Only the branch officer, branch manager or accountant can record a receipt.</span>
                     <Link href="/cheques" class="ml-2 text-ui text-accent-text hover:underline">Cheque register</Link>
                 </template>
                 <template #bulk="{ rows }">
