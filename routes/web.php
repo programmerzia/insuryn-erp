@@ -31,6 +31,7 @@ Route::middleware('auth')->get('account/security', SecurityPageController::class
 Route::middleware('auth')->get('search', GlobalSearchController::class)->name('search');
 Route::middleware('auth')->get('lookup/{type}', [LookupController::class, 'search'])->where('type', '[a-z]+');
 Route::middleware('auth')->post('lookup/customer', [LookupController::class, 'createCustomer']);
+Route::middleware('auth')->post('lookup/payee', [LookupController::class, 'createPayee']); // flow fix X8
 Route::middleware('auth')->get('help/{module}', \App\Http\Help\HelpController::class)->where('module', '[a-z]+');
 Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
 

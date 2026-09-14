@@ -12,7 +12,9 @@ use App\Modules\Insurance\Party\Domain\Models\PartyRole;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
+use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use Illuminate\Support\Facades\DB;
 
 /** Design §2.4 / spec §3 party model: create and edit parties, their roles and bank accounts (`party.manage`). */
@@ -23,15 +25,40 @@ final class PartyService
         private readonly Audit $audit,
     ) {}
 
+    /** Roles a payee created in the course of paying someone may take (flow fix X8). */
+    public const PAYEE_ROLES = [PartyRoleType::Vendor, PartyRoleType::Beneficiary];
+
     /** @param list<PartyRoleType> $roles */
     public function create(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId): Party
     {
         $this->permissions->authorize($actorUserId, 'party.manage');
 
-        return DB::transaction(function () use ($kind, $displayName, $taxId, $roles, $actorUserId): Party {
+        return $this->insert($kind, $displayName, $taxId, $roles, $actorUserId, 'party.manage');
+    }
+
+    /**
+     * Flow fix X8: a payee — a garage, a surveyor, a beneficiary — created while approving a payment to them. The duty being done authorizes it in
+     * its own scope (claim.approve on the claim's branch) instead of party.manage, and is the permission on the audit record. Only payee roles.
+     *
+     * @throws BusinessRuleViolation INVALID_PAYEE_ROLE
+     */
+    public function createPayee(PartyKind $kind, string $displayName, ?string $taxId, PartyRoleType $role, string $actorUserId, string $duty, AuthorizationScope $scope): Party
+    {
+        $this->permissions->authorize($actorUserId, $duty, $scope);
+        if (! in_array($role, self::PAYEE_ROLES, true)) {
+            throw new BusinessRuleViolation('INVALID_PAYEE_ROLE', "A payee is a vendor or a beneficiary, not a {$role->value}.");
+        }
+
+        return $this->insert($kind, $displayName, $taxId, [$role], $actorUserId, $duty);
+    }
+
+    /** @param list<PartyRoleType> $roles */
+    private function insert(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId, string $permission): Party
+    {
+        return DB::transaction(function () use ($kind, $displayName, $taxId, $roles, $actorUserId, $permission): Party {
             $party = Party::query()->create(['kind' => $kind->value, 'display_name' => $displayName, 'tax_id' => $taxId, 'status' => 'active']);
             $this->syncRoles($party, $roles);
-            $this->audit->record('party.created', AuditSubject::of('party', $party->id), null, $this->snapshot($party), null, 'party.manage', Actor::user($actorUserId));
+            $this->audit->record('party.created', AuditSubject::of('party', $party->id), null, $this->snapshot($party), null, $permission, Actor::user($actorUserId));
 
             return $party;
         });

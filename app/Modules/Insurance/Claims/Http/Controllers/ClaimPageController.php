@@ -110,7 +110,6 @@ final class ClaimPageController
                 'can_release' => $p->status === ClaimPaymentStatus::ReleaseRequested && $can('claim.pay_release')])->values()->all(),
             'recoveries' => DB::table('claim_recoveries')->where('claim_id', $model->id)->orderBy('received_on')->get(['type', 'amount_minor', 'received_on', 'reference'])
                 ->map(fn (object $r): array => ['type' => (string) $r->type, 'amount' => $money((int) $r->amount_minor), 'received_on' => (string) $r->received_on, 'reference' => $r->reference])->values()->all(),
-            'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'bankAccounts' => $bankAccounts->map(fn (object $b): array => ['id' => $b->id, 'bank_name' => $b->bank_name, 'account_no_masked' => $b->account_no_masked])->values()->all(),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/claims/{$model->id}/documents" : null,
             'actions' => [

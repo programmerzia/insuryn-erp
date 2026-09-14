@@ -5,6 +5,7 @@ import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import LookupInput, { type LookupResult } from '@/components/forms/LookupInput.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
@@ -21,7 +22,6 @@ const props = defineProps<{
     reserves: { version: number; reserve: string; delta: string; kind: string; reason: string; recorded_on: string }[];
     payments: { id: string; amount: string; status: string; approved_on: string; paid_on: string | null; bank_account_id: string | null; can_request_release: boolean; can_release: boolean }[];
     recoveries: { type: string; amount: string; received_on: string; reference: string | null }[];
-    parties: { id: string; display_name: string }[];
     bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
     actions: { reserve: boolean; approve: boolean; recover: boolean; close: boolean; reject: boolean; reopen: boolean };
     timeline?: TimelineEntry[];
@@ -59,8 +59,13 @@ const previewTitle = computed(() => ({ reserve: 'Post the new reserve?', payment
 // Flow fix X3: each drawer starts from what the claim already knows — the reserve left, the policyholder, today, the bank the release was requested from.
 const nextDismissed = ref(false);
 const offerApproval = computed(() => props.nextStep === 'approve_payment' && props.actions.approve && !nextDismissed.value);
+// Flow fix X8: the payee is looked up (or created inline as a vendor or beneficiary); it starts as the policyholder.
+const payee = ref<LookupResult | null>(null);
+const paymentOpened = ref(0);
 function openPayment(): void {
     nextDismissed.value = true;
+    payee.value = props.claim.policy.policyholder_id ? { id: props.claim.policy.policyholder_id, label: props.claim.policy.policyholder } : null;
+    paymentOpened.value++;
     payment.form.defaults({ amount: props.claim.uncommitted, payee_party_id: props.claim.policy.policyholder_id, on: props.today });
     payment.form.reset();
     drawer.value = 'payment';
@@ -176,7 +181,9 @@ function openRelease(id: string): void {
         <Drawer :open="drawer === 'payment'" title="Approve a payment" @update:open="(o) => !o && done()">
             <FormLayout submit-label="Review and approve" :dirty="payment.form.isDirty" :processing="payment.form.processing" :error="(payment.form.errors as Record<string, string>).form" @submit="payment.review" @cancel="done">
                 <Field id="payment_amount" :label="`Amount (${claim.currency})`" :error="payment.form.errors.amount"><MoneyInput v-model="payment.form.amount" /></Field>
-                <Field id="payee_party_id" label="Payee" :error="payment.form.errors.payee_party_id"><SelectInput id="payee_party_id" v-model="payment.form.payee_party_id" placeholder="Choose a payee" :options="parties.map((p) => ({ value: p.id, label: p.display_name }))" /></Field>
+                <Field id="payee_party_id" label="Payee" hint="A name or tax ID. Ctrl+N adds a garage, surveyor or beneficiary." :error="payment.form.errors.payee_party_id">
+                    <LookupInput id="payee_party_id" :key="paymentOpened" v-model="payment.form.payee_party_id" type="payee" creatable :create-context="{ claim_id: claim.id }" :initial="payee" placeholder="Type a name" @selected="payee = $event" />
+                </Field>
                 <Field id="payment_on" label="Approval date" :error="payment.form.errors.on"><DateInput v-model="payment.form.on" /></Field>
             </FormLayout>
         </Drawer>

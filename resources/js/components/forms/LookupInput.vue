@@ -6,12 +6,14 @@ import Drawer from '@/components/ui/Drawer.vue';
 import Kbd from '@/components/ui/Kbd.vue';
 import { useField } from '@/lib/field';
 import { HttpError, requestJson } from '@/lib/http';
+import { blankCreateDraft, createPayload, lookupCreateConfig, type LookupType } from '@/lib/lookupCreate';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { shortcutKeys } from '@/lib/shortcuts';
 
 /**
- * Brief §4 lookup: type a number or name, pick with ↑↓ Enter; recent picks show first; Ctrl+N creates a customer inline in a drawer.
- * GET /lookup/{type}?q=, POST /lookup/customer. The model is the record id; `selected` carries the picked label for summaries.
+ * Brief §4 lookup: type a number or name, pick with ↑↓ Enter; recent picks show first; Ctrl+N creates a customer (or, flow fix X8, a claim payee)
+ * inline in a drawer. GET /lookup/{type}?q=, POST /lookup/customer or /lookup/payee (with `createContext`, e.g. the claim). The model is the
+ * record id; `selected` carries the picked label for summaries.
  */
 export interface LookupResult {
     id: string;
@@ -20,8 +22,8 @@ export interface LookupResult {
     amount?: string;
 }
 
-const props = withDefaults(defineProps<{ type: 'customer' | 'agent' | 'policy' | 'installment'; placeholder?: string; initial?: LookupResult | null; creatable?: boolean; id?: string }>(), {
-    placeholder: undefined, initial: null, creatable: false, id: undefined,
+const props = withDefaults(defineProps<{ type: LookupType; placeholder?: string; initial?: LookupResult | null; creatable?: boolean; createContext?: Record<string, string>; id?: string }>(), {
+    placeholder: undefined, initial: null, creatable: false, createContext: () => ({}), id: undefined,
 });
 const model = defineModel<string>({ default: '' });
 const emit = defineEmits<{ selected: [result: LookupResult | null] }>();
@@ -90,8 +92,7 @@ function onBlur(): void {
 function onKeydown(event: KeyboardEvent): void {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n' && props.creatable) {
         event.preventDefault();
-        creating.value = true;
-        draft.value.display_name = query.value === selectedLabel.value ? '' : query.value;
+        startCreate();
         return;
     }
     if (event.key === 'ArrowDown') {
@@ -110,21 +111,31 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
-// Inline create (customers)
+// Inline create (customers, payees)
+const createConfig = lookupCreateConfig(props.type);
+const canCreate = computed(() => props.creatable && createConfig !== null);
+const noun = createConfig?.noun ?? 'record';
 const creating = ref(false);
-const draft = ref({ display_name: '', kind: 'individual', tax_id: '' });
+const draft = ref(blankCreateDraft(createConfig));
 const createErrors = ref<Record<string, string>>({});
+function startCreate(): void {
+    if (!createConfig) return;
+    draft.value = blankCreateDraft(createConfig, query.value === selectedLabel.value ? '' : query.value);
+    createErrors.value = {};
+    creating.value = true;
+}
 const saving = ref(false);
 async function create(): Promise<void> {
+    if (!createConfig) return;
     saving.value = true;
     try {
-        const response = await requestJson<{ result: LookupResult }>('POST', '/lookup/customer', { ...draft.value, tax_id: draft.value.tax_id || null });
+        const response = await requestJson<{ result: LookupResult }>('POST', createConfig.endpoint, createPayload(createConfig, draft.value, props.createContext));
         creating.value = false;
         createErrors.value = {};
         pick(response.result);
     } catch (error) {
         const body = error instanceof HttpError ? (error.body as { errors?: Record<string, string[]>; message?: string }) : null;
-        createErrors.value = Object.fromEntries(Object.entries(body?.errors ?? { form: [body?.message ?? 'The customer was not created. Try again.'] }).map(([k, v]) => [k, Array.isArray(v) ? (v[0] ?? '') : String(v)]));
+        createErrors.value = Object.fromEntries(Object.entries(body?.errors ?? { form: [body?.message ?? `The ${noun} was not created. Try again.`] }).map(([k, v]) => [k, Array.isArray(v) ? (v[0] ?? '') : String(v)]));
     } finally {
         saving.value = false;
     }
@@ -151,7 +162,7 @@ async function create(): Promise<void> {
             />
         </div>
         <ul
-            v-if="open && (shown.length || loading || failed || creatable)"
+            v-if="open && (shown.length || loading || failed || canCreate)"
             :id="`${field.id}-options`"
             role="listbox"
             class="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-panel border border-line bg-surface p-1 text-ui shadow-float"
@@ -173,14 +184,14 @@ async function create(): Promise<void> {
             <li v-if="loading && !shown.length" class="px-2 py-1.5 text-ink-2" role="status">Searching…</li>
             <li v-else-if="failed" class="px-2 py-1.5 text-danger" role="alert">{{ failed }}</li>
             <li v-else-if="!loading && query.trim() !== '' && query !== selectedLabel && !shown.length" class="px-2 py-1.5 text-ink-2">Nothing matches “{{ query }}”.</li>
-            <li v-if="creatable" class="mt-1 border-t border-line pt-1">
-                <button type="button" class="flex h-8 w-full items-center gap-2 rounded-control px-2 text-accent-text hover:bg-surface-2" @mousedown.prevent="creating = true; draft.display_name = query === selectedLabel ? '' : query">
-                    <Plus :size="14" :stroke-width="1.5" />New customer <Kbd :keys="shortcutKeys('lookup.create')" class="ml-auto" />
+            <li v-if="canCreate" class="mt-1 border-t border-line pt-1">
+                <button type="button" class="flex h-8 w-full items-center gap-2 rounded-control px-2 text-accent-text hover:bg-surface-2" @mousedown.prevent="startCreate">
+                    <Plus :size="14" :stroke-width="1.5" />New {{ noun }} <Kbd :keys="shortcutKeys('lookup.create')" class="ml-auto" />
                 </button>
             </li>
         </ul>
 
-        <Drawer v-if="creatable" v-model:open="creating" title="New customer">
+        <Drawer v-if="canCreate" v-model:open="creating" :title="`New ${noun}`">
             <form class="grid gap-4" @submit.prevent="create">
                 <p v-if="createErrors.form" class="text-ui text-danger" role="alert">{{ createErrors.form }}</p>
                 <Field id="new-customer-name" label="Name" :error="createErrors.display_name">
@@ -195,9 +206,14 @@ async function create(): Promise<void> {
                 <Field id="new-customer-tin" label="Tax ID" optional :error="createErrors.tax_id">
                     <input id="new-customer-tin" v-model="draft.tax_id" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body" />
                 </Field>
+                <Field v-if="createConfig?.roles" id="new-party-role" label="Paid as" :error="createErrors.role">
+                    <select id="new-party-role" v-model="draft.role" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body">
+                        <option v-for="role in createConfig.roles" :key="role.value" :value="role.value">{{ role.label }}</option>
+                    </select>
+                </Field>
                 <div class="flex justify-end gap-2">
                     <button type="button" class="h-8 rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="creating = false">Cancel</button>
-                    <button type="submit" :disabled="saving" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50">Create customer</button>
+                    <button type="submit" :disabled="saving" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50">Create {{ noun }}</button>
                 </div>
             </form>
         </Drawer>

@@ -11,6 +11,7 @@ use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
 use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
+use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,12 +20,16 @@ use Illuminate\Validation\Rule;
 
 /**
  * Typeahead lookups for form fields (UX brief §4 "Lookups (policy, customer, agent): typeahead with number/name/phone … Ctrl+N to create
- * inline"): GET /lookup/{customer|agent|policy|installment}?q=, POST /lookup/customer to create a customer inline. Read access follows the
- * areas that use the field. Phone search is not possible: parties have no phone number yet.
+ * inline"): GET /lookup/{customer|agent|policy|installment|payee}?q=, POST /lookup/customer to create a customer inline and (flow fix X8)
+ * POST /lookup/payee to create a claim payee. Read access follows the areas that use the field. Phone search is not possible: parties have no
+ * phone number yet.
  */
 final class LookupController
 {
     private const LIMIT = 12;
+
+    /** Flow fix X8: the duty that looks up and creates claim payees, checked on the claim's branch for creation — the same check as approving. */
+    private const PAYEE_DUTY = 'claim.approve';
 
     public function __construct(private readonly PermissionChecker $permissions) {}
 
@@ -37,6 +42,8 @@ final class LookupController
             'agent' => $this->guarded($actor, [...PartyPageController::AREA, ...CollectionsPageController::AREA], fn (): array => $this->agents($like)),
             'policy' => $this->guarded($actor, [...PolicyPageController::AREA, 'claim.register'], fn (): array => $this->policies($like)),
             'installment' => $this->guarded($actor, CollectionsPageController::AREA, fn (): array => $this->installments($like)),
+            // Flow fix X8: whoever approves claim payments picks the payee from every active party.
+            'payee' => $this->guarded($actor, [self::PAYEE_DUTY], fn (): array => $this->payees($like)),
             default => abort(404),
         };
 
@@ -50,6 +57,18 @@ final class LookupController
         $party = $parties->create(PartyKind::from($data['kind']), $data['display_name'], $data['tax_id'] ?? null, [PartyRoleType::Customer, PartyRoleType::Policyholder], PageSupport::actor($request));
 
         return response()->json(['result' => self::customer((string) $party->id, $party->display_name, $data['kind'], $data['tax_id'] ?? null)], 201);
+    }
+
+    public function createPayee(Request $request, PartyService $parties): JsonResponse
+    {
+        /** @var array{claim_id: string, kind: string, display_name: string, tax_id?: string|null, role: string} $data */
+        $data = $request->validate(['claim_id' => ['required', 'uuid'], 'kind' => ['required', Rule::enum(PartyKind::class)], 'display_name' => ['required', 'string', 'max:255'],
+            'tax_id' => ['nullable', 'string', 'max:64'], 'role' => ['required', Rule::in(array_map(fn (PartyRoleType $r): string => $r->value, PartyService::PAYEE_ROLES))]]);
+        $claim = DB::table('claims')->where('id', $data['claim_id'])->first(['entity_id', 'branch_id']) ?? abort(404);
+        $party = $parties->createPayee(PartyKind::from($data['kind']), $data['display_name'], $data['tax_id'] ?? null, PartyRoleType::from($data['role']), PageSupport::actor($request),
+            self::PAYEE_DUTY, AuthorizationScope::branch((string) $claim->entity_id, (string) $claim->branch_id));
+
+        return response()->json(['result' => ['id' => (string) $party->id, 'label' => $party->display_name, 'detail' => ucfirst($data['kind']).' · '.$data['role']]], 201);
     }
 
     /**
@@ -72,6 +91,20 @@ final class LookupController
         $results = [];
         foreach ($rows as $row) {
             $results[] = self::customer((string) $row->id, (string) $row->display_name, (string) $row->kind, $row->tax_id === null ? null : (string) $row->tax_id);
+        }
+
+        return $results;
+    }
+
+    /** @return list<array<string, string>> */
+    private function payees(string $like): array
+    {
+        $rows = DB::table('parties as p')->where('p.status', 'active')->where(fn ($q) => $q->where('p.display_name', 'ilike', $like)->orWhere('p.tax_id', 'ilike', $like))
+            ->orderBy('p.display_name')->limit(self::LIMIT)
+            ->get(['p.id', 'p.display_name', 'p.kind', DB::raw("(select string_agg(r.role, ', ' order by r.role) from party_roles r where r.party_id = p.id) as roles")]);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['id' => (string) $row->id, 'label' => (string) $row->display_name, 'detail' => ucfirst((string) $row->kind).($row->roles !== null ? " · {$row->roles}" : '')];
         }
 
         return $results;
