@@ -58,6 +58,8 @@ final class ClosePageController
                 'lock_from' => CarbonImmutable::parse((string) $p->ends)->addDay()->toDateString()])->values()->all(),
             'today' => $today,
             'can' => ['start' => $this->permissions->has($actor, 'periods.soft_lock'), 'reopen' => $this->permissions->has($actor, 'periods.reopen')],
+            // Gap fix GA-05: when each nightly job last ran, with "Run now" for finance.
+            'nightly' => app(\App\Http\Close\NightlyJobs::class)->panel($actor),
         ]);
     }
 

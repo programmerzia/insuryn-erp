@@ -66,6 +66,13 @@ Illuminate\Support\Facades\Artisan::command('erp:demo {--tenant=nonlife : slug o
 
         return 0;
     }
+    // Gap fix GA-05: the nightly lifecycle runs once for the demo, as the schedule would tonight — policies whose cover started become Active,
+    // overdue premium gets its reminders and the expiry register and renewals are prepared — and the close screen shows when each ran.
+    $tenantId = (string) Illuminate\Support\Facades\DB::table('tenants')->where('slug', $slug)->value('id');
+    foreach ([PremiumEarningJob::class, DunningJob::class, App\Modules\Insurance\Renewal\Infrastructure\Jobs\RenewalRunJob::class] as $job) {
+        app()->call([(new $job())->forTenant($tenantId, null), 'handle']);
+    }
+    dispatch_sync(new OutboxRelayJob());
     $this->info("Seeded the Part A story in tenant {$slug}. Sign in at http://{$slug}.localhost:8000 as admin@{$slug}.local or <role>@{$slug}.local (for example accountant@{$slug}.local).");
     $this->line('September bank statement: '.storage_path(Database\Seeders\PartADemoSeeder::STATEMENT_FILE));
 

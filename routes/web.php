@@ -304,6 +304,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('close/tasks/{task}/skip', [ClosePageController::class, 'skip'])->whereUuid('task');
     // Slice 2.1b (D-55): a manual journal pending approval moved by its approver to the next open period, so its period can be locked.
     Route::post('close/journals/{journal}/move-to-next-period', [ClosePageController::class, 'moveJournal'])->whereUuid('journal');
+    // Gap fix GA-05: run a nightly job now for this tenant (finance; the job posts through its own events).
+    Route::post('close/jobs/{job}/run', [\App\Http\Close\NightlyJobsController::class, 'run'])->where('job', '[a-z_]+');
 
     Route::get('reports', [ReportsPageController::class, 'index']);
     Route::get('reports/{report}', [ReportsPageController::class, 'show'])->where('report', '[a-z-]+');

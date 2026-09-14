@@ -85,6 +85,7 @@ function populateEveryTenantTable(array $ctx): void
         $installments = DB::table('installments')->where('policy_id', $policy->id)->orderBy('no')->pluck('id')->map(fn ($id): string => (string) $id)->all();
         app(PremiumEarningRun::class)->run((string) DB::table('fiscal_periods')->where('starts', '2026-07-01')->value('id'));
         app(DunningRun::class)->run($ctx['entity_id'], $d('2026-08-15'));
+        app(App\Modules\Platform\Jobs\JobRunLog::class)->record('dunning', fn (): int => 0, $ctx['entity_id']); // gap fix GA-05: job_runs
 
         $receipts = app(ReceiptService::class);
         $cheque = $receipts->record(new RecordReceiptRequest($ctx['entity_id'], $ctx['branch_id'], null, 'cheque', 4_500_000, 'BDT', $d('2026-09-02'), null, 'chq',

@@ -102,6 +102,23 @@ it('seeds the Part A story through the services', function (): void {
         ->toBe(['claim_payment' => '2026-09-13', 'claim_payment_release' => '2026-09-13', 'journal' => '2026-09-13', 'journal_reversal' => '2026-09-13']);
 });
 
+it('runs the nightly lifecycle once, so the demo shows active policies, payment reminders and renewals and when the jobs ran (GA-05)', function (): void {
+    expect(Artisan::call('erp:demo'))->toBe(0);
+    $tenantId = (string) DB::table('tenants')->where('slug', 'nonlife')->value('id');
+
+    asTenant($tenantId, function (): void {
+        // Every policy whose cover has started (all of the story's, dated August–September) is Active, none left Issued; the cancelled one stays cancelled.
+        expect(DB::table('policies')->where('status', 'issued')->where('inception', '<=', '2026-09-13')->count())->toBe(0)
+            ->and(DB::table('policies')->where('status', 'active')->count())->toBe(6)
+            // POL-2's second installment has been overdue since 5 September: its first reminder is out.
+            ->and(DB::table('dunning_notices')->count())->toBeGreaterThan(0);
+        $runs = DB::table('job_runs')->orderBy('job')->get(['job', 'status', 'triggered_by']);
+        expect($runs->pluck('job')->unique()->values()->all())->toBe(['dunning', 'policy_lifecycle', 'renewals'])
+            ->and($runs->pluck('status')->unique()->all())->toBe(['succeeded'])
+            ->and($runs->whereNotNull('triggered_by')->count())->toBe(0);
+    });
+});
+
 it('changes nothing when run again', function (): void {
     expect(Artisan::call('erp:demo'))->toBe(0);
     $tenantId = (string) DB::table('tenants')->where('slug', 'nonlife')->value('id');

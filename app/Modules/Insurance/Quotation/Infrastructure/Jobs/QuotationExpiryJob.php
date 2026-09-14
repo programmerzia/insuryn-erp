@@ -5,16 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Quotation\Infrastructure\Jobs;
 
 use App\Modules\Insurance\Quotation\Application\QuotationService;
+use App\Modules\Platform\Jobs\RunsNightly;
 use App\Modules\Platform\Tenancy\BusinessClock;
-use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\DB;
 
-/** Slice R4: issued quotations past their validity expire, nightly per tenant (D-07 loop). */
+/** Slice R4: issued quotations past their validity expire, nightly per tenant (D-07 loop). Gap fix GA-05: recorded; finance can run it now. */
 final class QuotationExpiryJob implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, RunsNightly;
+
+    public const KEY = 'quotation_expiry';
 
     public function __construct()
     {
@@ -23,9 +24,7 @@ final class QuotationExpiryJob implements ShouldQueue
 
     public function handle(QuotationService $quotations): void
     {
-        foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            // Slice 2.1b: the company's today, read inside the tenant (D-54).
-            TenantContext::run((string) $tenantId, fn (): int => $quotations->expireDue(app(BusinessClock::class)->today()));
-        }
+        // Slice 2.1b: the company's today, read inside the tenant (D-54).
+        $this->eachTenant(fn (): int => $this->logged(self::KEY, fn (): int => $quotations->expireDue(app(BusinessClock::class)->today())));
     }
 }

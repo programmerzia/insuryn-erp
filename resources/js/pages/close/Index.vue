@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import NightlyJobs from '@/components/close/NightlyJobs.vue';
 import PendingDocuments from '@/components/close/PendingDocuments.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import Drawer from '@/components/ui/Drawer.vue';
 import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
@@ -10,11 +12,14 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate, formatMonth } from '@/lib/format';
+import { nightlyHeadline, type NightlyJobsPanel } from '@/lib/nightlyJobs';
 import { useOnboarding } from '@/lib/onboarding';
 
 interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null; pending?: PendingDocument[]; last_day_reached?: boolean; ended?: boolean; lock_from?: string }
-const props = defineProps<{ periods: Period[]; can: { start: boolean; reopen: boolean } }>();
+const props = defineProps<{ periods: Period[]; can: { start: boolean; reopen: boolean }; nightly?: NightlyJobsPanel }>();
 const onboarding = useOnboarding();
+// Gap fix GA-05: the nightly jobs and when they last ran.
+const nightlyOpen = ref(false);
 
 const active = ref<string | null>(null);
 const reason = ref('');
@@ -58,6 +63,9 @@ async function reopen(p: Period): Promise<void> {
             :primary-label="(p) => (p.run && p.run.status !== 'reopened' ? 'Open the checklist' : canStart(p) ? 'Start close' : undefined)"
             @primary="(p) => (p.run && p.run.status !== 'reopened' ? router.visit(`/close/runs/${p.run.id}`) : start(p))"
         >
+            <template #toolbar>
+                <button v-if="nightly" type="button" class="ml-2 inline-flex h-8 items-center px-2 text-ui text-accent-text hover:underline" @click="nightlyOpen = true">{{ nightlyHeadline(nightly.jobs) }}</button>
+            </template>
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Period' }, { label: 'Close' }]">
                     <template #Period><StatusBadge :status="row.status" /></template>
@@ -76,5 +84,8 @@ async function reopen(p: Period): Promise<void> {
                 </div>
             </template>
         </QueueView>
+        <Drawer v-if="nightly" v-model:open="nightlyOpen" title="Nightly jobs" width="w-[520px]">
+            <NightlyJobs :panel="nightly" />
+        </Drawer>
     </AppLayout>
 </template>

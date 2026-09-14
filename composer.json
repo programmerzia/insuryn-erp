@@ -61,7 +61,7 @@
         ],
         "worker": [
             "Composer\\Config::disableProcessTimeout",
-            "@php artisan queue:work --queue=posting,batch,recon,default"
+            "npx concurrently --kill-others -n worker,scheduler \"php artisan queue:work --queue=posting,batch,recon,default\" \"php artisan schedule:work\""
         ],
         "scheduler": [
             "Composer\\Config::disableProcessTimeout",
