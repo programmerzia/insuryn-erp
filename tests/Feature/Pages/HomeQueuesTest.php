@@ -99,8 +99,9 @@ it('gives every seeded role its own work queues', function (string $role, array 
     'branch officer' => ['branch_officer', ['Installments due this week', 'Overdue premium', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Renewals due', 'Cover notes ending',
         'Agent cash not deposited', 'Policies with bounced premium']],
     'branch manager' => ['branch_manager', ['Installments due this week', 'Overdue premium', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Receipts to allocate',
-        'Referrals waiting for my decision', 'Renewals due', 'Cover notes ending', 'Agent cash not deposited', 'Producer licences expiring', 'Policies with bounced premium']],
-    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events', 'Commission to pay', 'Policies with bounced premium']],
+        'Referrals waiting for my decision', 'Renewals due', 'Cover notes ending', 'Agent cash not deposited', 'Producer licences expiring', 'Policies with bounced premium', 'Petty cash running low']],
+    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events', 'Commission to pay', 'Policies with bounced premium',
+        'Supplier bills to submit', 'Supplier bills due', 'Salaries to release']],
     'claims officer' => ['claims_officer', ['Claims awaiting reserve', 'Awaiting my approval', 'Payments to release']],
     'claims manager' => ['claims_manager', ['Claims awaiting reserve', 'Claims to settle', 'Awaiting my approval', 'Payments to release']],
     'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Waiting for my approval', 'Cash position', 'Payments to release', 'Failed accounting events',
@@ -143,7 +144,7 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
 
 it('shows each queue once for a user with several roles, and lands everyone on home after sign-in', function (): void {
     actingAs(($this->asRole)('branch_manager', 'branch_officer', 'accountant'))->get('/home', $this->headers)
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 17)); // 11 branch manager queues (the officer's are among them) + 5 accountant ones (GA-26) + policies with bounced premium, shown once (GA-14)
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 21)); // 12 branch manager queues (the officer's are among them, with petty cash running low) + 8 accountant ones (GA-26, consistency pass) + policies with bounced premium, shown once (GA-14)
     expect(config('fortify.home'))->toBe('/home');
     actingAs(($this->asRole)('auditor'))->get('/', $this->headers)->assertRedirect('/home');
 });

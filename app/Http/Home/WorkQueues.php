@@ -7,6 +7,7 @@ namespace App\Http\Home;
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Events\StuckAccountingEvents;
 use App\Http\Distribution\ProducersPageController;
+use App\Http\People\EmployeesPageController;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
@@ -54,7 +55,23 @@ final class WorkQueues
         'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'expense_vs_budget', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve'],
         'cfo' => ['expense_vs_budget', 'close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_release'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
+        // Consistency pass: HR prepares the monthly payroll and keeps the salary account and TIN every payslip needs.
+        'hr_manager' => ['payroll_to_prepare', 'employees_missing_bank', 'employees_missing_tin'],
     ];
+
+    /**
+     * Consistency pass: queues added to roles above without reordering their existing blocks — the accountant enters and submits supplier bills, pays the bills
+     * falling due and releases approved salaries; finance approves the payroll HR calculated; the branch manager, custodian of the branch float, sees it running low.
+     */
+    private const ADDED_BY_ROLE = [
+        'accountant' => ['bills_to_submit', 'bills_due', 'payroll_to_release'],
+        'finance_manager' => ['payroll_to_approve'],
+        'cfo' => ['payroll_to_approve'],
+        'branch_manager' => ['petty_cash_low'],
+    ];
+
+    /** ASSUMPTION: a float needs replenishing once the cash on hand is at or below this share of its limit (percent). */
+    private const PETTY_CASH_LOW_PERCENT = 50;
 
     /** Sidebar badge → the queue whose count it shows (lib/navigation.ts badge keys). */
     private const BADGES = ['receipts' => 'installments_due', 'policies' => 'lapsing_policies', 'bank' => ['receipts_to_record', 'unmatched_bank_lines'],
@@ -77,7 +94,7 @@ final class WorkQueues
         $keys = [];
         foreach (self::BY_ROLE as $role => $queues) {
             if (in_array($role, $roles, true)) {
-                array_push($keys, ...$queues);
+                array_push($keys, ...$queues, ...(self::ADDED_BY_ROLE[$role] ?? []));
             }
         }
         // GA-13: "Journals awaiting my approval" was always empty for someone who cannot approve; they follow the journals they submitted instead.
@@ -117,6 +134,7 @@ final class WorkQueues
             'close_progress' => $this->closeRun() === null ? 0 : (int) DB::table('period_close_tasks')->where('close_run_id', $this->closeRun()->id)->whereNotIn('status', ['done', 'skipped'])->count(),
             'cash_position' => 0,
             'expense_vs_budget' => count(array_filter($this->budgetRows(), fn (array $r): bool => ! $r['favourable'])),
+            'petty_cash_low' => count($this->lowFloats($userId)),
             default => $this->query($key, $userId)->count(),
         };
     }
@@ -162,8 +180,16 @@ final class WorkQueues
             'period_reopens' => ['Period reopen events', '/close', 'No period has been reopened.', ['Open the close', '/close']],
             'control_manual_postings' => ['Control-account manual postings', '/accounting/journals', 'No manual postings to control accounts.', ['Open journals', '/accounting/journals']],
             'bills_to_approve' => ['Bills to approve', '/payables/bills?view=awaiting_approval', 'No supplier bill is waiting for your approval.', ['Open supplier bills', '/payables/bills']],
-            'payment_runs_to_approve' => ['Payment runs to approve', '/payables/payment-runs', 'No payment run is waiting for your approval.', ['Open payment runs', '/payables/payment-runs']],
-            'payment_runs_to_release' => ['Payment runs to release', '/payables/payment-runs', 'No approved payment run is waiting to be released.', ['Open payment runs', '/payables/payment-runs']],
+            'payment_runs_to_approve' => ['Payment runs to approve', '/payables/payment-runs?f.status=pending_approval', 'No payment run is waiting for your approval.', ['Open payment runs', '/payables/payment-runs']],
+            'payment_runs_to_release' => ['Payment runs to release', '/payables/payment-runs?f.status=approved', 'No approved payment run is waiting to be released.', ['Open payment runs', '/payables/payment-runs']],
+            'bills_to_submit' => ['Supplier bills to submit', '/payables/bills?f.status=draft', 'None of your supplier bills is waiting in draft.', ['Enter a supplier bill', '/payables/bills/create']],
+            'bills_due' => ['Supplier bills due', '/payables/bills?view=open', 'No supplier bill falls due in the next seven days outside a payment run.', ['New payment run', '/payables/payment-runs/create']],
+            'payroll_to_prepare' => ['Payroll to prepare', '/people/payroll', 'Every month\'s payroll is calculated and approved.', ['Open payroll runs', '/people/payroll']],
+            'payroll_to_approve' => ['Payroll to approve', '/people/payroll?f.status=preview', 'No calculated payroll is waiting for your approval.', ['Open payroll runs', '/people/payroll']],
+            'payroll_to_release' => ['Salaries to release', '/people/payroll?f.status=posted', 'No approved payroll is waiting for its salary transfer.', ['Open payroll runs', '/people/payroll']],
+            'employees_missing_bank' => ['Employees without a salary account', '/people/employees?missing=bank', 'Every active employee has a salary account.', ['Open employees', '/people/employees']],
+            'employees_missing_tin' => ['Employees without a TIN', '/people/employees?missing=tin', 'Every active employee has a TIN.', ['Open employees', '/people/employees']],
+            'petty_cash_low' => ['Petty cash running low', '/petty-cash', 'Every petty cash float holds more than half its limit.', ['Open petty cash', '/petty-cash']],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
         $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
@@ -173,6 +199,7 @@ final class WorkQueues
             'close_progress' => $this->closeBlock($block),
             'cash_position' => $this->cashBlock($block, $today),
             'expense_vs_budget' => $this->budgetBlock($block),
+            'petty_cash_low' => $this->pettyCashBlock($block, $userId),
             default => [...$block, ...$this->rows($key, $userId)],
         };
 
@@ -319,8 +346,87 @@ final class WorkQueues
                 ->when($key === 'payment_runs_to_release', fn (Builder $q) => $q->where('r.status', 'approved')->where('r.approved_by', '<>', $userId)
                     ->when(! $this->permissions->has($userId, 'ap.release_payments'), fn (Builder $n) => $n->whereRaw('false')))
                 ->orderBy('r.pay_date')->select(['r.id', 'r.number', 'r.pay_date', 'r.item_count', 'r.total_minor', 'r.currency']),
+            // Consistency pass: bills this user entered that are still drafts (new, or sent back by the approver).
+            'bills_to_submit' => DB::table('ap_bills as b')->join('suppliers as s', 's.id', '=', 'b.supplier_id')->join('parties as p', 'p.id', '=', 's.party_id')
+                ->where('b.status', 'draft')->where('b.created_by', $userId)
+                ->orderBy('b.due_date')->select(['b.id', 'b.supplier_reference', 'p.display_name', 'b.due_date', 'b.payable_minor', 'b.currency']),
+            // Posted bills still owed, due within seven days or overdue, that no payment run in progress already pays.
+            'bills_due' => $this->within($userId, ['ap.prepare_payments'], DB::table('ap_bills as b'), 'b')->join('suppliers as s', 's.id', '=', 'b.supplier_id')->join('parties as p', 'p.id', '=', 's.party_id')
+                ->whereIn('b.status', ['posted', 'partially_paid'])->whereColumn('b.paid_minor', '<', 'b.payable_minor')->where('b.due_date', '<=', $today->addDays(7)->toDateString())
+                ->whereNotExists(fn (Builder $q) => $q->from('payment_run_items as it')->join('payment_runs as r', 'r.id', '=', 'it.run_id')->whereColumn('it.payable_id', 'b.id')
+                    ->whereNotIn('r.status', ['released', 'cancelled', 'rejected']))
+                ->orderBy('b.due_date')->select(['b.id', 'b.number', 'p.display_name', 'b.due_date', 'b.currency', DB::raw('b.payable_minor - b.paid_minor as outstanding_minor')]),
+            // The months from the first payroll (at most the last three) to this month whose regular payroll is not calculated yet or still a preview.
+            'payroll_to_prepare' => $this->payrollMonths($today),
+            'payroll_to_approve', 'payroll_to_release' => DB::table('payroll_runs as r')->where('r.status', $key === 'payroll_to_approve' ? 'preview' : 'posted')
+                ->when($key === 'payroll_to_approve', fn (Builder $q) => $q->where('r.prepared_by', '<>', $userId)
+                    ->when(! $this->permissions->has($userId, 'payroll.approve'), fn (Builder $n) => $n->whereRaw('false')))
+                ->when($key === 'payroll_to_release', fn (Builder $q) => $q->where(fn (Builder $a) => $a->whereNull('r.approved_by')->orWhere('r.approved_by', '<>', $userId))
+                    ->when(! $this->permissions->has($userId, 'payroll.pay'), fn (Builder $n) => $n->whereRaw('false')))
+                ->orderBy('r.period_year')->orderBy('r.period_month')->select(['r.id', 'r.number', 'r.period_year', 'r.period_month', 'r.employee_count', 'r.net_minor', 'r.currency']),
+            // Active employees without a salary account (payroll cannot be approved) or a TIN, within the branches of their current employment.
+            'employees_missing_bank', 'employees_missing_tin' => $this->withinColumns($userId, EmployeesPageController::AREA, DB::table('employees as e')
+                ->leftJoin('employments as m', fn ($j) => $j->on('m.employee_id', '=', 'e.id')->whereNull('m.effective_to')), 'e.entity_id', 'm.branch_id')
+                ->leftJoin('designations as d', 'd.id', '=', 'm.designation_id')->leftJoin('branches as br', 'br.id', '=', 'm.branch_id')
+                ->where('e.status', 'active')->whereNull($key === 'employees_missing_bank' ? 'e.account_no_masked' : 'e.tin_masked')
+                ->orderBy('e.joined_on')->orderBy('e.code')->select(['e.id', 'e.code', 'e.full_name', 'd.name as designation', 'br.code as branch', 'e.joined_on']),
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
+    }
+
+    private function payrollMonths(CarbonImmutable $today): Builder
+    {
+        $entityId = (string) DB::table('legal_entities')->orderBy('code')->value('id');
+        $currency = (string) (DB::table('legal_entities')->orderBy('code')->value('base_currency') ?? 'BDT');
+        $first = DB::table('payroll_runs')->where('entity_id', $entityId)->where('kind', 'regular')->where('status', '<>', 'cancelled')
+            ->orderBy('period_year')->orderBy('period_month')->first(['period_year', 'period_month']);
+        $thisMonth = $today->startOfMonth();
+        $from = $first === null ? $thisMonth : CarbonImmutable::create((int) $first->period_year, (int) $first->period_month, 1);
+        $from = $from < $thisMonth->subMonthsNoOverflow(2) ? $thisMonth->subMonthsNoOverflow(2) : $from;
+
+        return DB::query()->fromRaw("generate_series(?::date, ?::date, interval '1 month') as g(month)", [$from->toDateString(), $thisMonth->toDateString()])
+            ->leftJoin('payroll_runs as r', fn ($j) => $j->whereRaw("r.period_year = extract(year from g.month) and r.period_month = extract(month from g.month) and r.kind = 'regular' and r.status <> 'cancelled' and r.entity_id = ?", [$entityId]))
+            ->where(fn (Builder $q) => $q->whereNull('r.id')->orWhere('r.status', 'preview'))
+            ->orderBy('g.month')->select(['g.month', 'r.id', 'r.status', 'r.employee_count', 'r.net_minor'])->selectRaw('coalesce(r.currency, ?) as currency', [$currency]);
+    }
+
+    /**
+     * Active floats in the branches where this user spends petty cash whose cash on hand is at or below PETTY_CASH_LOW_PERCENT of the limit, lowest share first.
+     *
+     * @return list<array{id: string, code: string, name: string, branch: string, on_hand_minor: int, limit_minor: int, currency: string, pending: bool}>
+     */
+    private function lowFloats(string $userId): array
+    {
+        $floats = $this->withinColumns($userId, ['pettycash.spend'], DB::table('petty_cash_floats as f'), 'f.entity_id', 'f.branch_id')->join('branches as br', 'br.id', '=', 'f.branch_id')
+            ->where('f.status', 'active')->orderBy('br.code')->orderBy('f.code')->get(['f.id', 'f.code', 'f.name', 'br.code as branch', 'f.imprest_minor', 'f.currency']);
+        $pettyCash = app(\App\Modules\Finance\Expenses\Application\PettyCashService::class);
+        $low = [];
+        foreach ($floats as $f) {
+            $onHand = $pettyCash->cashOnHand((string) $f->id);
+            if ($onHand * 100 <= (int) $f->imprest_minor * self::PETTY_CASH_LOW_PERCENT) {
+                $low[] = ['id' => (string) $f->id, 'code' => (string) $f->code, 'name' => (string) $f->name, 'branch' => (string) $f->branch, 'on_hand_minor' => $onHand,
+                    'limit_minor' => (int) $f->imprest_minor, 'currency' => (string) $f->currency,
+                    'pending' => DB::table('petty_cash_replenishments')->where('float_id', $f->id)->where('status', 'pending_approval')->exists()];
+            }
+        }
+        usort($low, fn (array $a, array $b): int => $a['on_hand_minor'] * $b['limit_minor'] <=> $b['on_hand_minor'] * $a['limit_minor']);
+
+        return $low;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function pettyCashBlock(array $block, string $userId): array
+    {
+        $low = $this->lowFloats($userId);
+        $rows = array_map(fn (array $f): array => ['href' => "/petty-cash/{$f['id']}", 'cells' => ['float' => "{$f['code']} {$f['name']}", 'branch' => $f['branch'],
+            'replenishment' => $f['pending'] ? 'pending_approval' : null, 'on_hand' => PageSupport::money($f['on_hand_minor'], $f['currency']), 'limit' => PageSupport::money($f['limit_minor'], $f['currency'])]],
+            array_slice($low, 0, self::TOP));
+
+        return [...$block, 'count' => count($low), 'rows' => $rows, 'columns' => [['id' => 'float', 'label' => 'Float', 'type' => 'text'], ['id' => 'branch', 'label' => 'Branch', 'type' => 'text'],
+            ['id' => 'replenishment', 'label' => 'Replenishment', 'type' => 'status'], ['id' => 'on_hand', 'label' => 'On hand', 'type' => 'money'], ['id' => 'limit', 'label' => 'Limit', 'type' => 'money']]];
     }
 
     /**
@@ -449,6 +555,18 @@ final class WorkQueues
                 fn (\stdClass $r): array => ['href' => "/payables/bills/{$r->id}", 'cells' => ['bill' => $r->number, 'supplier' => $r->display_name, 'due' => $r->due_date, 'amount' => $money($r, 'payable_minor')]]],
             'payment_runs_to_approve', 'payment_runs_to_release' => [[$col('run', 'Payment run'), $col('bills', 'Bills'), $col('date', 'Pay date', 'date'), $col('amount', 'Total', 'money')],
                 fn (\stdClass $r): array => ['href' => "/payables/payment-runs/{$r->id}", 'cells' => ['run' => $r->number, 'bills' => (string) $r->item_count, 'date' => $r->pay_date, 'amount' => $money($r, 'total_minor')]]],
+            'bills_to_submit' => [[$col('reference', 'Supplier reference'), $col('supplier', 'Supplier'), $col('due', 'Due', 'date'), $col('amount', 'Payable', 'money')],
+                fn (\stdClass $r): array => ['href' => "/payables/bills/{$r->id}", 'cells' => ['reference' => $r->supplier_reference, 'supplier' => $r->display_name, 'due' => $r->due_date, 'amount' => $money($r, 'payable_minor')]]],
+            'bills_due' => [[$col('bill', 'Bill'), $col('supplier', 'Supplier'), $col('due', 'Due', 'date'), $col('amount', 'Outstanding', 'money')],
+                fn (\stdClass $r): array => ['href' => "/payables/bills/{$r->id}", 'cells' => ['bill' => $r->number, 'supplier' => $r->display_name, 'due' => $r->due_date, 'amount' => $money($r, 'outstanding_minor')]]],
+            'payroll_to_prepare' => [[$col('month', 'Month'), $col('status', 'Status', 'status'), $col('employees', 'Employees'), $col('amount', 'Net pay', 'money')],
+                fn (\stdClass $r): array => ['href' => $r->id === null ? '/people/payroll' : "/people/payroll/{$r->id}", 'cells' => ['month' => CarbonImmutable::parse((string) $r->month)->format('F Y'),
+                    'status' => $r->status ?? 'not_calculated', 'employees' => $r->id === null ? null : (string) $r->employee_count, 'amount' => $r->id === null ? null : $money($r, 'net_minor')]]],
+            'payroll_to_approve', 'payroll_to_release' => [[$col('month', 'Month'), $col('run', 'Payroll run'), $col('employees', 'Employees'), $col('amount', 'Net pay', 'money')],
+                fn (\stdClass $r): array => ['href' => "/people/payroll/{$r->id}", 'cells' => ['month' => CarbonImmutable::create((int) $r->period_year, (int) $r->period_month, 1)->format('F Y'),
+                    'run' => $r->number ?? 'Preview', 'employees' => (string) $r->employee_count, 'amount' => $money($r, 'net_minor')]]],
+            'employees_missing_bank', 'employees_missing_tin' => [[$col('employee', 'Employee'), $col('designation', 'Designation'), $col('branch', 'Branch'), $col('joined', 'Joined', 'date')],
+                fn (\stdClass $r): array => ['href' => "/people/employees/{$r->id}", 'cells' => ['employee' => "{$r->code} {$r->full_name}", 'designation' => $r->designation, 'branch' => $r->branch, 'joined' => $r->joined_on]]],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
     }

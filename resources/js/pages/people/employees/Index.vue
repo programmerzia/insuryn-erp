@@ -26,7 +26,8 @@ interface EmployeeRow {
 const props = defineProps<{ employees: Paginated<EmployeeRow>; filters: { missing: string }; options: PeopleOptions; defaultBranchId: string | null; can: { manage: boolean } }>();
 
 const active = ref<string | null>(null);
-const creating = ref(false);
+// Home's "Hire employee" opens the list with ?new=1: the hire drawer starts open for someone who may hire.
+const creating = ref(props.can.manage && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('new'));
 // New employees start in the user's branch and today's business date.
 const form = useForm({
     code: '', full_name: '', joined_on: useBusinessToday(), branch_id: props.defaultBranchId ?? props.options.branches[0]?.id ?? '', department_id: '', designation_id: '', grade_id: '', employment_type: 'permanent', basic: '',

@@ -27,6 +27,11 @@ final class HomeController
         ['label' => 'Record a receipt', 'href' => '/receipts/create', 'permissions' => ['receipt.create']],
         ['label' => 'Register a claim', 'href' => '/claims/create', 'permissions' => ['claim.register']],
         ['label' => 'New manual journal', 'href' => '/accounting/journals/create', 'permissions' => ['accounting.create_manual_journal', 'accounting.view_journals']],
+        // Consistency pass: the new modules' first steps (payables, people and payroll, petty cash).
+        ['label' => 'Enter a supplier bill', 'href' => '/payables/bills/create', 'permissions' => ['ap.enter_bills']],
+        ['label' => 'Record a petty cash voucher', 'href' => '/petty-cash', 'permissions' => ['pettycash.spend']],
+        ['label' => 'Hire employee', 'href' => '/people/employees?new=1', 'permissions' => ['hr.manage_employees']],
+        ['label' => 'Calculate payroll', 'href' => '/people/payroll', 'permissions' => ['payroll.prepare']],
     ];
 
     public function __invoke(Request $request, WorkQueues $queues, SetupWizard $setup, PermissionChecker $permissions): Response|RedirectResponse
