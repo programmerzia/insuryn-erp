@@ -2932,6 +2932,7 @@ Findings from `docs/gap-audit.md`, in the order given: GA-05, GA-15, GA-43, GA-0
   - `scripts/flow-audit.mjs` (not edited): step 11 clicks "Run the task" on each task; premium earning now opens the journal preview first, so a re-measured step 11 needs the confirm click. The added reconciliation tasks lengthen the checklist beyond its 14-iteration loop.
   - The journal page still has no Approve button once an approval policy applies; approval happens in the inbox.
   - Claim payment, release, reopen and period reopen approvals show their title, amount and link only (no `PreviewsApprovalSubject`); their postings, if any, show in the approve preview.
+
 ### Gap fixes W5 — setup wizard, date and amount defaults, cheques in clearing, bank reconciliation actions, recoveries — done
 Findings from docs/gap-audit.md, two commits (`fix(onboarding)`, `fix(collections)`). Assumptions A-211–A-220, decisions D-85–D-88.
 
