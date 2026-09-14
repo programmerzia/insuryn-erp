@@ -92,7 +92,7 @@ const itemColumns: DataColumn<ItemRow>[] = [
                 <section v-if="run.files.length > 0" class="mt-6 max-w-[700px]">
                     <h2 class="mb-2 text-ui font-medium">Bank files downloaded</h2>
                     <ul class="border border-line">
-                        <li v-for="f in run.files" :key="f.version" class="flex gap-4 border-b border-line px-3 py-2 text-ui last:border-b-0"><span>Version {{ f.version }}</span><span class="text-ink-2">{{ formatDateTime(f.generated_at) }}</span><span class="ml-auto font-mono text-dense text-ink-2">SHA-256 {{ f.sha256 }}…</span></li>
+                        <li v-for="f in run.files" :key="f.version" class="flex gap-4 border-b border-line px-3 py-2 text-ui last:border-b-0"><span>Version {{ f.version }}</span><span class="text-ink-2">{{ formatDateTime(f.generated_at) }}</span><span class="ml-auto num text-dense text-ink-2">SHA-256 {{ f.sha256 }}…</span></li>
                     </ul>
                 </section>
             </template>

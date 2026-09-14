@@ -141,7 +141,7 @@ const act = (action: string) => router.post(`/budgets/${props.budget.id}/${actio
             <FormLayout submit-label="Paste" :dirty="paste.isDirty" :processing="paste.processing" :error="(paste.errors as Record<string, string>).form" @submit="paste.transform((d) => ({ ...d, branch_id: branchId })).post(`/budgets/${budget.id}/paste`, { preserveScroll: true, onSuccess: () => { pasting = false; paste.reset(); } })" @cancel="pasting = false">
                 <p class="text-ui text-ink-2">Copy the rows from Excel: the account code, optionally its name, then twelve monthly amounts from {{ months[0] }} to {{ months[11] }}. They replace this branch's amounts for those accounts.</p>
                 <Field id="text" label="Rows" :error="paste.errors.text">
-                    <textarea id="text" v-model="paste.text" rows="14" class="w-full rounded-control border border-line-control bg-surface p-2 font-mono text-dense" placeholder="5300&#9;Salaries&#9;850000&#9;850000&#9;…" />
+                    <textarea id="text" v-model="paste.text" rows="14" class="w-full rounded-control border border-line-control bg-surface p-2 num text-dense" placeholder="5300&#9;Salaries&#9;850000&#9;850000&#9;…" />
                 </Field>
             </FormLayout>
         </Drawer>
