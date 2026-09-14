@@ -190,6 +190,17 @@ final class PartADemoSeeder extends Seeder
         ]), $accountant);
         $journals->submit($opening->id, $accountant);
         $journals->approve($opening->id, $finance);
+        // Demo realism: the paid-up capital a Bangladeshi non-life insurer must hold (BDT 40 crore minimum), invested in fixed deposits (FDRs), so the
+        // regulatory solvency snapshot shows a solvent company. Kept off the City Bank operating account so the bank reconciliation story is unchanged.
+        $fdr = (string) Str::uuid7();
+        DB::table('accounts')->insert(['id' => $fdr, 'tenant_id' => TenantContext::id(), 'entity_id' => $this->entityId, 'code' => '1300', 'name' => 'Fixed Deposits (FDR)',
+            'type' => 'asset', 'normal_side' => 'debit', 'is_postable' => true, 'is_control' => false, 'control_subledger' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $capital = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Paid-up capital in fixed deposits', JournalKind::Manual, 'Opening balance: paid-up share capital held in FDRs', 'BDT', [
+            new ManualJournalLine($fdr, Side::Debit, 60_00_00_000_00, ['branch' => $this->branchId], 'FDRs at Sonali, Dutch-Bangla and BRAC Bank'),
+            new ManualJournalLine($shareCapital, Side::Credit, 60_00_00_000_00, ['branch' => $this->branchId], 'Paid-up share capital'),
+        ]), $accountant);
+        $journals->submit($capital->id, $accountant);
+        $journals->approve($capital->id, $finance);
 
         // People: five customers, and the two producers.
         $parties = app(PartyService::class);
