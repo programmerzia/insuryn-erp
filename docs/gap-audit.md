@@ -65,8 +65,9 @@ Columns in the tables below:
 | GA-05 | `0c51620` fix(close) | Fixed |
 | GA-15, GA-43, GA-04, GA-09 | `f5eb391` fix(close) | Fixed. GA-04: claim payment and reopen approvals show no lines preview yet. |
 | GA-24 | `0f99fa7` | Partly: cancel date default, refund/collect next step and caption fixed; "write off small balance" not built yet. |
-| GA-14, GA-18, GA-19, GA-21, GA-27 | — | In progress (W5, being ported onto main). |
-| GA-16, GA-26, GA-29, GA-40 | — | Open (next wave). |
+| GA-19, GA-18 | `91cd588` fix(onboarding) | Fixed. GA-19's payout preview is the statement run's draft (the Phase 1 payout drawer was removed by GA-10). |
+| GA-14, GA-27, GA-21 | `88c7ad4` fix(collections) | Fixed. GA-14: clearing applies once a tenant maps `cheques_in_clearing` (A-215, verify). |
+| GA-16, GA-26, GA-29, GA-40 | — | In progress (W6). |
 
 ## 1. Fix first (top 15)
 
