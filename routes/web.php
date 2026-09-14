@@ -329,3 +329,5 @@ Route::middleware('auth')->group(function (): void {
 // People and Payroll MVP (addendum §B.9–§B.11): employees, payroll runs, payslips, payroll settings.
 require __DIR__.'/people.php';
 require __DIR__.'/reinsurance.php'; // reinsurance MVP (G4)
+// Slices 2.3/2.4 accounts payable.
+require __DIR__.'/payables.php';

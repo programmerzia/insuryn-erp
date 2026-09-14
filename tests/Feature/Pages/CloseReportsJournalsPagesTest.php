@@ -45,7 +45,7 @@ it('runs the month-end close from the close screens and reopens a locked period'
     $task = fn (string $code): string => asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('period_close_tasks')->where('close_run_id', $runId)->where('code', $code)->value('id'));
 
     actingAs($this->admin)->post("/close/tasks/{$task('trial_balance')}/execute", [], $this->headers)->assertSessionHasErrors('form'); // waits for its dependencies
-    foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation'] as $code) { // GA-43: four more reconciliations
+    foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'ap_reconciliation'] as $code) { // GA-43: four more reconciliations
         actingAs($this->admin)->post("/close/tasks/{$task($code)}/execute", [], $this->headers)->assertSessionHasNoErrors();
     }
     actingAs($this->admin)->post("/close/tasks/{$task('accruals')}/skip", ['reason' => 'No accruals this month'], $this->headers)->assertSessionHasNoErrors();
@@ -54,7 +54,7 @@ it('runs the month-end close from the close screens and reopens a locked period'
     }
 
     actingAs($this->admin)->get("/close/runs/{$runId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('close/Run')
-        ->where('run.status', 'completed')->has('tasks', 15)->where('tasks.7.code', 'accruals')->where('tasks.7.status', 'skipped')->where('tasks.0.summary', 'Every policy on cover has its earning row.'));
+        ->where('run.status', 'completed')->has('tasks', 16)->where('tasks.7.code', 'accruals')->where('tasks.7.status', 'skipped')->where('tasks.0.summary', 'Every policy on cover has its earning row.'));
 
     actingAs($this->admin)->post("/close/periods/{$this->september}/reopen", ['reason' => 'Late invoice'], $this->headers)->assertSessionHasNoErrors();
     expect(asTenant($this->ctx['tenant_id'], fn () => DB::table('fiscal_periods')->where('id', $this->september)->value('status')))->toBe('open');

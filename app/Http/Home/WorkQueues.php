@@ -48,8 +48,9 @@ final class WorkQueues
         // Flow fix X3: the claims manager decides settlements of reserved claims; finance releases requested claim payments.
         'claims_manager' => ['claims_awaiting_reserve', 'claims_to_settle', 'claim_approvals', 'payments_to_release'],
         // GA-08: the finance manager and CFO requeue accounting events that did not post, so they see them too.
+        // Slices 2.3/2.4: the finance manager approves supplier bills and payment runs; the CFO releases approved runs.
         // GA-26: they also decide referrals (A-86) and release refunds (receipt.refund_release).
-        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release'],
+        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve'],
         'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
     ];
@@ -157,6 +158,9 @@ final class WorkQueues
             'recent_reversals' => ['Recent reversals and adjustments', '/accounting/journals', 'No reversals or adjustments in the last 30 days.', ['Open journals', '/accounting/journals']],
             'period_reopens' => ['Period reopen events', '/close', 'No period has been reopened.', ['Open the close', '/close']],
             'control_manual_postings' => ['Control-account manual postings', '/accounting/journals', 'No manual postings to control accounts.', ['Open journals', '/accounting/journals']],
+            'bills_to_approve' => ['Bills to approve', '/payables/bills?view=awaiting_approval', 'No supplier bill is waiting for your approval.', ['Open supplier bills', '/payables/bills']],
+            'payment_runs_to_approve' => ['Payment runs to approve', '/payables/payment-runs', 'No payment run is waiting for your approval.', ['Open payment runs', '/payables/payment-runs']],
+            'payment_runs_to_release' => ['Payment runs to release', '/payables/payment-runs', 'No approved payment run is waiting to be released.', ['Open payment runs', '/payables/payment-runs']],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
         $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
@@ -300,6 +304,17 @@ final class WorkQueues
             'control_manual_postings' => DB::table('journal_lines as l')->join('journals as j', 'j.id', '=', 'l.journal_id')->join('accounts as a', 'a.id', '=', 'l.account_id')
                 ->where('a.is_control', true)->whereIn('j.kind', ['manual', 'adjustment'])->where('j.status', 'posted')
                 ->orderByDesc('j.posting_date')->select(['j.id', 'j.number', 'j.posting_date', 'a.code', 'a.name', 'l.side', 'l.amount_minor', 'j.currency']),
+            // Slices 2.3/2.4: supplier bills and payment runs someone else prepared (maker ≠ checker; the release also ≠ the approver).
+            'bills_to_approve' => DB::table('ap_bills as b')->join('suppliers as s', 's.id', '=', 'b.supplier_id')->join('parties as p', 'p.id', '=', 's.party_id')
+                ->where('b.status', 'pending_approval')->where('b.created_by', '<>', $userId)->where(fn (Builder $q) => $q->whereNull('b.submitted_by')->orWhere('b.submitted_by', '<>', $userId))
+                ->when(! $this->permissions->has($userId, 'ap.approve_bills'), fn (Builder $q) => $q->whereRaw('false'))
+                ->orderBy('b.due_date')->select(['b.id', 'b.number', 'p.display_name', 'b.due_date', 'b.payable_minor', 'b.currency']),
+            'payment_runs_to_approve', 'payment_runs_to_release' => DB::table('payment_runs as r')->where('r.created_by', '<>', $userId)
+                ->when($key === 'payment_runs_to_approve', fn (Builder $q) => $q->where('r.status', 'pending_approval')
+                    ->when(! $this->permissions->has($userId, 'ap.approve_payments'), fn (Builder $n) => $n->whereRaw('false')))
+                ->when($key === 'payment_runs_to_release', fn (Builder $q) => $q->where('r.status', 'approved')->where('r.approved_by', '<>', $userId)
+                    ->when(! $this->permissions->has($userId, 'ap.release_payments'), fn (Builder $n) => $n->whereRaw('false')))
+                ->orderBy('r.pay_date')->select(['r.id', 'r.number', 'r.pay_date', 'r.item_count', 'r.total_minor', 'r.currency']),
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
     }
@@ -426,6 +441,10 @@ final class WorkQueues
             'control_manual_postings' => [[$col('journal', 'Journal'), $col('account', 'Account'), $col('date', 'Date', 'date'), $col('amount', 'Amount', 'money')],
                 fn (\stdClass $r): array => ['href' => "/accounting/journals/{$r->id}", 'cells' => ['journal' => $r->number, 'account' => "{$r->code} {$r->name}", 'date' => $r->posting_date,
                     'amount' => ($r->side === 'credit' ? '-' : '').$money($r, 'amount_minor')]]],
+            'bills_to_approve' => [[$col('bill', 'Bill'), $col('supplier', 'Supplier'), $col('due', 'Due', 'date'), $col('amount', 'Payable', 'money')],
+                fn (\stdClass $r): array => ['href' => "/payables/bills/{$r->id}", 'cells' => ['bill' => $r->number, 'supplier' => $r->display_name, 'due' => $r->due_date, 'amount' => $money($r, 'payable_minor')]]],
+            'payment_runs_to_approve', 'payment_runs_to_release' => [[$col('run', 'Payment run'), $col('bills', 'Bills'), $col('date', 'Pay date', 'date'), $col('amount', 'Total', 'money')],
+                fn (\stdClass $r): array => ['href' => "/payables/payment-runs/{$r->id}", 'cells' => ['run' => $r->number, 'bills' => (string) $r->item_count, 'date' => $r->pay_date, 'amount' => $money($r, 'total_minor')]]],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
     }

@@ -91,6 +91,25 @@ final class ReasonMessages
         'RI_FACULTATIVE_INVALID' => 'Enter a share above 0% and up to 100%, a premium above zero and a commission between 0% and 100%.',
         'RI_SHARE_EXCEEDS_RISK' => 'This placement would cede more than the policy\'s sum insured. Reduce the share or the ceded sum insured.',
         'RI_QUARTER_INVALID' => 'Choose a quarter from 1 to 4 of a calendar year.',
+        // Slices 2.3/2.4 accounts payable.
+        'SUPPLIER_CODE_TAKEN' => 'Another supplier already uses this code. Choose a different code.',
+        'SUPPLIER_CATEGORY_UNKNOWN' => 'Choose one of the listed supplier categories; it decides the VAT and the taxes deducted at source.',
+        'SUPPLIER_NAME_REQUIRED' => 'Give the supplier a name, or choose a party that is already set up.',
+        'SUPPLIER_EXISTS' => 'This party is already a supplier. Open it from the suppliers list.',
+        'INVALID_ACCOUNT' => 'Choose an active account that takes postings and is not a control account.',
+        'SUPPLIER_STATUS_INVALID' => 'A supplier is active, on hold or blocked.',
+        'SUPPLIER_NOT_PAYABLE' => 'This supplier is on hold or blocked, so its bills cannot be entered or paid. Make the supplier active first.',
+        'INVALID_DUE_DATE' => 'The due date cannot be before the bill date.',
+        'DUPLICATE_SUPPLIER_BILL' => 'This supplier already has a bill with that invoice number. Check it is not the same bill entered twice.',
+        'BILL_LINES_REQUIRED' => 'Add at least one line with an expense account and an amount.',
+        'BILL_NOT_CANCELLABLE' => 'Only a draft or a posted bill with nothing paid can be cancelled.',
+        'BILL_IN_PAYMENT_RUN' => 'This bill is in a payment run waiting to be released. Cancel that run first, or pay it.',
+        'INVALID_BILL_TRANSITION' => 'This bill has already moved on. Refresh the page to see where it stands.',
+        'PAYMENT_RUN_EMPTY' => 'Choose at least one bill to pay.',
+        'BILL_NOT_PAYABLE' => 'Only posted bills with an amount still to pay can go into a payment run. Refresh the list of due bills.',
+        'SUPPLIER_BANK_ACCOUNT_MISSING' => 'A supplier in this run has no bank account to pay into. Add it on the supplier page first.',
+        'INVALID_PAYMENT_RUN_TRANSITION' => 'This payment run has already moved on. Refresh the page to see where it stands.',
+        'PAYMENT_RUN_NOT_RELEASED' => 'The bank file is available once the payment run is released.',
     ];
 
     /** @var list<string> reasons worded below from the amounts or dates in the domain message */

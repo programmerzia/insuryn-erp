@@ -56,6 +56,9 @@ return [
             'proposal_referral' => ['label' => 'Underwriting referral', 'permission' => 'underwriting.decide'],
             // Gap fixes W7 (GA-24): writing off a cancelled policy's small unpaid premium. Without a policy, any other holder of receipt.write_off_approve (A-233).
             'premium_write_off' => ['label' => 'Premium write-off', 'permission' => 'receipt.write_off_approve'],
+            // Slices 2.3/2.4 accounts payable: an approval limit adds approvers above an amount; without one, one checker other than the maker decides.
+            'ap_bill' => ['label' => 'Supplier bill', 'permission' => 'ap.approve_bills'],
+            'payment_run' => ['label' => 'Supplier payment run', 'permission' => 'ap.approve_payments'],
         ],
     ],
     // Gap fixes W7 (GA-24): "Write off small balance" on a cancelled policy.
@@ -308,5 +311,29 @@ return [
          * paid-up capital for a non-life insurer, a share of net premium over the last four quarters and a share of net claims incurred over them.
          */
         'solvency' => ['minimum_capital_minor' => 40_00_00_000_00, 'premium_factor_bp' => 2000, 'claims_factor_bp' => 3000],
+    ],
+
+    /*
+     * Slices 2.3/2.4 accounts payable (addendum v2 B.4).
+     * ASSUMPTION A-243 (CQ-B3/CQ-B4 unanswered): VAT on supplier bills, VAT deducted at source (VDS) and income tax deducted at source (TDS/AIT) per
+     * supplier category, in basis points of the bill line's net amount. PLACEHOLDER rates from the Bangladesh VAT and Supplementary Duty Act 2012 SRO
+     * schedules and the Income Tax Act 2023 withholding sections as commonly applied; VERIFY every rate with the insurer's tax adviser before use.
+     * VDS is never more than the line's VAT.
+     * ASSUMPTION A-244: VAT on supplier bills is not recoverable (it is part of the expense) unless input_vat_recoverable is true.
+     */
+    'payables' => [
+        'input_vat_recoverable' => (bool) env('ERP_AP_INPUT_VAT_RECOVERABLE', false),
+        'default_payment_terms_days' => 30,
+        'categories' => [
+            'rent' => ['label' => 'Office rent (landlord)', 'vat_bp' => 1500, 'vds_bp' => 1500, 'tds_bp' => 500],
+            'utility' => ['label' => 'Utilities (electricity, water, gas)', 'vat_bp' => 500, 'vds_bp' => 0, 'tds_bp' => 0],
+            'telecom' => ['label' => 'Telephone and internet', 'vat_bp' => 1500, 'vds_bp' => 0, 'tds_bp' => 0],
+            'repairs' => ['label' => 'Garage and repair services', 'vat_bp' => 1000, 'vds_bp' => 1000, 'tds_bp' => 500],
+            'professional' => ['label' => 'Surveyors and professional services', 'vat_bp' => 1500, 'vds_bp' => 1500, 'tds_bp' => 1000],
+            'supplies' => ['label' => 'Stationery and supplies', 'vat_bp' => 500, 'vds_bp' => 500, 'tds_bp' => 500],
+            'other' => ['label' => 'Other suppliers', 'vat_bp' => 1500, 'vds_bp' => 1500, 'tds_bp' => 500],
+        ],
+        // ASSUMPTION A-245 (CQ-I1 unanswered): a generic BEFTN-style CSV until the bank names its upload format.
+        'bank_file_format' => 'beftn_csv',
     ],
 ];

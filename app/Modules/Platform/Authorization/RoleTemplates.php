@@ -59,9 +59,13 @@ final class RoleTemplates
         // ASSUMPTION A-287 (People/Payroll MVP): the finance manager (and CFO) approve and post the payroll the HR manager calculated (SoD object rule).
         'payroll.approve',
         // ASSUMPTION A-257 (reinsurance MVP): the finance manager (and CFO) set up treaties and reinsurers, prepare reinsurer statements and place facultative cover.
-        'ri.manage_treaties', 'ri.place_facultative'];
+        'ri.manage_treaties', 'ri.place_facultative',
+        // ASSUMPTION A-242 (slices 2.3/2.4): the finance manager (and CFO) approve supplier bills and payment runs the accountant prepared, and keep suppliers.
+        'ap.manage_suppliers', 'ap.approve_bills', 'ap.approve_payments'];
     // ASSUMPTION A-268 (market gap G5): the CFO approves and posts the technical provisions run, never one they prepared (SoD object rule).
-    private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve'];
+    private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve',
+        // ASSUMPTION A-242 (slice 2.4): the CFO releases supplier payment runs the finance manager approved (never one they approved: SoD object rule).
+        'ap.release_payments'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */
     public static function all(): array
@@ -97,7 +101,10 @@ final class RoleTemplates
                 // ASSUMPTION A-219 (gap fix GA-27): the accountant who reconciles the bank records an unknown credit on the statement as a receipt held in suspense.
                 'receipt.create',
                 // ASSUMPTION A-287 (People/Payroll MVP): the accountant releases the salary bank transfer of the payroll the finance manager approved.
-                'payroll.pay']],
+                'payroll.pay',
+                // ASSUMPTION A-242 (slices 2.3/2.4): the accountant keeps suppliers, enters supplier bills and prepares payment runs (not in ACCOUNTANT, so the finance
+                // manager and CFO built on it never enter the bills they approve).
+                'ap.manage_suppliers', 'ap.enter_bills', 'ap.prepare_payments']],
             'finance_manager' => ['name' => 'Finance Manager', 'permissions' => $financeManager],
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
             // ASSUMPTION A-287 (People/Payroll MVP): HR keeps the employee records and the payroll rules and calculates the monthly payroll; finance approves it.

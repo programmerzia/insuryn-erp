@@ -36,6 +36,7 @@ const TASK_NAMES: Record<string, string> = {
     upr_reconciliation: 'Unearned premium reconciliation',
     vat_reconciliation: 'VAT payable reconciliation',
     stamp_duty_reconciliation: 'Stamp duty payable reconciliation',
+    ap_reconciliation: 'Accounts payable reconciliation',
     year_end_close: 'Year-end close to retained earnings',
     technical_provisions: 'Technical provisions', // market gap G5
     // Reinsurance MVP (G4).
@@ -65,6 +66,7 @@ const queueFor = (code: string): { label: string; href: string } | null =>
         ri_unearned_premium: { label: 'Cessions', href: '/reinsurance/cessions' },
         ri_balances_reconciliation: { label: 'Reinsurer statements', href: '/reinsurance/statements' },
         ri_claims_reconciliation: { label: 'Claims bordereau', href: `/reports/ri-claims-bordereau?from=${props.run.starts}&to=${end.value}` },
+        ap_reconciliation: { label: 'AP ageing', href: `/reports/ap-ageing?as_of=${end.value}` },
         year_end_close: { label: 'Profit and loss', href: `/reports/profit-and-loss?from=${props.run.starts}&to=${end.value}` },
         accruals: { label: 'New manual journal', href: '/accounting/journals/create' },
         technical_provisions: { label: 'Technical provisions', href: '/regulatory/provisions' }, // market gap G5

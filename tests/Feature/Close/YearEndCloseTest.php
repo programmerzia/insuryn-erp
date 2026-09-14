@@ -138,7 +138,7 @@ it('adds the year-end close task only to the close of the fiscal year\'s last mo
         expect(array_keys($june))->toContain('year_end_close')->and(array_keys($codes($mayRun)))->not->toContain('year_end_close')
             ->and(array_search('year_end_close', array_keys($june), true))->toBe(array_search('trial_balance', array_keys($june), true) - 1)
             ->and($june['year_end_close'])->toBe(['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation',
-                'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'accruals'])
+                'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'ap_reconciliation', 'accruals'])
             ->and($june['trial_balance'])->toContain('year_end_close')
             ->and(app(CloseTaskCatalogue::class)->find('year_end_close')->permission)->toBe('periods.lock');
 

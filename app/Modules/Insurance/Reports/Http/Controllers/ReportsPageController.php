@@ -49,6 +49,8 @@ final class ReportsPageController
         // Reinsurance MVP (G4): bordereaux (ReinsuranceReportTables::CATALOGUE).
         ['key' => 'ri-premium-bordereau', 'title' => 'Premium bordereau', 'description' => 'Premium ceded to each reinsurer in a period, per policy, with commission and the net due.', 'filter' => 'range'],
         ['key' => 'ri-claims-bordereau', 'title' => 'Claims bordereau', 'description' => 'Reinsurers\' shares of claim reserves and payments recorded in a period.', 'filter' => 'range'],
+        // Slice 2.3 accounts payable.
+        ['key' => 'ap-ageing', 'title' => 'AP ageing', 'description' => 'What is owed to suppliers per bill at a date, by days past due, reconciled to accounts payable.', 'filter' => 'as_of'],
     ];
 
     /** Gap fix GA-12 (ASSUMPTION A-175): the reports a claims desk reads with reports.claims alone; every other report needs reports.financial. */
@@ -161,6 +163,7 @@ final class ReportsPageController
             'profit-and-loss' => $this->profitAndLoss($entity['id'], $from, $to, $money),
             'balance-sheet' => $this->balanceSheet($entity['id'], $asOf, $money),
             'ri-premium-bordereau', 'ri-claims-bordereau' => \App\Modules\Insurance\Reinsurance\Http\Controllers\ReinsuranceReportTables::table($report, $entity['id'], $from, $to, $money), // reinsurance MVP
+            'ap-ageing' => $this->apAgeing($entity['id'], $asOf, $money),
             'account-activity' => $this->accountActivity($entity['id'], $request, $from, $to, $money),
             'suspense-ageing', 'agent-cash', 'commission-statements', 'trial-balance' => OperationalReportTables::table($report, $entity['id'], $from, $to, $asOf, $money), // gap audit GA-34
             default => abort(404),
@@ -217,6 +220,35 @@ final class ReportsPageController
                     ['cells' => ['item' => 'Unearned premium in this register', 'amount' => $money($recon['register_minor'])], 'link' => null],
                     ['cells' => ['item' => 'Unearned premium reserve in the ledger', 'amount' => $money($recon['gl_minor'])], 'link' => $glLink],
                     ['cells' => ['item' => 'Variance', 'amount' => $money($recon['variance_minor'])], 'link' => null],
+                ])]);
+    }
+
+    /**
+     * @param callable(int): string $money
+     * @return array<string, mixed>
+     */
+    private function apAgeing(string $entityId, CarbonImmutable $asOf, callable $money): array
+    {
+        $result = app(\App\Modules\Finance\Payables\Application\PayablesQuery::class)->ageing($entityId, $asOf);
+        $buckets = \App\Modules\Finance\Payables\Application\PayablesQuery::BUCKETS;
+        $ledger = -1 * (int) \Illuminate\Support\Facades\DB::table('journal_lines as l')->join('journals as j', 'j.id', '=', 'l.journal_id')
+            ->join('account_role_mappings as m', 'm.account_id', '=', 'l.account_id')->where('m.role_code', 'accounts_payable')->whereNull('m.effective_to')
+            ->whereIn('j.status', ['posted', 'reversed'])->where('j.posting_date', '<=', $asOf->toDateString())->whereRaw("l.dims_ext->>'payee_party' is not null")
+            ->sum(\Illuminate\Support\Facades\DB::raw("case when l.side = 'debit' then l.amount_minor else -l.amount_minor end"));
+        $bucketColumns = array_map(fn (string $key, string $label): array => [$key, $label], array_keys($buckets), $buckets);
+
+        return self::table('AP ageing', 'as_of', [['supplier', 'Supplier'], ['number', 'Bill'], ['reference', 'Invoice'], ['due_date', 'Due'], ['days_past_due', 'Days past due', 'right'],
+            ['bucket', 'Bucket'], ['outstanding', 'Outstanding', 'right']],
+            array_map(fn (array $r): array => ['cells' => ['supplier' => $r['supplier'], 'number' => $r['number'], 'reference' => $r['supplier_reference'], 'due_date' => $r['due_date'],
+                'days_past_due' => $r['days_past_due'], 'bucket' => $buckets[$r['bucket']], 'outstanding' => $money($r['outstanding_minor'])], 'link' => "/payables/bills/{$r['bill_id']}",
+                'links' => ['supplier' => "/payables/suppliers/{$r['supplier_id']}"]], $result['rows']),
+            ['outstanding' => $money($result['total_minor'])],
+            [self::summary('By supplier', [['group', 'Supplier'], ...$bucketColumns, ['total', 'Total']],
+                array_map(fn (array $g): array => ['cells' => ['group' => $g['supplier']] + array_map($money, $g['buckets']) + ['total' => $money($g['total_minor'])], 'link' => "/payables/suppliers/{$g['supplier_id']}"], $result['by_supplier'])),
+                self::summary('Reconciliation to the ledger', [['item', ''], ['amount', 'Amount']], [
+                    ['cells' => ['item' => 'Owed to suppliers in this ageing', 'amount' => $money($result['total_minor'])], 'link' => null],
+                    ['cells' => ['item' => 'Accounts payable to suppliers in the ledger', 'amount' => $money($ledger)], 'link' => null],
+                    ['cells' => ['item' => 'Variance', 'amount' => $money($result['total_minor'] - $ledger)], 'link' => null],
                 ])]);
     }
 

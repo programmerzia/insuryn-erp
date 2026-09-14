@@ -66,9 +66,9 @@ it('starts a close run with the §5.7 tasks in order with their dependencies, on
             [7, 'upr_reconciliation', ['premium_earning']], [8, 'accruals', []], [9, 'suspense_reconciliation', ['suspense_review']], [10, 'vat_reconciliation', []],
             [11, 'stamp_duty_reconciliation', []],
             // Reinsurance MVP (G4).
-            [11, 'ri_unearned_premium', ['premium_earning']], [11, 'ri_balances_reconciliation', []], [11, 'ri_claims_reconciliation', []],
+            [11, 'ri_unearned_premium', ['premium_earning']], [11, 'ri_balances_reconciliation', []], [11, 'ri_claims_reconciliation', []], [11, 'ap_reconciliation', []],
             [13, 'trial_balance', ['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation',
-                'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation', 'accruals']],
+                'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation', 'ap_reconciliation', 'accruals']],
             [14, 'financial_statements', ['trial_balance']], [15, 'sign_off', ['trial_balance', 'financial_statements']], [16, 'period_lock', ['sign_off']],
         ])
             ->and($tasks->pluck('status')->unique()->all())->toBe(['pending'])
@@ -85,7 +85,7 @@ it('closes a clean month end to end: earning, checks, soft-lock at the trial bal
         expect(thrownBy(fn () => $close->execute(($this->task)($runId, 'premium_reconciliation'), $this->world['admin']), BusinessRuleViolation::class)->reasonCode)->toBe('DEPENDENCIES_OPEN');
 
         foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation',
-            'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation'] as $code) {
+            'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation', 'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation', 'ap_reconciliation'] as $code) {
             $close->execute(($this->task)($runId, $code), $this->world['admin']);
         }
         $close->execute(($this->task)($runId, 'accruals'), $this->world['admin'], 'No accruals this month');

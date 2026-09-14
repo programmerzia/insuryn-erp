@@ -66,11 +66,14 @@ function populateEveryTenantTable(array $ctx): void
     $approver = userWithPermissions($ctx['tenant_id'], ['commission.approve', 'claim.approve', 'claim.pay_request', 'claim.close']);
     $payer = userWithPermissions($ctx['tenant_id'], ['commission.pay', 'claim.pay_release', 'receipt.refund_release', 'periods.lock']);
     $officer = userWithPermissions($ctx['tenant_id'], ['claim.register', 'claim.reserve', 'receipt.refund_request']);
+    // Slices 2.3/2.4 accounts payable: a clerk enters and prepares, an approver approves, a third person releases.
+    $ap = [userWithPermissions($ctx['tenant_id'], ['ap.manage_suppliers', 'ap.enter_bills', 'ap.prepare_payments']),
+        userWithPermissions($ctx['tenant_id'], ['ap.approve_bills', 'ap.approve_payments']), userWithPermissions($ctx['tenant_id'], ['ap.release_payments'])];
     $planId = asTenant($ctx['tenant_id'], fn (): string => app(CommissionPlanService::class)->create('P10', 'Plan', 1000, null, null, $planner)->id);
     $world = seedInsuranceWorld($ctx, 'monthly', true, $planId);
     approvalPolicy($ctx['tenant_id'], 'claim_payment', ['min_amount_minor' => 1_000_000], [['permission' => 'periods.lock']]);
 
-    asTenant($ctx['tenant_id'], function () use ($ctx, $world, $maker, $checker, $approver, $payer, $officer): void {
+    asTenant($ctx['tenant_id'], function () use ($ctx, $world, $maker, $checker, $approver, $payer, $officer, $ap): void {
         $d = fn (string $date): CarbonImmutable => CarbonImmutable::parse($date);
         DB::table('dimension_requirements')->insert(['tenant_id' => $ctx['tenant_id'], 'event_type' => 'PREMIUM_RECEIVED', 'dimension_code' => 'branch']);
         app(PartyService::class)->addBankAccount($world['policyholder_id'], 'City Bank', '0012345678', true, $world['admin']);
@@ -103,6 +106,20 @@ function populateEveryTenantTable(array $ctx): void
         $bankLines = DB::table('journal_lines as l')->join('journals as j', 'j.id', '=', 'l.journal_id')->where('l.account_id', $gl)->where('l.side', 'debit')
             ->whereIn('j.source_id', DB::table('receipt_allocations')->where('receipt_id', $cheque->id)->pluck('id')->push($cheque->id))->pluck('l.id')->map(fn ($id): string => (string) $id)->all();
         app(BankMatcher::class)->match((string) DB::table('bank_statement_lines')->value('id'), $bankLines === [] ? [$bankLine] : array_values($bankLines), $world['admin']);
+
+        // Slices 2.3/2.4: suppliers, ap_bills, ap_bill_lines, payment_runs, payment_run_items, bank_payment_files.
+        $supplier = app(App\Modules\Finance\Payables\Application\SupplierService::class)->create($ctx['entity_id'], ['code' => 'SUP-ISO', 'name' => 'Isolation Supplier', 'category' => 'supplies',
+            'bank_name' => 'Sonali Bank', 'routing_no' => '200270003', 'account_name' => 'Isolation Supplier', 'account_no' => '0001234567'], $ap[0]);
+        $apBills = app(App\Modules\Finance\Payables\Application\BillService::class);
+        $apBill = $apBills->create($ctx['branch_id'], $supplier->id, 'INV-ISO', $d('2026-09-03'), $d('2026-09-10'), null, [['description' => 'Stationery', 'account_id' => $ctx['accounts']['ap_expense'], 'net_minor' => 100_000]], $ap[0]);
+        $apBills->submit($apBill->id, $ap[0]);
+        $apBills->approve($apBill->id, $ap[1]);
+        $apRuns = app(App\Modules\Finance\Payables\Application\PaymentRunService::class);
+        $apRun = $apRuns->create($ctx['entity_id'], $bankAccount->id, $d('2026-09-12'), [$apBill->id], $ap[0]);
+        $apRuns->submit($apRun->id, $ap[0]);
+        $apRuns->approve($apRun->id, $ap[1]);
+        $apRuns->release($apRun->id, $ap[2]);
+        app(App\Modules\Finance\Payables\Application\BankPaymentFile::class)->generate($apRun->id, $ap[2]);
 
         // GA-10: statements come only from the monthly statement run.
         $runIds = app(\App\Modules\Insurance\Commission\Application\CommissionStatementRun::class)->prepare($ctx['entity_id'], $d('2026-09-30'), $approver);

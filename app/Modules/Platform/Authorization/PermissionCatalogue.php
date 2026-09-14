@@ -17,6 +17,8 @@ final class PermissionCatalogue
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'regulatory' => 'Regulatory returns', 'provisions' => 'Technical provisions', 'audit' => 'Audit', 'platform' => 'Administration',
         'numbering' => 'Numbering', 'ri' => 'Reinsurance', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
+        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
+        'numbering' => 'Numbering', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
     /** @var array<string, array{0: string, 1: string}> code → [label, one-line help] */
@@ -55,6 +57,12 @@ final class PermissionCatalogue
         'bank.match' => ['Match bank statements', 'Match statement lines to the ledger and explain the rest.'],
         'bank.import' => ['Import bank statements', 'Upload bank statement files.'],
         'bank.manage_accounts' => ['Maintain bank accounts', 'Add the company\'s bank accounts and their ledger accounts.'],
+        'ap.manage_suppliers' => ['Maintain suppliers', 'Add suppliers with their payment terms, tax profile and bank account.'],
+        'ap.enter_bills' => ['Enter supplier bills', 'Enter supplier bills and send them for approval.'],
+        'ap.approve_bills' => ['Approve supplier bills', 'Approve or reject bills someone else entered; approving posts them.'],
+        'ap.prepare_payments' => ['Prepare payment runs', 'Choose due supplier bills to pay from a bank account.'],
+        'ap.approve_payments' => ['Approve payment runs', 'Approve a payment run someone else prepared.'],
+        'ap.release_payments' => ['Release payment runs', 'Release an approved run to the bank and download its payment file.'],
         'numbering.void' => ['Void document numbers', 'Void a reserved document number that will not be used.'],
         'platform.manage_users' => ['Manage users', 'Invite, deactivate and give roles to users.'],
         'platform.manage_roles' => ['Manage roles', 'Create roles and choose their permissions.'],

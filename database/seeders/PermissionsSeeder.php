@@ -45,6 +45,8 @@ final class PermissionsSeeder extends Seeder
         'hr.manage_employees','payroll.prepare','payroll.approve','payroll.pay','payroll.manage_rules',
         // Reinsurance MVP (G4, A-257): treaties and reinsurers / facultative placements / cessions, statements and bordereaux
         'ri.manage_treaties','ri.place_facultative','ri.view',
+        // Slices 2.3/2.4 accounts payable (addendum v2 B.4; codes as named for the demo build, D-102)
+        'ap.manage_suppliers','ap.enter_bills','ap.approve_bills','ap.prepare_payments','ap.approve_payments','ap.release_payments',
     ];
 
     /**
@@ -63,6 +65,11 @@ final class PermissionsSeeder extends Seeder
         ['provisions.run', 'provisions.approve', 'object'], // market gap G5: whoever prepared a technical provisions run does not approve and post it
         ['payroll.prepare', 'payroll.approve', 'object'], // addendum §B.10.10: whoever calculated a payroll run does not approve it
         ['payroll.approve', 'payroll.pay', 'object'], // addendum §B.10.10: whoever approved a payroll run does not pay it
+        // Slices 2.3/2.4 (addendum v2 B.4): a bill is approved by someone other than who entered it; a payment run is prepared, approved and released by three people.
+        ['ap.enter_bills', 'ap.approve_bills', 'object'],
+        ['ap.prepare_payments', 'ap.approve_payments', 'object'],
+        ['ap.approve_payments', 'ap.release_payments', 'object'],
+        ['ap.prepare_payments', 'ap.release_payments', 'object'],
     ];
 
     public function run(): void

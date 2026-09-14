@@ -46,7 +46,7 @@ final class CloseTaskCatalogue
         $reconciliations = ['premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation',
             'vat_reconciliation', 'stamp_duty_reconciliation',
             // Reinsurance MVP (G4): reinsurers' share of unearned premium, then the amounts due to and from reinsurers.
-            'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation'];
+            'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation', 'ap_reconciliation'];
         $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals', ...($provisions ? ['technical_provisions'] : []), ...$contributedCodes];
         $beforeTrialBalance = $yearEnd ? [...$beforeYearEnd, 'year_end_close'] : $beforeYearEnd;
 
@@ -71,6 +71,8 @@ final class CloseTaskCatalogue
             new CloseTaskDefinition(11, 'ri_unearned_premium', CloseTaskKind::Check, ['premium_earning'], 'accounting', 'periods.soft_lock'),
             new CloseTaskDefinition(11, 'ri_balances_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'ri_payable'),
             new CloseTaskDefinition(11, 'ri_claims_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'ri_claims'),
+            // Slice 2.3 (addendum v2 B.2.8 row 7): the AP subledger per supplier against accounts payable. Numbered after the duties so the existing order stays.
+            new CloseTaskDefinition(11, 'ap_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'ap'),
             // Gap fix GA-15 (D-81): in the fiscal year's last month, once everything that posts to income and expense is done.
             ...($yearEnd ? [new CloseTaskDefinition(12, 'year_end_close', CloseTaskKind::YearEndClose, $beforeYearEnd, 'finance_manager', 'periods.lock')] : []),
             new CloseTaskDefinition(13, 'trial_balance', CloseTaskKind::TrialBalance, $beforeTrialBalance, 'finance_manager', 'periods.soft_lock'),

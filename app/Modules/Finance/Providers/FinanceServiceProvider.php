@@ -17,5 +17,14 @@ final class FinanceServiceProvider extends ServiceProvider
     {
         $this->app->tag([BankReconciliationCloseCheck::class], CloseTaskCheck::class);
         $this->app->tag([BankAccountGlUsage::class], AccountUsage::class);
+        // Slice 2.3: the AP subledger against accounts payable per supplier (D-103), in the close as task ap_reconciliation.
+        $this->app->tag([\App\Modules\Finance\Payables\Application\PayablesReconciler::class], \App\Modules\Accounting\Application\Contracts\SubledgerReconciler::class);
+    }
+
+    public function boot(\App\Modules\Platform\Approvals\ApprovalHandlerRegistry $approvals): void
+    {
+        // Slices 2.3/2.4: supplier bills and payment runs through the approval engine when an approval limit applies.
+        $approvals->register('ap_bill', \App\Modules\Finance\Payables\Application\BillApprovalHandler::class);
+        $approvals->register('payment_run', \App\Modules\Finance\Payables\Application\PaymentRunApprovalHandler::class);
     }
 }

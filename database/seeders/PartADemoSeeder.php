@@ -288,6 +288,7 @@ final class PartADemoSeeder extends Seeder
         File::put(storage_path(self::STATEMENT_FILE), $september);
         $this->importStatement($september, basename(self::STATEMENT_FILE), matchAll: false);
         ReinsuranceDemoSeeder::finish($this->entityId, $this->branchId, $products['FIRE'], $this->users); // reinsurance MVP (G4): a facultative placement and Q3 statements
+        (new PayablesDemoSeeder())->run($this->entityId, $this->branchId, $this->bankAccountId, $this->users); // slices 2.3/2.4 accounts payable
         $this->postQueuedEvents();
     }
 

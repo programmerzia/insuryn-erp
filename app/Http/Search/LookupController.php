@@ -62,7 +62,7 @@ final class LookupController
             'policy' => $this->guarded($actor, [...PolicyPageController::AREA, 'claim.register'], fn (AreaReach $reach): array => $this->policies($like, $reach)),
             'installment' => $this->guarded($actor, CollectionsPageController::AREA, fn (AreaReach $reach): array => $this->installments($like, $reach)),
             // GA-31: the manual journal's account picker, searchable by code or name.
-            'account' => $this->guarded($actor, ['accounting.create_manual_journal', 'accounting.manage_coa'], fn (): array => $this->accounts($like)),
+            'account' => $this->guarded($actor, ['accounting.create_manual_journal', 'accounting.manage_coa', 'ap.enter_bills', 'ap.manage_suppliers'], fn (): array => $this->accounts($like)),
             // Flow fix X8: whoever approves claim payments picks the payee from every active party.
             'payee' => $this->guarded($actor, [self::PAYEE_DUTY], fn (): array => $this->payees($like)),
             // Gap fix GA-21: whoever receipts a claim recovery picks its payer (a salvage buyer, a third party's insurer) from every active party.

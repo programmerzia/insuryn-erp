@@ -2,7 +2,7 @@
 export type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral';
 
 const ok = new Set(['posted', 'matched', 'reconciled', 'paid', 'released', 'allocated', 'done', 'completed', 'active', 'issued', 'approved', 'balanced', 'renewed', 'succeeded', 'cleared', 'filed']); // market gap G5: filed returns // GA-14: cleared cheques
-const warn = new Set(['pending', 'pending_approval', 'queued', 'posting', 'draft', 'quote', 'requested', 'release_requested', 'partially_allocated', 'unallocated', 'soft_locked', 'in_progress', 'registered', 'reserved', 'lapsed', 'skipped', 'waiting', 'blocked', 'renewal_offered', 'expired_not_renewed', 'invited', 'running', 'in_clearing', 'reviewed']); // market gap G5: a reviewed return or provisions run waits for its next step // GA-14: cheques in clearing
+const warn = new Set(['pending', 'pending_approval', 'queued', 'posting', 'draft', 'quote', 'requested', 'release_requested', 'partially_allocated', 'unallocated', 'soft_locked', 'in_progress', 'registered', 'reserved', 'lapsed', 'skipped', 'waiting', 'blocked', 'renewal_offered', 'expired_not_renewed', 'invited', 'running', 'in_clearing', 'reviewed', 'partially_paid', 'on_hold']); // market gap G5: a reviewed return or provisions run waits for its next step // GA-14: cheques in clearing
 const danger = new Set(['failed', 'unbalanced', 'variance', 'bounced']);
 
 export function statusTone(status: string): StatusTone {
