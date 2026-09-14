@@ -17,7 +17,6 @@ use App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController;
-use App\Modules\Insurance\Reinsurance\Http\Controllers\ReinsurancePageController;
 use App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController;
 use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\PermissionChecker;

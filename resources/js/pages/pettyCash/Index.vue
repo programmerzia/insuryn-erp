@@ -8,22 +8,25 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
+import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
+import { formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 
 /** Design addendum v2 §B.6: petty cash floats per branch, with cash on hand and what is waiting to be replenished. */
 interface FloatRow { id: string; code: string; name: string; branch: string; custodian: string; limit: string; on_hand: string; to_replenish: string; pending: boolean; status: string }
 type Option = { id: string; label: string };
-const props = defineProps<{ floats: FloatRow[]; branches: Option[]; users: Option[]; accounts: Option[]; bankAccounts: Option[]; can: { create: boolean } }>();
+const props = defineProps<{ floats: FloatRow[]; branches: Option[]; users: Option[]; accounts: Option[]; bankAccounts: Option[]; defaultBranchId: string; can: { create: boolean } }>();
 
 const active = ref<string | null>(null);
 const creating = ref(false);
 const today = useBusinessToday();
-const create = useMoneyForm(() => '/petty-cash', { branch_id: props.branches[0]?.id ?? '', code: '', name: '', custodian_user_id: '', limit: '', gl_account_id: props.accounts.find((a) => a.label.includes('Petty'))?.id ?? '',
+const create = useMoneyForm(() => '/petty-cash', { branch_id: props.branches.some((b) => b.id === props.defaultBranchId) ? props.defaultBranchId : (props.branches[0]?.id ?? ''), code: '', name: '', custodian_user_id: '', limit: '', gl_account_id: props.accounts.find((a) => a.label.includes('Petty'))?.id ?? '',
     bank_account_id: props.bankAccounts[0]?.id ?? '', issued_on: today }, () => (creating.value = false));
 const columns: DataColumn<FloatRow>[] = [
     { id: 'code', header: 'Float', value: (r) => r.code, href: (r) => `/petty-cash/${r.id}`, width: 110 },
@@ -38,7 +41,7 @@ const columns: DataColumn<FloatRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Petty cash" fill>
+    <AppLayout help="pettycash" title="Petty cash" fill>
         <QueueView
             id="petty-cash"
             v-model:active="active"
@@ -50,11 +53,17 @@ const columns: DataColumn<FloatRow>[] = [
             empty-text="No petty cash floats yet. Give each branch a float for small expenses."
             :action="can.create ? { label: 'New float' } : null"
             :inspector-title="(r) => `${r.code} ${r.name}`"
-            :primary-label="() => 'Open float'"
+            :inspector-subtitle="(r) => `${r.branch} · held by ${r.custodian}`"
+            :primary-label="() => 'Open the float'"
             @action="creating = true"
             @primary="(r) => router.visit(`/petty-cash/${r.id}`)"
         >
             <template #toolbar><Link href="/petty-cash/book" class="ml-3 text-ui text-accent-text hover:underline">Petty cash book</Link></template>
+            <template #details="{ row }">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Float limit', value: `${formatMoney(row.limit)} BDT`, num: true }, { label: 'Cash on hand', value: `${formatMoney(row.on_hand)} BDT`, num: true }, { label: 'Spent, to replenish', value: `${formatMoney(row.to_replenish)} BDT`, num: true }, { label: 'Custodian', value: row.custodian }]">
+                    <template #Status><StatusBadge :status="row.pending ? 'pending_approval' : row.status" /></template>
+                </DetailList>
+            </template>
         </QueueView>
         <Drawer v-model:open="creating" title="New petty cash float">
             <FormLayout submit-label="Review the journal" :dirty="create.form.isDirty" :processing="create.form.processing" :error="(create.form.errors as Record<string, string>).form" @submit="create.review" @cancel="creating = false">

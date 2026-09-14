@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { Link, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
-import Breadcrumb from '@/components/Breadcrumb.vue';
+import { Link, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
@@ -9,7 +8,10 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
-import StatusBadge from '@/components/StatusBadge.vue';
+import ObjectPage from '@/components/object/ObjectPage.vue';
+import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
@@ -18,19 +20,33 @@ import { useJournalConfirm } from '@/lib/journalConfirm';
 import { useMoneyForm } from '@/lib/moneyForm';
 import { type PreviewResult, previewJournal } from '@/lib/preview';
 
-/** Design addendum v2 §B.6 float page: pay a voucher (with the receipt photo), ask for replenishment, approve it, count the cash. */
+/** Design addendum v2 §B.6 float page (an object page like the other documents): vouchers with receipts, replenishments (request ✕ approve), cash counts. */
 type Option = { id: string; label: string };
+interface VoucherRow { id: string; number: string; date: string; payee: string; description: string; account: string; amount: string; replenishment: string | null; receipts: { name: string; url: string }[] }
+interface ReplenishmentRow { id: string; number: string; amount: string; status: string; requested_at: string; paid_on: string | null; requested_by: string; decided_by: string | null; reason: string | null }
+interface CountRow { date: string; counted: string; expected: string; difference: string; by: string; note: string | null }
 const props = defineProps<{
     float: { id: string; code: string; name: string; branch: string; custodian: string; limit: string; on_hand: string; to_replenish: string; status: string };
-    vouchers: { id: string; number: string; date: string; payee: string; description: string; account: string; amount: string; replenishment: string | null; receipts: { name: string; url: string }[] }[];
-    replenishments: { id: string; number: string; amount: string; status: string; requested_at: string; paid_on: string | null; requested_by: string; decided_by: string | null; reason: string | null }[];
-    counts: { date: string; counted: string; expected: string; difference: string; by: string; note: string | null }[];
+    vouchers: VoucherRow[];
+    replenishments: ReplenishmentRow[];
+    counts: CountRow[];
     accounts: Option[];
     bankAccounts: Option[];
     can: { spend: boolean; replenish: boolean; approve: boolean; count: boolean };
+    timeline?: TimelineEntry[];
+    accounting?: AccountingJournal[];
+    audit?: AuditRow[];
 }>();
 
 const today = useBusinessToday();
+const title = computed(() => `${props.float.code} · ${props.float.name}`);
+const facts = computed(() => [
+    { label: 'Float limit (BDT)', value: formatMoney(props.float.limit), num: true },
+    { label: 'Cash on hand', value: formatMoney(props.float.on_hand), num: true },
+    { label: 'Spent, to replenish', value: formatMoney(props.float.to_replenish), num: true },
+]);
+const pending = computed(() => props.replenishments.filter((r) => r.status === 'pending_approval').length);
+
 const spending = ref(false);
 const replenishing = ref(false);
 const counting = ref(false);
@@ -54,88 +70,113 @@ function postVoucher(): void {
 const replenish = useForm({ bank_account_id: props.bankAccounts[0]?.id ?? '' });
 const count = useMoneyForm(() => `/petty-cash/${props.float.id}/counts`, { counted_on: today, counted: '', note: '' }, () => (counting.value = false));
 const confirm = useJournalConfirm();
+
+// Deciding a replenishment: approve (pay date, then the journal preview) or reject (with a reason), each in a drawer.
+const deciding = ref<{ row: ReplenishmentRow; decision: 'approve' | 'reject' } | null>(null);
 const paidOn = ref(today);
-const rejectReason = ref('');
-function approve(id: string, number: string, amount: string): void {
-    void confirm.request(`/petty-cash/replenishments/${id}/approve`, { paid_on: paidOn.value }, `Approve ${number} and pay it from the bank?`, `Pay ${formatMoney(amount)} BDT`);
+const rejecting = useForm({ reason: '' });
+function decide(row: ReplenishmentRow, decision: 'approve' | 'reject'): void {
+    paidOn.value = today;
+    rejecting.reset();
+    rejecting.clearErrors();
+    deciding.value = { row, decision };
 }
+function approve(): void {
+    const row = deciding.value?.row;
+    if (!row) return;
+    deciding.value = null;
+    void confirm.request(`/petty-cash/replenishments/${row.id}/approve`, { paid_on: paidOn.value }, `Approve ${row.number} and pay it from the bank?`, `Pay ${formatMoney(row.amount)} BDT`);
+}
+function reject(): void {
+    const row = deciding.value?.row;
+    if (!row) return;
+    rejecting.post(`/petty-cash/replenishments/${row.id}/reject`, { preserveScroll: true, onSuccess: () => (deciding.value = null) });
+}
+
+const voucherColumns: DataColumn<VoucherRow>[] = [
+    { id: 'number', header: 'Voucher', value: (v) => v.number, width: 170 },
+    { id: 'date', header: 'Date', type: 'date', value: (v) => v.date },
+    { id: 'payee', header: 'Paid to', value: (v) => v.payee, width: 180 },
+    { id: 'description', header: 'For', value: (v) => v.description, width: 220 },
+    { id: 'account', header: 'Account', value: (v) => v.account, width: 200, muted: true },
+    { id: 'amount', header: 'Amount', type: 'money', value: (v) => v.amount, total: true },
+    { id: 'receipts', header: 'Receipt', value: (v) => v.receipts.map((d) => d.name).join(', '), width: 150 },
+    { id: 'replenishment', header: 'Replenished by', value: (v) => v.replenishment ?? 'Not yet', width: 200, muted: true },
+];
+const replenishmentColumns: DataColumn<ReplenishmentRow>[] = [
+    { id: 'number', header: 'Replenishment', value: (r) => r.number, width: 170 },
+    { id: 'requested_at', header: 'Requested', type: 'date', value: (r) => r.requested_at },
+    { id: 'requested_by', header: 'Requested by', value: (r) => r.requested_by, width: 160, muted: true },
+    { id: 'amount', header: 'Amount', type: 'money', value: (r) => r.amount, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (r) => r.status },
+    { id: 'decision', header: 'Decision', value: (r) => (r.decided_by ? `${r.decided_by}${r.paid_on ? `, paid ${formatDate(r.paid_on)}` : ''}${r.reason ? `: ${r.reason}` : ''}` : ''), width: 280 },
+];
+const countColumns: DataColumn<CountRow>[] = [
+    { id: 'date', header: 'Counted on', type: 'date', value: (c) => c.date },
+    { id: 'counted', header: 'Counted', type: 'money', value: (c) => c.counted },
+    { id: 'expected', header: 'Book balance', type: 'money', value: (c) => c.expected },
+    { id: 'difference', header: 'Difference', type: 'money', value: (c) => c.difference },
+    { id: 'by', header: 'Counted by', value: (c) => c.by, width: 160, muted: true },
+    { id: 'note', header: 'Note', value: (c) => c.note, width: 240, muted: true },
+];
 </script>
 
 <template>
-    <AppLayout :title="`${float.code} petty cash`">
-        <div class="grid max-w-[1100px] gap-5">
-            <div><Breadcrumb :base="[{ label: 'Petty cash', href: '/petty-cash' }]" /></div>
-            <header class="flex flex-wrap items-end gap-x-8 gap-y-3">
-                <div>
-                    <div class="flex items-center gap-3"><h1 class="text-title font-semibold">{{ float.code }} · {{ float.name }}</h1><StatusBadge :status="float.status" /></div>
-                    <p class="text-ui text-ink-2">{{ float.branch }} · held by {{ float.custodian }}</p>
-                </div>
-                <dl class="flex flex-wrap gap-x-8">
-                    <div><dt class="text-dense text-ink-2">Float limit (BDT)</dt><dd class="num text-left text-ui font-medium">{{ formatMoney(float.limit) }}</dd></div>
-                    <div><dt class="text-dense text-ink-2">Cash on hand</dt><dd class="num text-left text-ui font-medium">{{ formatMoney(float.on_hand) }}</dd></div>
-                    <div><dt class="text-dense text-ink-2">Spent, to replenish</dt><dd class="num text-left text-ui font-medium">{{ formatMoney(float.to_replenish) }}</dd></div>
-                </dl>
-                <div class="ml-auto flex flex-wrap gap-2">
-                    <button v-if="can.spend" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="spending = true">Pay a voucher</button>
-                    <button v-if="can.replenish && float.to_replenish !== '0.00'" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="replenishing = true">Request replenishment</button>
-                    <button v-if="can.count" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="counting = true">Count the cash</button>
-                    <Link :href="`/petty-cash/book?float=${float.id}`" class="inline-flex h-8 items-center text-ui text-accent-text hover:underline">Petty cash book</Link>
-                </div>
-            </header>
-
-            <section v-if="replenishments.length">
-                <h2 class="mb-2 text-ui font-medium">Replenishments</h2>
-                <div class="overflow-x-auto rounded-panel border border-line">
-                    <table class="w-full border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Number</th><th class="border-b border-line px-3 text-left font-medium">Requested</th><th class="border-b border-line px-3 text-right font-medium">Amount (BDT)</th><th class="border-b border-line px-3 text-left font-medium">Status</th><th class="border-b border-line px-3 text-left font-medium">Decision</th><th class="border-b border-line px-3" /></tr></thead>
-                        <tbody>
-                            <tr v-for="r in replenishments" :key="r.id" class="h-(--row-h)">
-                                <td class="border-b border-line px-3">{{ r.number }}</td><td class="border-b border-line px-3">{{ formatDate(r.requested_at) }} · {{ r.requested_by }}</td>
-                                <td class="num border-b border-line px-3">{{ formatMoney(r.amount) }}</td><td class="border-b border-line px-3"><StatusBadge :status="r.status" /></td>
-                                <td class="border-b border-line px-3 text-ink-2">{{ r.decided_by ? `${r.decided_by}${r.paid_on ? `, paid ${formatDate(r.paid_on)}` : ''}${r.reason ? `: ${r.reason}` : ''}` : '' }}</td>
-                                <td class="border-b border-line px-3">
-                                    <div v-if="can.approve && r.status === 'pending_approval'" class="flex items-center justify-end gap-2">
-                                        <DateInput v-model="paidOn" class="w-32" aria-label="Paid on" />
-                                        <button type="button" class="h-7 rounded-control bg-accent px-2 text-accent-ink" @click="approve(r.id, r.number, r.amount)">Approve</button>
-                                        <input v-model="rejectReason" class="h-7 w-32 rounded-control border border-line-control px-2" placeholder="Reason to reject" />
-                                        <button type="button" class="h-7 rounded-control border border-line-control px-2 disabled:opacity-50" :disabled="!rejectReason.trim()" @click="router.post(`/petty-cash/replenishments/${r.id}/reject`, { reason: rejectReason })">Reject</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section>
+    <AppLayout help="pettycash" :title="`${float.code} petty cash`">
+        <ObjectPage
+            :title="title"
+            :subtitle="`${float.branch} · held by ${float.custodian}`"
+            :status="float.status"
+            :facts="facts"
+            :crumbs="[{ label: 'Petty cash', href: '/petty-cash' }]"
+            currency="BDT"
+            :timeline="timeline"
+            :accounting="accounting"
+            :audit="audit"
+            :hidden-tabs="['documents']"
+            :extra-tabs="[{ value: 'replenishments', label: 'Replenishments' }, { value: 'counts', label: 'Cash counts' }]"
+        >
+            <template #actions>
+                <Link :href="`/petty-cash/book?float=${float.id}`" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-ink-2 hover:bg-surface-2 hover:text-ink">Petty cash book</Link>
+                <button v-if="can.count" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="counting = true">Count the cash</button>
+                <button v-if="can.replenish && float.to_replenish !== '0.00'" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="replenishing = true">Request replenishment</button>
+                <button v-if="can.spend" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="spending = true">Pay a voucher</button>
+            </template>
+            <template #overview>
+                <p v-if="pending && can.approve" class="mb-4 max-w-[1100px] rounded-control border border-line bg-accent-soft px-3 py-2 text-ui" role="status">
+                    {{ pending }} replenishment{{ pending === 1 ? ' is' : 's are' }} waiting for your decision on the Replenishments tab.
+                </p>
                 <h2 class="mb-2 text-ui font-medium">Vouchers</h2>
-                <div class="overflow-x-auto rounded-panel border border-line">
-                    <table class="w-full border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Voucher</th><th class="border-b border-line px-3 text-left font-medium">Date</th><th class="border-b border-line px-3 text-left font-medium">Paid to</th><th class="border-b border-line px-3 text-left font-medium">For</th><th class="border-b border-line px-3 text-left font-medium">Account</th><th class="border-b border-line px-3 text-right font-medium">Amount (BDT)</th><th class="border-b border-line px-3 text-left font-medium">Receipt</th><th class="border-b border-line px-3 text-left font-medium">Replenished by</th></tr></thead>
-                        <tbody>
-                            <tr v-for="v in vouchers" :key="v.id" class="h-(--row-h)">
-                                <td class="border-b border-line px-3">{{ v.number }}</td><td class="border-b border-line px-3">{{ formatDate(v.date) }}</td><td class="border-b border-line px-3">{{ v.payee }}</td>
-                                <td class="border-b border-line px-3">{{ v.description }}</td><td class="border-b border-line px-3 text-ink-2">{{ v.account }}</td><td class="num border-b border-line px-3">{{ formatMoney(v.amount) }}</td>
-                                <td class="border-b border-line px-3"><a v-for="d in v.receipts" :key="d.url" :href="d.url" class="text-accent-text hover:underline">{{ d.name }}</a></td>
-                                <td class="border-b border-line px-3 text-ink-2">{{ v.replenishment ?? 'Not yet' }}</td>
-                            </tr>
-                            <tr v-if="vouchers.length === 0"><td colspan="8" class="px-3 py-6 text-center text-ui text-ink-2">No vouchers paid from this float yet.</td></tr>
-                        </tbody>
-                    </table>
+                <div class="border border-line">
+                    <DataTable id="petty-cash-vouchers" label="Vouchers" :columns="voucherColumns" :rows="vouchers" :row-key="(v) => v.id" currency="BDT" :url-sync="false" :open-on-click="false" compact-toolbar
+                        empty-text="No vouchers paid from this float yet.">
+                        <template #cell-receipts="{ row }">
+                            <a v-for="d in row.receipts" :key="d.url" :href="d.url" class="mr-2 text-accent-text hover:underline">{{ d.name }}</a>
+                        </template>
+                    </DataTable>
                 </div>
-            </section>
-
-            <section v-if="counts.length">
-                <h2 class="mb-2 text-ui font-medium">Cash counts</h2>
-                <ul class="rounded-panel border border-line text-ui">
-                    <li v-for="(c, i) in counts" :key="i" class="flex flex-wrap gap-4 border-b border-line px-3 py-2 last:border-b-0">
-                        <span class="w-28">{{ formatDate(c.date) }}</span><span>counted {{ formatMoney(c.counted) }} against {{ formatMoney(c.expected) }}</span>
-                        <span :class="c.difference === '0.00' ? 'text-ok' : 'text-danger'">{{ c.difference === '0.00' ? 'agrees' : `difference ${formatMoney(c.difference)}` }}</span>
-                        <span class="text-ink-2">{{ c.by }}<template v-if="c.note"> — {{ c.note }}</template></span>
-                    </li>
-                </ul>
-            </section>
-        </div>
+            </template>
+            <template #tab-replenishments>
+                <div class="max-w-[1100px] border border-line">
+                    <DataTable id="petty-cash-replenishments" label="Replenishments" :columns="replenishmentColumns" :rows="replenishments" :row-key="(r) => r.id" currency="BDT" :url-sync="false" :open-on-click="false"
+                        compact-toolbar empty-text="No replenishment requested yet.">
+                        <template #cell-decision="{ row }">
+                            <div v-if="can.approve && row.status === 'pending_approval'" class="flex items-center gap-2">
+                                <button type="button" class="h-7 rounded-control bg-accent px-2 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="decide(row, 'approve')">Approve</button>
+                                <button type="button" class="h-7 rounded-control border border-line-control px-2 text-ui hover:bg-surface-2" @click="decide(row, 'reject')">Reject</button>
+                            </div>
+                            <span v-else class="text-ink-2">{{ row.decided_by ? `${row.decided_by}${row.paid_on ? `, paid ${formatDate(row.paid_on)}` : ''}${row.reason ? `: ${row.reason}` : ''}` : '' }}</span>
+                        </template>
+                    </DataTable>
+                </div>
+            </template>
+            <template #tab-counts>
+                <div class="max-w-[1100px] border border-line">
+                    <DataTable id="petty-cash-counts" label="Cash counts" :columns="countColumns" :rows="counts" :row-key="(c) => `${c.date}-${c.counted}-${c.by}`" currency="BDT" :url-sync="false" :open-on-click="false"
+                        compact-toolbar empty-text="The cash has not been counted yet." />
+                </div>
+            </template>
+        </ObjectPage>
 
         <Drawer v-model:open="spending" title="Pay a voucher">
             <FormLayout submit-label="Review the journal" :dirty="voucher.isDirty" :processing="voucher.processing" :error="(voucher.errors as Record<string, string>).form" @submit="reviewVoucher" @cancel="spending = false">
@@ -162,6 +203,17 @@ function approve(id: string, number: string, amount: string): void {
                 <Field id="counted_on" label="Counted on" :error="count.form.errors.counted_on"><DateInput v-model="count.form.counted_on" /></Field>
                 <Field id="counted" label="Cash counted (BDT)" :error="count.form.errors.counted"><MoneyInput v-model="count.form.counted" /></Field>
                 <Field id="note" label="Note" optional :error="count.form.errors.note"><TextInput v-model="count.form.note" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="deciding?.decision === 'approve'" :title="`Approve ${deciding?.row.number ?? ''}`" @update:open="(o) => !o && (deciding = null)">
+            <FormLayout submit-label="Review the journal" :dirty="true" :processing="confirm.state.processing" @submit="approve" @cancel="deciding = null">
+                <p class="text-ui text-ink-2">Pays {{ formatMoney(deciding?.row.amount ?? '0') }} BDT from the bank into the float.</p>
+                <Field id="paid_on" label="Paid on"><DateInput v-model="paidOn" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer :open="deciding?.decision === 'reject'" :title="`Reject ${deciding?.row.number ?? ''}`" @update:open="(o) => !o && (deciding = null)">
+            <FormLayout submit-label="Reject" :dirty="rejecting.isDirty" :processing="rejecting.processing" :error="(rejecting.errors as Record<string, string>).form" @submit="reject" @cancel="deciding = null">
+                <Field id="reject_reason" label="Reason" :error="rejecting.errors.reason"><TextInput v-model="rejecting.reason" /></Field>
             </FormLayout>
         </Drawer>
         <JournalPreviewDialog v-model:open="voucherPreviewOpen" :result="voucherPreview" title="Pay this voucher?" confirm-label="Pay" currency="BDT" :processing="voucher.processing" @confirm="postVoucher" />

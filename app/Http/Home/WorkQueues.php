@@ -44,7 +44,8 @@ final class WorkQueues
             'cover_notes_expiring', 'agent_cash_undeposited', 'licences_expiring', 'bounced_premium'],
         // GA-13: journals_to_approve becomes journals_submitted for someone who cannot approve journals (the accountant template, §7.2) — see keysFor.
         // GA-26: the accountant pays approved commission statements (commission.pay, A-138).
-        'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events', 'commission_to_pay', 'bounced_premium'],
+        // UI consistency pass: the accountant asks for petty cash replenishment (A-278), so floats with spent vouchers are theirs to act on.
+        'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events', 'commission_to_pay', 'bounced_premium', 'petty_cash_to_replenish'],
         'claims_officer' => ['claims_awaiting_reserve', 'claim_approvals', 'payments_to_release'],
         // Flow fix X3: the claims manager decides settlements of reserved claims; finance releases requested claim payments.
         'claims_manager' => ['claims_awaiting_reserve', 'claims_to_settle', 'claim_approvals', 'payments_to_release'],
@@ -52,7 +53,7 @@ final class WorkQueues
         // Slices 2.3/2.4: the finance manager approves supplier bills and payment runs; the CFO releases approved runs.
         // GA-26: they also decide referrals (A-86) and release refunds (receipt.refund_release).
         // Design addendum v2 §B.8.1: the CFO (and finance manager) see this month's expense against the approved budget.
-        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'expense_vs_budget', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve'],
+        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'expense_vs_budget', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve', 'petty_cash_replenishments'],
         'cfo' => ['expense_vs_budget', 'close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_release'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
         // Consistency pass: HR prepares the monthly payroll and keeps the salary account and TIN every payslip needs.
@@ -190,9 +191,12 @@ final class WorkQueues
             'employees_missing_bank' => ['Employees without a salary account', '/people/employees?missing=bank', 'Every active employee has a salary account.', ['Open employees', '/people/employees']],
             'employees_missing_tin' => ['Employees without a TIN', '/people/employees?missing=tin', 'Every active employee has a TIN.', ['Open employees', '/people/employees']],
             'petty_cash_low' => ['Petty cash running low', '/petty-cash', 'Every petty cash float holds more than half its limit.', ['Open petty cash', '/petty-cash']],
+            // UI consistency pass: petty cash work for whoever approves replenishments and for whoever asks for them.
+            'petty_cash_replenishments' => ['Petty cash replenishments to approve', '/petty-cash', 'No petty cash replenishment is waiting for your approval.', ['Open petty cash', '/petty-cash']],
+            'petty_cash_to_replenish' => ['Petty cash to replenish', '/petty-cash', 'No float has vouchers waiting to be replenished.', ['Open petty cash', '/petty-cash']],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
-        $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
+        $block =['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
 
         $filled = match ($key) {
             'claim_approvals', 'approvals_over_threshold' => $this->approvalBlock($block, $this->approvals($userId, $key)),
@@ -370,6 +374,14 @@ final class WorkQueues
                 ->leftJoin('designations as d', 'd.id', '=', 'm.designation_id')->leftJoin('branches as br', 'br.id', '=', 'm.branch_id')
                 ->where('e.status', 'active')->whereNull($key === 'employees_missing_bank' ? 'e.account_no_masked' : 'e.tin_masked')
                 ->orderBy('e.joined_on')->orderBy('e.code')->select(['e.id', 'e.code', 'e.full_name', 'd.name as designation', 'br.code as branch', 'e.joined_on']),
+            'petty_cash_replenishments' => $this->within($userId, ['pettycash.approve'], DB::table('petty_cash_replenishments as r')->join('petty_cash_floats as f', 'f.id', '=', 'r.float_id')
+                ->where('r.status', 'pending_approval')->where('r.requested_by', '<>', $userId), 'f')
+                ->orderBy('r.requested_at')->select(['f.id', 'r.number', 'f.code', 'r.requested_at', 'r.amount_minor', 'f.currency']),
+            'petty_cash_to_replenish' => $this->within($userId, ['pettycash.replenish'], DB::table('petty_cash_floats as f')->where('f.status', 'active')
+                ->whereNotExists(fn (Builder $q) => $q->from('petty_cash_replenishments as r')->whereColumn('r.float_id', 'f.id')->where('r.status', 'pending_approval')), 'f')
+                ->joinSub(DB::table('petty_cash_vouchers')->where('status', 'posted')->whereNull('replenishment_id')->groupBy('float_id')->selectRaw('float_id, sum(amount_minor) as spent_minor, min(voucher_date) as since'),
+                    'v', 'v.float_id', '=', 'f.id')
+                ->orderBy('v.since')->select(['f.id', 'f.code', 'f.name', 'v.since', 'v.spent_minor', 'f.currency']),
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
     }
@@ -567,6 +579,10 @@ final class WorkQueues
                     'run' => $r->number ?? 'Preview', 'employees' => (string) $r->employee_count, 'amount' => $money($r, 'net_minor')]]],
             'employees_missing_bank', 'employees_missing_tin' => [[$col('employee', 'Employee'), $col('designation', 'Designation'), $col('branch', 'Branch'), $col('joined', 'Joined', 'date')],
                 fn (\stdClass $r): array => ['href' => "/people/employees/{$r->id}", 'cells' => ['employee' => "{$r->code} {$r->full_name}", 'designation' => $r->designation, 'branch' => $r->branch, 'joined' => $r->joined_on]]],
+            'petty_cash_replenishments' => [[$col('number', 'Replenishment'), $col('float', 'Float'), $col('requested', 'Requested', 'date'), $col('amount', 'Amount', 'money')],
+                fn (\stdClass $r): array => ['href' => "/petty-cash/{$r->id}?tab=replenishments", 'cells' => ['number' => $r->number, 'float' => $r->code, 'requested' => substr((string) $r->requested_at, 0, 10), 'amount' => $money($r, 'amount_minor')]]],
+            'petty_cash_to_replenish' => [[$col('float', 'Float'), $col('name', 'Name'), $col('since', 'Spent since', 'date'), $col('amount', 'To replenish', 'money')],
+                fn (\stdClass $r): array => ['href' => "/petty-cash/{$r->id}", 'cells' => ['float' => $r->code, 'name' => $r->name, 'since' => $r->since, 'amount' => $money($r, 'spent_minor')]]],
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
     }

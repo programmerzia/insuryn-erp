@@ -46,6 +46,7 @@ final class PettyCashPageController
             'accounts' => DB::table('accounts')->where('entity_id', $entity['id'])->where('type', 'asset')->where('is_postable', true)->where('is_control', false)->where('status', 'active')->orderBy('code')
                 ->get(['id', 'code', 'name'])->map(fn (object $a): array => ['id' => (string) $a->id, 'label' => "{$a->code} · {$a->name}"])->values()->all(),
             'bankAccounts' => FixedAssetsPageController::bankAccounts($entity['id']),
+            'defaultBranchId' => app(\App\Http\Pages\FormDefaults::class)->branch($actor, $entity['id']) ?? '',
             'can' => ['create' => $this->permissions->has($actor, 'pettycash.approve', AuthorizationScope::entity($entity['id']))],
         ]);
     }
@@ -62,7 +63,7 @@ final class PettyCashPageController
         return redirect("/petty-cash/{$id}")->with('status', 'Float issued to its custodian.');
     }
 
-    public function show(Request $request, string $float, PettyCashService $pettyCash): Response
+    public function show(Request $request, string $float, PettyCashService $pettyCash, \App\Http\Pages\ObjectHistory $history): Response
     {
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeArea($actor, self::AREA);
@@ -95,7 +96,24 @@ final class PettyCashPageController
             'bankAccounts' => FixedAssetsPageController::bankAccounts((string) $row->entity_id),
             'can' => ['spend' => $this->permissions->has($actor, 'pettycash.spend', $scope), 'replenish' => $this->permissions->has($actor, 'pettycash.replenish', $scope),
                 'approve' => $this->permissions->has($actor, 'pettycash.approve', $scope), 'count' => $this->permissions->has($actor, 'pettycash.replenish', $scope) && $row->custodian_user_id !== $actor],
+            // UI consistency pass: the float page is an object page with Timeline, Accounting and Audit like the other documents.
+            'timeline' => $history->timeline([['petty_cash_float', $float]]),
+            'accounting' => Inertia::defer(fn (): array => $history->accounting(self::journals($float)), 'history'),
+            'audit' => Inertia::defer(fn (): array => $history->audit([['petty_cash_float', $float],
+                ...DB::table('petty_cash_replenishments')->where('float_id', $float)->pluck('id')->map(fn (mixed $id): array => ['petty_cash_replenishment', (string) $id])->all()]), 'history'),
         ]);
+    }
+
+    /** @return list<string> journals posted for the float: its issue, its vouchers, replenishments and count differences */
+    private static function journals(string $float): array
+    {
+        $ids = fn (string $table): array => DB::table($table)->where('float_id', $float)->pluck('id')->map(fn (mixed $id): string => (string) $id)->all();
+
+        return array_values(DB::table('journals')->where(fn ($q) => $q->where('source_type', 'petty_cash_float')->where('source_id', $float))
+            ->orWhere(fn ($q) => $q->where('source_type', 'petty_cash_voucher')->whereIn('source_id', $ids('petty_cash_vouchers')))
+            ->orWhere(fn ($q) => $q->where('source_type', 'petty_cash_replenishment')->whereIn('source_id', $ids('petty_cash_replenishments')))
+            ->orWhere(fn ($q) => $q->where('source_type', 'petty_cash_count')->whereIn('source_id', $ids('petty_cash_counts')))
+            ->pluck('id')->map(fn (mixed $id): string => (string) $id)->all());
     }
 
     public function spend(Request $request, string $float, PettyCashService $pettyCash, ObjectDocuments $documents): RedirectResponse
