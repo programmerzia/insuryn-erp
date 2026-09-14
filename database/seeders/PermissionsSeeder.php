@@ -35,6 +35,8 @@ final class PermissionsSeeder extends Seeder
         'cover_note.issue','cover_note.cancel',
         // Phase 3 renewals (slice R9, A-126)
         'renewal.manage',
+        // Gap fix GA-12 (A-175): the claims reports for the claims desk
+        'reports.claims',
     ];
 
     /**

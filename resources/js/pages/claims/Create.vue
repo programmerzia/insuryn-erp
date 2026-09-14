@@ -7,11 +7,12 @@ import FormLayout from '@/components/forms/FormLayout.vue';
 import LookupInput, { type LookupResult } from '@/components/forms/LookupInput.vue';
 import Stepper from '@/components/forms/Stepper.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { toast } from '@/lib/toasts';
 
-const props = defineProps<{ policies: { id: string; number: string; display_name: string; inception: string; expiry: string }[]; today: string }>();
+/** GA-12: `unpaid_premium` is the premium already due and unpaid today (a warning, never a refusal). */
+const props = defineProps<{ policies: { id: string; number: string; display_name: string; inception: string; expiry: string; unpaid_premium?: string | null }[]; today: string }>();
 
 const DRAFT = 'drafts.claim-register';
 const preferences = usePreferences();
@@ -70,6 +71,9 @@ function saveDraft(): void {
                     <Field id="policy_id" label="Policy" :error="form.errors.policy_id" hint="The policy number or the policyholder's name.">
                         <LookupInput v-model="form.policy_id" type="policy" :initial="policy" @selected="policy = $event" />
                     </Field>
+                    <p v-if="cover?.unpaid_premium" class="rounded-control border border-warn bg-surface-2 px-3 py-2 text-ui" role="note" data-premium-warning>
+                        Premium of {{ formatMoney(cover.unpaid_premium) }} is due and unpaid on {{ cover.number }}. You can register the claim; check the premium before reserving.
+                    </p>
                 </template>
                 <template v-else-if="step === 1">
                     <Field id="loss_date" label="Date of loss" :error="dateErrors.loss_date ?? form.errors.loss_date">
@@ -84,6 +88,7 @@ function saveDraft(): void {
                 </template>
                 <template v-else>
                     <p class="text-ui text-ink-2">Check the details. Registering opens the claim; reserves and payments follow on the claim page.</p>
+                    <p v-if="cover?.unpaid_premium" class="text-ui" role="note">Premium of {{ formatMoney(cover.unpaid_premium) }} is due and unpaid on this policy.</p>
                 </template>
             </FormLayout>
             <template #summary>

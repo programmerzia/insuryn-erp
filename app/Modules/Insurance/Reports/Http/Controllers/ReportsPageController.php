@@ -48,13 +48,21 @@ final class ReportsPageController
         ['key' => 'balance-sheet', 'title' => 'Balance sheet', 'description' => 'Assets, liabilities and equity at a date.', 'filter' => 'as_of'],
     ];
 
+    /** Gap fix GA-12 (ASSUMPTION A-175): the reports a claims desk reads with reports.claims alone; every other report needs reports.financial. */
+    public const CLAIMS_REPORTS = ['outstanding-claims', 'claims-paid', 'loss-ratio'];
+
     public function __construct(private readonly PermissionChecker $permissions) {}
 
     public function index(Request $request): Response
     {
-        $this->authorize($request);
+        $this->permissions->authorizeAny(PageSupport::actor($request), ['reports.financial', 'reports.claims']);
+        $financial = $this->permissions->has(PageSupport::actor($request), 'reports.financial');
+        $catalogue = $financial ? self::CATALOGUE : array_values(array_filter(self::CATALOGUE, fn (array $r): bool => in_array($r['key'], self::CLAIMS_REPORTS, true)));
 
-        $exports = array_map(fn (array $r): array => $r + ['exports' => ['csv' => "/reports/{$r['key']}/export?format=csv", 'xlsx' => "/reports/{$r['key']}/export?format=xlsx"]], self::CATALOGUE);
+        $exports = array_map(fn (array $r): array => $r + ['exports' => ['csv' => "/reports/{$r['key']}/export?format=csv", 'xlsx' => "/reports/{$r['key']}/export?format=xlsx"]], $catalogue);
+        if (! $financial) {
+            return Inertia::render('reports/Index', ['reports' => $exports]);
+        }
 
         // Gap audit GA-34: the registers on their own screens open there, and export through the same path as the reports above.
         $screens = [];
@@ -68,8 +76,11 @@ final class ReportsPageController
 
     public function show(Request $request, string $report): Response
     {
-        $this->authorize($request);
+        $financial = $this->authorize($request, $report);
         [$page, $filters] = $this->page($request, $report);
+        if (! $financial) {
+            $page = self::claimsLinksOnly($page);
+        }
 
         return Inertia::render('reports/Show', $page + ['report' => $report, 'filters' => $filters]);
     }
@@ -77,7 +88,7 @@ final class ReportsPageController
     /** Flow fix X12: the report's table as a CSV or XLSX download — the columns and rows the page shows, on the same filters (defaults: this month, as of today). */
     public function export(Request $request, string $report): StreamedResponse
     {
-        $this->authorize($request);
+        $this->authorize($request, $report);
         /** @var array{format: string} $data */
         $data = $request->validate(['format' => ['required', Rule::in(['csv', 'xlsx'])]]);
         abort_unless(in_array($report, array_column(self::CATALOGUE, 'key'), true) || isset(OperationalReportTables::REPORTS[$report]), 404);
@@ -443,9 +454,48 @@ final class ReportsPageController
         return '/reports/account-activity?'.http_build_query(['account_id' => $match[1] ?? ''] + $query);
     }
 
-    private function authorize(Request $request): void
+    /** Returns whether the reader holds reports.financial; a claims report also opens with reports.claims (GA-12). */
+    private function authorize(Request $request, string $report): bool
     {
-        $this->permissions->authorize(PageSupport::actor($request), 'reports.financial');
+        $actor = PageSupport::actor($request);
+        if (in_array($report, self::CLAIMS_REPORTS, true) && ! $this->permissions->has($actor, 'reports.financial')) {
+            $this->permissions->authorize($actor, 'reports.claims');
+
+            return false;
+        }
+        $this->permissions->authorize($actor, 'reports.financial');
+
+        return true;
+    }
+
+    /**
+     * GA-12: a claims-report reader follows links to claims only (journals, account activity and policies need other permissions).
+     *
+     * @param array<string, mixed> $page
+     * @return array<string, mixed>
+     */
+    private static function claimsLinksOnly(array $page): array
+    {
+        $keep = fn (mixed $link): ?string => is_string($link) && str_starts_with($link, '/claims/') ? $link : null;
+        $strip = function (mixed $rows) use ($keep): array {
+            $result = [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (is_array($row)) {
+                    $row['link'] = $keep($row['link'] ?? null);
+                    if (isset($row['links']) && is_array($row['links'])) {
+                        $row['links'] = array_filter(array_map($keep, $row['links']));
+                    }
+                }
+                $result[] = $row;
+            }
+
+            return $result;
+        };
+        $page['rows'] = $strip($page['rows'] ?? []);
+        $page['summaries'] = array_map(fn (mixed $summary): mixed => is_array($summary) ? ['rows' => $strip($summary['rows'] ?? [])] + $summary : $summary, is_array($page['summaries'] ?? null) ? $page['summaries'] : []);
+        unset($page['related']);
+
+        return $page;
     }
 
     private static function date(Request $request, string $key, CarbonImmutable $default): CarbonImmutable

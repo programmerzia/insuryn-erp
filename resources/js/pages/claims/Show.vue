@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import ClaimPolicyPanel, { type ClaimPolicyFacts } from '@/components/claims/ClaimPolicyPanel.vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
@@ -31,6 +32,8 @@ const props = defineProps<{
     /** Gap audit GA-41: print the claim acknowledgement and each payment's discharge voucher. */
     documentGeneration?: DocumentGeneration;
     today: string;
+    /** GA-12: the policy as the claims desk checks it (read-only). */
+    policyFacts?: ClaimPolicyFacts | null;
     /** Flow fix X3: set right after a reserve when this user may approve the settlement now. */
     nextStep?: 'approve_payment' | null;
 }>();
@@ -137,6 +140,7 @@ function openRelease(id: string): void {
                 <button v-if="actions.reserve" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="openDrawer('reserve')">Set reserve</button>
             </template>
             <template #overview>
+                <ClaimPolicyPanel v-if="policyFacts" :facts="policyFacts" :currency="claim.currency" class="mb-6 max-w-[1100px]" />
                 <div class="grid max-w-[1100px] gap-6 lg:grid-cols-2">
                     <section>
                         <h2 class="mb-2 text-ui font-medium">Payments</h2>

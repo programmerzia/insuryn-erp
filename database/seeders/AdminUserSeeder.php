@@ -16,6 +16,8 @@ use RuntimeException;
  * config erp.seed.admin_password (env ERP_ADMIN_PASSWORD). Holds Tenant Admin; in the local environment only, also Finance Manager and Claims
  * Manager so every read-only page can be browsed. That local combination deliberately breaks the §7.3 rule `platform.manage_roles` ✕
  * `accounting.*`, which is why roles are inserted directly instead of through RoleAssignmentService — never outside `local`.
+ * Gap fix GA-20: a tenant that already has its own finance manager (the Part A demo's role users) keeps its admin to Tenant Admin only, so the demo
+ * shows the segregation rule it sells.
  * Existing admins keep their password. Run RolesSeeder first.
  */
 final class AdminUserSeeder extends Seeder
@@ -29,6 +31,13 @@ final class AdminUserSeeder extends Seeder
         }
     }
 
+    /** Another active user already holds the finance manager role in this tenant. */
+    private function hasOwnFinanceManager(string $adminId): bool
+    {
+        return DB::table('user_roles as ur')->join('roles as r', 'r.id', '=', 'ur.role_id')->join('users as u', 'u.id', '=', 'ur.user_id')
+            ->where('r.code', 'finance_manager')->where('ur.user_id', '<>', $adminId)->where('u.status', 'active')->exists();
+    }
+
     private function seedAdmin(string $tenantId, string $email): void
     {
         $userId = DB::table('users')->where('email', $email)->value('id');
@@ -37,7 +46,7 @@ final class AdminUserSeeder extends Seeder
             DB::table('users')->insert(['id' => $userId, 'tenant_id' => $tenantId, 'email' => $email, 'name' => 'Tenant Admin',
                 'password' => Hash::make((string) config('erp.seed.admin_password')), 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         }
-        $roles = ['tenant_admin', ...(app()->environment('local') ? self::LOCAL_ONLY_ROLES : [])];
+        $roles = ['tenant_admin', ...(app()->environment('local') && ! $this->hasOwnFinanceManager($userId) ? self::LOCAL_ONLY_ROLES : [])];
         foreach ($roles as $code) {
             $roleId = DB::table('roles')->where('code', $code)->value('id') ?? throw new RuntimeException("Role {$code} is missing; run RolesSeeder first.");
             DB::table('user_roles')->insertOrIgnore(['tenant_id' => $tenantId, 'user_id' => $userId, 'role_id' => $roleId, 'scope_type' => 'tenant', 'scope_id' => $tenantId]);

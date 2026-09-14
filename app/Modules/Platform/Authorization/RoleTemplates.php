@@ -30,7 +30,10 @@ final class RoleTemplates
         'renewal.manage'];
     private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve',
         // ASSUMPTION A-184 (gap audit GA-41): the claims desk prints the claim acknowledgement and discharge vouchers for the claimant (claims officer, and the claims manager through "+").
-        'document.generate'];
+        'document.generate',
+        // ASSUMPTION A-175 (gap fix GA-12): the claims desk reads the outstanding claims register, claims paid and loss ratio (claims officer, and the claims manager
+        // through "+"), without the financial reports.
+        'reports.claims'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
         'commission.approve', 'claim.pay_release', 'receipt.refund_release', 'product.manage', 'bank.manage_accounts', 'commission.manage_plans',

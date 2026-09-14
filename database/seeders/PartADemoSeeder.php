@@ -33,6 +33,9 @@ use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
 use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
 use App\Modules\Platform\Approvals\ApprovalPolicyService;
+use App\Modules\Platform\Audit\Actor;
+use App\Modules\Platform\Audit\Audit;
+use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\RoleTemplates;
 use App\Modules\Platform\Setup\SetupProgress;
 use App\Modules\Platform\Tax\TaxRateSetup;
@@ -298,7 +301,13 @@ final class PartADemoSeeder extends Seeder
             $id = (string) Str::uuid7();
             DB::table('users')->insert(['id' => $id, 'tenant_id' => $tenantId, 'email' => str_replace('_', '.', $code)."@{$slug}.local", 'name' => ucfirst(str_replace('_', ' ', $code)),
                 'password' => Hash::make((string) config('erp.seed.admin_password')), 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
-            DB::table('user_roles')->insert(['tenant_id' => $tenantId, 'user_id' => $id, 'role_id' => DB::table('roles')->where('code', $code)->value('id'), 'scope_type' => 'tenant', 'scope_id' => $tenantId]);
+            // GA-20: every demo role is on the user's timeline, like one given in Admin → Users. Still tenant-wide: the story's services (parties, products,
+            // printing) check some permissions tenant-wide, so branch-scoped demo roles wait for the branch filtering work.
+            [$scopeType, $scopeId] = ['tenant', $tenantId];
+            $roleId = (string) DB::table('roles')->where('code', $code)->value('id');
+            DB::table('user_roles')->insert(['tenant_id' => $tenantId, 'user_id' => $id, 'role_id' => $roleId, 'scope_type' => $scopeType, 'scope_id' => $scopeId]);
+            app(Audit::class)->record('user_role.assigned', AuditSubject::of('user', $id), null, ['role_id' => $roleId, 'role_code' => $code, 'scope_type' => $scopeType, 'scope_id' => $scopeId],
+                'Part A demo', 'platform.manage_users', Actor::system());
             $users[$code] = $id;
         }
 

@@ -7,6 +7,7 @@ namespace App\Modules\Insurance\Claims\Http\Controllers;
 use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Claims\Application\ClaimPaymentService;
+use App\Modules\Insurance\Claims\Application\ClaimPolicyFacts;
 use App\Modules\Insurance\Claims\Application\ClaimService;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimStatus;
@@ -63,9 +64,14 @@ final class ClaimPageController
 
         return Inertia::render('claims/Create', [
             'today' => app(BusinessClock::class)->today()->toDateString(), // flow fix X2: reported on starts at today; the date of loss stays for the customer to say
+            // GA-12: with each policy, the premium already due and unpaid today, so registration warns (never refuses) "no premium, no cover".
             'policies' => $reach->constrain(DB::table('policies as p'), 'p.entity_id', 'p.branch_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.entity_id', $entity['id'])->whereNotNull('p.number')
+                ->leftJoinSub(DB::table('installments')->where('due_date', '<=', app(BusinessClock::class)->today()->toDateString())->groupBy('policy_id')
+                    ->select(['policy_id', DB::raw('sum(amount_minor - paid_minor - cancelled_minor) as unpaid')]), 'u', 'u.policy_id', '=', 'p.id')
                 ->whereIn('p.status', ['issued', 'active', 'expired', 'lapsed', 'cancelled', 'renewed'])->orderBy('p.number')
-                ->get(['p.id', 'p.number', 'h.display_name', 'p.inception', 'p.expiry'])->map(fn (object $p): array => (array) $p)->values()->all(),
+                ->get(['p.id', 'p.number', 'h.display_name', 'p.inception', 'p.expiry', 'p.currency', 'u.unpaid'])
+                ->map(fn (object $p): array => ['id' => (string) $p->id, 'number' => (string) $p->number, 'display_name' => (string) $p->display_name, 'inception' => (string) $p->inception,
+                    'expiry' => (string) $p->expiry, 'unpaid_premium' => (int) ($p->unpaid ?? 0) > 0 ? PageSupport::money((int) $p->unpaid, (string) $p->currency) : null])->values()->all(),
         ]);
     }
 
@@ -74,8 +80,12 @@ final class ClaimPageController
         /** @var array{policy_id: string, loss_date: string, reported_on: string, description: string} $data */
         $data = $request->validate(['policy_id' => ['required', 'uuid'], 'loss_date' => ['required', 'date_format:Y-m-d'], 'reported_on' => ['required', 'date_format:Y-m-d'], 'description' => ['required', 'string', 'max:5000']]);
         $claim = $this->claims->register($data['policy_id'], CarbonImmutable::parse($data['loss_date']), $data['description'], PageSupport::actor($request), CarbonImmutable::parse($data['reported_on']));
+        // GA-12: a warning, not a refusal — the claims desk checks the premium before reserving.
+        $facts = app(ClaimPolicyFacts::class)->forPolicy($claim->policy_id, CarbonImmutable::parse($data['loss_date']), $claim->id);
+        $warning = $facts !== null && $facts['overdue_minor'] > 0
+            ? ' Premium of '.PageSupport::money($facts['overdue_minor'], $facts['currency'])." due by the date of loss is unpaid on {$facts['number']}: check it before reserving." : '';
 
-        return redirect("/claims/{$claim->id}")->with('status', "Claim {$claim->number} registered.");
+        return redirect("/claims/{$claim->id}")->with('status', "Claim {$claim->number} registered.{$warning}");
     }
 
     public function show(Request $request, string $claim): Response
@@ -109,6 +119,8 @@ final class ClaimPageController
                 // Flow fix X3: the approval drawer proposes the reserve not yet committed to payments.
                 'uncommitted' => $money(max(0, $model->reserve_minor - (int) $payments->filter(fn (ClaimPayment $p): bool => in_array($p->status->value, ClaimPaymentStatus::committed(), true))->sum('amount_minor')))],
             'today' => app(BusinessClock::class)->today()->toDateString(),
+            // GA-12: the policy as the claims desk needs it (cover, sum insured, premium paid, bounced cheques, earlier claims), read-only.
+            'policyFacts' => $this->policyFacts($actor, $model),
             'nextStep' => $request->hasSession() ? $request->session()->get('next_step') : null,
             'reserves' => DB::table('claim_reserves')->where('claim_id', $model->id)->orderBy('version')->get(['version', 'reserve_minor', 'delta_minor', 'kind', 'reason', 'recorded_on'])
                 ->map(fn (object $r): array => ['version' => (int) $r->version, 'reserve' => $money((int) $r->reserve_minor), 'delta' => $money((int) $r->delta_minor), 'kind' => (string) $r->kind,
@@ -132,6 +144,25 @@ final class ClaimPageController
                     && ! DB::table('approvals')->where('object_type', 'claim_reopen')->where('object_id', $model->id)->where('status', 'pending')->exists(),
             ],
         ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function policyFacts(string $actor, Claim $claim): ?array
+    {
+        $facts = app(ClaimPolicyFacts::class)->forPolicy($claim->policy_id, $claim->loss_date, $claim->id);
+        if ($facts === null) {
+            return null;
+        }
+        $money = fn (?int $minor): ?string => $minor === null ? null : PageSupport::money($minor, $facts['currency']);
+        $opensPolicy = $this->permissions->has($actor, 'reports.financial') || array_any(\App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController::AREA,
+            fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($claim->entity_id, $claim->branch_id)));
+
+        return ['number' => $facts['number'], 'status' => $facts['status'], 'product' => $facts['product'], 'inception' => $facts['inception'], 'expiry' => $facts['expiry'],
+            'sum_insured' => $money($facts['sum_insured_minor']), 'gross_premium' => $money($facts['gross_premium_minor']), 'paid' => $money($facts['paid_minor']),
+            'outstanding' => $money($facts['outstanding_minor']), 'unpaid_at_loss' => $money($facts['overdue_minor']),
+            'bounced_cheques' => array_map(fn (array $b): array => ['receipt_number' => $b['receipt_number'], 'cheque_no' => $b['cheque_no'], 'bounced_on' => $b['bounced_on'], 'amount' => $money($b['amount_minor'])], $facts['bounced_cheques']),
+            'other_claims' => array_map(fn (array $c): array => ['id' => $c['id'], 'number' => $c['number'], 'loss_date' => $c['loss_date'], 'status' => $c['status'], 'reserve' => $money($c['reserve_minor'])], $facts['other_claims']),
+            'href' => $opensPolicy ? "/policies/{$facts['id']}" : null];
     }
 
     public function reserve(Request $request, string $claim): RedirectResponse
