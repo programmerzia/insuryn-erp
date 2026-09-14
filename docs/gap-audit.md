@@ -47,6 +47,27 @@ Columns in the tables below:
 - **Effort:** S = hours, M = a day or two, L = a slice.
 - **Cat** (category): broken, inconsistent, flow (confusing flow), affordance (missing affordance), copy, a11y, perf, data (data or accounting correctness), perm (security or permissions).
 
+## Fix status (updated 14 Sep 2026)
+
+| Findings | Commit | Status |
+|---|---|---|
+| GA-01, GA-03, GA-13, GA-08 | `0f99fa7` fix(roles) | Fixed |
+| GA-07, GA-23, GA-22 | `8339270` fix(ux) | Fixed |
+| GA-12, GA-20 | `9b35690` fix(claims) | Fixed. GA-20: the demo's CTG officer is branch-scoped (W3); the Head Office roles stay tenant-wide. |
+| GA-02, GA-06, GA-34, GA-45 | `ab21dda` fix(reports) | Fixed |
+| GA-42, GA-44 | `4c2bd00` fix(commission) | Fixed. Product owner decisions: commission on net premium, earning 1/365 (A-181, A-182, verify). |
+| GA-36, GA-33, GA-41 | `c5ee2af` fix(documents) | Fixed |
+| GA-32, GA-39 | `69588c1` fix(ux) | Fixed |
+| GA-46, GA-47 | `a28ab17` fix(accounting) | Fixed |
+| GA-11, GA-10, GA-35, GA-37 | `f397cf0` fix(distribution) | Fixed |
+| GA-17, GA-38, GA-30 | `56222ad` fix(parties) | Fixed |
+| GA-25, GA-28, GA-31 | `adaa9c3` fix(policies) | Fixed. GA-25: premium-free endorsement types not built yet. |
+| GA-05 | `0c51620` fix(close) | Fixed |
+| GA-15, GA-43, GA-04, GA-09 | `f5eb391` fix(close) | Fixed. GA-04: claim payment and reopen approvals show no lines preview yet. |
+| GA-24 | `0f99fa7` | Partly: cancel date default, refund/collect next step and caption fixed; "write off small balance" not built yet. |
+| GA-14, GA-18, GA-19, GA-21, GA-27 | — | In progress (W5, being ported onto main). |
+| GA-16, GA-26, GA-29, GA-40 | — | Open (next wave). |
+
 ## 1. Fix first (top 15)
 
 | # | ID | What | Sev | Effort |
