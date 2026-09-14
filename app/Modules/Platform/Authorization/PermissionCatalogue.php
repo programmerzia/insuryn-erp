@@ -16,6 +16,7 @@ final class PermissionCatalogue
         'receipt' => 'Receipts and refunds', 'claim' => 'Claims', 'commission' => 'Commission', 'agent' => 'Agents and producers', 'party' => 'Customers',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'regulatory' => 'Regulatory returns', 'provisions' => 'Technical provisions', 'audit' => 'Audit', 'platform' => 'Administration',
+        'numbering' => 'Numbering', 'ri' => 'Reinsurance', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
     /** @var array<string, array{0: string, 1: string}> code → [label, one-line help] */
@@ -79,6 +80,10 @@ final class PermissionCatalogue
         'cover_note.issue' => ['Issue cover notes', 'Issue temporary cover for an approved proposal.'],
         'cover_note.cancel' => ['Cancel cover notes', 'Cancel a cover note.'],
         'renewal.manage' => ['Work renewals', 'Offer renewal quotations and record why a policy was not renewed.'],
+        // Reinsurance MVP (G4).
+        'ri.manage_treaties' => ['Set up reinsurance treaties', 'Add reinsurers, set up treaties and their shares, and prepare reinsurer statements.'],
+        'ri.place_facultative' => ['Place facultative reinsurance', 'Place a share of a policy with a reinsurer on its own slip; the placement posts the ceded premium.'],
+        'ri.view' => ['See reinsurance', 'See cessions, the reinsurance of each policy and reinsurer statements.'],
     ];
 
     public static function groupLabel(string $code): string

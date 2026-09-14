@@ -42,6 +42,9 @@ final class InsuranceServiceProvider extends ServiceProvider
             \App\Modules\Insurance\Policy\Application\Reconciliation\UnearnedPremiumReconciler::class, \App\Modules\Insurance\Policy\Application\Reconciliation\PremiumTaxReconciler::class,
             \App\Modules\Insurance\Policy\Application\Reconciliation\StampDutyReconciler::class], SubledgerReconciler::class);
         $this->app->tag([PremiumEarningCloseCheck::class, SuspenseReviewCloseCheck::class], CloseTaskCheck::class);
+        // Reinsurance MVP (G4): reinsurer balances and claims shares reconcile per reinsurer; reinsurers' share of unearned premium at each close.
+        $this->app->tag([\App\Modules\Insurance\Reinsurance\Application\ReinsurancePayableReconciler::class, \App\Modules\Insurance\Reinsurance\Application\ReinsuranceClaimsReconciler::class], SubledgerReconciler::class);
+        $this->app->tag([\App\Modules\Insurance\Reinsurance\Application\ReinsuranceUnearnedPremiumRun::class], CloseTaskCheck::class);
         // Slice 2.1b (D-55): claim payments and refunds still waiting hold the period's lock.
         $this->app->tag([\App\Modules\Insurance\Claims\Application\ClaimPaymentsPendingAtClose::class, \App\Modules\Insurance\Collections\Application\RefundsPendingAtClose::class],
             \App\Modules\Accounting\Application\Contracts\PendingCloseDocuments::class);
@@ -66,5 +69,11 @@ final class InsuranceServiceProvider extends ServiceProvider
         Event::listen(PolicyIssued::class, [EarnCommissionOnIssue::class, 'handle']);
         Event::listen(\App\Modules\Insurance\Policy\Domain\Events\PolicyRenewed::class, [\App\Modules\Insurance\Renewal\Application\ExpiryRegister::class, 'markRenewed']); // slice R9
         Event::listen(ReceiptAllocationReversed::class, [ClawBackCommissionOnReversal::class, 'handle']);
+        // Reinsurance MVP (G4): the cession engine follows the policy lifecycle and the claims.
+        Event::listen(PolicyIssued::class, [\App\Modules\Insurance\Reinsurance\Application\CessionEngine::class, 'onIssued']);
+        Event::listen(\App\Modules\Insurance\Policy\Domain\Events\PolicyEndorsed::class, [\App\Modules\Insurance\Reinsurance\Application\CessionEngine::class, 'onEndorsed']);
+        Event::listen(PolicyCancelled::class, [\App\Modules\Insurance\Reinsurance\Application\CessionEngine::class, 'onCancelled']);
+        Event::listen(\App\Modules\Insurance\Claims\Domain\Events\ClaimReserveChanged::class, [\App\Modules\Insurance\Reinsurance\Application\ClaimCessions::class, 'onReserveChanged']);
+        Event::listen(\App\Modules\Insurance\Claims\Domain\Events\ClaimPaid::class, [\App\Modules\Insurance\Reinsurance\Application\ClaimCessions::class, 'onPaid']);
     }
 }

@@ -37,17 +37,17 @@ it('seeds the Part A story through the services', function (): void {
     expect(Artisan::call('erp:demo'))->toBe(0);
     $tenantId = (string) DB::table('tenants')->where('slug', 'nonlife')->value('id');
 
-    expect(($this->count)($tenantId))->toMatchArray(['products' => 4, 'customers' => 5, 'producers' => 2, 'policies' => 8, 'claims' => 2]);
+    expect(($this->count)($tenantId))->toMatchArray(['products' => 4, 'customers' => 6, 'producers' => 2, 'policies' => 9, 'claims' => 2]);
     asTenant($tenantId, function (): void {
         $policies = DB::table('policies')->pluck('status')->countBy()->all();
         expect(array_keys($policies))->toContain('cancelled')
-            ->and(($policies['issued'] ?? 0) + ($policies['active'] ?? 0))->toBe(7);
+            ->and(($policies['issued'] ?? 0) + ($policies['active'] ?? 0))->toBe(8); // + the reinsurance demo's large fire risk
         // Phase 3 R7: the products are rated, so the quote to follow up is an issued quotation (a typed-premium quote is refused), and every policy was issued
         // from its approved proposal on its frozen rating, with stamp duty on its own line.
         expect(DB::table('quotations')->where('status', 'issued')->whereNull('renewal_of_policy_id')->count())->toBe(1)->and(DB::table('policies')->where('status', 'quote')->count())->toBe(0)
             ->and(DB::table('policies')->whereNull('rating_result')->orWhereNull('proposal_id')->count())->toBe(0)
-            ->and(DB::table('proposals')->where('status', 'issued')->count())->toBe(8)
-            ->and(DB::table('policies')->where('stamp_duty_minor', '>', 0)->count())->toBe(8)
+            ->and(DB::table('proposals')->where('status', 'issued')->count())->toBe(9)
+            ->and(DB::table('policies')->where('stamp_duty_minor', '>', 0)->count())->toBe(9)
             ->and((int) DB::table('policies')->sum(DB::raw('gross_premium_minor - net_premium_minor - tax_minor - stamp_duty_minor')))->toBe(0);
 
         // One commission producer accrues commission on receipts, through the compensation scheme (GA-35); the salaried one has none.
@@ -109,7 +109,7 @@ it('runs the nightly lifecycle once, so the demo shows active policies, payment 
     asTenant($tenantId, function (): void {
         // Every policy whose cover has started (all of the story's, dated August–September) is Active, none left Issued; the cancelled one stays cancelled.
         expect(DB::table('policies')->where('status', 'issued')->where('inception', '<=', '2026-09-13')->count())->toBe(0)
-            ->and(DB::table('policies')->where('status', 'active')->count())->toBe(7) // the story's six plus the CTG short-period fire policy (GA-35)
+            ->and(DB::table('policies')->where('status', 'active')->count())->toBe(8) // the story's six plus the CTG short-period fire policy (GA-35) and the reinsurance demo's large fire risk
             // POL-2's second installment has been overdue since 5 September: its first reminder is out.
             ->and(DB::table('dunning_notices')->count())->toBeGreaterThan(0);
         $runs = DB::table('job_runs')->orderBy('job')->get(['job', 'status', 'triggered_by']);

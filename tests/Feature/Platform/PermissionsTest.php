@@ -76,7 +76,7 @@ it('seeds the design role templates per tenant', function (): void {
         expect(DB::table('roles')->orderBy('code')->pluck('code')->all())->toBe([
             'accountant', 'auditor', 'branch_manager', 'branch_officer', 'cfo', 'claims_manager', 'claims_officer', 'finance_manager', 'tenant_admin',
         ])
-            ->and($permissionsOf('auditor'))->toBe(['accounting.view_journals', 'audit.view', 'reports.financial', 'reports.regulatory'])
+            ->and($permissionsOf('auditor'))->toBe(['accounting.view_journals', 'audit.view', 'reports.financial', 'reports.regulatory', 'ri.view'])
             ->and($permissionsOf('finance_manager'))->toContain('accounting.approve_journal', 'accounting.create_manual_journal', 'periods.lock')
             ->and($permissionsOf('cfo'))->toContain('periods.reopen', 'accounting.post_to_control', 'accounting.approve_journal')
             // Fix F3 (A-54): the Tenant Admin template also sets approval limits; slice R8 (A-101): and manages document templates; slice R5 (A-87): and underwriting limits.

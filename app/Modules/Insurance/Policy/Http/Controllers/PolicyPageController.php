@@ -145,6 +145,7 @@ final class PolicyPageController
                 'paid' => $money($p['paid_minor']), 'outstanding' => $money($p['outstanding_minor'])], $this->payers->forPolicy($model->id)['payers']),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/policies/{$model->id}/documents" : null,
             'rating' => $this->rating($model),
+            'reinsurance' => \App\Modules\Insurance\Reinsurance\Http\Controllers\ReinsurancePageController::policyTab($actor, $model), // reinsurance MVP (G4)
             'today' => app(BusinessClock::class)->today()->toDateString(),
             // Gap fix GA-14: premium a bounced cheque was paying and that is still unpaid ("no premium, no cover" banner).
             'bouncedPremium' => array_map(fn (array $b): array => ['receipt_id' => $b['receipt_id'], 'receipt_number' => $b['receipt_number'], 'cheque_no' => $b['cheque_no'],

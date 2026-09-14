@@ -194,6 +194,18 @@ return [
             'commission_statement' => env('ERP_COMMISSION_STATEMENT_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}')],
     ],
     'close' => ['suspense_max_age_days' => 30],
+    // Reinsurance MVP (market gap G4).
+    'reinsurance' => [
+        // ASSUMPTION: A-251 — the statutory share of non-life business ceded to Sadharan Bima Corporation (SBC) is a placeholder: 50% (VERIFY with the insurer and IDRA/SBC
+        // circulars). It is the default for a new treaty's SBC share and can be changed per treaty.
+        'sbc_share_bp' => (int) env('ERP_RI_SBC_SHARE_BP', 5000),
+        // ASSUMPTION: A-252 — the SBC share is applied first, to the gross sum insured and net premium; treaties apply to what is left.
+        'sbc_basis' => 'gross_first',
+        // ASSUMPTION: A-253 — a product version without a class maps to a treaty class by its line of business.
+        'lob_classes' => ['motor' => 'motor', 'fire' => 'fire', 'marine' => 'marine_cargo', 'engineering' => 'engineering', 'misc' => 'misc', 'health' => 'health'],
+        // ASSUMPTION: A-254 — the risk field that holds a policy's sum insured (the proposal's sum insured is used first).
+        'sum_insured_field' => 'sum_insured',
+    ],
 
     /*
      * ASSUMPTION: A-3 — design OPEN #6 — whether opening balances come from an existing system, and in which

@@ -42,11 +42,11 @@ it('lists roles with their permissions and holders, only for people who manage r
 
     actingAs(($this->person)('Branch Person', ['branch_officer']))->get('/admin/roles', $this->headers)->assertForbidden();
     actingAs($this->admin)->get('/admin/roles', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('admin/roles/Index')
-        ->where('roles', fn ($roles): bool => in_array(['code' => 'accountant', 'name' => 'Accountant', 'permissions' => 8, 'holders' => 1] /* GA-27 (A-219): + receipt.create, was 7 */,
+        ->where('roles', fn ($roles): bool => in_array(['code' => 'accountant', 'name' => 'Accountant', 'permissions' => 9, 'holders' => 1] /* GA-27 (A-219): + receipt.create, was 7; reinsurance MVP (A-257): + ri.view */,
             array_map(fn (array $r): array => array_diff_key($r, ['id' => true]), json_decode((string) json_encode($roles), true)), true)));
 
     actingAs($this->admin)->get('/admin/roles/'.($this->role)('accountant'), $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('admin/roles/Show')
-        ->where('role.name', 'Accountant')->where('granted', ['accounting.create_manual_journal', 'accounting.view_journals', 'bank.import', 'bank.match', 'commission.pay', 'receipt.allocate', 'receipt.create', 'reports.financial'])
+        ->where('role.name', 'Accountant')->where('granted', ['accounting.create_manual_journal', 'accounting.view_journals', 'bank.import', 'bank.match', 'commission.pay', 'receipt.allocate', 'receipt.create', 'reports.financial', 'ri.view'])
         ->where('holders.0.name', 'Karim Accountant')->where('catalogue', fn ($groups): bool => in_array('Accounting', array_column(json_decode((string) json_encode($groups), true), 'label'), true)));
 });
 

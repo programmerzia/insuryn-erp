@@ -43,6 +43,8 @@ final class PermissionsSeeder extends Seeder
         'regulatory.file','provisions.run','provisions.approve',
         // Phase 2 People and Payroll MVP (addendum §B.9, §B.10; A-287): employees, payroll preparation, approval, payment, rules
         'hr.manage_employees','payroll.prepare','payroll.approve','payroll.pay','payroll.manage_rules',
+        // Reinsurance MVP (G4, A-257): treaties and reinsurers / facultative placements / cessions, statements and bordereaux
+        'ri.manage_treaties','ri.place_facultative','ri.view',
     ];
 
     /**

@@ -56,6 +56,14 @@ final class PartyService
         return $this->insert($kind, $displayName, $taxId, [$role], $actorUserId, $duty);
     }
 
+    /** Reinsurance MVP: a reinsurer party, created by whoever sets up treaties (ri.manage_treaties), which the audit record names. */
+    public function createReinsurer(string $displayName, string $actorUserId, string $duty): Party
+    {
+        $this->permissions->authorize($actorUserId, $duty);
+
+        return $this->insert(PartyKind::Organization, $displayName, null, [PartyRoleType::Reinsurer], $actorUserId, $duty);
+    }
+
     /** @param list<PartyRoleType> $roles */
     private function insert(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId, string $permission, ?PartyContact $contact = null): Party
     {

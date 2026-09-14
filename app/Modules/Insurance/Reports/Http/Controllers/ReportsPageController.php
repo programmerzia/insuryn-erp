@@ -46,6 +46,9 @@ final class ReportsPageController
         ['key' => 'renewal-conversion', 'title' => 'Renewal conversion', 'description' => 'Policies expiring in a period renewed or lost, by branch, agent or product, with lapse reasons.', 'filter' => 'range_by'],
         ['key' => 'profit-and-loss', 'title' => 'Profit and loss', 'description' => 'Income and expense for a period.', 'filter' => 'range'],
         ['key' => 'balance-sheet', 'title' => 'Balance sheet', 'description' => 'Assets, liabilities and equity at a date.', 'filter' => 'as_of'],
+        // Reinsurance MVP (G4): bordereaux (ReinsuranceReportTables::CATALOGUE).
+        ['key' => 'ri-premium-bordereau', 'title' => 'Premium bordereau', 'description' => 'Premium ceded to each reinsurer in a period, per policy, with commission and the net due.', 'filter' => 'range'],
+        ['key' => 'ri-claims-bordereau', 'title' => 'Claims bordereau', 'description' => 'Reinsurers\' shares of claim reserves and payments recorded in a period.', 'filter' => 'range'],
     ];
 
     /** Gap fix GA-12 (ASSUMPTION A-175): the reports a claims desk reads with reports.claims alone; every other report needs reports.financial. */
@@ -157,6 +160,7 @@ final class ReportsPageController
             'renewal-conversion' => $this->renewalConversion($entity['id'], $from, $to, $by),
             'profit-and-loss' => $this->profitAndLoss($entity['id'], $from, $to, $money),
             'balance-sheet' => $this->balanceSheet($entity['id'], $asOf, $money),
+            'ri-premium-bordereau', 'ri-claims-bordereau' => \App\Modules\Insurance\Reinsurance\Http\Controllers\ReinsuranceReportTables::table($report, $entity['id'], $from, $to, $money), // reinsurance MVP
             'account-activity' => $this->accountActivity($entity['id'], $request, $from, $to, $money),
             'suspense-ageing', 'agent-cash', 'commission-statements', 'trial-balance' => OperationalReportTables::table($report, $entity['id'], $from, $to, $asOf, $money), // gap audit GA-34
             default => abort(404),

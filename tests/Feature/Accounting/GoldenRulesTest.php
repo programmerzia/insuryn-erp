@@ -25,7 +25,7 @@ it('posts golden fixture :dataset', function (string $file): void {
         // dims in fixtures are labels; map the ones that must be UUIDs
         $dims = $fx['dimensions'];
         $dims['branch'] = $ctx['branch_id'];
-        foreach (['product', 'policy', 'customer', 'agent', 'claim'] as $d) {
+        foreach (['product', 'policy', 'customer', 'agent', 'claim', 'reinsurer'] as $d) {
             $dims[$d] = (string) \Illuminate\Support\Str::uuid7();
         }
         $event = DB::transaction(fn () => app(SubmitAccountingEvent::class)(

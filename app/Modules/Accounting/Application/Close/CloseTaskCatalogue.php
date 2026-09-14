@@ -16,7 +16,7 @@ use App\Modules\Accounting\Application\Contracts\CloseTaskContributor;
 final class CloseTaskCatalogue
 {
     /** Gap fix GA-09: tasks that post journals (premium earning's events, the year-end closing journal), so the checklist previews them. */
-    public const POSTING_TASKS = ['premium_earning', 'year_end_close'];
+    public const POSTING_TASKS = ['premium_earning', 'ri_unearned_premium', 'year_end_close'];
 
     /** Market gap G5: tasks listed only where a ConditionalCloseTask says they apply. */
     public const CONDITIONAL_TASKS = ['technical_provisions'];
@@ -44,7 +44,9 @@ final class CloseTaskCatalogue
         $contributedCodes = array_map(fn (CloseTaskDefinition $task): string => $task->code, $contributed);
         // Gap fix GA-43: the unearned premium, suspense, VAT payable and stamp duty payable reconciliations run before the trial balance too.
         $reconciliations = ['premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation',
-            'vat_reconciliation', 'stamp_duty_reconciliation'];
+            'vat_reconciliation', 'stamp_duty_reconciliation',
+            // Reinsurance MVP (G4): reinsurers' share of unearned premium, then the amounts due to and from reinsurers.
+            'ri_unearned_premium', 'ri_balances_reconciliation', 'ri_claims_reconciliation'];
         $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals', ...($provisions ? ['technical_provisions'] : []), ...$contributedCodes];
         $beforeTrialBalance = $yearEnd ? [...$beforeYearEnd, 'year_end_close'] : $beforeYearEnd;
 
@@ -65,6 +67,10 @@ final class CloseTaskCatalogue
             // Market gap G5: the quarter's technical provisions run is posted before the trial balance (the task shares number 12 with the year-end close, which follows it).
             ...($provisions ? [new CloseTaskDefinition(12, 'technical_provisions', CloseTaskKind::Check, [], 'finance_manager', 'provisions.run')] : []),
             ...$contributed,
+            // Reinsurance MVP (G4, DECISION D-108): they share order 11 with the stamp duty reconciliation (order numbers need not be unique) and run before the trial balance.
+            new CloseTaskDefinition(11, 'ri_unearned_premium', CloseTaskKind::Check, ['premium_earning'], 'accounting', 'periods.soft_lock'),
+            new CloseTaskDefinition(11, 'ri_balances_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'ri_payable'),
+            new CloseTaskDefinition(11, 'ri_claims_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'ri_claims'),
             // Gap fix GA-15 (D-81): in the fiscal year's last month, once everything that posts to income and expense is done.
             ...($yearEnd ? [new CloseTaskDefinition(12, 'year_end_close', CloseTaskKind::YearEndClose, $beforeYearEnd, 'finance_manager', 'periods.lock')] : []),
             new CloseTaskDefinition(13, 'trial_balance', CloseTaskKind::TrialBalance, $beforeTrialBalance, 'finance_manager', 'periods.soft_lock'),

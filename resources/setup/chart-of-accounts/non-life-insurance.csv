@@ -8,6 +8,9 @@ code,name,type,normal_side,is_control,control_subledger,role
 1160,Producer Advances,asset,debit,false,,producer_advances
 1200,Recovery Receivable,asset,debit,false,,recovery_receivable
 1300,Advance Income Tax,asset,debit,false,,
+1410,Reinsurers' Share of Unearned Premium,asset,debit,false,,ri_unearned_premium
+1420,Reinsurers' Share of Outstanding Claims,asset,debit,false,,ri_outstanding_claims
+1430,Reinsurance Claims Recoverable,asset,debit,false,,ri_claims_recoverable
 2010,Suspense - Unallocated Receipts,liability,credit,true,suspense,suspense_receipts
 2100,Unearned Premium Reserve,liability,credit,false,,unearned_premium
 2150,Premium Tax Payable (VAT),liability,credit,false,,premium_tax_payable
@@ -21,10 +24,12 @@ code,name,type,normal_side,is_control,control_subledger,role
 2410,Employee Tax Payable,liability,credit,false,,employee_tax_payable
 2420,Provident Fund Payable,liability,credit,false,,pf_payable
 2500,Accounts Payable,liability,credit,false,,accounts_payable
+2610,Due to Reinsurers,liability,credit,false,,ri_payable
 3000,Share Capital,equity,credit,false,,
 3100,Retained Earnings,equity,credit,false,,retained_earnings
 4100,Premium Income,income,credit,false,,premium_income
 4200,Claims Recovery Income,income,credit,false,,claims_recovery_income
+4310,Reinsurance Commission Income,income,credit,false,,ri_commission_income
 4900,FX Gain/Loss,income,credit,false,,fx_gain_loss
 5100,Claims Incurred,expense,debit,false,,claims_expense
 5200,Commission Expense,expense,debit,false,,commission_expense
@@ -32,6 +37,7 @@ code,name,type,normal_side,is_control,control_subledger,role
 5310,Employer PF Contribution,expense,debit,false,,employer_pf_expense
 5400,Office Rent,expense,debit,false,,
 5450,Premium Written Off,expense,debit,false,,premium_written_off
+5410,Reinsurance Premium Ceded,expense,debit,false,,ri_premium_ceded
 5500,Printing and Stationery,expense,debit,false,,
 5600,Bank Charges,expense,debit,false,,bank_charges
 5900,Rounding Differences,expense,debit,false,,rounding_difference

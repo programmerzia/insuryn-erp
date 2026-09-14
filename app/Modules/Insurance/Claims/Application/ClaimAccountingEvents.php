@@ -32,6 +32,8 @@ final class ClaimAccountingEvents
         };
         $this->submitFor($claim, $eventType, 'claim_reserve', $reserve->id, "{$eventType}:{$claim->id}:{$reserve->version}", $reserve->recorded_on,
             $payload + ['claim_id' => $claim->id, 'reserve_version' => $reserve->version]);
+        // Reinsurance MVP: reinsurers' share of the reserve change follows.
+        \Illuminate\Support\Facades\Event::dispatch(new \App\Modules\Insurance\Claims\Domain\Events\ClaimReserveChanged($claim->id, $reserve->id, $reserve->delta_minor, $reserve->recorded_on->toDateString()));
     }
 
     /** Design §4.7: DR claims_outstanding / CR claims_payable. */
@@ -46,6 +48,8 @@ final class ClaimAccountingEvents
     public function paid(Claim $claim, ClaimPayment $payment, CarbonImmutable $paidOn): void
     {
         $this->submitFor($claim, 'CLAIM_PAID', 'claim_payment', $payment->id, 'CLAIM_PAID:'.$payment->id, $paidOn, $this->paidPayload($claim, $payment));
+        // Reinsurance MVP: reinsurers' share of the payment becomes recoverable.
+        \Illuminate\Support\Facades\Event::dispatch(new \App\Modules\Insurance\Claims\Domain\Events\ClaimPaid($claim->id, $payment->id, $payment->amount_minor, $paidOn->toDateString()));
     }
 
     /**

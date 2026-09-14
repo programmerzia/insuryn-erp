@@ -178,6 +178,7 @@ final class PartADemoSeeder extends Seeder
             // GA-35: a one-month short-period fire cover (seasonal stock), so the story has a policy near expiry to renew. Rated on the fire tariff (placeholder, verify).
             'FIRE-SP' => $product('FIRE-SP', 'Fire Short Period (seasonal stock)', 'fire', 'fire', 1)];
         DemoRatingPlans::seed($finance, $this->users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify)
+        ReinsuranceDemoSeeder::setUp($this->entityId, $this->users); // reinsurance MVP (G4): SBC, reinsurers and FY2026 treaties before the first sale
         $this->bankAccountId = app(BankAccountService::class)->create($this->entityId, $accounts['bank_main'], 'City Bank', '****4471', 'BDT', $finance)->id;
         $journals = app(ManualJournalService::class);
         // GA-35: the balance brought forward is the paid-up share capital, not retained earnings (nothing has been earned yet).
@@ -286,6 +287,7 @@ final class PartADemoSeeder extends Seeder
         File::ensureDirectoryExists(dirname(storage_path(self::STATEMENT_FILE)));
         File::put(storage_path(self::STATEMENT_FILE), $september);
         $this->importStatement($september, basename(self::STATEMENT_FILE), matchAll: false);
+        ReinsuranceDemoSeeder::finish($this->entityId, $this->branchId, $products['FIRE'], $this->users); // reinsurance MVP (G4): a facultative placement and Q3 statements
         $this->postQueuedEvents();
     }
 

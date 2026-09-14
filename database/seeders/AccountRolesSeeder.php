@@ -46,6 +46,13 @@ final class AccountRolesSeeder extends Seeder
         'bonus_expense' => 'Festival bonus and other bonuses paid through payroll (People/Payroll MVP)',
         'retained_earnings' => 'Retained earnings',
         'premium_written_off' => 'Unpaid premium written off as too small to collect', // gap fixes W7 (GA-24, A-234)
+        // Reinsurance MVP (G4).
+        'ri_premium_ceded' => 'Reinsurance premium ceded (expense)',
+        'ri_payable' => 'Due to reinsurers: premium ceded less commission (control per reinsurer)',
+        'ri_commission_income' => 'Reinsurance commission income',
+        'ri_unearned_premium' => 'Reinsurers\' share of unearned premium (asset)',
+        'ri_outstanding_claims' => 'Reinsurers\' share of outstanding claims (asset)',
+        'ri_claims_recoverable' => 'Claims recoverable from reinsurers',
     ];
 
     public function run(): void

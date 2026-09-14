@@ -187,6 +187,28 @@ function populateEveryTenantTable(array $ctx): void
         DB::table('claims_paid_history')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'class' => 'motor',
             'accident_quarter_start' => '2026-01-01', 'paid_quarter_start' => '2026-04-01', 'paid_minor' => 1]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
+        // Reinsurance MVP (G4): every reinsurance table.
+        $t = $ctx['tenant_id'];
+        $partyId = (string) DB::table('parties')->value('id');
+        DB::table('reinsurers')->insert(['id' => $reinsurer = (string) Str::uuid7(), 'tenant_id' => $t, 'party_id' => $partyId, 'code' => 'RE1', 'country' => 'BD', 'created_by' => $world['admin']]);
+        DB::table('ri_treaties')->insert(['id' => $treaty = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'code' => 'T1', 'name' => 'Treaty', 'class_code' => 'motor',
+            'underwriting_year' => 2026, 'period_from' => '2026-07-01', 'period_to' => '2027-06-30', 'type' => 'quota_share', 'cession_bp' => 4000, 'commission_bp' => 2500, 'sbc_share_bp' => 5000,
+            'currency' => 'BDT', 'created_by' => $world['admin']]);
+        DB::table('ri_treaty_participants')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'treaty_id' => $treaty, 'reinsurer_id' => $reinsurer, 'share_bp' => 10_000, 'created_at' => now()]);
+        DB::table('ri_facultative_placements')->insert(['id' => $placement = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'policy_id' => $policy->id, 'reinsurer_id' => $reinsurer,
+            'share_bp' => 1000, 'ceded_sum_insured_minor' => 0, 'premium_minor' => 1_000, 'commission_bp' => 0, 'commission_minor' => 0, 'placed_on' => '2026-09-01', 'currency' => 'BDT', 'placed_by' => $world['admin']]);
+        DB::table('ri_cessions')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'policy_id' => $policy->id, 'facultative_placement_id' => $placement,
+            'reinsurer_id' => $reinsurer, 'kind' => 'facultative', 'movement' => 'placement', 'share_bp' => 1000, 'ceded_sum_insured_minor' => 0, 'premium_minor' => 1_000, 'commission_minor' => 0,
+            'accounting_date' => '2026-09-01', 'currency' => 'BDT', 'created_at' => now()]);
+        DB::table('ri_policy_positions')->insertOrIgnore(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'policy_id' => $policy->id, 'sum_insured_minor' => 0, 'net_premium_minor' => 0, 'sbc_sum_insured_minor' => 0,
+            'treaty_sum_insured_minor' => 0, 'retained_sum_insured_minor' => 0, 'above_capacity_minor' => 0]);
+        DB::table('ri_claim_shares')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'claim_id' => $claim->id, 'policy_id' => $policy->id, 'reinsurer_id' => $reinsurer,
+            'kind' => 'reserve', 'source_type' => 'claim_reserve', 'source_id' => (string) Str::uuid7(), 'share_bp' => 1000, 'gross_minor' => 0, 'amount_minor' => 0, 'recorded_on' => '2026-09-06', 'currency' => 'BDT', 'created_at' => now()]);
+        DB::table('ri_upr_adjustments')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'period_id' => (string) Str::uuid7(), 'branch_id' => $ctx['branch_id'],
+            'reinsurer_id' => $reinsurer, 'as_of' => '2026-09-30', 'unearned_minor' => 0, 'delta_minor' => 0, 'currency' => 'BDT', 'created_at' => now()]);
+        DB::table('ri_statements')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'number' => 'RIS-1', 'reinsurer_id' => $reinsurer, 'year' => 2026, 'quarter' => 3,
+            'period_from' => '2026-07-01', 'period_to' => '2026-09-30', 'opening_balance_minor' => 0, 'premium_minor' => 0, 'commission_minor' => 0, 'claims_recoverable_minor' => 0,
+            'closing_balance_minor' => 0, 'outstanding_claims_share_minor' => 0, 'currency' => 'BDT', 'prepared_by' => $world['admin']]);
     });
     activeRatingPlan($ctx['tenant_id'], ['code' => 'MOTOR-ISOLATION', 'name' => 'Isolation plan', 'class_code' => 'motor', 'effective_from' => '2026-01-01', // Phase 3 R2
         'tables' => [['code' => 'rates', 'name' => 'Rates', 'dimensions' => ['vehicle_type'], 'value_type' => 'rate_pct', 'rows' => [['keys' => ['vehicle_type' => 'private'], 'value_bp' => 250]]]],

@@ -38,6 +38,10 @@ const TASK_NAMES: Record<string, string> = {
     stamp_duty_reconciliation: 'Stamp duty payable reconciliation',
     year_end_close: 'Year-end close to retained earnings',
     technical_provisions: 'Technical provisions', // market gap G5
+    // Reinsurance MVP (G4).
+    ri_unearned_premium: "Reinsurers' share of unearned premium",
+    ri_balances_reconciliation: 'Reinsurer balances reconciliation',
+    ri_claims_reconciliation: 'Reinsurance claims reconciliation',
 };
 const taskName = (code: string) => TASK_NAMES[code] ?? words(code);
 const month = computed(() => (props.run.starts ? formatMonth(props.run.starts, 'long') : props.run.period));
@@ -58,6 +62,9 @@ const queueFor = (code: string): { label: string; href: string } | null =>
         suspense_reconciliation: { label: 'Suspense', href: '/suspense' },
         vat_reconciliation: { label: 'Premium register', href: `/reports/premium-register?from=${props.run.starts}&to=${end.value}` },
         stamp_duty_reconciliation: { label: 'Premium register', href: `/reports/premium-register?from=${props.run.starts}&to=${end.value}` },
+        ri_unearned_premium: { label: 'Cessions', href: '/reinsurance/cessions' },
+        ri_balances_reconciliation: { label: 'Reinsurer statements', href: '/reinsurance/statements' },
+        ri_claims_reconciliation: { label: 'Claims bordereau', href: `/reports/ri-claims-bordereau?from=${props.run.starts}&to=${end.value}` },
         year_end_close: { label: 'Profit and loss', href: `/reports/profit-and-loss?from=${props.run.starts}&to=${end.value}` },
         accruals: { label: 'New manual journal', href: '/accounting/journals/create' },
         technical_provisions: { label: 'Technical provisions', href: '/regulatory/provisions' }, // market gap G5

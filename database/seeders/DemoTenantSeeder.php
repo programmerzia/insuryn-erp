@@ -74,6 +74,13 @@ final class DemoTenantSeeder extends Seeder
                 '5450' => ['Premium Written Off', 'expense', 'debit', 'premium_written_off', false, null], // gap fixes W7 (GA-24)
                 '5320' => ['Festival Bonus', 'expense', 'debit', 'bonus_expense', false, null], // People/Payroll MVP
                 '5900' => ['Rounding Differences', 'expense', 'debit', 'rounding_difference', false, null],
+                // Reinsurance MVP (G4).
+                '1410' => ['Reinsurers\' Share of Unearned Premium', 'asset', 'debit', 'ri_unearned_premium', false, null],
+                '1420' => ['Reinsurers\' Share of Outstanding Claims', 'asset', 'debit', 'ri_outstanding_claims', false, null],
+                '1430' => ['Reinsurance Claims Recoverable', 'asset', 'debit', 'ri_claims_recoverable', false, null],
+                '2610' => ['Due to Reinsurers', 'liability', 'credit', 'ri_payable', false, null],
+                '4310' => ['Reinsurance Commission Income', 'income', 'credit', 'ri_commission_income', false, null],
+                '5410' => ['Reinsurance Premium Ceded', 'expense', 'debit', 'ri_premium_ceded', false, null],
             ];
             $accounts = [];
             foreach ($coa as $code => [$name, $type, $side, $role, $control, $sub]) {

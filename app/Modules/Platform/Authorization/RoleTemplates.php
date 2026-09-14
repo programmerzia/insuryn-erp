@@ -17,7 +17,7 @@ final class RoleTemplates
     public const AUDITOR = 'auditor';
 
     /** Permissions an auditor may hold: read-only (§7.3 "Auditor role can never be combined with write permissions"). */
-    public const READ_ONLY_PERMISSIONS = ['accounting.view_journals', 'audit.view', 'reports.financial', 'reports.regulatory'];
+    public const READ_ONLY_PERMISSIONS = ['accounting.view_journals', 'audit.view', 'reports.financial', 'reports.regulatory', 'ri.view'];
 
     private const BRANCH_OFFICER = ['policy.create', 'policy.issue', 'receipt.create', 'party.manage',
         // ASSUMPTION A-101 (slice R8): whoever quotes, issues and records receipts at the branch prints the schedule, endorsement and receipt for the customer.
@@ -34,7 +34,9 @@ final class RoleTemplates
         // ASSUMPTION A-175 (gap fix GA-12): the claims desk reads the outstanding claims register, claims paid and loss ratio (claims officer, and the claims manager
         // through "+"), without the financial reports.
         'reports.claims'];
-    private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
+    private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate',
+        // ASSUMPTION A-257 (reinsurance MVP): accounting sees cessions, reinsurer statements and bordereaux (accountant, and the finance manager and CFO built on it).
+        'ri.view'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
         'commission.approve', 'claim.pay_release', 'receipt.refund_release', 'product.manage', 'bank.manage_accounts', 'commission.manage_plans',
         // Interpretation: the finance manager signs off financial statements in the close (§5.7 tasks 14–15), so holds reports.financial.
@@ -55,7 +57,9 @@ final class RoleTemplates
         // ASSUMPTION A-268 (market gap G5): the finance manager (and CFO) prepare the technical provisions run and mark regulatory returns filed.
         'regulatory.file', 'provisions.run',
         // ASSUMPTION A-287 (People/Payroll MVP): the finance manager (and CFO) approve and post the payroll the HR manager calculated (SoD object rule).
-        'payroll.approve'];
+        'payroll.approve',
+        // ASSUMPTION A-257 (reinsurance MVP): the finance manager (and CFO) set up treaties and reinsurers, prepare reinsurer statements and place facultative cover.
+        'ri.manage_treaties', 'ri.place_facultative'];
     // ASSUMPTION A-268 (market gap G5): the CFO approves and posts the technical provisions run, never one they prepared (SoD object rule).
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve'];
 
@@ -78,7 +82,9 @@ final class RoleTemplates
                 'receipt.refund_request',
                 // ASSUMPTION A-232 (gap fixes W7, GA-24): the branch manager who cancels and collects asks to write off a small balance the customer will not pay;
                 // finance approves it (receipt.write_off_approve), never the same person (the approval engine's maker ≠ checker).
-                'receipt.write_off_request']],
+                'receipt.write_off_request',
+                // ASSUMPTION A-257 (reinsurance MVP): the branch manager who decides underwriting places a large risk facultatively and sees its reinsurance.
+                'ri.place_facultative', 'ri.view']],
             'claims_officer' => ['name' => 'Claims Officer', 'permissions' => self::CLAIMS_OFFICER],
             'claims_manager' => ['name' => 'Claims Manager', 'permissions' => [...self::CLAIMS_OFFICER, 'claim.approve', 'claim.pay_request', 'claim.close']],
             'accountant' => ['name' => 'Accountant', 'permissions' => [...self::ACCOUNTANT,

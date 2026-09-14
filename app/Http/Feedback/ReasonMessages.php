@@ -79,6 +79,18 @@ final class ReasonMessages
         'PROVISIONS_NOT_DRAFT' => 'This technical provisions run has already been reviewed or posted. Refresh the page.',
         'PROVISIONS_NOT_REVIEWED' => 'Only a reviewed technical provisions run can be approved. Mark it reviewed first, or refresh the page.',
         'PROVISIONS_NO_BRANCH' => 'Set up a branch for this company before posting technical provisions.',
+        // Reinsurance MVP (G4).
+        'RI_REINSURER_CODE_TAKEN' => 'Another reinsurer already uses this code. Choose a different code.',
+        'RI_STATE_REINSURER_EXISTS' => 'The state reinsurer (Sadharan Bima Corporation) is already set up.',
+        'RI_TREATY_TYPE_INVALID' => 'A quota share treaty needs a cession percentage above zero; a surplus treaty needs a retention above zero and at least one line.',
+        'RI_TREATY_PERIOD_INVALID' => 'The treaty period must end on or after the day it starts.',
+        'RI_TREATY_PARTICIPANTS_INVALID' => 'The treaty reinsurers\' shares must add up to 100%, each above zero. The state reinsurer takes its compulsory share separately.',
+        'RI_TREATY_DUPLICATE' => 'Another active treaty already covers this class and underwriting year, or uses this code. Make the other one inactive or choose another code.',
+        'RI_POLICY_NOT_IN_FORCE' => 'Facultative reinsurance is placed on an issued or active policy.',
+        'RI_REINSURER_INACTIVE' => 'Choose an active reinsurer.',
+        'RI_FACULTATIVE_INVALID' => 'Enter a share above 0% and up to 100%, a premium above zero and a commission between 0% and 100%.',
+        'RI_SHARE_EXCEEDS_RISK' => 'This placement would cede more than the policy\'s sum insured. Reduce the share or the ceded sum insured.',
+        'RI_QUARTER_INVALID' => 'Choose a quarter from 1 to 4 of a calendar year.',
     ];
 
     /** @var list<string> reasons worded below from the amounts or dates in the domain message */

@@ -1,0 +1,1 @@
+{ "event_type": "RI_CLAIM_RESERVE_CEDED", "payload": {"amount":6000000,"share_id":"SH1"}, "dimensions": {"branch":"B1","product":"P1","product_code":"MOTOR","lob":"motor","channel":"agent","policy":"POL1","customer":"CU1","agent":"AG1","claim":"CL1","reinsurer":"RE1"}, "expected": [["ri_outstanding_claims","debit",6000000],["claims_expense","credit",6000000]] }

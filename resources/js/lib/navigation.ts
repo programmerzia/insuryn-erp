@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal } from 'lucide-vue-next';
+import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2 } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). GA-37: each label is the title of the page it opens, in the words of docs/glossary.md, and no two items share an icon. Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -46,6 +46,10 @@ export const navigation: NavItem[] = [
     { id: 'trial-balance', detail: 'reports/Show', page: 'accounting/TrialBalance', label: 'Trial balance', href: '/accounting/trial-balance', icon: Scale, any: [reader] },
     { id: 'close', detail: 'close/Run', page: 'close/Index', label: 'Month-end close', href: '/close', icon: CalendarCheck, any: ['periods.soft_lock', 'periods.lock', 'periods.reopen', reader], badge: 'close' },
     // GA-12: the claims desk opens the claims reports (outstanding claims, claims paid, loss ratio) with reports.claims.
+    // Reinsurance MVP (G4).
+    { id: 'ri-treaties', detail: 'reinsurance/treaties/Edit', page: 'reinsurance/treaties/Index', label: 'Treaties', href: '/reinsurance/treaties', icon: Handshake, any: ['ri.view', 'ri.manage_treaties', 'ri.place_facultative'], secondary: true },
+    { id: 'ri-cessions', page: 'reinsurance/cessions/Index', label: 'Cessions', href: '/reinsurance/cessions', icon: Share2, any: ['ri.view', 'ri.manage_treaties', 'ri.place_facultative'], secondary: true },
+    { id: 'ri-statements', page: 'reinsurance/statements/Index', label: 'Reinsurer statements', href: '/reinsurance/statements', icon: FileSpreadsheet, any: ['ri.view', 'ri.manage_treaties', 'ri.place_facultative'], secondary: true },
     { id: 'reports', detail: 'reports/Show', page: 'reports/Index', label: 'Reports', href: '/reports', icon: ChartColumn, any: [reader, 'reports.claims'] },
     // Market gap G5: the Regulatory dashboard, returns and the quarterly technical provisions run.
     { id: 'regulatory', page: 'regulatory/Dashboard', label: 'Regulatory dashboard', href: '/regulatory', icon: ShieldCheck, any: ['reports.regulatory', 'regulatory.file', 'provisions.run', 'provisions.approve'] },

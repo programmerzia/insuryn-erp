@@ -11,6 +11,7 @@ import ObjectPage from '@/components/object/ObjectPage.vue';
 import EndorseDetailsDrawer, { type InsuredDetails } from '@/components/policies/EndorseDetailsDrawer.vue';
 import WriteOffDrawer, { type WriteOffOutlook } from '@/components/policies/WriteOffDrawer.vue';
 import EndorseRiskDrawer from '@/components/rating/EndorseRiskDrawer.vue';
+import PolicyReinsuranceTab from '@/components/reinsurance/PolicyReinsuranceTab.vue';
 import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
 import DataTable from '@/components/table/DataTable.vue';
 import DetailList from '@/components/table/DetailList.vue';
@@ -26,6 +27,7 @@ import { basisSentence, changeRows, type EndorsementRatingData } from '@/lib/end
 import { useMoneyForm } from '@/lib/moneyForm';
 import { policyPageActions, usePageActions } from '@/lib/pageActions';
 import { usePreferences } from '@/lib/preferences';
+import type { PolicyReinsurance } from '@/lib/reinsurance';
 import type { RatingResultData, RiskFieldDefinition } from '@/lib/riskForm';
 
 const props = defineProps<{
@@ -47,6 +49,8 @@ const props = defineProps<{
         schema: RiskFieldDefinition[]; current_inputs: Record<string, unknown>; coverages: { code: string; name_en: string; name_bn: string; mandatory: boolean }[]; chosen_coverages: string[];
     } | null;
     today: string;
+    /** Reinsurance MVP (G4): null without a reinsurance permission. */
+    reinsurance?: PolicyReinsurance | null;
     /** Gap fix GA-14. */
     bouncedPremium?: { receipt_id: string; receipt_number: string; cheque_no: string | null; bounced_on: string; bounce_reason: string | null; installment_no: number; outstanding: string }[];
     timeline?: TimelineEntry[];
@@ -121,6 +125,7 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
             :documents="documents"
             :document-upload="documentUpload"
             :document-generation="documentGeneration"
+            :extra-tabs="reinsurance ? [{ value: 'reinsurance', label: 'Reinsurance' }] : []"
         >
             <template #actions>
                 <button v-if="actions.endorse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'endorse'">Endorse</button>
@@ -207,6 +212,9 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
                         <RatingBreakdown :result="rating.result" :locale="preferences.locale" />
                     </aside>
                 </div>
+            </template>
+            <template v-if="reinsurance" #tab-reinsurance>
+                <PolicyReinsuranceTab :policy-id="policy.id" :title="title" :currency="policy.currency" :data="reinsurance" />
             </template>
             <template #transactions>
                 <div class="max-w-[900px] overflow-x-auto border border-line">
