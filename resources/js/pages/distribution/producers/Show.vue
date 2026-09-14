@@ -12,13 +12,14 @@ import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import AuditList from '@/components/object/AuditList.vue';
+import DocumentList from '@/components/object/DocumentList.vue';
 import SkeletonRows from '@/components/object/SkeletonRows.vue';
-import type { AuditRow } from '@/components/object/types';
+import type { AuditRow, StoredDocumentRow } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 
 /** Distribution design note §6 producer page: Overview · Hierarchy · Compensation · Production · Statements · Documents · Audit. */
@@ -40,6 +41,9 @@ const props = defineProps<{
     bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
     can: { manage: boolean; advance: boolean };
     audit?: AuditRow[];
+    /** Gap audit GA-41: agency agreements, KYC and licence certificates attached to the producer. */
+    documents?: StoredDocumentRow[];
+    documentUpload?: string | null;
 }>();
 
 const base = `/distribution/producers/${props.producer.id}`;
@@ -113,8 +117,8 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                             <h2 class="mb-2 text-ui font-medium">Advances</h2>
                             <ul class="border border-line">
                                 <li v-for="a in advances" :key="a.id" class="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2 text-ui last:border-b-0">
-                                    <span class="w-28 font-medium tabular-nums">{{ a.balance }}</span>
-                                    <span class="text-ink-2">of {{ a.amount }} issued {{ formatDate(a.issued_on) }} · {{ a.recovery }}</span>
+                                    <span class="w-28 font-medium tabular-nums">{{ formatMoney(a.balance) }}</span>
+                                    <span class="text-ink-2">of {{ formatMoney(a.amount) }} issued {{ formatDate(a.issued_on) }} · {{ a.recovery }}</span>
                                     <StatusBadge :status="a.status" class="ml-auto" />
                                 </li>
                                 <li v-if="advances.length === 0" class="px-3 py-4 text-ui text-ink-2">No advances.</li>
@@ -162,7 +166,7 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                                             <td class="border-b border-line px-3">{{ formatDate(e.earned_on) }}</td>
                                             <td class="border-b border-line px-3">{{ e.kind === 'earned' ? (e.role === 'override' ? `Override ${e.level ?? ''}` : 'Direct') : words(e.kind) }}</td>
                                             <td class="border-b border-line px-3"><Link v-if="e.policy_id" :href="`/policies/${e.policy_id}`" class="text-accent-text hover:underline">{{ e.policy_number }}</Link></td>
-                                            <td class="num border-b border-line px-3">{{ e.rate_percent }}</td><td class="num border-b border-line px-3">{{ e.amount }}</td><td class="num border-b border-line px-3">{{ e.withholding }}</td>
+                                            <td class="num border-b border-line px-3">{{ e.rate_percent }}</td><td class="num border-b border-line px-3">{{ formatMoney(e.amount) }}</td><td class="num border-b border-line px-3">{{ formatMoney(e.withholding) }}</td>
                                             <td class="border-b border-line px-3"><StatusBadge :status="e.status" /></td>
                                         </tr>
                                         <tr v-if="compensation.entries.length === 0"><td colspan="7" class="px-3 py-4 text-ui text-ink-2">No commission yet.</td></tr>
@@ -185,8 +189,8 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                                 <tbody>
                                     <tr v-for="[key, label] in [['month', 'This month'], ['quarter', 'This quarter'], ['year', 'This year']] as const" :key="key" class="h-(--row-h)">
                                         <td class="border-b border-line px-3">{{ label }} <span class="text-ink-2">({{ formatDate(production[key].from) }} to {{ formatDate(production[key].to) }})</span></td>
-                                        <td class="num border-b border-line px-3">{{ production[key].premium }}</td><td class="num border-b border-line px-3 text-ink-2">{{ production[key].premium_target ?? '—' }}</td>
-                                        <td class="num border-b border-line px-3">{{ production[key].policies }}</td><td class="num border-b border-line px-3">{{ production[key].collections }}</td>
+                                        <td class="num border-b border-line px-3">{{ formatMoney(production[key].premium) }}</td><td class="num border-b border-line px-3 text-ink-2">{{ production[key].premium_target ? formatMoney(production[key].premium_target) : '—' }}</td>
+                                        <td class="num border-b border-line px-3">{{ production[key].policies }}</td><td class="num border-b border-line px-3">{{ formatMoney(production[key].collections) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -197,7 +201,7 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                     <TabsContent value="statements" class="max-w-[900px] outline-none">
                         <ul class="border border-line">
                             <li v-for="s in statements" :key="s.id" class="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2 text-ui last:border-b-0">
-                                <span class="w-36 font-medium">{{ s.number ?? 'Draft' }}</span><span class="text-ink-2">{{ formatDate(s.period) }}</span><span class="w-28 text-right tabular-nums">{{ s.net }}</span>
+                                <span class="w-36 font-medium">{{ s.number ?? 'Draft' }}</span><span class="text-ink-2">{{ formatDate(s.period) }}</span><span class="w-28 text-right tabular-nums">{{ formatMoney(s.net) }}</span>
                                 <span class="text-ink-2">{{ routeWords[s.paid_via] }}</span><StatusBadge :status="s.status" class="ml-auto" />
                             </li>
                             <li v-if="statements.length === 0" class="px-3 py-4 text-ui text-ink-2">No statements yet. They are prepared in the statement run.</li>
@@ -206,7 +210,7 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                     </TabsContent>
 
                     <TabsContent value="documents" class="outline-none">
-                        <p class="text-ui text-ink-2">Documents cannot be attached yet. Keep agreements and KYC in your document store and note the reference on the licence.</p>
+                        <Deferred data="documents"><template #fallback><SkeletonRows /></template><DocumentList :documents="documents ?? []" :upload-url="documentUpload ?? null" /></Deferred>
                     </TabsContent>
                     <TabsContent value="audit" class="outline-none">
                         <Deferred data="audit"><template #fallback><SkeletonRows /></template><AuditList :rows="audit ?? []" /></Deferred>

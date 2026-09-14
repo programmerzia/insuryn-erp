@@ -32,7 +32,7 @@ final class ObjectPageController
         ]);
     }
 
-    public function claim(Request $request, string $claim, ObjectHistory $history, ObjectDocuments $documents): Response
+    public function claim(Request $request, string $claim, ObjectHistory $history, ObjectDocuments $documents, GeneratedDocumentsController $generated): Response
     {
         $subjects = array_values([['claim', $claim], ...array_map(fn (string $id): array => ['claim_payment', $id], DB::table('claim_payments')->where('claim_id', $claim)->pluck('id')->map(fn ($id): string => (string) $id)->all())]);
 
@@ -41,6 +41,7 @@ final class ObjectPageController
             'accounting' => Inertia::defer(fn (): array => $history->accounting($history->journalsOnDimension('dim_claim', $claim)), 'history'),
             'audit' => Inertia::defer(fn (): array => $history->audit($subjects), 'history'),
             'documents' => Inertia::defer(fn (): array => $documents->forPage('claim', $claim, "/claims/{$claim}"), 'history'),
+            'documentGeneration' => Inertia::defer(fn (): array => $generated->forClaim(PageSupport::actor($request), $claim), 'history'), // gap audit GA-41
         ]);
     }
 

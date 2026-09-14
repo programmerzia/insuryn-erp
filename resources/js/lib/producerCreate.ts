@@ -42,7 +42,9 @@ export interface ProducerDraft {
 
 /** The drawer's starting values: the typed name, an agent on the quote's branch, a non-life licence from today to a year less a day. */
 export function producerDraft(name: string, branchId: string, today: string): ProducerDraft {
-    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
-    const end = new Date(Date.UTC(y + 1, m - 1, d) - 86_400_000).toISOString().slice(0, 10);
-    return { name, producer_type: 'agent', code: '', branch_id: branchId, licence_no: '', licence_class: 'non_life', issued_on: today, expires_on: end };
+    // Gap audit GA-33: the drawer starts before today is known (''), which threw "RangeError: Invalid time value"; without a date both dates stay empty.
+    const match = today.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const start = match ? Date.UTC(Number(match[1]) + 1, Number(match[2]) - 1, Number(match[3])) : Number.NaN;
+    const end = Number.isNaN(start) ? '' : new Date(start - 86_400_000).toISOString().slice(0, 10);
+    return { name, producer_type: 'agent', code: '', branch_id: branchId, licence_no: '', licence_class: 'non_life', issued_on: end === '' ? '' : today, expires_on: end };
 }

@@ -6,7 +6,7 @@ import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { formatMoney } from '@/lib/format';
+import { formatDateTime, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 
 interface ApprovalRow { id: string; object_type: string; title: string; step: number; requested_by: string; requested_at: string; link: string | null; amount: string | null }
@@ -52,7 +52,7 @@ void props;
             @primary="approve"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Amount', value: row.amount ? `${formatMoney(row.amount)} BDT` : null, num: true }, { label: 'Requested by', value: row.requested_by }, { label: 'Requested', value: row.requested_at }, { label: 'Step', value: row.step }]" />
+                <DetailList :items="[{ label: 'Amount', value: row.amount ? `${formatMoney(row.amount)} BDT` : null, num: true }, { label: 'Requested by', value: row.requested_by }, { label: 'Requested', value: formatDateTime(row.requested_at) }, { label: 'Step', value: row.step }]" />
                 <p class="mt-4 text-ui text-ink-2">You never see your own requests here. Approving may post to the ledger; you see the entries first.</p>
             </template>
             <template #actions="{ row }">

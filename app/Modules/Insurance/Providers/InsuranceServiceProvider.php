@@ -45,7 +45,9 @@ final class InsuranceServiceProvider extends ServiceProvider
         // Slice R8: printable documents. A new document for an object is one DocumentDataProvider class tagged here.
         $this->app->tag([PolicyScheduleDocumentData::class, EndorsementDocumentData::class, ReceiptDocumentData::class,
             \App\Modules\Insurance\Quotation\Application\Documents\QuotationDocumentData::class, \App\Modules\Insurance\CoverNote\Application\Documents\CoverNoteDocumentData::class,
-            \App\Modules\Insurance\Renewal\Application\Documents\RenewalNoticeDocumentData::class], DocumentDataProvider::class); // slice R9: renewal notice
+            \App\Modules\Insurance\Renewal\Application\Documents\RenewalNoticeDocumentData::class, // slice R9: renewal notice
+            // Gap audit GA-41: the claim acknowledgement and the discharge voucher.
+            \App\Modules\Insurance\Claims\Application\Documents\ClaimAcknowledgementDocumentData::class, \App\Modules\Insurance\Claims\Application\Documents\DischargeVoucherDocumentData::class], DocumentDataProvider::class);
     }
 
     public function boot(ApprovalHandlerRegistry $approvals): void

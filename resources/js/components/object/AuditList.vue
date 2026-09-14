@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AuditRow } from '@/components/object/types';
+import { formatDateTime } from '@/lib/format';
 
 /** The raw audit trail: who did what, when, why, and each field before and after. */
 defineProps<{ rows: AuditRow[] }>();
@@ -19,7 +20,7 @@ defineProps<{ rows: AuditRow[] }>();
             </thead>
             <tbody>
                 <tr v-for="(row, index) in rows" :key="index" class="align-top">
-                    <td class="border-b border-line px-3 py-2 text-ink-2 tabular-nums">{{ row.at.slice(0, 16).replace('T', ' ') }}</td>
+                    <td class="border-b border-line px-3 py-2 text-ink-2 tabular-nums">{{ formatDateTime(row.at) }}</td>
                     <td class="border-b border-line px-3 py-2">{{ row.action }}</td>
                     <td class="border-b border-line px-3 py-2">{{ row.by }}</td>
                     <td class="border-b border-line px-3 py-2">

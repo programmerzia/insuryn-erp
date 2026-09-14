@@ -59,6 +59,25 @@ final class GeneratedDocumentsController
             ->with('next', ['label' => 'Download', 'url' => "/receipts/{$receipt}/documents/{$generated->storedDocumentId}", 'method' => 'download']);
     }
 
+    /** Gap audit GA-41: POST /claims/{id}/generated-documents — print the claim acknowledgement, or a payment's discharge voucher (object_id = the payment). */
+    public function claim(Request $request, string $claim): RedirectResponse
+    {
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeAny($actor, \App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController::AREA);
+        abort_if(! DB::table('claims')->where('id', $claim)->exists(), 404);
+        /** @var array{template_code: string, object_id?: string|null, locale: string} $data */
+        $data = $request->validate(['template_code' => ['required', Rule::in([DocumentTemplateCode::ClaimAck->value, DocumentTemplateCode::DischargeVoucher->value])],
+            'object_id' => ['nullable', 'uuid'], 'locale' => ['required', Rule::in(['en', 'bn'])]]);
+        [$objectType, $objectId] = $data['template_code'] === DocumentTemplateCode::DischargeVoucher->value
+            ? ['claim_payment', (string) DB::table('claim_payments')->where('id', $data['object_id'] ?? null)->where('claim_id', $claim)->value('id')]
+            : ['claim', $claim];
+        abort_if($objectId === '', 404);
+        $generated = $this->generator->generate($data['template_code'], $objectType, $objectId, $actor, $data['locale']);
+
+        return redirect("/claims/{$claim}?tab=documents")->with('status', self::generatedMessage($generated))
+            ->with('next', ['label' => 'Download', 'url' => "/claims/{$claim}/documents/{$generated->storedDocumentId}", 'method' => 'download']);
+    }
+
     /** POST /quotations/{id}/generated-documents — print an issued quotation (Phase 3 §2 step 1 "save/print quotation"). */
     public function quotation(Request $request, string $quotation): RedirectResponse
     {
@@ -164,6 +183,37 @@ final class GeneratedDocumentsController
         usort($history, fn (GeneratedDocument $a, GeneratedDocument $b): int => [$b->renderedAt->format('Y-m-d H:i:s.u'), $b->id] <=> [$a->renderedAt->format('Y-m-d H:i:s.u'), $a->id]);
 
         return self::panel("/policies/{$policy}/generated-documents", $actions, array_map(fn (GeneratedDocument $g): array => self::row($g, "/policies/{$policy}"), $history));
+    }
+
+    /**
+     * Gap audit GA-41: the claim page's print panel — the acknowledgement, and the discharge voucher of each approved payment — and every version printed.
+     *
+     * @return array<string, mixed>
+     */
+    public function forClaim(string $actor, string $claim): array
+    {
+        $model = DB::table('claims')->where('id', $claim)->first(['id', 'entity_id', 'branch_id']);
+        if ($model === null) {
+            return self::panel(null, [], []);
+        }
+        $payments = DB::table('claim_payments')->where('claim_id', $claim)->orderBy('created_at')->orderBy('id')->get(['id', 'status', 'amount_minor', 'currency']);
+        $actions = [];
+        if ($this->permissions->has($actor, DocumentGenerator::PERMISSION, AuthorizationScope::branch((string) $model->entity_id, (string) $model->branch_id))) {
+            $actions[] = ['label' => 'Print acknowledgement', 'template_code' => DocumentTemplateCode::ClaimAck->value, 'object_id' => null];
+            foreach ($payments as $i => $payment) {
+                if (in_array((string) $payment->status, ['approved', 'release_requested', 'release_pending_approval', 'paid'], true)) {
+                    $actions[] = ['label' => 'Print discharge voucher '.($i + 1).' ('.PageSupport::money((int) $payment->amount_minor, (string) $payment->currency).')',
+                        'template_code' => DocumentTemplateCode::DischargeVoucher->value, 'object_id' => (string) $payment->id];
+                }
+            }
+        }
+        $history = $this->generator->history('claim', $claim);
+        foreach ($payments as $payment) {
+            $history = [...$history, ...$this->generator->history('claim_payment', (string) $payment->id)];
+        }
+        usort($history, fn (GeneratedDocument $a, GeneratedDocument $b): int => [$b->renderedAt->format('Y-m-d H:i:s.u'), $b->id] <=> [$a->renderedAt->format('Y-m-d H:i:s.u'), $a->id]);
+
+        return self::panel("/claims/{$claim}/generated-documents", $actions, array_map(fn (GeneratedDocument $g): array => self::row($g, "/claims/{$claim}"), $history));
     }
 
     /** @return array<string, mixed> */

@@ -10,7 +10,7 @@ import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
-import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
+import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -28,6 +28,8 @@ const props = defineProps<{
     audit?: AuditRow[];
     documents?: StoredDocumentRow[];
     documentUpload: string | null;
+    /** Gap audit GA-41: print the claim acknowledgement and each payment's discharge voucher. */
+    documentGeneration?: DocumentGeneration;
     today: string;
     /** Flow fix X3: set right after a reserve when this user may approve the settlement now. */
     nextStep?: 'approve_payment' | null;
@@ -123,6 +125,7 @@ function openRelease(id: string): void {
             :audit="audit"
             :documents="documents"
             :document-upload="documentUpload"
+            :document-generation="documentGeneration"
             transactions-label="Reserves and payments"
         >
             <template #actions>

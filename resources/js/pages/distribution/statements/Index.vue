@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { blankZero } from '@/lib/distribution';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 
 /**
@@ -36,7 +36,7 @@ const on = ref('');
 const bankAccount = ref('');
 const confirm = useJournalConfirm();
 const routeWords: Record<string, string> = { bank: 'Bank', payroll: 'Payroll', ap: 'Accounts payable' };
-const monthLabel = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+const monthLabel = (day: string) => formatMonth(day, 'long');
 const drafts = computed(() => props.statements.filter((s) => s.status === 'draft').length);
 const columns: DataColumn<Statement>[] = [
     { id: 'producer', header: 'Producer', value: (s) => s.producer_code, href: (s) => `/distribution/producers/${s.producer_id}`, width: 100 },
@@ -99,8 +99,8 @@ const primaryLabel = (s: Statement): string | undefined =>
                 </div>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Earned', value: row.earned, num: true }, { label: 'Overrides', value: row.override, num: true }, { label: 'Bonus', value: row.bonus, num: true },
-                    { label: 'Clawback', value: row.clawback, num: true }, { label: 'Tax withheld', value: row.withholding, num: true }, { label: 'Advances recovered', value: row.advances, num: true }, { label: 'Net to pay', value: `${row.net} BDT`, num: true }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Earned', value: formatMoney(row.earned), num: true }, { label: 'Overrides', value: formatMoney(row.override), num: true }, { label: 'Bonus', value: formatMoney(row.bonus), num: true },
+                    { label: 'Clawback', value: formatMoney(row.clawback), num: true }, { label: 'Tax withheld', value: formatMoney(row.withholding), num: true }, { label: 'Advances recovered', value: formatMoney(row.advances), num: true }, { label: 'Net to pay', value: `${formatMoney(row.net)} BDT`, num: true }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div v-if="primaryLabel(row)" class="mt-4 grid gap-3 border-t border-line pt-4">
@@ -113,7 +113,7 @@ const primaryLabel = (s: Statement): string | undefined =>
                 <h3 class="mt-5 mb-1 text-ui font-medium">Entries</h3>
                 <ul class="border border-line">
                     <li v-for="(e, i) in entries.filter((x) => x.statement_id === row.id)" :key="i" class="flex items-center gap-2 border-b border-line px-2 py-1 text-dense last:border-b-0">
-                        <span class="w-20 text-ink-2">{{ formatDate(e.earned_on) }}</span><span class="w-20">{{ e.kind.charAt(0).toUpperCase() + e.kind.slice(1) }}</span><span class="truncate text-ink-2">{{ e.policy_number }}</span><span class="ml-auto tabular-nums">{{ e.amount }}</span>
+                        <span class="w-20 text-ink-2">{{ formatDate(e.earned_on) }}</span><span class="w-20">{{ e.kind.charAt(0).toUpperCase() + e.kind.slice(1) }}</span><span class="truncate text-ink-2">{{ e.policy_number }}</span><span class="ml-auto tabular-nums">{{ formatMoney(e.amount) }}</span>
                     </li>
                 </ul>
                 <Link :href="`/distribution/producers/${row.producer_id}?tab=statements`" class="mt-3 inline-block text-ui text-accent-text hover:underline">Open the producer</Link>

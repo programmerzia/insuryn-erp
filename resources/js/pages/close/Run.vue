@@ -7,7 +7,7 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMonth } from '@/lib/format';
 import { usePermissions } from '@/lib/permissions';
 
 /**
@@ -29,7 +29,7 @@ const expanded = ref<string | null>(null);
 // Slice 2.1b (D-56): a CFO locking before month end writes the reason; it is kept on the audit trail.
 const earlyReason = ref('');
 const words = (code: string) => code.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
-const month = computed(() => (props.run.starts ? new Date(`${props.run.starts}T00:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : props.run.period));
+const month = computed(() => (props.run.starts ? formatMonth(props.run.starts, 'long') : props.run.period));
 const done = computed(() => props.tasks.filter((t) => t.status === 'done' || t.status === 'skipped').length);
 const lockTask = computed(() => props.tasks.find((t) => t.code === 'period_lock'));
 const checklist = computed(() => props.tasks.filter((t) => t.code !== 'period_lock'));

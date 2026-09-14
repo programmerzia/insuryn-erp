@@ -11,7 +11,7 @@ import TextInput from '@/components/forms/TextInput.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { normalSideFor } from '@/lib/accountCreate';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMonth } from '@/lib/format';
 import type { SharedProps } from '@/types/shared';
 
 /**
@@ -49,7 +49,7 @@ const people = useForm({ users: [{ name: '', email: '', role: 'branch_officer' }
 const types = ['asset', 'liability', 'equity', 'income', 'expense'].map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }));
 const sides = [{ value: 'debit', label: 'Debit' }, { value: 'credit', label: 'Credit' }];
 const terms = [{ value: '12', label: '12 months' }, { value: '6', label: '6 months' }, { value: '3', label: '3 months' }, { value: '1', label: '1 month' }];
-const monthLabel = (month: string) => (month ? new Date(`${month}-01T00:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : '—');
+const monthLabel = (month: string) => (month ? formatMonth(month, 'long') : '—');
 const lastMonth = computed(() => {
     if (!fiscal.first_month) return '';
     const [y, m] = fiscal.first_month.split('-').map(Number);

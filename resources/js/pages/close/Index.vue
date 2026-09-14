@@ -9,7 +9,7 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMonth } from '@/lib/format';
 import { useOnboarding } from '@/lib/onboarding';
 
 interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null; pending?: PendingDocument[]; last_day_reached?: boolean; ended?: boolean; lock_from?: string }
@@ -18,7 +18,7 @@ const onboarding = useOnboarding();
 
 const active = ref<string | null>(null);
 const reason = ref('');
-const month = (p: Period) => new Date(`${p.starts}T00:00:00`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+const month = (p: Period) => formatMonth(p.starts); // gap audit GA-36: "Sep 2026", not en-GB "Sept"
 const canStart = (p: Period) => props.can.start && p.status !== 'locked' && (!p.run || p.run.status === 'reopened');
 const closeState = (p: Period) => (p.run ? p.run.status : 'not_started');
 const columns: DataColumn<Period>[] = [

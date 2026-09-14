@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Distribution;
 
+use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\ObjectHistory;
 use App\Http\Pages\PageSupport;
 use App\Modules\Distribution\Application\Advances\AdvanceService;
@@ -170,7 +171,28 @@ final class ProducersPageController
             'bankAccounts' => DB::table('bank_accounts')->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'can' => ['manage' => $this->permissions->has($actor, 'agent.manage'), 'advance' => $this->permissions->has($actor, 'commission.pay')],
             'audit' => Inertia::defer(fn (): array => $history->audit([['producer', $model->id]]), 'history'),
+            // Gap audit GA-41: the Documents tab (agency agreement, KYC, licence certificates). ASSUMPTION A-185: attaching needs agent.manage; reading follows AREA.
+            'documents' => Inertia::defer(fn (): array => app(ObjectDocuments::class)->forPage('producer', $model->id, "/distribution/producers/{$model->id}"), 'history'),
+            'documentUpload' => $this->permissions->has($actor, 'agent.manage') ? "/distribution/producers/{$model->id}/documents" : null,
         ]);
+    }
+
+    /** Gap audit GA-41: POST /distribution/producers/{id}/documents — attach a document to the producer (agent.manage). */
+    public function attachDocument(Request $request, string $producer, ObjectDocuments $documents): RedirectResponse
+    {
+        $this->permissions->authorize(PageSupport::actor($request), 'agent.manage');
+        $model = $this->producers->find($producer) ?? abort(404);
+
+        return $documents->attach($request, 'producer', $model->id, "/distribution/producers/{$model->id}");
+    }
+
+    /** Gap audit GA-41: GET /distribution/producers/{id}/documents/{document} — download, audited. */
+    public function downloadDocument(Request $request, string $producer, string $document, ObjectDocuments $documents): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $model = $this->producers->find($producer) ?? abort(404);
+
+        return $documents->download($request, 'producer', $model->id, $document);
     }
 
     public function storeLicence(Request $request, string $producer, LicenceService $licences): RedirectResponse

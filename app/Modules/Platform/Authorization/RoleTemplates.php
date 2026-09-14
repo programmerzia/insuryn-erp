@@ -28,7 +28,9 @@ final class RoleTemplates
         'cover_note.issue',
         // ASSUMPTION A-126 (slice R9): the branch that sold and quotes a policy works its expiry register (branch officer, and the branch manager through "+").
         'renewal.manage'];
-    private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve'];
+    private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve',
+        // ASSUMPTION A-184 (gap audit GA-41): the claims desk prints the claim acknowledgement and discharge vouchers for the claimant (claims officer, and the claims manager through "+").
+        'document.generate'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',
         'commission.approve', 'claim.pay_release', 'receipt.refund_release', 'product.manage', 'bank.manage_accounts', 'commission.manage_plans',

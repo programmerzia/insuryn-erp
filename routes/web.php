@@ -46,6 +46,9 @@ Route::middleware('auth')->prefix('distribution')->group(function (): void {
     Route::post('producers/{producer}/licences', [\App\Http\Distribution\ProducersPageController::class, 'storeLicence'])->whereUuid('producer');
     Route::post('producers/{producer}/advances', [\App\Http\Distribution\ProducersPageController::class, 'issueAdvance'])->whereUuid('producer')->middleware('moves-money');
     Route::post('producers/{producer}/status', [\App\Http\Distribution\ProducersPageController::class, 'updateStatus'])->whereUuid('producer');
+    // Gap audit GA-41: documents attached to a producer (agency agreement, KYC, licence certificate).
+    Route::post('producers/{producer}/documents', [\App\Http\Distribution\ProducersPageController::class, 'attachDocument'])->whereUuid('producer');
+    Route::get('producers/{producer}/documents/{document}', [\App\Http\Distribution\ProducersPageController::class, 'downloadDocument'])->whereUuid(['producer', 'document']);
     // F6: the agency (IDRA) register download from the producers queue, the same export as GET /api/distribution/licences/register.
     Route::get('licences/register', [\App\Modules\Distribution\Http\Controllers\LicenceController::class, 'register']);
     Route::post('licences/{licence}/{action}', [\App\Http\Distribution\ProducersPageController::class, 'licenceStatus'])->whereUuid('licence')->whereIn('action', ['suspend', 'revoke', 'reinstate']);
@@ -268,6 +271,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('claims/{claim}', [\App\Http\Pages\ObjectPageController::class, 'claim'])->whereUuid('claim');
     Route::post('claims/{claim}/documents', [ClaimPageController::class, 'attachDocument'])->whereUuid('claim');
     Route::get('claims/{claim}/documents/{document}', [ClaimPageController::class, 'downloadDocument'])->whereUuid(['claim', 'document']);
+    Route::post('claims/{claim}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'claim'])->whereUuid('claim'); // gap audit GA-41
     Route::post('claims/{claim}/reserve', [ClaimPageController::class, 'reserve'])->whereUuid('claim')->middleware('moves-money');
     Route::post('claims/{claim}/payments', [ClaimPageController::class, 'approvePayment'])->whereUuid('claim')->middleware('moves-money');
     Route::post('claims/{claim}/recover', [ClaimPageController::class, 'recover'])->whereUuid('claim')->middleware('moves-money');

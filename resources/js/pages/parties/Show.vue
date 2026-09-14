@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatDate } from '@/lib/format';
 
 const props = defineProps<{
     party: { id: string; kind: string; display_name: string; tax_id: string | null; roles: string[] };
@@ -46,7 +47,7 @@ const form = useForm({ bank_name: '', account_number: '', is_default: false });
                 <ul class="mt-3 grid gap-2 text-ui">
                     <li v-for="policy in policies" :key="policy.id" class="flex items-center justify-between">
                         <Link :href="`/policies/${policy.id}`" class="text-accent-text hover:underline">{{ policy.number ?? 'Quote' }}</Link>
-                        <span class="text-ink-2">{{ policy.inception }} – {{ policy.expiry }}</span>
+                        <span class="text-ink-2">{{ formatDate(policy.inception) }} – {{ formatDate(policy.expiry) }}</span>
                         <StatusBadge :status="policy.status" />
                     </li>
                     <li v-if="policies.length === 0" class="text-ink-2">No policies.</li>
