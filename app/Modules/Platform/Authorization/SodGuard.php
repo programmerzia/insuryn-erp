@@ -46,6 +46,18 @@ final class SodGuard
         return $warnings;
     }
 
+    /** Read-only twin of assert() for offering a next step: true when a block-mode rule would refuse. Records nothing, not even warnings. */
+    public function wouldBlock(string $actorUserId, string $permission, AuditSubject $object): bool
+    {
+        foreach ($this->rulesInvolving($permission) as $rule) {
+            if ($rule->blocks() && $this->actorExercised($actorUserId, (string) $rule->conflictFor($permission), $object)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** @return list<SodRule> */
     public function rulesInvolving(string $permission): array
     {

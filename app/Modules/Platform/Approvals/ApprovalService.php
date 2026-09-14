@@ -90,6 +90,17 @@ final class ApprovalService
         return $approvalId;
     }
 
+    /**
+     * The steps an approval of these facts would need, or null when no policy matches (the amount is within the requester's limit). Read-only:
+     * lets a screen offer a next step or say who approves without starting an approval.
+     *
+     * @return list<array{permission: string, role: string|null}>|null
+     */
+    public function stepsRequiredFor(string $objectType, ApprovalFacts $facts, CarbonImmutable $on): ?array
+    {
+        return $this->matchingPolicy($objectType, $facts, $on)['steps'] ?? null;
+    }
+
     public function pendingFor(string $objectType, string $objectId): ?string
     {
         $id = DB::table('approvals')->where('object_type', $objectType)->where('object_id', $objectId)

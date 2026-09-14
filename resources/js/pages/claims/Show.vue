@@ -17,9 +17,9 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 
 const props = defineProps<{
-    claim: { id: string; number: string; status: string; loss_date: string; reported_on: string; description: string; reserve: string; currency: string; status_reason: string | null; policy: { id: string; number: string | null; policyholder: string } };
+    claim: { id: string; number: string; status: string; loss_date: string; reported_on: string; description: string; reserve: string; uncommitted: string; currency: string; status_reason: string | null; policy: { id: string; number: string | null; policyholder: string; policyholder_id: string } };
     reserves: { version: number; reserve: string; delta: string; kind: string; reason: string; recorded_on: string }[];
-    payments: { id: string; amount: string; status: string; approved_on: string; paid_on: string | null; can_request_release: boolean; can_release: boolean }[];
+    payments: { id: string; amount: string; status: string; approved_on: string; paid_on: string | null; bank_account_id: string | null; can_request_release: boolean; can_release: boolean }[];
     recoveries: { type: string; amount: string; received_on: string; reference: string | null }[];
     parties: { id: string; display_name: string }[];
     bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
@@ -29,6 +29,9 @@ const props = defineProps<{
     audit?: AuditRow[];
     documents?: StoredDocumentRow[];
     documentUpload: string | null;
+    today: string;
+    /** Flow fix X3: set right after a reserve when this user may approve the settlement now. */
+    nextStep?: 'approve_payment' | null;
 }>();
 
 type DrawerName = 'reserve' | 'payment' | 'recover' | 'close' | 'reject' | 'reopen' | 'release';
@@ -53,17 +56,41 @@ const facts = computed(() => [
 ]);
 const previewTitle = computed(() => ({ reserve: 'Post the new reserve?', payment: 'Approve this payment?', recover: 'Post the recovery?', close: `Close ${props.claim.number}?`, release: 'Pay the claim?' })[drawer.value as 'reserve'] ?? '');
 
+// Flow fix X3: each drawer starts from what the claim already knows — the reserve left, the policyholder, today, the bank the release was requested from.
+const nextDismissed = ref(false);
+const offerApproval = computed(() => props.nextStep === 'approve_payment' && props.actions.approve && !nextDismissed.value);
+function openPayment(): void {
+    nextDismissed.value = true;
+    payment.form.defaults({ amount: props.claim.uncommitted, payee_party_id: props.claim.policy.policyholder_id, on: props.today });
+    payment.form.reset();
+    drawer.value = 'payment';
+}
+function openClose(): void {
+    closing.form.defaults({ reason: '', on: props.today });
+    closing.form.reset();
+    drawer.value = 'close';
+}
+
 function requestRelease(id: string): void {
     router.post(`/claim-payments/${id}/request-release`, {}, { preserveScroll: true });
 }
 function openRelease(id: string): void {
     releasing.value = id;
+    release.form.defaults({ paid_on: props.today, bank_account_id: props.payments.find((p) => p.id === id)?.bank_account_id ?? '' });
+    release.form.reset();
     drawer.value = 'release';
 }
 </script>
 
 <template>
     <AppLayout help="claims" :title="claim.number">
+        <div v-if="offerApproval" class="mb-3 flex flex-wrap items-center gap-3 rounded-control border border-line bg-accent-soft px-3 py-2 text-ui" role="status">
+            <span>Reserve set. Next, approve the settlement: {{ formatMoney(claim.uncommitted) }} {{ claim.currency }} of reserve is left.</span>
+            <span class="ml-auto flex gap-2">
+                <button type="button" class="h-8 rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="nextDismissed = true">Not now</button>
+                <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="openPayment">Approve payment</button>
+            </span>
+        </div>
         <ObjectPage
             :title="claim.number"
             :subtitle="`${claim.description} · policy ${claim.policy.number} · ${claim.policy.policyholder}${claim.status_reason ? ` · ${claim.status_reason}` : ''}`"
@@ -82,8 +109,8 @@ function openRelease(id: string): void {
                 <button v-if="actions.recover" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'recover'">Record recovery</button>
                 <button v-if="actions.reopen" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reopen'">Reopen</button>
                 <button v-if="actions.reject" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'reject'">Reject</button>
-                <button v-if="actions.close" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'close'">Close claim</button>
-                <button v-if="actions.approve" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'payment'">Approve payment</button>
+                <button v-if="actions.close" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openClose">Close claim</button>
+                <button v-if="actions.approve" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openPayment">Approve payment</button>
                 <button v-if="actions.reserve" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'reserve'">Set reserve</button>
             </template>
             <template #overview>

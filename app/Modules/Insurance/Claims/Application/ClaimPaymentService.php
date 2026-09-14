@@ -70,6 +70,31 @@ final class ClaimPaymentService
         });
     }
 
+    /**
+     * Flow fix X3: what would happen if $actorUserId approved the claim's uncommitted reserve now. `approve` is true when they hold claim.approve in the
+     * claim's scope, no block-mode SoD rule refuses them on this claim, the claim can take a payment with reserve left, and no approval limit catches
+     * that amount (ApprovalService decides, as approve() would). `approver_roles` names who decides otherwise: the roles of the approval steps when a
+     * limit applies, else every role holding claim.approve. Read-only: nothing is audited or requested.
+     *
+     * @return array{approve: bool, available_minor: int, approver_roles: list<string>}
+     */
+    public function settlementOutlook(string $claimId, string $actorUserId, CarbonImmutable $on): array
+    {
+        $claim = Claim::query()->findOrFail($claimId);
+        $available = max(0, $claim->reserve_minor - $this->reserves->committedMinor($claim->id));
+        $steps = $available > 0 ? $this->approvals->stepsRequiredFor('claim_payment', new ApprovalFacts($available), $on) : null;
+        $approve = $available > 0 && $steps === null
+            && in_array($claim->status, [ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true)
+            && $this->permissions->has($actorUserId, 'claim.approve', AuthorizationScope::branch($claim->entity_id, $claim->branch_id))
+            && ! $this->sod->wouldBlock($actorUserId, 'claim.approve', AuditSubject::of('claim', $claim->id));
+        $first = $steps[0] ?? null;
+        $roles = $first !== null && $first['role'] !== null
+            ? DB::table('roles')->where('code', $first['role'])->pluck('name')
+            : DB::table('roles as r')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->where('rp.permission_code', $first['permission'] ?? 'claim.approve')->orderBy('r.name')->distinct()->pluck('r.name');
+
+        return ['approve' => $approve, 'available_minor' => $available, 'approver_roles' => array_values(array_unique($roles->map(fn ($name): string => (string) $name)->all()))];
+    }
+
     /** Posts CLAIM_APPROVED. Called directly or by ClaimPaymentApprovalHandler (the final approver must also pass claim SoD). */
     public function completeApproval(string $paymentId, string $approverId): void
     {

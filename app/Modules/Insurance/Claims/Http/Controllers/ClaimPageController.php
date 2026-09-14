@@ -85,23 +85,32 @@ final class ClaimPageController
         $payments = ClaimPayment::query()->where('claim_id', $model->id)->orderBy('created_at')->get();
         $unsettled = $payments->contains(fn (ClaimPayment $p): bool => in_array($p->status->value, ClaimPaymentStatus::unsettled(), true));
         $status = $model->status;
-        $policy = DB::table('policies as p')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.id', $model->policy_id)->first(['p.id', 'p.number', 'h.display_name']);
+        $policy = DB::table('policies as p')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.id', $model->policy_id)->first(['p.id', 'p.number', 'p.policyholder_party_id', 'h.display_name']);
+        $bankAccounts = DB::table('bank_accounts')->where('entity_id', $model->entity_id)->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked', 'gl_account_id', 'currency']);
+        // Flow fix X3: "pay from" starts at the bank account the release was requested from, else the active account in the claim's currency behind bank_main.
+        $bankMain = DB::table('account_role_mappings')->where('entity_id', $model->entity_id)->where('role_code', 'bank_main')->where('effective_from', '<=', CarbonImmutable::today()->toDateString())
+            ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', CarbonImmutable::today()->toDateString()))->orderByDesc('effective_from')->value('account_id');
+        $defaultBank = $bankAccounts->first(fn (object $b): bool => $b->gl_account_id === $bankMain && $b->currency === $model->currency)?->id;
 
         return Inertia::render('claims/Show', [
             'claim' => ['id' => $model->id, 'number' => $model->number, 'status' => $status->value, 'loss_date' => $model->loss_date->toDateString(), 'reported_on' => $model->reported_on->toDateString(),
                 'description' => $model->description, 'reserve' => $money($model->reserve_minor), 'currency' => $model->currency, 'status_reason' => $model->status_reason,
-                'policy' => ['id' => (string) ($policy->id ?? ''), 'number' => $policy->number ?? null, 'policyholder' => (string) ($policy->display_name ?? '')]],
+                'policy' => ['id' => (string) ($policy->id ?? ''), 'number' => $policy->number ?? null, 'policyholder' => (string) ($policy->display_name ?? ''), 'policyholder_id' => (string) ($policy->policyholder_party_id ?? '')],
+                // Flow fix X3: the approval drawer proposes the reserve not yet committed to payments.
+                'uncommitted' => $money(max(0, $model->reserve_minor - (int) $payments->filter(fn (ClaimPayment $p): bool => in_array($p->status->value, ClaimPaymentStatus::committed(), true))->sum('amount_minor')))],
+            'today' => CarbonImmutable::today()->toDateString(),
+            'nextStep' => $request->hasSession() ? $request->session()->get('next_step') : null,
             'reserves' => DB::table('claim_reserves')->where('claim_id', $model->id)->orderBy('version')->get(['version', 'reserve_minor', 'delta_minor', 'kind', 'reason', 'recorded_on'])
                 ->map(fn (object $r): array => ['version' => (int) $r->version, 'reserve' => $money((int) $r->reserve_minor), 'delta' => $money((int) $r->delta_minor), 'kind' => (string) $r->kind,
                     'reason' => (string) $r->reason, 'recorded_on' => (string) $r->recorded_on])->values()->all(),
             'payments' => $payments->map(fn (ClaimPayment $p): array => ['id' => $p->id, 'amount' => $money($p->amount_minor), 'status' => $p->status->value, 'approved_on' => $p->approved_on->toDateString(),
-                'paid_on' => $p->paid_on?->toDateString(),
+                'paid_on' => $p->paid_on?->toDateString(), 'bank_account_id' => $p->bank_account_id ?? $defaultBank,
                 'can_request_release' => $p->status === ClaimPaymentStatus::Approved && $can('claim.pay_request'),
                 'can_release' => $p->status === ClaimPaymentStatus::ReleaseRequested && $can('claim.pay_release')])->values()->all(),
             'recoveries' => DB::table('claim_recoveries')->where('claim_id', $model->id)->orderBy('received_on')->get(['type', 'amount_minor', 'received_on', 'reference'])
                 ->map(fn (object $r): array => ['type' => (string) $r->type, 'amount' => $money((int) $r->amount_minor), 'received_on' => (string) $r->received_on, 'reference' => $r->reference])->values()->all(),
             'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
-            'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $model->entity_id)->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
+            'bankAccounts' => $bankAccounts->map(fn (object $b): array => ['id' => $b->id, 'bank_name' => $b->bank_name, 'account_no_masked' => $b->account_no_masked])->values()->all(),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/claims/{$model->id}/documents" : null,
             'actions' => [
                 'reserve' => in_array($status, [ClaimStatus::Registered, ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true) && $can('claim.reserve'),
@@ -119,9 +128,27 @@ final class ClaimPageController
         /** @var array{reserve: string, reason: string, on: string} $data */
         $data = $request->validate(['reserve' => ['required', 'string'], 'reason' => ['required', 'string', 'max:1000'], 'on' => ['required', 'date_format:Y-m-d']]);
         $currency = (string) Claim::query()->whereKey($claim)->value('currency');
-        $this->claims->reserve($claim, PageSupport::minor('reserve', $data['reserve'], $currency), $data['reason'], PageSupport::actor($request), CarbonImmutable::parse($data['on']));
+        $actor = PageSupport::actor($request);
+        $this->claims->reserve($claim, PageSupport::minor('reserve', $data['reserve'], $currency), $data['reason'], $actor, CarbonImmutable::parse($data['on']));
 
-        return redirect("/claims/{$claim}")->with('status', 'Reserve updated.');
+        // Flow fix X3: the next step is the settlement. Offer it when this user may approve it now; otherwise say who does.
+        $outlook = $this->payments->settlementOutlook($claim, $actor, CarbonImmutable::today());
+        if ($outlook['approve']) {
+            return redirect("/claims/{$claim}")->with('status', 'Reserve set.')->with('next_step', 'approve_payment');
+        }
+        if ($outlook['available_minor'] === 0) {
+            return redirect("/claims/{$claim}")->with('status', 'Reserve set.');
+        }
+
+        return redirect("/claims/{$claim}")->with('status', 'Reserve set. '.self::approvers($outlook['approver_roles']).' approves the settlement from their Home.');
+    }
+
+    /** @param list<string> $roles role names → "The claims manager", "The claims manager or CFO" (acronyms keep their capitals) */
+    private static function approvers(array $roles): string
+    {
+        $names = array_map(fn (string $name): string => implode(' ', array_map(fn (string $word): string => $word === strtoupper($word) ? $word : strtolower($word), explode(' ', $name))), $roles);
+
+        return $names === [] ? 'Someone given claim approval in Admin → Roles' : 'The '.implode(' or ', $names);
     }
 
     public function approvePayment(Request $request, string $claim): RedirectResponse

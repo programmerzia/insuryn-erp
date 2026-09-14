@@ -79,6 +79,8 @@ beforeEach(function (): void {
         $claims->register($lapsing->id, CarbonImmutable::parse('2026-09-01'), 'Awaiting reserve', $admin, CarbonImmutable::parse('2026-09-02'));
         $reserved = $claims->register($lapsing->id, CarbonImmutable::parse('2026-08-10'), 'Collision', $admin, CarbonImmutable::parse('2026-08-11'));
         $claims->reserve($reserved->id, 5_000_000, 'Initial', userWithPermissions($this->ctx['tenant_id'], ['claim.reserve']), CarbonImmutable::parse('2026-08-12'));
+        $toSettle = $claims->register($lapsing->id, CarbonImmutable::parse('2026-08-20'), 'Windscreen', $admin, CarbonImmutable::parse('2026-08-21')); // reserved, no payment yet
+        $claims->reserve($toSettle->id, 800_000, 'Initial', userWithPermissions($this->ctx['tenant_id'], ['claim.reserve']), CarbonImmutable::parse('2026-08-22'));
         $payment = app(ClaimPaymentService::class)->approve($reserved->id, 2_000_000, $this->world['policyholder_id'], userWithPermissions($this->ctx['tenant_id'], ['claim.approve']), CarbonImmutable::parse('2026-08-20'));
         app(ClaimPaymentService::class)->requestRelease($payment->id, userWithPermissions($this->ctx['tenant_id'], ['claim.pay_request']), null);
 
@@ -96,9 +98,9 @@ it('gives every seeded role its own work queues', function (string $role, array 
     'branch manager' => ['branch_manager', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up']],
     'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals awaiting my approval', 'Failed accounting events']],
     'claims officer' => ['claims_officer', ['Claims awaiting reserve', 'Awaiting my approval', 'Payments to release']],
-    'claims manager' => ['claims_manager', ['Claims awaiting reserve', 'Awaiting my approval', 'Payments to release']],
-    'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position']],
-    'cfo' => ['cfo', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position']],
+    'claims manager' => ['claims_manager', ['Claims awaiting reserve', 'Claims to settle', 'Awaiting my approval', 'Payments to release']],
+    'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release']],
+    'cfo' => ['cfo', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release']],
     'auditor' => ['auditor', ['Recent reversals and adjustments', 'Period reopen events', 'Control-account manual postings']],
     'tenant admin' => ['tenant_admin', []],
 ]);
@@ -122,12 +124,14 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
 
     $claims = ($this->asRole)('claims_manager');
     actingAs($claims)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('queues.0.count', 1)->where('queues.2.count', 1)->where('shell.badges.claims', 2));
+        ->where('queues.0.count', 1)->where('queues.1.key', 'claims_to_settle')->where('queues.1.count', 1)->where('queues.1.rows.0.cells.reserve', '8,000.00')
+        ->where('queues.3.key', 'payments_to_release')->where('queues.3.count', 1)->where('shell.badges.claims', 3));
 
     $finance = ($this->asRole)('finance_manager');
     actingAs($finance)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('queues.1.count', 1)->where('queues.1.rows.0.cells.variance', '1.00')->where('queues.3.cash.balance', fn (string $balance): bool => $balance !== '')
-        ->has('queues.3.cash.days', 30)->where('shell.badges.close', 1));
+        ->has('queues.3.cash.days', 30)->where('queues.4.key', 'payments_to_release')->where('queues.4.count', 1)->where('queues.4.rows.0.cells.status', 'release_requested')
+        ->where('shell.badges.close', 1)->where('shell.badges.claims', 1));
 });
 
 it('shows each queue once for a user with several roles, and lands everyone on home after sign-in', function (): void {

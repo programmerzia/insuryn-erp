@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Home;
 
 use App\Http\Pages\PageSupport;
+use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
 use App\Modules\Platform\Approvals\ApprovalInboxQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
@@ -23,15 +24,16 @@ final class WorkQueues
         'branch_manager' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes'],
         'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events'],
         'claims_officer' => ['claims_awaiting_reserve', 'claim_approvals', 'payments_to_release'],
-        'claims_manager' => ['claims_awaiting_reserve', 'claim_approvals', 'payments_to_release'],
-        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position'],
-        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position'],
+        // Flow fix X3: the claims manager decides settlements of reserved claims; finance releases requested claim payments.
+        'claims_manager' => ['claims_awaiting_reserve', 'claims_to_settle', 'claim_approvals', 'payments_to_release'],
+        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release'],
+        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
     ];
 
     /** Sidebar badge → the queue whose count it shows (lib/navigation.ts badge keys). */
     private const BADGES = ['receipts' => 'installments_due', 'policies' => 'lapsing_policies', 'bank' => ['receipts_to_record', 'unmatched_bank_lines'],
-        'suspense' => 'unallocated_receipts', 'journals' => 'journals_to_approve', 'claims' => ['claims_awaiting_reserve', 'payments_to_release'], 'close' => 'reconciliation_variances'];
+        'suspense' => 'unallocated_receipts', 'journals' => 'journals_to_approve', 'claims' => ['claims_awaiting_reserve', 'claims_to_settle', 'payments_to_release'], 'close' => 'reconciliation_variances'];
 
     private const TOP = 5;
 
@@ -99,6 +101,7 @@ final class WorkQueues
             'journals_to_approve' => ['Journals awaiting my approval', '/accounting/journals?f.status=pending_approval', 'No journals are waiting for you.', ['Open journals', '/accounting/journals']],
             'failed_events' => ['Failed accounting events', null, 'Every accounting event posted.', ['Open journals', '/accounting/journals']],
             'claims_awaiting_reserve' => ['Claims awaiting reserve', '/claims?status=registered', 'Every open claim has a reserve.', ['Register a claim', '/claims/create']],
+            'claims_to_settle' => ['Claims to settle', '/claims?status=reserved', 'No reserved claim is waiting for a settlement decision.', ['Open claims', '/claims']],
             'claim_approvals' => ['Awaiting my approval', '/approvals', 'No claim approvals are waiting for you.', ['Open claims', '/claims']],
             'payments_to_release' => ['Payments to release', '/claims', 'No approved payments are waiting to be paid.', ['Open claims', '/claims']],
             'close_progress' => ['Close progress', '/close', 'No month-end close is running.', ['Start the close', '/close']],
@@ -166,7 +169,13 @@ final class WorkQueues
             'failed_events' => DB::table('accounting_events')->where('status', 'failed')->orderByDesc('created_at')->select(['id', 'event_type', 'transaction_date', 'failure_reason']),
             'claims_awaiting_reserve' => DB::table('claims as c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'registered')->where('c.reserve_minor', 0)
                 ->orderBy('c.reported_on')->select(['c.id', 'c.number', 'p.number as policy_number', 'c.description', 'c.reported_on']),
-            'payments_to_release' => DB::table('claim_payments as cp')->join('claims as c', 'c.id', '=', 'cp.claim_id')->whereIn('cp.status', ['approved', 'release_requested'])
+            // Reserved claims with nothing committed against the reserve yet: the settlement decision (approve a payment) is still to make.
+            'claims_to_settle' => DB::table('claims as c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'reserved')->where('c.reserve_minor', '>', 0)
+                ->whereNotExists(fn (Builder $q) => $q->from('claim_payments as cp')->whereColumn('cp.claim_id', 'c.id')->whereIn('cp.status', ClaimPaymentStatus::committed()))
+                ->orderBy('c.reported_on')->orderBy('c.number')->select(['c.id', 'c.number', 'p.number as policy_number', 'c.reserve_minor', 'c.currency', 'c.reported_on']),
+            // Someone who releases but does not request releases (finance) only has the requested ones to act on.
+            'payments_to_release' => DB::table('claim_payments as cp')->join('claims as c', 'c.id', '=', 'cp.claim_id')
+                ->whereIn('cp.status', $this->permissions->has($userId, 'claim.pay_release') && ! $this->permissions->has($userId, 'claim.pay_request') ? ['release_requested'] : ['approved', 'release_requested'])
                 ->orderBy('cp.approved_on')->select(['c.id', 'c.number', 'cp.status', 'cp.approved_on', 'cp.amount_minor', 'cp.currency']),
             'reconciliation_variances' => DB::table('reconciliation_runs as r')->join('fiscal_periods as f', 'f.id', '=', 'r.period_id')->where('r.status', 'variance')
                 ->orderByDesc('r.run_at')->select(['r.id', 'r.subledger', 'f.starts', 'r.variance_minor']),
@@ -206,6 +215,8 @@ final class WorkQueues
                 fn (\stdClass $r): array => ['href' => null, 'cells' => ['event' => $r->event_type, 'date' => $r->transaction_date, 'reason' => $r->failure_reason]]],
             'claims_awaiting_reserve' => [[$col('claim', 'Claim'), $col('policy', 'Policy'), $col('description', 'What happened'), $col('reported', 'Reported', 'date')],
                 fn (\stdClass $r): array => ['href' => "/claims/{$r->id}", 'cells' => ['claim' => $r->number, 'policy' => $r->policy_number, 'description' => $r->description, 'reported' => $r->reported_on]]],
+            'claims_to_settle' => [[$col('claim', 'Claim'), $col('policy', 'Policy'), $col('reported', 'Reported', 'date'), $col('reserve', 'Reserve', 'money')],
+                fn (\stdClass $r): array => ['href' => "/claims/{$r->id}", 'cells' => ['claim' => $r->number, 'policy' => $r->policy_number, 'reported' => $r->reported_on, 'reserve' => $money($r, 'reserve_minor')]]],
             'payments_to_release' => [[$col('claim', 'Claim'), $col('status', 'Status', 'status'), $col('approved', 'Approved', 'date'), $col('amount', 'Amount', 'money')],
                 fn (\stdClass $r): array => ['href' => "/claims/{$r->id}", 'cells' => ['claim' => $r->number, 'status' => $r->status, 'approved' => $r->approved_on, 'amount' => $money($r, 'amount_minor')]]],
             'reconciliation_variances' => [[$col('subledger', 'Subledger'), $col('period', 'Period'), $col('variance', 'Variance', 'money')],
