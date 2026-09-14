@@ -67,6 +67,18 @@ final class ReasonMessages
         // Gap fix GA-27: bank reconciliation actions.
         'OFFSET_NEEDS_TWO_LINES' => 'Choose at least two ledger lines that cancel each other out.',
         'STATEMENT_LINE_NOT_A_CREDIT' => 'Only money paid into the bank can be recorded as a receipt. Post a charge or payment as a journal instead.',
+        // Market gap G5: regulatory returns and technical provisions.
+        'REGULATORY_PERIOD_INVALID' => 'Choose a quarter such as 2026-Q3 or a year such as 2026.',
+        'RETURN_NOT_DRAFT' => 'This return has already been reviewed or filed. Refresh the page to see where it stands.',
+        'RETURN_NOT_REVIEWED' => 'Mark the return reviewed before filing it.',
+        'RETURN_ALREADY_FILED' => 'This return is already filed. Refresh the page to see its filing.',
+        'RETURN_FILING_DATE_INVALID' => 'The filing date must be in or after the return\'s period and not later than today.',
+        'RETURN_REFERENCE_REQUIRED' => 'Enter the reference the regulator gave for this filing.',
+        'PROVISIONS_QUARTER_REQUIRED' => 'Technical provisions are run for a quarter. Choose a quarter such as 2026-Q3.',
+        'PROVISIONS_ALREADY_POSTED' => 'The technical provisions for this quarter are already posted. Next quarter\'s run releases them.',
+        'PROVISIONS_NOT_DRAFT' => 'This technical provisions run has already been reviewed or posted. Refresh the page.',
+        'PROVISIONS_NOT_REVIEWED' => 'Only a reviewed technical provisions run can be approved. Mark it reviewed first, or refresh the page.',
+        'PROVISIONS_NO_BRANCH' => 'Set up a branch for this company before posting technical provisions.',
     ];
 
     /** @var list<string> reasons worded below from the amounts or dates in the domain message */

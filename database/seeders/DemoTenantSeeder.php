@@ -55,6 +55,7 @@ final class DemoTenantSeeder extends Seeder
                 '2160' => ['Customer Refunds Payable', 'liability', 'credit', 'customer_refund_payable', false, null],
                 '2200' => ['Outstanding Claims Reserve', 'liability', 'credit', 'claims_outstanding', true, 'claims'],
                 '2210' => ['Claims Payable', 'liability', 'credit', 'claims_payable', true, 'claims'],
+                '2220' => ['IBNR Provision', 'liability', 'credit', 'ibnr_provision', false, null], // market gap G5
                 '2300' => ['Commission Payable', 'liability', 'credit', 'commission_payable', true, 'commission'],
                 '2310' => ['Withholding Tax on Commission', 'liability', 'credit', 'commission_withholding_payable', false, null],
                 '2400' => ['Salaries Payable', 'liability', 'credit', 'salary_payable', false, null],
@@ -66,6 +67,7 @@ final class DemoTenantSeeder extends Seeder
                 '4200' => ['Claims Recovery Income', 'income', 'credit', 'claims_recovery_income', false, null],
                 '4900' => ['FX Gain/Loss', 'income', 'credit', 'fx_gain_loss', false, null],
                 '5100' => ['Claims Incurred', 'expense', 'debit', 'claims_expense', false, null],
+                '5110' => ['Claims Incurred - IBNR', 'expense', 'debit', 'claims_ibnr_expense', false, null], // market gap G5
                 '5200' => ['Commission Expense', 'expense', 'debit', 'commission_expense', false, null],
                 '5300' => ['Salaries', 'expense', 'debit', 'salary_expense', false, null],
                 '5310' => ['Employer PF Contribution', 'expense', 'debit', 'employer_pf_expense', false, null],

@@ -17,6 +17,18 @@ final class XlsxWriter
      */
     public static function workbook(string $sheetName, array $header, array $rows): string
     {
+        return self::workbookOfSheets([$sheetName => [$header, ...$rows]]);
+    }
+
+    /**
+     * Market gap G5 (DECISION D-113): a workbook of several sheets, each a list of text rows (a return set: one sheet per form). Sheet names are cut to
+     * Excel's 31 characters without the characters it refuses, and made unique.
+     *
+     * @param array<string, list<list<string>>> $sheets sheet name → rows
+     * @return string the workbook's bytes
+     */
+    public static function workbookOfSheets(array $sheets): string
+    {
         $path = tempnam(sys_get_temp_dir(), 'xlsx');
         if ($path === false) {
             throw new \RuntimeException('Cannot create a temporary file for the workbook.');
@@ -26,7 +38,7 @@ final class XlsxWriter
             if ($zip->open($path, \ZipArchive::OVERWRITE) !== true) {
                 throw new \RuntimeException('Cannot open the workbook archive.');
             }
-            foreach (self::parts($sheetName, [$header, ...$rows]) as $name => $xml) {
+            foreach (self::parts($sheets) as $name => $xml) {
                 $zip->addFromString($name, $xml);
             }
             $zip->close();
@@ -38,34 +50,50 @@ final class XlsxWriter
     }
 
     /**
-     * @param list<list<string>> $rows
+     * @param array<string, list<list<string>>> $sheets
      * @return array<string, string> part name → XML
      */
-    private static function parts(string $sheetName, array $rows): array
+    private static function parts(array $sheets): array
     {
         $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'."\n";
-        $sheetRows = '';
-        foreach ($rows as $r => $row) {
-            $cells = '';
-            foreach ($row as $c => $value) {
-                $cells .= sprintf('<c r="%s%d" t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>', self::column($c), $r + 1, self::escape($value));
+        $overrides = '';
+        $entries = '';
+        $relations = '';
+        $parts = [];
+        $used = [];
+        $index = 0;
+        foreach ($sheets as $sheetName => $rows) {
+            $index++;
+            $sheetRows = '';
+            foreach ($rows as $r => $row) {
+                $cells = '';
+                foreach ($row as $c => $value) {
+                    $cells .= sprintf('<c r="%s%d" t="inlineStr"><is><t xml:space="preserve">%s</t></is></c>', self::column($c), $r + 1, self::escape($value));
+                }
+                $sheetRows .= sprintf('<row r="%d">%s</row>', $r + 1, $cells);
             }
-            $sheetRows .= sprintf('<row r="%d">%s</row>', $r + 1, $cells);
+            $base = mb_substr(trim(str_replace(['\\', '/', '?', '*', '[', ']', ':'], ' ', (string) $sheetName)), 0, 31);
+            $name = $base === '' ? "Sheet{$index}" : $base;
+            for ($n = 2; in_array(mb_strtolower($name), $used, true); $n++) {
+                $name = mb_substr($base, 0, 28)." {$n}";
+            }
+            $used[] = mb_strtolower($name);
+            $overrides .= '<Override PartName="/xl/worksheets/sheet'.$index.'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+            $entries .= '<sheet name="'.self::escape($name).'" sheetId="'.$index.'" r:id="rId'.$index.'"/>';
+            $relations .= '<Relationship Id="rId'.$index.'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'.$index.'.xml"/>';
+            $parts["xl/worksheets/sheet{$index}.xml"] = $xml.'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.$sheetRows.'</sheetData></worksheet>';
         }
-        $name = self::escape(mb_substr(str_replace(['\\', '/', '?', '*', '[', ']', ':'], ' ', $sheetName), 0, 31));
 
         return [
             '[Content_Types].xml' => $xml.'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
                 .'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
-                .'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-                .'<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+                .'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'.$overrides.'</Types>',
             '_rels/.rels' => $xml.'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
             'xl/workbook.xml' => $xml.'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-                .'<sheets><sheet name="'.$name.'" sheetId="1" r:id="rId1"/></sheets></workbook>',
-            'xl/_rels/workbook.xml.rels' => $xml.'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-            'xl/worksheets/sheet1.xml' => $xml.'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.$sheetRows.'</sheetData></worksheet>',
+                .'<sheets>'.$entries.'</sheets></workbook>',
+            'xl/_rels/workbook.xml.rels' => $xml.'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'.$relations.'</Relationships>',
+            ...$parts,
         ];
     }
 

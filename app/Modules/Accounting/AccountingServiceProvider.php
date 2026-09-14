@@ -44,6 +44,7 @@ final class AccountingServiceProvider extends ServiceProvider
         $this->app->when(ReconciliationService::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
         $this->app->when(CloseTaskExecutor::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
         $this->app->when(CloseTaskExecutor::class)->needs('$checks')->giveTagged(CloseTaskCheck::class);
+        $this->app->when(\App\Modules\Accounting\Application\Close\PeriodCloseService::class)->needs('$checks')->giveTagged(CloseTaskCheck::class); // market gap G5 (D-111)
         // UX U2: contexts that post to an account directly say so before it is deactivated.
         $this->app->when(ChartOfAccounts::class)->needs('$usages')->giveTagged(AccountUsage::class);
         // Slice 2.1b (D-55): documents that hold a period's lock; business contexts tag their own sources next to the kernel's.

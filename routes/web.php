@@ -323,4 +323,5 @@ Route::middleware('auth')->group(function (): void {
     Route::get('reports/{report}', [ReportsPageController::class, 'show'])->where('report', '[a-z-]+');
     // Flow fix X12: a report's table as CSV or XLSX, from the reports index.
     Route::get('reports/{report}/export', [ReportsPageController::class, 'export'])->where('report', '[a-z-]+');
+    require __DIR__.'/regulatory.php'; // market gap G5: regulatory returns and technical provisions
 });

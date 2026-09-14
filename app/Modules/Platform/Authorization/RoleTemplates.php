@@ -51,8 +51,11 @@ final class RoleTemplates
         // finance manager (and CFO) fix the cause and requeue from Accounting events. No SoD rule involves it.
         'accounting.requeue_event',
         // ASSUMPTION A-232 (gap fixes W7, GA-24): the finance manager (and CFO) approve writing off a cancelled policy's small unpaid premium.
-        'receipt.write_off_approve'];
-    private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
+        'receipt.write_off_approve',
+        // ASSUMPTION A-268 (market gap G5): the finance manager (and CFO) prepare the technical provisions run and mark regulatory returns filed.
+        'regulatory.file', 'provisions.run'];
+    // ASSUMPTION A-268 (market gap G5): the CFO approves and posts the technical provisions run, never one they prepared (SoD object rule).
+    private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */
     public static function all(): array

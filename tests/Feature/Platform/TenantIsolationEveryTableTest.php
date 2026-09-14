@@ -178,6 +178,14 @@ function populateEveryTenantTable(array $ctx): void
         DB::table('notifications')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'channel' => 'email', 'adapter' => 'log', 'recipient_type' => 'party',
             'recipient_id' => $world['policyholder_id'], 'recipient_name' => 'Rahima Akter', 'subject_type' => 'policy', 'subject_id' => $policy->id, 'title' => 'Renewal notice',
             'body' => 'Isolation', 'idempotency_key' => 'isolation', 'status' => 'sent', 'sent_at' => now(), 'created_at' => now()]);
+        // Market gap G5: regulatory returns, technical provision runs and legacy paid claims history.
+        DB::table('regulatory_returns')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'form_code' => 'claims', 'period_key' => '2026-Q3',
+            'period_start' => '2026-07-01', 'period_end' => '2026-09-30', 'status' => 'draft', 'snapshot' => '{}', 'generated_by' => $world['admin'], 'generated_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('technical_provision_runs')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'quarter_key' => '2026-Q3',
+            'quarter_start' => '2026-07-01', 'quarter_end' => '2026-09-30', 'currency' => 'BDT', 'status' => 'draft', 'methods' => '{}', 'results' => '{"classes":[]}', 'total_ibnr_minor' => 0,
+            'prepared_by' => $world['admin'], 'prepared_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('claims_paid_history')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'class' => 'motor',
+            'accident_quarter_start' => '2026-01-01', 'paid_quarter_start' => '2026-04-01', 'paid_minor' => 1]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
     });
     activeRatingPlan($ctx['tenant_id'], ['code' => 'MOTOR-ISOLATION', 'name' => 'Isolation plan', 'class_code' => 'motor', 'effective_from' => '2026-01-01', // Phase 3 R2

@@ -36,6 +36,8 @@ final class PeriodCloseService
         private readonly ReconciliationService $reconciliation,
         private readonly PermissionChecker $permissions,
         private readonly Audit $audit,
+        /** @var iterable<\App\Modules\Accounting\Application\Contracts\CloseTaskCheck> Market gap G5 (D-111): checks that may claim a conditional task */
+        private readonly iterable $checks = [],
     ) {}
 
     /** @throws BusinessRuleViolation PERIOD_NOT_OPEN | CLOSE_ALREADY_RUNNING */
@@ -59,11 +61,29 @@ final class PeriodCloseService
                 'status' => 'running', 'started_by' => $actorUserId, 'started_at' => CarbonImmutable::now()]);
             DB::table('period_close_tasks')->insert(array_map(fn (CloseTaskDefinition $task): array => ['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(),
                 'close_run_id' => $runId, 'code' => $task->code, 'order_no' => $task->orderNo, 'depends_on' => json_encode($task->dependsOn, JSON_THROW_ON_ERROR),
-                'owner_role' => $task->ownerRole, 'status' => 'pending'], $this->catalogue->tasks($yearEnd)));
+                'owner_role' => $task->ownerRole, 'status' => 'pending'], $this->catalogue->tasks($yearEnd, $view === null ? [] : $this->conditionalTasks($view))));
             $this->audit->record('close.started', AuditSubject::of('period_close_run', $runId), null, ['period_id' => $periodId], null, 'periods.soft_lock', Actor::user($actorUserId));
 
             return $runId;
         });
+    }
+
+    /**
+     * Market gap G5 (D-111): the conditional tasks whose check claims the period.
+     *
+     * @return list<string>
+     */
+    private function conditionalTasks(FiscalPeriodView $period): array
+    {
+        $codes = [];
+        foreach ($this->checks as $check) {
+            if ($check instanceof \App\Modules\Accounting\Application\Contracts\ConditionalCloseTask && in_array($check->taskCode(), CloseTaskCatalogue::CONDITIONAL_TASKS, true)
+                && $check->appliesTo($period)) {
+                $codes[] = $check->taskCode();
+            }
+        }
+
+        return $codes;
     }
 
     /** @throws BusinessRuleViolation CLOSE_RUN_NOT_ACTIVE | TASK_ALREADY_DONE | DEPENDENCIES_OPEN */

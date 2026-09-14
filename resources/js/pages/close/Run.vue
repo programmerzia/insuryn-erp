@@ -37,6 +37,7 @@ const TASK_NAMES: Record<string, string> = {
     vat_reconciliation: 'VAT payable reconciliation',
     stamp_duty_reconciliation: 'Stamp duty payable reconciliation',
     year_end_close: 'Year-end close to retained earnings',
+    technical_provisions: 'Technical provisions', // market gap G5
 };
 const taskName = (code: string) => TASK_NAMES[code] ?? words(code);
 const month = computed(() => (props.run.starts ? formatMonth(props.run.starts, 'long') : props.run.period));
@@ -59,6 +60,7 @@ const queueFor = (code: string): { label: string; href: string } | null =>
         stamp_duty_reconciliation: { label: 'Premium register', href: `/reports/premium-register?from=${props.run.starts}&to=${end.value}` },
         year_end_close: { label: 'Profit and loss', href: `/reports/profit-and-loss?from=${props.run.starts}&to=${end.value}` },
         accruals: { label: 'New manual journal', href: '/accounting/journals/create' },
+        technical_provisions: { label: 'Technical provisions', href: '/regulatory/provisions' }, // market gap G5
         trial_balance: { label: 'Trial balance', href: `/accounting/trial-balance?as_of=${end.value}` },
         financial_statements: { label: 'Balance sheet', href: `/reports/balance-sheet?as_of=${end.value}` },
     })[code] ?? null;

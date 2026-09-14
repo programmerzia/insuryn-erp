@@ -33,6 +33,8 @@ final class AccountRolesSeeder extends Seeder
         'claims_expense' => 'Claims incurred',
         'claims_payable' => 'Approved claims awaiting payment',
         'claims_recovery_income' => 'Salvage / subrogation recoveries',
+        'claims_ibnr_expense' => 'Claims incurred – IBNR (incurred but not reported)', // market gap G5
+        'ibnr_provision' => 'IBNR provision (claims incurred but not reported)', // market gap G5
         'recovery_receivable' => 'Accrued recoveries',
         'rounding_difference' => 'Rounding residual',
         'fx_gain_loss' => 'FX gain/loss',

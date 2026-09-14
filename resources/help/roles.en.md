@@ -26,6 +26,8 @@ account role (do not translate it); the others say what a debit or a credit to t
 | claims_outstanding | Reserve released or moved to payable | Money we expect to pay on a reported claim |
 | claims_expense | Cost of claims | Claims cost reduced as the reserve is released |
 | claims_payable | Claim payment made | Approved claim we must now pay |
+| claims_ibnr_expense | Estimated cost of claims that happened but are not reported yet | Last quarter's IBNR estimate released |
+| ibnr_provision | Last quarter's IBNR estimate released | Claims we expect for losses that happened but are not reported yet |
 | claims_recovery_income | Recovery income reduced | Money recovered from salvage or a third party |
 | recovery_receivable | Recovery we expect to receive | Recovery received |
 | rounding_difference | Rounding difference | Rounding difference |

@@ -134,6 +134,7 @@ final class PartADemoSeeder extends Seeder
                 foreach (SetupProgress::STEPS as $step) {
                     app(SetupProgress::class)->complete($step, $this->users['finance_manager']);
                 }
+                (new RegulatoryDemoSeeder())->run($this->entityId, $this->users); // market gap G5: Q3 technical provisions posted, Q3 returns with one filed
             });
             (new AdminUserSeeder())->run();
             // Fix F3: the default approval limits (A-55), set by the tenant admin after the story, so the story's approvals stay as they were and the

@@ -15,7 +15,7 @@ final class PermissionCatalogue
         'quotation' => 'Quotes', 'underwriting' => 'Underwriting', 'cover_note' => 'Cover notes', 'policy' => 'Policies', 'renewal' => 'Renewals',
         'receipt' => 'Receipts and refunds', 'claim' => 'Claims', 'commission' => 'Commission', 'agent' => 'Agents and producers', 'party' => 'Customers',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
-        'numbering' => 'Numbering', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
+        'numbering' => 'Numbering', 'reports' => 'Reports', 'regulatory' => 'Regulatory returns', 'provisions' => 'Technical provisions', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
     /** @var array<string, array{0: string, 1: string}> code → [label, one-line help] */
@@ -62,6 +62,10 @@ final class PermissionCatalogue
         'reports.financial' => ['Read financial reports', 'Open the trial balance, close checklist, reports and business records, read-only.'],
         'reports.regulatory' => ['File regulatory reports', 'Download the IDRA registers and regulatory exports.'],
         'reports.claims' => ['Read claims reports', 'Open outstanding claims, claims paid and loss ratio, read-only.'],
+        // Market gap G5.
+        'regulatory.file' => ['Mark returns filed', 'Record that a regulatory return was filed with IDRA, with the filing date and reference.'],
+        'provisions.run' => ['Prepare technical provisions', 'Calculate the quarterly IBNR provision, choose the method per class and mark the run reviewed.'],
+        'provisions.approve' => ['Approve technical provisions', 'Approve and post a technical provisions run someone else prepared.'],
         'party.manage' => ['Maintain customers', 'Create customers and add their bank accounts.'],
         'agent.manage' => ['Maintain producers', 'Create agents and producers, licences and the hierarchy.'],
         'product.manage' => ['Maintain products', 'Create products and their versions.'],

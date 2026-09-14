@@ -16,18 +16,24 @@ final class CloseTaskCatalogue
     /** Gap fix GA-09: tasks that post journals (premium earning's events, the year-end closing journal), so the checklist previews them. */
     public const POSTING_TASKS = ['premium_earning', 'year_end_close'];
 
+    /** Market gap G5: tasks listed only where a ConditionalCloseTask says they apply. */
+    public const CONDITIONAL_TASKS = ['technical_provisions'];
+
     /**
      * The tasks of a close run. Gap fix GA-15: the year-end close task only in the close of a fiscal year's last month ($yearEnd); the other
      * months' runs do not list it.
      *
+     * @param list<string> $conditional codes of conditional tasks that apply to the run (ConditionalCloseTask)
      * @return list<CloseTaskDefinition>
      */
-    public function tasks(bool $yearEnd = false): array
+    public function tasks(bool $yearEnd = false, array $conditional = []): array
     {
+        // Market gap G5 (D-111): the quarterly technical provisions, only in the runs a ConditionalCloseTask claims (a quarter's last month).
+        $provisions = in_array('technical_provisions', $conditional, true);
         // Gap fix GA-43: the unearned premium, suspense, VAT payable and stamp duty payable reconciliations run before the trial balance too.
         $reconciliations = ['premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation',
             'vat_reconciliation', 'stamp_duty_reconciliation'];
-        $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals'];
+        $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals', ...($provisions ? ['technical_provisions'] : [])];
         $beforeTrialBalance = $yearEnd ? [...$beforeYearEnd, 'year_end_close'] : $beforeYearEnd;
 
         return [
@@ -44,6 +50,8 @@ final class CloseTaskCatalogue
             new CloseTaskDefinition(9, 'suspense_reconciliation', CloseTaskKind::Reconciliation, ['suspense_review'], 'accounting', 'periods.soft_lock', subledger: 'suspense'),
             new CloseTaskDefinition(10, 'vat_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'premium_tax'),
             new CloseTaskDefinition(11, 'stamp_duty_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'stamp_duty'),
+            // Market gap G5: the quarter's technical provisions run is posted before the trial balance (the task shares number 12 with the year-end close, which follows it).
+            ...($provisions ? [new CloseTaskDefinition(12, 'technical_provisions', CloseTaskKind::Check, [], 'finance_manager', 'provisions.run')] : []),
             // Gap fix GA-15 (D-81): in the fiscal year's last month, once everything that posts to income and expense is done.
             ...($yearEnd ? [new CloseTaskDefinition(12, 'year_end_close', CloseTaskKind::YearEndClose, $beforeYearEnd, 'finance_manager', 'periods.lock')] : []),
             new CloseTaskDefinition(13, 'trial_balance', CloseTaskKind::TrialBalance, $beforeTrialBalance, 'finance_manager', 'periods.soft_lock'),
@@ -55,7 +63,7 @@ final class CloseTaskCatalogue
 
     public function find(string $code): CloseTaskDefinition
     {
-        foreach ($this->tasks(yearEnd: true) as $task) {
+        foreach ($this->tasks(yearEnd: true, conditional: ['technical_provisions']) as $task) {
             if ($task->code === $code) {
                 return $task;
             }

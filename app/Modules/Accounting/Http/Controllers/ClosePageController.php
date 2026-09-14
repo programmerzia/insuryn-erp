@@ -34,7 +34,8 @@ final class ClosePageController
 
     /** Gap fix GA-43 / GA-15: task names the code does not spell out. */
     private const TASK_NAMES = ['upr_reconciliation' => 'Unearned premium reconciliation', 'vat_reconciliation' => 'VAT payable reconciliation',
-        'stamp_duty_reconciliation' => 'Stamp duty payable reconciliation', 'year_end_close' => 'Year-end close to retained earnings'];
+        'stamp_duty_reconciliation' => 'Stamp duty payable reconciliation', 'year_end_close' => 'Year-end close to retained earnings',
+        'technical_provisions' => 'Technical provisions']; // market gap G5
 
     public function __construct(
         private readonly PermissionChecker $permissions,

@@ -39,6 +39,8 @@ final class PermissionsSeeder extends Seeder
         'reports.claims',
         // Gap fixes W7 (GA-24, A-232): writing off a cancelled policy's small unpaid premium, requested by one person and approved by another
         'receipt.write_off_request', 'receipt.write_off_approve',
+        // Market gap G5 (A-268): mark regulatory returns filed; prepare / approve the quarterly technical provisions run
+        'regulatory.file','provisions.run','provisions.approve',
     ];
 
     /**
@@ -54,6 +56,7 @@ final class PermissionsSeeder extends Seeder
         ['platform.manage_roles', 'accounting.*', 'user'],
         ['rating.manage_plans', 'rating.approve_plans', 'object'], // slice R2: whoever drafted or edited a rating plan does not approve it
         ['quotation.create', 'underwriting.decide', 'object'], // slice R5: whoever prepared a proposal does not decide its referral
+        ['provisions.run', 'provisions.approve', 'object'], // market gap G5: whoever prepared a technical provisions run does not approve and post it
     ];
 
     public function run(): void

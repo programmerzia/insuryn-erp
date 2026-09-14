@@ -235,4 +235,65 @@ return [
         'render_timeout_seconds' => (int) env('ERP_DOCUMENT_RENDER_TIMEOUT', 60),
         'default_locale' => env('ERP_DOCUMENT_LOCALE', 'en'),
     ],
+
+    /*
+     * Market gap G5: regulatory returns (IDRA) and technical provisions (IBNR). Every rate here is a PLACEHOLDER to verify with the customer's actuary and IDRA circulars.
+     * ASSUMPTION: A-261 — IDRA's form numbers and wording are not known: forms are titled descriptively and their sections and columns are this configuration,
+     * so a layout is changed here, not in code. A column key names a figure the form's builder computes; a key it does not know stays blank.
+     */
+    'regulatory' => [
+        'regulator' => 'Insurance Development and Regulatory Authority (IDRA)',
+        'forms' => [
+            'premium_income' => ['title' => 'Premium income by class of business', 'sheet' => 'Premium income', 'sections' => [
+                ['key' => 'by_class', 'title' => 'By class of business', 'columns' => ['group' => 'Class of business', 'policies' => 'Policies', 'gross_premium' => 'Gross premium (excluding VAT)',
+                    'vat' => 'VAT collected (excluded)', 'stamp_duty' => 'Stamp duty', 'cancellations' => 'Cancellations (return premium)', 'net_premium' => 'Net premium income']],
+                ['key' => 'by_branch', 'title' => 'By branch', 'columns' => ['group' => 'Branch', 'policies' => 'Policies', 'gross_premium' => 'Gross premium (excluding VAT)',
+                    'vat' => 'VAT collected (excluded)', 'stamp_duty' => 'Stamp duty', 'cancellations' => 'Cancellations (return premium)', 'net_premium' => 'Net premium income']],
+            ]],
+            'claims' => ['title' => 'Claims intimated, paid and outstanding by class of business', 'sheet' => 'Claims', 'sections' => [
+                ['key' => 'by_class', 'title' => 'By class of business', 'columns' => ['group' => 'Class of business', 'intimated_count' => 'Claims intimated (number)',
+                    'intimated_amount' => 'Claims intimated (estimate)', 'paid_count' => 'Claims paid (number)', 'paid_amount' => 'Claims paid (amount)',
+                    'outstanding_count' => 'Claims outstanding at period end (number)', 'outstanding_amount' => 'Claims outstanding at period end (amount)']],
+            ]],
+            'expenses' => ['title' => 'Commission and management expenses by class of business against the expense limit', 'sheet' => 'Expenses', 'sections' => [
+                ['key' => 'by_class', 'title' => 'By class of business', 'columns' => ['group' => 'Class of business', 'gross_premium' => 'Gross premium (excluding VAT)',
+                    'commission' => 'Commission', 'management' => 'Management expenses (allocated)', 'total' => 'Total expenses', 'ratio' => 'Expenses to gross premium',
+                    'limit_rate' => 'Expense limit rate', 'limit' => 'Expense limit', 'excess' => 'Excess over limit']],
+            ]],
+            'agent_register' => ['title' => 'Agent and producer register summary', 'sheet' => 'Agent register', 'sections' => [
+                ['key' => 'summary', 'title' => 'Licences by producer type at period end', 'columns' => ['group' => 'Producer type', 'valid' => 'Valid', 'expired' => 'Expired',
+                    'suspended' => 'Suspended', 'revoked' => 'Revoked', 'not_yet_valid' => 'Not yet valid', 'total' => 'Total', 'issued_in_period' => 'Issued in the period']],
+                ['key' => 'licences', 'title' => 'Licence register', 'columns' => ['licence_no' => 'Licence number', 'producer_code' => 'Producer code', 'producer_name' => 'Name',
+                    'producer_type' => 'Type', 'class' => 'Class', 'branch_code' => 'Branch', 'issued_on' => 'Issued on', 'expires_on' => 'Expires on', 'status' => 'Status']],
+            ]],
+            'reinsurance_ceded' => ['title' => 'Reinsurance ceded summary', 'sheet' => 'Reinsurance ceded', 'sections' => [
+                ['key' => 'by_class', 'title' => 'By class of business', 'columns' => ['group' => 'Class of business', 'cessions' => 'Cessions', 'ceded_premium' => 'Premium ceded',
+                    'commission' => 'Reinsurance commission', 'recoveries' => 'Claims recovered']],
+            ]],
+        ],
+        /*
+         * ASSUMPTION: A-263 — the IDRA management expense limit as a percentage of gross premium per class (placeholders, verify against the current IDRA expense
+         * rules). Management expenses are the expense accounts not mapped to the roles below, spread over classes by gross premium.
+         */
+        'expense_limit_bp' => ['fire' => 3500, 'marine' => 3500, 'motor' => 3500, 'engineering' => 3500, 'default' => 3500],
+        'non_management_expense_roles' => ['claims_expense', 'claims_ibnr_expense', 'commission_expense', 'rounding_difference', 'fx_gain_loss'],
+        'provisions' => [
+            // ASSUMPTION: A-264 — IBNR as a percentage of net written premium (excluding VAT, after cancellations) over the four quarters to the quarter end (placeholders, verify).
+            'ibnr_percentage_bp' => ['fire' => 300, 'marine' => 400, 'motor' => 500, 'default' => 500],
+            'premium_base_quarters' => 4,
+            // ASSUMPTION: A-265 — a paid chain ladder needs paid claims in at least this many accident quarters; otherwise the class falls back to the percentage.
+            'chain_ladder_min_accident_quarters' => 4,
+            'triangle_quarters' => 8,
+            // ASSUMPTION: A-266 — premium deficiency check: unearned premium against its expected claims and maintenance expenses (placeholders, verify).
+            'expected_loss_ratio_bp' => ['fire' => 4000, 'marine' => 5000, 'motor' => 6500, 'default' => 6000],
+            'maintenance_expense_ratio_bp' => 1000,
+            // ASSUMPTION: A-267 — the branch the provision is booked to (a head-office provision); the first branch by code when this code does not exist.
+            'branch_code' => env('ERP_PROVISIONS_BRANCH_CODE', 'HO'),
+        ],
+        /*
+         * ASSUMPTION: A-269 — solvency snapshot, a placeholder formula to verify: available capital = assets − liabilities; required = the greater of the minimum
+         * paid-up capital for a non-life insurer, a share of net premium over the last four quarters and a share of net claims incurred over them.
+         */
+        'solvency' => ['minimum_capital_minor' => 40_00_00_000_00, 'premium_factor_bp' => 2000, 'claims_factor_bp' => 3000],
+    ],
 ];
