@@ -12,7 +12,7 @@ use App\Modules\Accounting\Application\ChartOfAccounts\ChartOfAccountsRules;
 use App\Modules\Accounting\Domain\Enums\AccountType;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
-use Carbon\CarbonImmutable;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +42,7 @@ final class ChartOfAccountsPageController
 
         return Inertia::render('accounting/ChartOfAccounts', [
             'entity' => $entity,
-            'accounts' => $bookId === '' ? [] : $query->tree($entity['id'], $bookId, CarbonImmutable::today()),
+            'accounts' => $bookId === '' ? [] : $query->tree($entity['id'], $bookId, app(BusinessClock::class)->today($entity['id'])),
             'canManage' => $this->permissions->has($actor, ChartOfAccounts::PERMISSION, AuthorizationScope::entity($entity['id'])),
             'types' => array_column(AccountType::cases(), 'value'),
             'subledgers' => ChartOfAccountsRules::SUBLEDGERS,
@@ -84,7 +84,7 @@ final class ChartOfAccountsPageController
 
     public function deactivate(Request $request, string $account): RedirectResponse
     {
-        $this->accounts->deactivate($account, PageSupport::actor($request), CarbonImmutable::today());
+        $this->accounts->deactivate($account, PageSupport::actor($request), app(BusinessClock::class)->today());
 
         return redirect('/accounting/chart-of-accounts')->with('status', 'Account deactivated. Journals can no longer post to it.');
     }

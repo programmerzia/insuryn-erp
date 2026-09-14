@@ -17,6 +17,7 @@ use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Money\MinorUnits;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -217,7 +218,7 @@ final class ChartOfAccounts
     /** @param object{id: string, code: string} $account */
     private function refuseWhenRoleMapped(object $account, string $what, ?CarbonImmutable $today = null): void
     {
-        $day = ($today ?? CarbonImmutable::today())->toDateString();
+        $day = ($today ?? app(BusinessClock::class)->today())->toDateString();
         $role = DB::table('account_role_mappings as m')->leftJoin('account_roles as r', 'r.code', '=', 'm.role_code')->where('m.account_id', $account->id)
             ->where(fn ($q) => $q->whereNull('m.effective_to')->orWhere('m.effective_to', '>', $day))->orderBy('m.role_code')->first(['m.role_code', 'r.description']);
         if ($role !== null) {
