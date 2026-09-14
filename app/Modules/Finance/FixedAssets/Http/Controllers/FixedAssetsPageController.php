@@ -43,19 +43,28 @@ final class FixedAssetsPageController
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
         $today = app(BusinessClock::class)->today();
         $onBooks = array_column($register->register($entity['id'], $today), null, 'id');
-        $assets = $reach->constrain(DB::table('fixed_assets as f'), 'f.entity_id', 'f.branch_id')->join('asset_classes as c', 'c.id', '=', 'f.class_id')->join('branches as b', 'b.id', '=', 'f.branch_id')
+        // GA-40: the register queue pages on the server like the other lists.
+        $page = $reach->constrain(DB::table('fixed_assets as f'), 'f.entity_id', 'f.branch_id')->join('asset_classes as c', 'c.id', '=', 'f.class_id')->join('branches as b', 'b.id', '=', 'f.branch_id')
             ->where('f.entity_id', $entity['id'])->orderByDesc('f.acquired_on')->orderByDesc('f.number')
-            ->get(['f.id', 'f.number', 'f.description', 'c.name as class_name', 'b.code as branch_code', 'f.location', 'f.custodian', 'f.acquired_on', 'f.cost_minor', 'f.status', 'f.disposed_on'])
-            ->map(fn (object $f): array => ['id' => (string) $f->id, 'number' => (string) $f->number, 'description' => (string) $f->description, 'class' => (string) $f->class_name,
+            ->select(['f.id', 'f.number', 'f.description', 'c.name as class_name', 'b.code as branch_code', 'f.location', 'f.custodian', 'f.acquired_on', 'f.cost_minor', 'f.status', 'f.disposed_on'])
+            ->paginate(PageSupport::listPageSize())->withQueryString();
+        $assets = [];
+        foreach ($page->items() as $f) {
+            /** @var object{id: string, number: string, description: string, class_name: string, branch_code: string, location: string|null, custodian: string|null, acquired_on: string, cost_minor: int|string, status: string} $f */
+            $assets[] = ['id' => (string) $f->id, 'number' => (string) $f->number, 'description' => (string) $f->description, 'class' => (string) $f->class_name,
                 'branch' => (string) $f->branch_code, 'location' => $f->location, 'custodian' => $f->custodian, 'acquired_on' => (string) $f->acquired_on, 'cost' => $money((int) $f->cost_minor),
                 'accumulated' => isset($onBooks[(string) $f->id]) ? $money($onBooks[(string) $f->id]['accumulated_minor']) : null,
-                'nbv' => $money(isset($onBooks[(string) $f->id]) ? $onBooks[(string) $f->id]['nbv_minor'] : 0), 'status' => (string) $f->status])->values()->all();
+                'nbv' => $money(isset($onBooks[(string) $f->id]) ? $onBooks[(string) $f->id]['nbv_minor'] : 0), 'status' => (string) $f->status];
+        }
+        $branches = $this->branches($actor, $entity['id'], ['fa.manage']);
+        $defaultBranch = app(\App\Http\Pages\FormDefaults::class)->branch($actor, $entity['id']);
 
         return Inertia::render('fixedAssets/Index', [
-            'assets' => $assets,
+            'assets' => PageSupport::page($page, $assets),
+            'defaultBranchId' => in_array($defaultBranch, array_column($branches, 'id'), true) ? $defaultBranch : ($branches[0]['id'] ?? ''),
             'classes' => DB::table('asset_classes')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('code')->get(['id', 'code', 'name', 'capitalisation_threshold_minor'])
                 ->map(fn (object $c): array => ['id' => (string) $c->id, 'label' => "{$c->code} · {$c->name}", 'threshold' => $money((int) $c->capitalisation_threshold_minor)])->values()->all(),
-            'branches' => $this->branches($actor, $entity['id'], ['fa.manage']),
+            'branches' => $branches,
             'bankAccounts' => self::bankAccounts($entity['id']),
             'can' => ['manage' => ! $this->permissions->reach($actor, ['fa.manage'])->isEmpty(), 'depreciate' => $this->permissions->has($actor, 'fa.post_depreciation', AuthorizationScope::entity($entity['id']))],
         ]);

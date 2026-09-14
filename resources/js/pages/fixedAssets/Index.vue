@@ -17,12 +17,14 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
+import { type Paginated, serverPage } from '@/lib/paging';
 
 /** Design addendum v2 §B.7: the fixed asset register queue; capitalise an asset (journal preview), then attach its invoice on the asset page. */
 interface AssetRow { id: string; number: string; description: string; class: string; branch: string; location: string | null; custodian: string | null; acquired_on: string; cost: string; accumulated: string | null; nbv: string; status: string }
 type Option = { id: string; label: string };
 const props = defineProps<{
-    assets: AssetRow[];
+    assets: Paginated<AssetRow>;
+    defaultBranchId: string;
     classes: (Option & { threshold: string })[];
     branches: Option[];
     bankAccounts: Option[];
@@ -32,7 +34,7 @@ const props = defineProps<{
 const active = ref<string | null>(null);
 const acquiring = ref(false);
 const today = useBusinessToday();
-const acquire = useMoneyForm(() => '/fixed-assets', { class_id: '', branch_id: props.branches[0]?.id ?? '', description: '', serial_no: '', location: '', custodian: '', supplier: '', invoice_ref: '',
+const acquire = useMoneyForm(() => '/fixed-assets', { class_id: '', branch_id: props.defaultBranchId, description: '', serial_no: '', location: '', custodian: '', supplier: '', invoice_ref: '',
     acquired_on: today, cost: '', paid_via: 'payable', bank_account_id: props.bankAccounts[0]?.id ?? '' }, () => (acquiring.value = false));
 const columns: DataColumn<AssetRow>[] = [
     { id: 'number', header: 'Asset', value: (r) => r.number, href: (r) => `/fixed-assets/${r.id}`, width: 140 },
@@ -49,13 +51,14 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
 </script>
 
 <template>
-    <AppLayout title="Fixed assets" fill>
+    <AppLayout help="assets" title="Fixed assets" fill>
         <QueueView
             id="fixed-assets"
             v-model:active="active"
             title="Fixed assets"
             :columns="columns"
-            :rows="assets"
+            :rows="assets.data"
+            :page="serverPage(assets)"
             :row-key="(r) => r.id"
             currency="BDT"
             empty-text="No fixed assets yet. Capitalise the company's furniture, computers and vehicles here."
@@ -63,7 +66,7 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
             :empty-action="classes.length ? null : { label: 'Set up asset classes', href: '/fixed-assets/classes' }"
             :inspector-title="(r) => r.number"
             :inspector-subtitle="(r) => r.description"
-            :primary-label="() => 'Open asset'"
+            :primary-label="() => 'Open the asset'"
             @action="acquiring = true"
             @primary="(r) => router.visit(`/fixed-assets/${r.id}`)"
         >

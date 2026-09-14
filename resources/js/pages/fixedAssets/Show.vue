@@ -9,10 +9,12 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 
 /** Design addendum v2 §B.7 asset page: Overview · Depreciation schedule · Movements · Documents · Accounting · Audit, with Move and Dispose drawers. */
@@ -49,10 +51,25 @@ const details = computed(() => [
     ['Description', props.asset.description], ['Method', props.asset.method], ['Residual value', `${formatMoney(props.asset.residual)} BDT`], ['Acquired', formatDate(props.asset.acquired_on)],
     ['How acquired', props.asset.source], ['Location', props.asset.location], ['Custodian', props.asset.custodian], ['Serial number', props.asset.serial_no], ['Supplier', props.asset.supplier], ['Supplier invoice', props.asset.invoice_ref],
 ] as [string, string | null][]);
+type ScheduleRow = (typeof props.schedule)[number];
+type MovementRow = (typeof props.movements)[number];
+const scheduleColumns: DataColumn<ScheduleRow>[] = [
+    { id: 'period', header: 'Month', value: (r) => (r.opening ? `Brought forward ${formatDate(r.period)}` : formatMonth(r.period, 'long')), width: 220 },
+    { id: 'amount', header: 'Depreciation', type: 'money', value: (r) => r.amount },
+    { id: 'accumulated', header: 'Accumulated', type: 'money', value: (r) => r.accumulated },
+    { id: 'nbv', header: 'Net book value', type: 'money', value: (r) => r.nbv },
+];
+const movementColumns: DataColumn<MovementRow>[] = [
+    { id: 'moved_on', header: 'Moved on', type: 'date', value: (m) => m.moved_on },
+    { id: 'from', header: 'From', value: (m) => m.from, width: 90 },
+    { id: 'to', header: 'To', value: (m) => m.to, width: 90 },
+    { id: 'location', header: 'Location', value: (m) => m.location, width: 180 },
+    { id: 'reason', header: 'Reason', value: (m) => m.reason, width: 260, muted: true },
+];
 </script>
 
 <template>
-    <AppLayout :title="asset.number">
+    <AppLayout help="assets" :title="asset.number">
         <ObjectPage
             :title="asset.number"
             :subtitle="asset.description"
@@ -83,24 +100,16 @@ const details = computed(() => [
                 </div>
             </template>
             <template #tab-schedule>
-                <div class="max-w-[760px] overflow-x-auto border border-line">
-                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Month</th><th class="border-b border-line px-3 text-right font-medium">Depreciation (BDT)</th><th class="border-b border-line px-3 text-right font-medium">Accumulated</th><th class="border-b border-line px-3 text-right font-medium">Net book value</th></tr></thead>
-                        <tbody>
-                            <tr v-for="row in schedule" :key="row.period" class="h-(--row-h)">
-                                <td class="border-b border-line px-3">{{ row.opening ? `Brought forward ${formatDate(row.period)}` : formatDate(row.period) }}</td>
-                                <td class="num border-b border-line px-3">{{ formatMoney(row.amount) }}</td><td class="num border-b border-line px-3">{{ formatMoney(row.accumulated) }}</td><td class="num border-b border-line px-3">{{ formatMoney(row.nbv) }}</td>
-                            </tr>
-                            <tr v-if="schedule.length === 0"><td colspan="4" class="px-3 py-6 text-center text-ui text-ink-2">No depreciation posted yet; the monthly batch posts it.</td></tr>
-                        </tbody>
-                    </table>
+                <div class="max-w-[760px] border border-line">
+                    <DataTable id="fixed-asset-schedule" label="Depreciation schedule" :columns="scheduleColumns" :rows="schedule" :row-key="(r) => `${r.opening ? 'b' : 'm'}-${r.period}`" currency="BDT" :url-sync="false"
+                        :open-on-click="false" compact-toolbar empty-text="No depreciation posted yet; the monthly batch posts it." />
                 </div>
             </template>
             <template #tab-movements>
-                <ul class="max-w-[760px] text-ui">
-                    <li v-for="(m, i) in movements" :key="i" class="border-b border-line py-2">{{ formatDate(m.moved_on) }}: {{ m.from }} → {{ m.to }}<template v-if="m.location">, {{ m.location }}</template> <span class="text-ink-2">— {{ m.reason }}</span></li>
-                    <li v-if="movements.length === 0" class="py-2 text-ink-2">The asset has not moved since it was acquired.</li>
-                </ul>
+                <div class="max-w-[900px] border border-line">
+                    <DataTable id="fixed-asset-movements" label="Movements" :columns="movementColumns" :rows="movements" :row-key="(m) => `${m.moved_on}-${m.from}-${m.to}`" :url-sync="false"
+                        :open-on-click="false" compact-toolbar empty-text="The asset has not moved since it was acquired." />
+                </div>
             </template>
         </ObjectPage>
         <Drawer v-model:open="moving" title="Move to another branch">

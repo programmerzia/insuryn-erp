@@ -6,10 +6,12 @@ import FormLayout from '@/components/forms/FormLayout.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
+import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatMoney } from '@/lib/format';
 
 /** Design addendum v2 §B.7 asset classes: method, useful life or yearly rate, residual, capitalisation threshold and the GL accounts each class posts to. */
 interface ClassRow { id: string; code: string; name: string; method: string; useful_life_months: string; rate: string; residual: string; threshold: string; cost_account_id: string;
@@ -25,7 +27,7 @@ const columns: DataColumn<ClassRow>[] = [
     { id: 'code', header: 'Code', value: (r) => r.code, width: 90 },
     { id: 'name', header: 'Class', value: (r) => r.name, width: 220 },
     { id: 'method', header: 'Method', value: (r) => (r.method === 'straight_line' ? `Straight line, ${r.useful_life_months} months` : `Reducing balance, ${r.rate}% a year`), width: 220 },
-    { id: 'residual', header: 'Residual %', value: (r) => r.residual },
+    { id: 'residual', header: 'Residual %', type: 'number', value: (r) => r.residual },
     { id: 'threshold', header: 'Capitalise from', type: 'money', value: (r) => r.threshold },
     { id: 'accounts', header: 'Cost / accumulated / expense', value: (r) => r.accounts, muted: true, width: 220 },
     { id: 'assets', header: 'Assets', type: 'number', value: (r) => r.assets },
@@ -46,7 +48,7 @@ function save(): void {
 </script>
 
 <template>
-    <AppLayout title="Asset classes" fill>
+    <AppLayout help="assets" title="Asset classes" fill>
         <QueueView
             id="asset-classes"
             v-model:active="active"
@@ -65,6 +67,9 @@ function save(): void {
             <template #toolbar>
                 <button v-if="can.manage" type="button" class="ml-2 h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="router.post('/fixed-assets/classes/defaults')">Add the default classes</button>
                 <Link href="/fixed-assets" class="ml-3 text-ui text-accent-text hover:underline">Fixed assets</Link>
+            </template>
+            <template #details="{ row }">
+                <DetailList :items="[{ label: 'Method', value: row.method === 'straight_line' ? `Straight line over ${row.useful_life_months} months` : `Reducing balance at ${row.rate}% a year` }, { label: 'Residual value', value: `${row.residual}% of cost` }, { label: 'Capitalise from', value: `${formatMoney(row.threshold)} BDT`, num: true }, { label: 'Cost / accumulated / expense accounts', value: row.accounts }, { label: 'Assets in the class', value: String(row.assets) }]" />
             </template>
         </QueueView>
         <Drawer v-model:open="open" :title="editing ? `Edit ${editing.name}` : 'New asset class'" width="w-[520px]">

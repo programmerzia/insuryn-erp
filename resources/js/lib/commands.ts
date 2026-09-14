@@ -29,6 +29,7 @@ const actions: (Omit<Command, 'group' | 'icon'> & { any: string[]; icon?: Compon
     { id: 'start-close', label: 'Start month-end close', href: '/close', keywords: 'lock period close month', any: ['periods.soft_lock', 'periods.lock'] },
     { id: 'new-supplier-bill', label: 'Enter a supplier bill', href: '/payables/bills/create', keywords: 'payables invoice vendor expense ap', any: ['ap.enter_bills'] },
     { id: 'new-payment-run', label: 'New payment run', href: '/payables/payment-runs/create', keywords: 'pay suppliers bills due bank file ap', any: ['ap.prepare_payments'] },
+    { id: 'post-depreciation', label: 'Post monthly depreciation', href: '/fixed-assets/depreciation', keywords: 'fixed assets depreciate month batch', any: ['fa.post_depreciation'] },
     { id: 'pay-commission', label: 'Approve or pay commission', href: '/distribution/statements', keywords: 'agent producer payout statement run', any: ['commission.approve', 'commission.pay'] },
     // Consistency pass: the main actions of payables, reinsurance, regulatory, people, fixed assets, budgets and petty cash, gated like the pages.
     { id: 'new-bill', label: 'Enter a supplier bill', href: '/payables/bills/create', keywords: 'new bill invoice vendor supplier payable expense', any: ['ap.enter_bills'] },
