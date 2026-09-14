@@ -18,13 +18,16 @@ interface Task { id: string; code: string; order_no: number; owner_role: string;
 const props = defineProps<{
     run: { id: string; status: string; period: string; period_status: string; started_at: string; completed_at: string | null; starts?: string; ends?: string };
     tasks: Task[];
-    lock?: { ready: boolean; reason: string | null };
+    lock?: { ready: boolean; early?: boolean; reason: string | null };
+    softLock?: { allowed: boolean; from: string };
     pending?: PendingDocument[];
 }>();
 
 const { can } = usePermissions();
 const notes = reactive<Record<string, string>>({});
 const expanded = ref<string | null>(null);
+// Slice 2.1b (D-56): a CFO locking before month end writes the reason; it is kept on the audit trail.
+const earlyReason = ref('');
 const words = (code: string) => code.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 const month = computed(() => (props.run.starts ? new Date(`${props.run.starts}T00:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : props.run.period));
 const done = computed(() => props.tasks.filter((t) => t.status === 'done' || t.status === 'skipped').length);
@@ -53,8 +56,18 @@ function skip(task: Task): void {
 }
 async function lockPeriod(): Promise<void> {
     if (!lockTask.value || !props.lock?.ready) return;
-    const ok = await confirmAction({ title: `Lock ${month.value}?`, body: 'Nobody can post into a locked month. Reopening it later needs a reason and the right approval.', confirmLabel: `Lock ${month.value}` });
-    if (ok) router.post(`/close/tasks/${lockTask.value.id}/execute`, { note: 'Locked from the close checklist' }, { preserveScroll: true });
+    const early = props.lock.early === true;
+    if (early && earlyReason.value.trim() === '') return;
+    const ok = await confirmAction({
+        title: early ? `Lock ${month.value} before it ends?` : `Lock ${month.value}?`,
+        body: early
+            ? `Nothing dated in ${month.value} can be posted once it is locked, including the days still left. Your reason is kept in the audit trail.`
+            : 'Nobody can post into a locked month. Reopening it later needs a reason and the right approval.',
+        confirmLabel: `Lock ${month.value}`,
+        tone: early ? 'danger' : undefined,
+    });
+    // The lock task's note is the early-lock reason (D-56); after month end no reason is sent.
+    if (ok) router.post(`/close/tasks/${lockTask.value.id}/execute`, { note: early ? earlyReason.value.trim() : '' }, { preserveScroll: true });
 }
 </script>
 
@@ -108,14 +121,21 @@ async function lockPeriod(): Promise<void> {
                 <Lock :size="16" :stroke-width="1.5" class="text-ink-2" aria-hidden="true" />
                 <div class="min-w-0 flex-1">
                     <p class="text-ui font-medium">Lock {{ month }}</p>
-                    <p class="text-dense" :class="lock?.ready ? 'text-ok' : 'text-ink-2'">{{ lock?.ready ? 'Every task is done and every subledger reconciles.' : (lock?.reason ?? lockTask?.summary ?? 'Locked.') }}</p>
+                    <p class="text-dense" :class="lock?.ready && !lock?.early ? 'text-ok' : lock?.early ? 'text-warn' : 'text-ink-2'">
+                        {{ lock?.ready && !lock?.early ? 'Every task is done and every subledger reconciles.' : (lock?.reason ?? lockTask?.summary ?? 'Locked.') }}
+                    </p>
+                    <p v-if="softLock && !softLock.allowed && run.period_status === 'open'" class="text-dense text-ink-2">The trial balance task soft-locks the month; that is possible from its last day, {{ formatDate(softLock.from) }}.</p>
+                    <label v-if="lock?.early && run.status === 'running' && can('periods.lock')" class="mt-2 grid gap-1 text-ui font-medium" for="early-lock-reason">
+                        Reason for locking before month end
+                        <input id="early-lock-reason" v-model="earlyReason" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body font-normal" />
+                    </label>
                 </div>
                 <button
                     v-if="lockTask && run.status === 'running' && can('periods.lock')"
                     type="button"
                     class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50"
-                    :disabled="!lock?.ready"
-                    :title="lock?.ready ? undefined : (lock?.reason ?? undefined)"
+                    :disabled="!lock?.ready || (lock?.early === true && earlyReason.trim() === '')"
+                    :title="lock?.ready && !lock?.early ? undefined : (lock?.reason ?? undefined)"
                     @click="lockPeriod"
                 >
                     Lock the period

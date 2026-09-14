@@ -69,7 +69,7 @@ final class PeriodCloseService
         [$task, $definition, $period] = $this->prepare($taskId, $actorUserId);
         $this->assertDependenciesClear($task->close_run_id, $definition);
         if ($definition->kind === CloseTaskKind::PeriodLock) {
-            return $this->lockPeriod($task->id, $task->close_run_id, $period, $actorUserId);
+            return $this->lockPeriod($task->id, $task->close_run_id, $period, $actorUserId, $note);
         }
 
         try {
@@ -129,15 +129,16 @@ final class PeriodCloseService
     /**
      * Task 16: every subledger is reconciled again and the run recorded first (committed, so a refusal leaves its variance and exceptions to
      * drill into), then the task is marked done and the period locked in one transaction, so FiscalPeriodService's open-task guard sees it
-     * done and its variance guard judges the ledger as it stands.
+     * done and its variance guard judges the ledger as it stands. Slice 2.1b (D-56): the task's note is the CFO's written reason when the period
+     * has not ended yet; after the period's end it is not needed.
      */
-    private function lockPeriod(string $taskId, string $closeRunId, FiscalPeriodView $period, string $actorUserId): string
+    private function lockPeriod(string $taskId, string $closeRunId, FiscalPeriodView $period, string $actorUserId, ?string $note): string
     {
         $this->reconciliation->runAll($period->id);
 
-        return DB::transaction(function () use ($taskId, $closeRunId, $period, $actorUserId): string {
+        return DB::transaction(function () use ($taskId, $closeRunId, $period, $actorUserId, $note): string {
             $this->record($taskId, 'done', ['summary' => 'Period locked.', 'details' => ['period_id' => $period->id]], $this->catalogue->find('period_lock'), $actorUserId, null);
-            $this->periods->lock($period->id, $actorUserId);
+            $this->periods->lock($period->id, $actorUserId, $note);
             DB::table('period_close_runs')->where('id', $closeRunId)->update(['status' => 'completed', 'completed_at' => CarbonImmutable::now()]);
 
             return 'done';

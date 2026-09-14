@@ -14,12 +14,16 @@ use App\Modules\Accounting\Exceptions\PeriodTransitionException;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
+use function Pest\Laravel\travelTo;
+
 /**
  * Review finding (critical): design §5.7 INVARIANT "period.lock() refuses if … any reconciliation variance" held only for *stored* runs. A
  * control-account posting made after the reconciliation tasks passed (e.g. under accounting.post_in_soft_locked between tasks 13 and 16) was
  * never re-checked, and the period locked with the subledger and GL apart. The lock must judge the ledger as it stands.
  */
 beforeEach(function (): void {
+    // Slice 2.1b (D-56): a month is locked only once it has ended on the business clock; these cases close September, so they run on 1 October.
+    travelTo(CarbonImmutable::parse('2026-10-01 10:00'));
     $this->ctx = seedDemoTenant();
     $this->world = seedInsuranceWorld($this->ctx, 'monthly');
     $this->maker = userWithPermissions($this->ctx['tenant_id'], ['accounting.create_manual_journal', 'accounting.post_to_control']);

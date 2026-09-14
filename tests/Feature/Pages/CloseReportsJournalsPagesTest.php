@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\travelTo;
 
 /** Slice 1C.11 screens: month-end close (design §5.7), reports drilling to journals, manual journals and reversals with maker ≠ checker. */
 beforeEach(function (): void {
@@ -33,6 +34,8 @@ beforeEach(function (): void {
 });
 
 it('runs the month-end close from the close screens and reopens a locked period', function (): void {
+    // Slice 2.1b (D-56): a month is locked only once it has ended on the business clock; these cases close September, so they run on 1 October.
+    travelTo(CarbonImmutable::parse('2026-10-01 10:00'));
     actingAs(($this->userWith)(['receipt.create']))->get('/close', $this->headers)->assertForbidden();
     actingAs($this->admin)->get('/close', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('close/Index')->has('periods', 12)
         ->where('periods.2.status', 'open')->where('periods.2.run', null));

@@ -38,7 +38,11 @@ final class ReasonMessages
         // Slice 2.1b (D-55): pending documents hold the lock; a pending manual journal moves only into an open next period.
         'PERIOD_HAS_PENDING_DOCUMENTS' => 'Documents dated in this period are still waiting for approval, release or posting. Approve or reject each one, or move a pending manual journal to the next period, before locking. The close checklist lists them.',
         'NEXT_PERIOD_NOT_OPEN' => 'The journal can only move into the next period while that period is open. Open the next fiscal year, or reopen the next period, first.',
-        'RECONCILIATION_VARIANCE' =>'A subledger does not reconcile to the ledger. Rerun the reconciliation tasks and resolve the difference before locking.',
+        // Slice 2.1b (D-56): locking follows the calendar on the company's clock.
+        'PERIOD_LAST_DAY_NOT_REACHED' => 'This month can be soft-locked from its last day. Run the trial balance task again on or after that day.',
+        'PERIOD_NOT_ENDED' => 'This month has not ended yet, so it cannot be locked. Lock it from the first day of the next month, or ask the CFO to lock it earlier with a written reason.',
+        'EARLY_LOCK_REASON_REQUIRED' => 'This month has not ended yet. To lock it now, write the reason for locking early.',
+        'RECONCILIATION_VARIANCE' => 'A subledger does not reconcile to the ledger. Rerun the reconciliation tasks and resolve the difference before locking.',
     ];
 
     public static function forPeople(string $reason, string $message, string $currency = 'BDT'): string

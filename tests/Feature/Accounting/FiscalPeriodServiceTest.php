@@ -12,12 +12,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 
+use function Pest\Laravel\travelTo;
+
 /**
  * Design §5.3 fiscal period: open ─soft_lock─▶ soft_locked ─lock─▶ locked, reopen(reason) back to open,
  * each transition behind its periods.* permission and audited. §5.7: lock refuses open close tasks and
  * reconciliation variances.
  */
 beforeEach(function (): void {
+    // Slice 2.1b (D-56): a month is locked only once it has ended on the business clock; these cases close September, so they run on 1 October.
+    travelTo(CarbonImmutable::parse('2026-10-01 10:00'));
     Queue::fake();
     $this->ctx = seedDemoTenant();
     $this->closer = userWithPermissions($this->ctx['tenant_id'], ['periods.soft_lock', 'periods.lock', 'periods.reopen']);

@@ -12,7 +12,7 @@ import { confirmAction } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
 import { useOnboarding } from '@/lib/onboarding';
 
-interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null; pending?: PendingDocument[] }
+interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null; pending?: PendingDocument[]; last_day_reached?: boolean; ended?: boolean; lock_from?: string }
 const props = defineProps<{ periods: Period[]; can: { start: boolean; reopen: boolean } }>();
 const onboarding = useOnboarding();
 
@@ -63,6 +63,11 @@ async function reopen(p: Period): Promise<void> {
                     <template #Period><StatusBadge :status="row.status" /></template>
                     <template #Close><StatusBadge :status="closeState(row)" /></template>
                 </DetailList>
+                <!-- Slice 2.1b (D-56): when the month can be soft-locked and locked, on the business clock. -->
+                <p v-if="row.status !== 'locked' && row.ended === false" class="mt-4 text-dense text-ink-2">
+                    {{ row.last_day_reached ? 'Today is its last day: the close can soft-lock it now.' : `The close can soft-lock it from its last day, ${formatDate(row.ends)}.` }}
+                    Locking waits until {{ formatDate(row.lock_from ?? row.ends) }}; a CFO can lock earlier with a written reason.
+                </p>
                 <PendingDocuments class="mt-4" :documents="row.pending ?? []" :month="month(row)" compact />
                 <Link v-if="row.run" :href="`/close/runs/${row.run.id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the close checklist</Link>
                 <div v-if="can.reopen && row.status !== 'open'" class="mt-4 grid gap-2 border-t border-line pt-4">

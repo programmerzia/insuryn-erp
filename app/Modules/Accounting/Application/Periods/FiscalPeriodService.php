@@ -40,17 +40,59 @@ final class FiscalPeriodService
         private readonly ReconciliationService $reconciliation,
         private readonly PendingDocumentsQuery $pendingDocuments,
         private readonly FiscalPeriodQuery $periodQuery,
+        private readonly BusinessClock $clock,
     ) {}
 
+    /** @throws PeriodTransitionException PERIOD_LAST_DAY_NOT_REACHED (slice 2.1b, D-56: soft lock from the period's last day on the business clock) */
     public function softLock(string $periodId, string $actorUserId): void
     {
+        $this->permissions->authorize($actorUserId, 'periods.soft_lock');
+        $dates = $this->dates($periodId);
+        if ($dates !== null && $dates['today']->lessThan($dates['ends'])) {
+            throw new PeriodTransitionException('PERIOD_LAST_DAY_NOT_REACHED', sprintf('Period %s can be soft-locked from its last day, %s.', $periodId, $dates['ends']->format('j M Y')));
+        }
         $this->transition($periodId, $actorUserId, 'periods.soft_lock', [PeriodStatus::Open], PeriodStatus::SoftLocked, 'period.soft_locked');
     }
 
-    public function lock(string $periodId, string $actorUserId): void
+    /**
+     * Slice 2.1b (DECISION D-56, CQ-C5): the lock needs the period to have ended on the business clock. Before that it is refused
+     * (PERIOD_NOT_ENDED) unless the actor is a CFO — a holder of periods.reopen (ASSUMPTION A-155) — who gives a written reason
+     * (EARLY_LOCK_REASON_REQUIRED without one); the reason and `early_lock` are recorded on the `period.locked` audit event.
+     *
+     * @throws PeriodTransitionException PERIOD_NOT_ENDED | EARLY_LOCK_REASON_REQUIRED | CLOSE_TASKS_OPEN | PERIOD_HAS_PENDING_DOCUMENTS | RECONCILIATION_VARIANCE
+     */
+    public function lock(string $periodId, string $actorUserId, ?string $earlyLockReason = null): void
     {
+        $this->permissions->authorize($actorUserId, 'periods.lock');
+        $dates = $this->dates($periodId);
+        $early = $dates !== null && ! $dates['today']->greaterThan($dates['ends']);
+        $reason = null;
+        $after = [];
+        if ($early) {
+            if (! $this->permissions->has($actorUserId, 'periods.reopen')) {
+                throw new PeriodTransitionException('PERIOD_NOT_ENDED', sprintf('Period %s has not ended; it can be locked from %s. Only a CFO can lock it earlier, with a written reason.',
+                    $periodId, $dates['ends']->addDay()->format('j M Y')));
+            }
+            $reason = trim((string) $earlyLockReason);
+            if ($reason === '') {
+                throw new PeriodTransitionException('EARLY_LOCK_REASON_REQUIRED', sprintf('Period %s ends on %s. Locking it earlier needs a written reason.', $periodId, $dates['ends']->format('j M Y')));
+            }
+            $after = ['early_lock' => true, 'period_ends' => $dates['ends']->toDateString()];
+        }
         $this->transition($periodId, $actorUserId, 'periods.lock', [PeriodStatus::SoftLocked], PeriodStatus::Locked, 'period.locked',
-            fn () => $this->assertReadyToLock($periodId));
+            fn () => $this->assertReadyToLock($periodId), $reason, after: $after);
+    }
+
+    /**
+     * Whether a period has reached its last day or ended, on its entity's business clock.
+     *
+     * @return array{today: CarbonImmutable, ends: CarbonImmutable}|null null when the period does not exist
+     */
+    public function dates(string $periodId): ?array
+    {
+        $period = DB::table('fiscal_periods')->where('id', $periodId)->first(['entity_id', 'ends']);
+
+        return $period === null ? null : ['today' => $this->clock->today((string) $period->entity_id), 'ends' => CarbonImmutable::parse((string) $period->ends)];
     }
 
     /**
@@ -68,7 +110,7 @@ final class FiscalPeriodService
 
         return DB::transaction(function () use ($periodId, $actorUserId, $reason): ?string {
             $this->assertStatusIn($periodId, [PeriodStatus::SoftLocked, PeriodStatus::Locked], PeriodStatus::Open);
-            $approvalId = $this->approvals->request('fiscal_period_reopen', $periodId, new ApprovalFacts(0), $actorUserId, app(BusinessClock::class)->today(), ['reason' => trim($reason)]);
+            $approvalId = $this->approvals->request('fiscal_period_reopen', $periodId, new ApprovalFacts(0), $actorUserId, $this->clock->today(), ['reason' => trim($reason)]);
             if ($approvalId !== null) {
                 $this->audit->record('period.reopen_requested', AuditSubject::of('fiscal_period', $periodId), null, ['approval_id' => $approvalId],
                     trim($reason), 'periods.reopen', Actor::user($actorUserId));
@@ -108,6 +150,7 @@ final class FiscalPeriodService
     /**
      * @param list<PeriodStatus> $allowedFrom
      * @param (callable(): mixed)|null $guard runs under the row lock before the status changes
+     * @param array<string, mixed> $after recorded on the audit event next to the new status
      */
     private function transition(
         string $periodId,
@@ -119,12 +162,13 @@ final class FiscalPeriodService
         ?callable $guard = null,
         ?string $reason = null,
         bool $authorize = true,
+        array $after = [],
     ): void {
         if ($authorize) {
             $this->permissions->authorize($actorUserId, $permission);
         }
 
-        DB::transaction(function () use ($periodId, $actorUserId, $permission, $allowedFrom, $to, $auditAction, $guard, $reason): void {
+        DB::transaction(function () use ($periodId, $actorUserId, $permission, $allowedFrom, $to, $auditAction, $guard, $reason, $after): void {
             $from = $this->assertStatusIn($periodId, $allowedFrom, $to);
             if ($guard !== null) {
                 $guard();
@@ -136,7 +180,7 @@ final class FiscalPeriodService
                 'locked_by' => $locked ? $actorUserId : null,
                 'locked_at' => $locked ? CarbonImmutable::now() : null,
             ]);
-            $this->audit->record($auditAction, AuditSubject::of('fiscal_period', $periodId), ['status' => $from->value], ['status' => $to->value],
+            $this->audit->record($auditAction, AuditSubject::of('fiscal_period', $periodId), ['status' => $from->value], ['status' => $to->value] + $after,
                 $reason, $permission, Actor::user($actorUserId));
             $this->announce($periodId, $to, $actorUserId, $reason);
         });

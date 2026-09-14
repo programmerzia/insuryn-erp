@@ -23,12 +23,16 @@ use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
+use function Pest\Laravel\travelTo;
+
 /**
  * Design §5.7 month-end close: tasks 1 premium earning, 2 suspense review, 3 bank reconciliation, 4 premium recon, 6 commission recon,
  * 8 accruals, 13 trial balance (soft-lock), 14 financial statements, 15 sign-off, 16 period lock; order and dependencies; blocking
  * conditions; INVARIANT lock refuses open tasks or variance.
  */
 beforeEach(function (): void {
+    // Slice 2.1b (D-56): a month is locked only once it has ended on the business clock; these cases close September, so they run on 1 October.
+    travelTo(CarbonImmutable::parse('2026-10-01 10:00'));
     $this->ctx = seedDemoTenant();
     $this->world = seedInsuranceWorld($this->ctx, 'monthly');
     $this->september = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('fiscal_periods')->where('starts', '2026-09-01')->value('id'));

@@ -22,6 +22,8 @@ use App\Modules\Insurance\Policy\Application\QuoteRequest;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
+use function Pest\Laravel\travelTo;
+
 /**
  * Design §6.1 subledger classification (premium, suspense, commission reconcile to their control accounts), §6.2 contract, §6.3
  * ReconciliationService: runs and exceptions, variance blocks close. Subledger balances are computed as of the reconciliation date.
@@ -92,6 +94,8 @@ it('reconciles clean at every month end of real business, as of that date', func
 });
 
 it('reports a variance with drill-down when a manual journal hits a control account, and blocks the period lock', function (): void {
+    // Slice 2.1b (D-56): a month is locked only once it has ended on the business clock; these cases close September, so they run on 1 October.
+    travelTo(CarbonImmutable::parse('2026-10-01 10:00'));
     $maker = userWithPermissions($this->ctx['tenant_id'], ['accounting.create_manual_journal', 'accounting.post_to_control']);
     $checker = userWithPermissions($this->ctx['tenant_id'], ['accounting.approve_journal', 'accounting.post_to_control']);
     $closer = userWithPermissions($this->ctx['tenant_id'], ['periods.soft_lock', 'periods.lock']);
