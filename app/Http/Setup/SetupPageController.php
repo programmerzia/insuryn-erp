@@ -149,7 +149,7 @@ final class SetupPageController
             throw ValidationException::withMessages($errors);
         }
 
-        return $this->saved($request, 'chart_of_accounts', count($rows).' accounts added to the chart of accounts.');
+        return $this->saved($request, 'chart_of_accounts', count($rows).' accounts added to the chart of accounts. Add or change accounts any time in Accounting → Chart of accounts.');
     }
 
     public function product(Request $request, ProductCatalogue $catalogue, TaxRateSetup $taxRates): RedirectResponse

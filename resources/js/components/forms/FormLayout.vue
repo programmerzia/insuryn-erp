@@ -10,8 +10,8 @@ import type { SharedProps } from '@/types/shared';
  * Brief §4 form: one column, 560px, labels above; Tab order is reading order. Ctrl+Enter submits, Ctrl+S saves a draft (when the form
  * offers drafts), Esc cancels with the unsaved-changes guard. Business-rule refusals from the server show above the fields.
  */
-const props = withDefaults(defineProps<{ submitLabel: string; cancelHref?: string; dirty: boolean; processing?: boolean; drafts?: boolean; wide?: boolean; error?: string }>(), {
-    processing: false, drafts: false, wide: false, error: undefined, cancelHref: undefined,
+const props = withDefaults(defineProps<{ submitLabel: string; cancelHref?: string; cancelLabel?: string; dirty: boolean; processing?: boolean; drafts?: boolean; wide?: boolean; error?: string }>(), {
+    processing: false, drafts: false, wide: false, error: undefined, cancelHref: undefined, cancelLabel: 'Cancel',
 });
 const emit = defineEmits<{ submit: []; saveDraft: []; cancel: [] }>();
 const page = usePage<SharedProps>();
@@ -39,7 +39,7 @@ useShortcut('form.cancel', () => props.cancelHref && cancel(), { allowInInputs: 
                 Save draft <Kbd :keys="shortcutKeys('form.save')" />
             </button>
             <button type="button" class="ml-auto inline-flex h-8 items-center gap-1.5 rounded-control px-3 text-ui text-ink-2 hover:bg-surface-2" @click="cancel">
-                Cancel <Kbd :keys="shortcutKeys('form.cancel')" />
+                {{ cancelLabel }} <Kbd :keys="shortcutKeys('form.cancel')" />
             </button>
         </div>
     </form>

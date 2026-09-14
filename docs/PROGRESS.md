@@ -2676,3 +2676,37 @@ Small fixes found by the flow audit, one commit each (`fix(…): Gn – …`); n
 - **Found, not changed:**
   - Receipt and claim numbers are not branch-coded by default (`erp.numbering.formats` has no `receipt` / `claim` entry), so the first receipts or claims of two branches get the same number and the second insert fails on the unique number. A tenant with a second branch needs those formats set; `BranchScopedPagesTest` sets them.
   - The web endorse-risk refusal message still reads "The risk details are not valid (chassis_no: REQUIRED)." The drawer stops an empty required field before posting, so people do not normally see it.
+
+### UX U1–U3 — date picker, chart of accounts, setup chart step — done
+Product owner feedback: dates could only be typed; there was no screen to add an account; flows should be easier to follow. One commit each (`feat(ux)` / `feat(accounting)`).
+
+- **U1 (date picker):** `DateInput` keeps typing (`14 Sep 2026`, `t`, `+3`, `12/09/2026`), the display and the `Y-m-d` model, and adds a calendar button inside the field (D-62).
+  - Opening: the button, or Alt+ArrowDown in the field.
+  - Keys: arrows move a day or a week, PageUp/PageDown a month, Shift+PageUp/PageDown a year, Home/End the week. Enter picks; Escape closes and focus returns to the field.
+  - Today is ringed and the selected day filled. Month and year selects jump; "Today" picks today.
+  - `min` / `max` disable days and refuse a typed date outside them. They are used where the server already checks: the report range filter ("to" not before "from") and the new producer's licence dates (issued no later than today, valid today).
+  - The week starts on `erp.ui.week_starts_on`, Sunday by default (A-165). Month names are in Bangla when the user reads the help in Bangla (A-166).
+  - Every date field already used `DateInput`; the grep found no raw date input. The one exception is the setup wizard's "first month" `type="month"`, which picks a month, not a date, and was left as it is.
+- **U2 (chart of accounts):** Accounting → Chart of accounts (sidebar, secondary).
+  - Who: it opens for `accounting.view_journals` or `accounting.manage_coa`. Every change needs `accounting.manage_coa` in the entity.
+  - The list: an indented tree by code with type, normal side, posting (postable / heading / control with its subledger), the account roles mapped today, currency, balance on the normal side (primary book, base currency) and status.
+  - Add account: a drawer with code, name, type (normal side suggested), under, postable, control with subledger, and currency. It goes through the import's rules, now `ChartOfAccountsRules`, shared with the CSV import (D-63). Audited `account.created`.
+  - Edit: name, parent, postable, type and side, within A-167 and A-169. Audited `account.updated` with only the changed fields.
+  - Deactivate and reactivate: deactivating needs nothing left on the account (A-168); both are audited. The inspector says why Deactivate is off.
+  - Links: the manual journal's "New account" drawer and its hint for other users, and Account roles (toolbar and remap drawer), all point to the screen.
+  - Tests: Pest `ChartOfAccountsScreenTest` (7), Vitest `chart-of-accounts.test.ts`.
+- **U3 (setup wizard):** the chart step now has:
+  - one sentence (template → adjust → create)
+  - "Add account" above and below the table; the new row's code field is focused
+  - "Import from a CSV file instead"
+  - a lock on accounts the accounting needs
+  - the normal side following the type
+  - each row's errors under that row, with a count above the table
+  - a notice with a button when "Company and branches" or "Fiscal year and currency" is not saved yet (the flow audit hit "Save the company first" only after filling in the table)
+  - once the chart is saved: the step, the summary rail and the saved message link to Chart of accounts
+  Sweep: the button that leaves a step without saving says "Skip for now", or "Continue" once the step is saved (it said "Cancel"; `FormLayout` has a `cancelLabel`).
+- **Screenshots:** before and after, light and dark, 1366×768, in `storage/ux-screenshots/ux-u1-u3/{before,after}/` (gitignored; there is no `docs/screenshots` convention). The "before" set was taken from the main checkout's build.
+- **No** migration, permission or role template change. Shared props gain `calendar.week_starts_on`.
+- **Found, not changed:**
+  - A new tenant's company step opens with an empty short code.
+  - `vendor/bin/phpstan analyse` reports two errors in `tests/Pest.php` (`fakePdfRenderer`'s `ArrayObject` generics). They are not from this work.
