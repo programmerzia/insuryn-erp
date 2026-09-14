@@ -108,6 +108,11 @@ return [
         'tax_jurisdiction' => env('ERP_TAX_JURISDICTION', 'BD'),
         'chart_of_accounts_template' => 'non-life-insurance',
     ],
+    'ui' => [
+        // UX U1 date picker. ASSUMPTION: A-165 — the calendar week starts on Sunday: Bangladesh's working week runs Sunday to Thursday and CLDR
+        // gives Sunday for bn-BD. Not confirmed with the customer (some offices print Saturday-first calendars); one of sunday … saturday.
+        'week_starts_on' => env('ERP_WEEK_STARTS_ON', 'sunday'),
+    ],
     'distribution' => [
         // ASSUMPTION: A-14 — which producer types need a licence to write new business is not specified: all of them.
         'licence_required_types' => ['agent', 'agency_org', 'bdo', 'broker', 'partner'],

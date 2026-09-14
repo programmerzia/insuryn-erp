@@ -32,6 +32,8 @@ final class HandleInertiaRequests extends Middleware
             'undo' => fn (): mixed => $request->hasSession() ? $request->session()->get('undo') : null,
             // Flow audit: the next step offered with a completed action's confirmation ({label, url, prompt}), e.g. "Record receipt" after issuing a policy.
             'next' => fn (): mixed => $request->hasSession() ? $request->session()->get('next') : null,
+            // UX U1: the date picker's first day of the week (A-165).
+            'calendar' => ['week_starts_on' => (string) config('erp.ui.week_starts_on', 'sunday')],
         ];
     }
 

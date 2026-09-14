@@ -13,6 +13,8 @@ export interface SharedProps {
         onboarding: { setupNeeded: boolean; canSetup: boolean; demoCommand: string | null };
     } | null;
     status: string | null;
+    /** UX U1: the date picker's first day of the week, `sunday` … `saturday` (erp.ui.week_starts_on, A-165). */
+    calendar?: { week_starts_on: string };
     errors: Record<string, string>;
     [key: string]: unknown;
 }

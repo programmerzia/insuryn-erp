@@ -20,10 +20,13 @@ const emit = defineEmits<{ created: [result: LookupResult] }>();
 const draft = ref<ProducerDraft>(producerDraft('', '', ''));
 const errors = ref<Record<string, string>>({});
 const saving = ref(false);
+/** The server's today: a licence is not issued later and must still be valid (POST /lookup/producer checks both). */
+const today = ref<string | null>(null);
 
 async function suggest(type: string): Promise<void> {
     try {
         const answer = await requestJson<{ code: string; today: string }>('GET', `/lookup/producer/new?type=${encodeURIComponent(type)}`);
+        today.value = answer.today;
         if (draft.value.issued_on === '') draft.value = { ...producerDraft(draft.value.name, draft.value.branch_id, answer.today), producer_type: draft.value.producer_type };
         draft.value.code = answer.code;
     } catch {
@@ -70,8 +73,8 @@ async function create(): Promise<void> {
             <div class="grid grid-cols-2 gap-3">
                 <Field id="new-producer-licence" label="Licence number" :error="errors.licence_no"><TextInput id="new-producer-licence" v-model="draft.licence_no" :maxlength="64" /></Field>
                 <Field id="new-producer-class" label="Licensed for" :error="errors.licence_class"><SelectInput id="new-producer-class" v-model="draft.licence_class" :options="LICENCE_CLASSES" /></Field>
-                <Field id="new-producer-issued" label="Issued on" :error="errors.issued_on"><DateInput id="new-producer-issued" v-model="draft.issued_on" /></Field>
-                <Field id="new-producer-expires" label="Expires on" :error="errors.expires_on"><DateInput id="new-producer-expires" v-model="draft.expires_on" /></Field>
+                <Field id="new-producer-issued" label="Issued on" :error="errors.issued_on"><DateInput id="new-producer-issued" v-model="draft.issued_on" :max="today" /></Field>
+                <Field id="new-producer-expires" label="Expires on" :error="errors.expires_on"><DateInput id="new-producer-expires" v-model="draft.expires_on" :min="today && draft.issued_on > today ? draft.issued_on : today" /></Field>
             </div>
             <p v-if="errors.branch_id" class="text-ui text-danger" role="alert">{{ errors.branch_id }}</p>
             <div class="flex justify-end gap-2">
