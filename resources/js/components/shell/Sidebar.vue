@@ -52,7 +52,7 @@ function fullLabelWhenClipped(event: MouseEvent, label: string): void {
 <template>
     <nav
         id="main-navigation"
-        class="flex min-h-0 flex-col overflow-y-auto border-r border-line bg-surface-2 py-2"
+        class="relative flex min-h-0 flex-col overflow-y-auto border-r border-line bg-surface-2 py-2"
         :class="[collapsed ? 'w-12' : 'w-56', navOpen ? 'max-sm:fixed max-sm:top-(--topbar-h) max-sm:bottom-0 max-sm:left-0 max-sm:z-40 max-sm:w-64 max-sm:shadow-float' : 'max-sm:hidden']"
         aria-label="Main"
     >

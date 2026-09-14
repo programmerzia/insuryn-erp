@@ -38,7 +38,7 @@ watch(() => [props.module, panelLocale.value] as const, async ([module, locale])
                 <X :size="16" :stroke-width="1.5" />
             </button>
         </div>
-        <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3" :lang="text?.locale ?? panelLocale" aria-live="polite">
+        <div class="relative min-h-0 flex-1 overflow-y-auto px-4 py-3" :lang="text?.locale ?? panelLocale" aria-live="polite">
             <p v-if="failed" class="text-ui text-ink-2">The explanation could not be loaded. Check your connection and open the panel again.</p>
             <template v-else-if="text">
                 <h3 class="text-section font-semibold">{{ text.title }}</h3>

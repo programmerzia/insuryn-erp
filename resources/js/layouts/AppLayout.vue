@@ -64,7 +64,8 @@ watch(() => page.props.errors?.form, (message) => message && toast(message, { to
         <TopBar class="col-span-3 col-start-1 row-start-1" />
         <TabStrip class="col-span-3 col-start-1 row-start-2" />
         <Sidebar class="col-start-1 row-start-3" />
-        <main id="main" tabindex="-1" class="col-start-2 row-start-3 min-h-0 min-w-0 outline-none max-sm:col-span-3 max-sm:col-start-1" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4 max-sm:px-3'">
+        <!-- `relative` on the scrolling regions: an absolutely positioned descendant (an sr-only label, a badge) scrolled below the fold otherwise counts towards the document's height, and the whole window scrolls past the status bar. -->
+        <main id="main" tabindex="-1" class="relative col-start-2 row-start-3 min-h-0 min-w-0 outline-none max-sm:col-span-3 max-sm:col-start-1" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4 max-sm:px-3'">
             <slot />
         </main>
         <!-- GA-16: on a phone the sidebar opens over the page; tapping outside it or Escape closes it. -->
