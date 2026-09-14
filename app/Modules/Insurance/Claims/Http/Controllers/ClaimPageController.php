@@ -87,11 +87,17 @@ final class ClaimPageController
         $unsettled = $payments->contains(fn (ClaimPayment $p): bool => in_array($p->status->value, ClaimPaymentStatus::unsettled(), true));
         $status = $model->status;
         $policy = DB::table('policies as p')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.id', $model->policy_id)->first(['p.id', 'p.number', 'p.policyholder_party_id', 'h.display_name']);
-        $bankAccounts = DB::table('bank_accounts')->where('entity_id', $model->entity_id)->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked', 'gl_account_id', 'currency']);
-        // Flow fix X3: "pay from" starts at the bank account the release was requested from, else the active account in the claim's currency behind bank_main.
+        $bankAccounts = DB::table('bank_accounts')->where('entity_id', $model->entity_id)->get(['id', 'bank_name', 'account_no_masked', 'gl_account_id', 'currency', 'status']);
+        // Flow fix X3 / G1: the bank a payment is paid from is fixed when the release is requested (ClaimPaymentService::requestRelease); the release does
+        // not change it. Without one, CLAIM_PAID credits bank_main — shown as the active account in the claim's currency behind that role.
         $bankMain = DB::table('account_role_mappings')->where('entity_id', $model->entity_id)->where('role_code', 'bank_main')->where('effective_from', '<=', CarbonImmutable::today()->toDateString())
             ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', CarbonImmutable::today()->toDateString()))->orderByDesc('effective_from')->value('account_id');
-        $defaultBank = $bankAccounts->first(fn (object $b): bool => $b->gl_account_id === $bankMain && $b->currency === $model->currency)?->id;
+        $defaultBank = $bankAccounts->first(fn (object $b): bool => $b->gl_account_id === $bankMain && $b->currency === $model->currency && $b->status === 'active')?->id;
+        $bankLabel = function (?string $id) use ($bankAccounts): string {
+            $bank = $id === null ? null : $bankAccounts->firstWhere('id', $id);
+
+            return $bank === null ? 'Main bank account (account role bank_main)' : "{$bank->bank_name} {$bank->account_no_masked}";
+        };
 
         return Inertia::render('claims/Show', [
             'claim' => ['id' => $model->id, 'number' => $model->number, 'status' => $status->value, 'loss_date' => $model->loss_date->toDateString(), 'reported_on' => $model->reported_on->toDateString(),
@@ -106,11 +112,11 @@ final class ClaimPageController
                     'reason' => (string) $r->reason, 'recorded_on' => (string) $r->recorded_on])->values()->all(),
             'payments' => $payments->map(fn (ClaimPayment $p): array => ['id' => $p->id, 'amount' => $money($p->amount_minor), 'status' => $p->status->value, 'approved_on' => $p->approved_on->toDateString(),
                 'paid_on' => $p->paid_on?->toDateString(), 'bank_account_id' => $p->bank_account_id ?? $defaultBank,
+                'pay_from' => $bankLabel($p->bank_account_id ?? $defaultBank),
                 'can_request_release' => $p->status === ClaimPaymentStatus::Approved && $can('claim.pay_request'),
                 'can_release' => $p->status === ClaimPaymentStatus::ReleaseRequested && $can('claim.pay_release')])->values()->all(),
             'recoveries' => DB::table('claim_recoveries')->where('claim_id', $model->id)->orderBy('received_on')->get(['type', 'amount_minor', 'received_on', 'reference'])
                 ->map(fn (object $r): array => ['type' => (string) $r->type, 'amount' => $money((int) $r->amount_minor), 'received_on' => (string) $r->received_on, 'reference' => $r->reference])->values()->all(),
-            'bankAccounts' => $bankAccounts->map(fn (object $b): array => ['id' => $b->id, 'bank_name' => $b->bank_name, 'account_no_masked' => $b->account_no_masked])->values()->all(),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/claims/{$model->id}/documents" : null,
             'actions' => [
                 'reserve' => in_array($status, [ClaimStatus::Registered, ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true) && $can('claim.reserve'),

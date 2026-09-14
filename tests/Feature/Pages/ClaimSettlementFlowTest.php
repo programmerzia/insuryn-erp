@@ -96,7 +96,33 @@ it('starts the approval, release and close drawers from what the claim already k
     actingAs($manager)->post("/claim-payments/{$paymentId}/request-release", [], $this->headers)->assertSessionHasNoErrors();
 
     actingAs($manager)->get("/claims/{$this->claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('claim.uncommitted', '20,000.00')->where('payments.0.bank_account_id', $bankId));
+        ->where('claim.uncommitted', '20,000.00')->where('payments.0.bank_account_id', $bankId)->where('payments.0.pay_from', 'City Bank ****1'));
+});
+
+it('shows the release drawer the bank account fixed when the release was requested, not a choice the release would ignore', function (): void {
+    [$city, $other] = asTenant($this->ctx['tenant_id'], function (): array {
+        $ids = [];
+        foreach ([['City Bank', '****1', 'bank_main'], ['Other Bank', '****9', 'salary_expense']] as [$name, $masked, $gl]) {
+            DB::table('bank_accounts')->insert(['id' => $ids[] = (string) Str::uuid7(), 'tenant_id' => $this->ctx['tenant_id'], 'entity_id' => $this->ctx['entity_id'],
+                'gl_account_id' => $this->ctx['accounts'][$gl], 'bank_name' => $name, 'account_no_masked' => $masked, 'currency' => 'BDT', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        }
+
+        return $ids;
+    });
+    $manager = ($this->userWith)(['claim.reserve', 'claim.approve', 'claim.pay_request']);
+    $finance = ($this->userWith)(['claim.pay_release']);
+    asTenant($this->ctx['tenant_id'], fn () => DB::table('sod_rules')->where('permission_a', 'claim.reserve')->where('permission_b', 'claim.approve')->update(['mode' => 'warn']));
+    actingAs($manager)->post("/claims/{$this->claimId}/reserve", ['reserve' => '200,000.00', 'reason' => 'Initial', 'on' => '2026-09-14'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($manager)->post("/claims/{$this->claimId}/payments", ['amount' => '180,000.00', 'payee_party_id' => $this->world['policyholder_id'], 'on' => '2026-09-14'], $this->headers)->assertSessionHasNoErrors();
+    $paymentId = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('claim_payments')->value('id'));
+    actingAs($manager)->post("/claim-payments/{$paymentId}/request-release", ['bank_account_id' => $other], $this->headers)->assertSessionHasNoErrors();
+
+    actingAs($finance)->get("/claims/{$this->claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('payments.0.can_release', true)->where('payments.0.bank_account_id', $other)->where('payments.0.pay_from', 'Other Bank ****9')->missing('bankAccounts'));
+
+    // The release pays from the requested account whatever the form sends.
+    actingAs($finance)->post("/claim-payments/{$paymentId}/release", ['paid_on' => '2026-09-14', 'bank_account_id' => $city], $this->headers)->assertSessionHasNoErrors();
+    expect(asTenant($this->ctx['tenant_id'], fn (): ?string => DB::table('claim_payments')->where('id', $paymentId)->value('bank_account_id')))->toBe($other);
 });
 
 it('puts reserved claims to settle on the claims manager\'s home and requested releases on finance\'s', function (): void {

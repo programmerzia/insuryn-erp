@@ -20,9 +20,8 @@ import { useMoneyForm } from '@/lib/moneyForm';
 const props = defineProps<{
     claim: { id: string; number: string; status: string; loss_date: string; reported_on: string; description: string; reserve: string; uncommitted: string; currency: string; status_reason: string | null; policy: { id: string; number: string | null; policyholder: string; policyholder_id: string } };
     reserves: { version: number; reserve: string; delta: string; kind: string; reason: string; recorded_on: string }[];
-    payments: { id: string; amount: string; status: string; approved_on: string; paid_on: string | null; bank_account_id: string | null; can_request_release: boolean; can_release: boolean }[];
+    payments: { id: string; amount: string; status: string; approved_on: string; paid_on: string | null; bank_account_id: string | null; pay_from: string; can_request_release: boolean; can_release: boolean }[];
     recoveries: { type: string; amount: string; received_on: string; reference: string | null }[];
-    bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
     actions: { reserve: boolean; approve: boolean; recover: boolean; close: boolean; reject: boolean; reopen: boolean };
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
@@ -43,7 +42,9 @@ const reserve = useMoneyForm(() => `${base}/reserve`, { reserve: '', reason: '',
 const payment = useMoneyForm(() => `${base}/payments`, { amount: '', payee_party_id: '', on: '' }, done);
 const recover = useMoneyForm(() => `${base}/recover`, { type: 'salvage', amount: '', received_on: '', reference: '', bank_account_id: '' }, done);
 const closing = useMoneyForm(() => `${base}/close`, { reason: '', on: '' }, done);
-const release = useMoneyForm(() => `/claim-payments/${releasing.value}/release`, { paid_on: '', bank_account_id: '' }, done);
+const release = useMoneyForm(() => `/claim-payments/${releasing.value}/release`, { paid_on: '' }, done);
+// G1: the bank account is fixed when the release is requested; the drawer only says which one pays.
+const releasePayFrom = computed(() => props.payments.find((p) => p.id === releasing.value)?.pay_from ?? '');
 const decision = useForm({ reason: '', on: '' });
 const money = computed(() => ({ reserve, payment, recover, close: closing, release })[drawer.value as 'reserve'] ?? null);
 const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
@@ -56,7 +57,7 @@ const facts = computed(() => [
 ]);
 const previewTitle = computed(() => ({ reserve: 'Post the new reserve?', payment: 'Approve this payment?', recover: 'Post the recovery?', close: `Close ${props.claim.number}?`, release: 'Pay the claim?' })[drawer.value as 'reserve'] ?? '');
 
-// Flow fix X3: each drawer starts from what the claim already knows — the reserve left, the policyholder, today, the bank the release was requested from.
+// Flow fix X3: each drawer starts from what the claim already knows — the reserve left, the policyholder, today; the release drawer shows the bank the release was requested from.
 const nextDismissed = ref(false);
 const offerApproval = computed(() => props.nextStep === 'approve_payment' && props.actions.approve && !nextDismissed.value);
 // Flow fix X8: the payee is looked up (or created inline as a vendor or beneficiary); it starts as the policyholder.
@@ -95,7 +96,7 @@ function requestRelease(id: string): void {
 }
 function openRelease(id: string): void {
     releasing.value = id;
-    release.form.defaults({ paid_on: props.today, bank_account_id: props.payments.find((p) => p.id === id)?.bank_account_id ?? '' });
+    release.form.defaults({ paid_on: props.today });
     release.form.reset();
     drawer.value = 'release';
 }
@@ -198,7 +199,11 @@ function openRelease(id: string): void {
         <Drawer :open="drawer === 'release'" title="Pay the claim" @update:open="(o) => !o && done()">
             <FormLayout submit-label="Review and pay" :dirty="release.form.isDirty" :processing="release.form.processing" :error="(release.form.errors as Record<string, string>).form" @submit="release.review" @cancel="done">
                 <Field id="paid_on" label="Paid on" hint="The person who requested the release cannot pay it." :error="release.form.errors.paid_on"><DateInput v-model="release.form.paid_on" /></Field>
-                <Field id="release_bank" label="Pay from" optional><SelectInput id="release_bank" v-model="release.form.bank_account_id" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" /></Field>
+                <div class="grid gap-1">
+                    <span class="text-ui font-medium text-ink">Pay from</span>
+                    <p id="release_bank" class="text-ui text-ink" aria-describedby="release_bank-hint">{{ releasePayFrom }}</p>
+                    <p id="release_bank-hint" class="text-dense text-ink-2">Set when the release was requested.</p>
+                </div>
             </FormLayout>
         </Drawer>
         <Drawer :open="drawer === 'close'" :title="`Close ${claim.number}`" @update:open="(o) => !o && done()">
