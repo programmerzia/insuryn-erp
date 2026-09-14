@@ -141,8 +141,8 @@ Each fix is its own commit, `fix(flow): Xn – …`, merged in this order.
 Out of scope (features, not flow fixes): AP and payroll (G6), IDRA forms (G5).
 
 ## Observations to confirm (not failures of the audit)
-- **Date shown vs Dhaka date:** the trial balance opened "as of 13 Sep 2026" while it was already 14 Sep in Dhaka. The run was around 21:00 UTC, so the default date may follow the server clock (UTC) rather than the tenant's time zone.
-- **Lock with a pending journal:** September locked while the office rent manual journal dated 14 Sep was still waiting for approval. Approving it later cannot post into the locked month. Decide whether the close should block or warn about journals pending approval in the period.
-- **Locking early:** a month can be locked before it ends. Part A assumes month end.
+- **Date shown vs Dhaka date:** ~~the trial balance opened "as of 13 Sep 2026" while it was already 14 Sep in Dhaka~~ — **resolved in slice 2.1b** (CQ-H2, D-54): every business date, including the trial balance "as of" default, follows the company's time zone (Asia/Dhaka) through the BusinessClock.
+- **Lock with a pending journal:** ~~September locked while the office rent manual journal dated 14 Sep was still waiting for approval~~ — **resolved in slice 2.1b** (CQ-C4, D-55): the checklist lists pending documents, the soft lock warns, and the lock is refused until each is approved, rejected or moved to the next open period by its approver.
+- **Locking early:** ~~a month can be locked before it ends~~ — **resolved in slice 2.1b** (CQ-C5, D-56): soft lock from the last day, lock only after month end, except a CFO with a written reason. A re-measured step 13 therefore needs the audit to run after 30 September (Dhaka) or as the CFO with a reason.
 - **Regulatory permission:** the finance manager does not hold `reports.regulatory`, so step 14 runs as the auditor.
 - **Worker needed:** without a queue worker, accounting events wait and the close reports variances. Home's "Failed accounting events" queue does not list queued-but-unposted events.

@@ -36,8 +36,8 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 | C1 | Approval limits | setup defaults, placeholders (A-55) | — | go-live |
 | C2 | CFO approval of the month lock | not required | — | go-live |
 | C3 | Role mapping and strictness of segregation | templates as shipped | 2.3–2.16 role templates | finish |
-| C4 | Close with documents pending approval: block or warn | neither | 2.1b; close tasks of 2.3, 2.5, 2.6 | build |
-| C5 | May a month be locked before it ends | allowed | 2.1b | build |
+| C4 | Close with documents pending approval: block or warn | **Decided:** soft lock warns, lock refused until each is cleared (D-55) | close tasks of 2.3, 2.5, 2.6 add their documents to the list | — |
+| C5 | May a month be locked before it ends | **Decided:** soft lock from the last day, lock after month end, CFO earlier with a reason (D-56) | — | — |
 | C6 | Approval routing: sequential, parallel, line manager | sequential by role or permission | 2.2, 2.6b, 2.11 | build |
 | C7 | Delegation of approvals | none | 2.2 | build |
 | C8 | Escalation times and SLA calendar | none | 2.2 | build |
@@ -73,7 +73,7 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 | G1 | Reopening closed claims | claim approvers (limit optional) | — | go-live |
 | G2 | Deductibles, co-insurance, batch payments, SLA timers | not built | scope decision | go-live |
 | H1 | Opening balances and chart of accounts source | CSV import (A-3) | 2.7, 2.10 cut-over data | finish |
-| H2 | Which clock sets "today": server (UTC) or Dhaka | server clock (UTC) | 2.1b; 2.2 SLA, 2.11, 2.13 | build |
+| H2 | Which clock sets "today": server (UTC) or Dhaka | **Decided:** the entity's time zone, Asia/Dhaka by default (D-54) | 2.2 SLA, 2.11, 2.13 read the BusinessClock | — |
 | I1 | Supplier payment file formats per bank | none | 2.4 | finish |
 | I2 | Supplier master data and payment terms | none | 2.3 | finish |
 | I3 | OCR of supplier bills now or later | later | 2.3 scope | build |
@@ -228,16 +228,16 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 - **Default today:** the close does not look at items pending approval.
 - **Options:** (a) block the lock until they are approved, rejected or re-dated; (b) warn and let the Finance Manager continue with a reason; (c) as today.
 - **Blocked until answered:** 2.1b and the close tasks of 2.3, 2.5, 2.6 (build).
-- **Status:** new (flow audit).
-- **Your answer:**
+- **Status:** Decided (product owner, slice 2.1b, D-55): the close checklist lists every document dated in the period still pending approval or posting — manual journals and reversals awaiting approval, claim payments approved and not released or awaiting approval, refunds awaiting release, unposted or failed accounting events. A soft lock goes ahead with that list shown as a warning; the lock is refused (`PERIOD_HAS_PENDING_DOCUMENTS`) until each is approved, rejected or re-dated to the next open period by its approver ("Move to next period" for pending manual journals). No override. Phase 2 documents (bills, invoices, vouchers) join the list in their slices.
+- **Your answer:** (a), without an override.
 
 ### C5. May a month be locked before its last day?
 - **Why it matters:** the flow audit locked September before it ended. Anything dated later in that month (receipts, earning, bank lines) could then not be posted.
 - **Default today:** allowed when all close tasks are done.
 - **Options:** (a) never before the last day; (b) allowed with a reason and a second approval; (c) as today.
 - **Blocked until answered:** 2.1b (build).
-- **Status:** new (flow audit).
-- **Your answer:**
+- **Status:** Decided (product owner, slice 2.1b, D-56): soft lock allowed from the period's last day on the company's clock; lock refused before the period has ended (`PERIOD_NOT_ENDED`), except a CFO (the holder of period reopening rights) with a mandatory written reason, audited.
+- **Your answer:** (a), with the CFO exception.
 
 ### C6. How should approvals of Phase 2 documents be routed?
 - **Why it matters:** the approval engine grows in Phase 2 (slice 2.2). Today steps run one after another, each decided by a role or permission holder.
@@ -514,8 +514,8 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 - **Default today:** server clock (UTC). Printed documents already show their "generated at" time in the company's time zone.
 - **Options:** (a) the company's time zone for every business date and night run; (b) as today; (c) another rule (for example per branch).
 - **Blocked until answered:** 2.1b (build); SLA timers in 2.2, attendance in 2.11, payroll periods in 2.13.
-- **Status:** new (flow audit).
-- **Your answer:**
+- **Status:** Decided (product owner, slice 2.1b, D-54): every business date — dates offered on forms, report "as of" dates, the current period, expiry, renewals, dunning and the night runs — follows the entity's time zone (a setting per entity, default Asia/Dhaka, on the setup wizard's company step); technical timestamps stay UTC.
+- **Your answer:** (a).
 
 ---
 

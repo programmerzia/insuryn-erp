@@ -31,7 +31,7 @@ slice notes. This addendum does not change any of them.
 | Child tables | some without `tenant_id` | every tenant table has `tenant_id` + forced RLS, no exceptions; `TenantIsolationEveryTableTest` fails for a new tenant table until it holds rows in the scenario | D-08, 1C.6 |
 | PDFs | browsershot (headless Chromium) | the Chrome binary in headless mode through Symfony Process, fonts embedded | D-34 |
 | XLSX | — | dependency-free `Platform\Exports\XlsxWriter` | D-28 |
-| Time | tenant `timezone` | column exists (Asia/Dhaka) and is used for the "generated at" line on PDFs; request-time "today" defaults and the scheduler use the application clock (UTC). Which clock applies is **OPEN** (CQ-H2) | flow audit |
+| Time | tenant `timezone` | `legal_entities.timezone` (default Asia/Dhaka) drives every business date through `Platform\Tenancy\BusinessClock`; technical timestamps stay UTC; nightly jobs run on the default zone (slice 2.1b, D-54; CQ-H2 decided) | flow audit, 2.1b |
 
 ## A.2 Context map as built (v1 §1)
 
@@ -237,7 +237,7 @@ Flow fixes changed no posting rule, invariant, permission or role template. Mode
 | Fix | Change |
 |---|---|
 | X1 | receipt form prefilled from the policy (`/receipts/create?policy=`); branch and last channel defaults |
-| X2 | today as the default on "now" dates (reported on, reserve, approval, paid on, close, manual journal and reversal) — on the application clock, see CQ-H2 |
+| X2 | today as the default on "now" dates (reported on, reserve, approval, paid on, close, manual journal and reversal) — on the business clock since 2.1b (D-54) |
 | X3 | read-only check "may this user approve, within limits and SoD" to offer the next step; Home queues "Claims to settle", "Payments to release" |
 | X4 | Home start actions |
 | X5 | receipt header "Print receipt" |
@@ -295,9 +295,9 @@ Tariff values (rates, loadings, minimums, rounding, risk schema options and boun
 
 ### A.10.4 Observations from the flow audit (not tagged OPEN before; now OPEN)
 
-- **OPEN** default business dates and scheduled runs follow the application clock (UTC), not the tenant time zone (Asia/Dhaka). Between 18:00 and 24:00 UTC a Dhaka user's "today" is yesterday (CQ-H2).
-- **OPEN** the close does not look at manual journals pending approval in the period; a month locked with one pending cannot receive it later (CQ-C4).
-- **OPEN** a period can be locked before its last day (CQ-C5).
+- **Decided** (CQ-H2, slice 2.1b, D-54): business dates and scheduled runs follow the entity's time zone (Asia/Dhaka by default) through `BusinessClock`; technical timestamps stay UTC.
+- **Decided** (CQ-C4, slice 2.1b, D-55): the close lists documents dated in the period still pending approval or posting; the soft lock warns, the lock is refused (`PERIOD_HAS_PENDING_DOCUMENTS`) until each is approved, rejected or moved to the next open period by its approver. No override.
+- **Decided** (CQ-C5, slice 2.1b, D-56): soft lock from the period's last day, lock only after it has ended (`PERIOD_NOT_ENDED`), except a CFO (`periods.reopen`) with a written reason, audited.
 
 ## A.11 Decisions taken (summary)
 
@@ -491,7 +491,7 @@ Each new role gets a caption in `resources/help/roles.*.md`, a row in the chart-
 | 7 | `ap_reconciliation` | reconciliation (`ap`) | — | accounting | `periods.soft_lock` | variance ≠ 0 |
 | 7 | `ar_reconciliation` | reconciliation (`ar`, `ar_unapplied`) | — | accounting | `periods.soft_lock` | variance ≠ 0 |
 | 7 | `expense_reconciliation` | reconciliation (`employee_claims`, `petty_cash`) | — | accounting | `periods.soft_lock` | variance ≠ 0 |
-| 8 | `pending_documents_review` | check | — | accounting | `accounting.create_manual_journal` | depends on CQ-C4: bills, invoices, claims, vouchers, manual journals dated in the period and not posted |
+| 8 | `pending_documents_review` | check | — | accounting | `accounting.create_manual_journal` | not a task: since 2.1b (D-55) the lock itself refuses while any `PendingCloseDocuments` source lists a document dated in the period; 2.3, 2.5, 2.6 tag sources for bills, invoices and vouchers |
 | 9 | `depreciation` | check (runs the batch) | — | system | `periods.soft_lock` | an asset in service in the period without a depreciation row |
 | 9 | `fixed_asset_reconciliation` | reconciliation (`fixed_asset_cost`, `accumulated_depreciation`) | `depreciation` | accounting | `periods.soft_lock` | variance ≠ 0 |
 | 9 | `payroll_reconciliation` | reconciliation (`payroll`, `employee_loans`, `final_settlement`) | — | payroll | `payroll.approve` | variance ≠ 0 |
@@ -501,7 +501,7 @@ Each new role gets a caption in `resources/help/roles.*.md`, a row in the chart-
 
 ### B.2.9 Dates and time zone
 
-Every Phase 2 date rule (due dates, SLA hours, attendance days, payroll period cut-off, depreciation month, leave days) reads "today" from one place. PD-9 (proposed): a Platform `BusinessClock::today()` for the tenant; which zone it uses is CQ-H2, and the change of existing defaults (X2) and schedules is its own small slice before 2.2, not part of a feature slice.
+Every Phase 2 date rule (due dates, SLA hours, attendance days, payroll period cut-off, depreciation month, leave days) reads "today" from one place. PD-9, applied in slice 2.1b as D-54: `Platform\Tenancy\BusinessClock::today(?entityId)` in the entity's time zone (CQ-H2 decided); existing defaults (X2) and schedules is its own small slice before 2.2, not part of a feature slice.
 
 ---
 
@@ -1348,7 +1348,7 @@ Which object rules the customer wants as user rules (stricter) is CQ-C3.
 - Source row + accounting event + outbox row commit in one transaction (non-negotiable #8); bank files and payslip PDFs are generated after commit and stored append-only with their hash.
 - Payroll posting is one event per run; the calculation is a batch job but the posting is not split.
 - Outbox consumers (PD-7) for `CommissionPayableToAp`, `CommissionPayrollEarning`; later candidates `DunningNoticeDue`, `ProducerLicenceExpiring` (notifications).
-- New scheduled jobs: `ApprovalSlaJob` (every 5 min), `DepreciationJob` (nightly, batch), `LeaveAccrualJob` (daily, batch), `OutboxConsumerRelayJob` (every few seconds, default), optional `BudgetVarianceJob` (LATER). All loop over tenants per D-07 and run on the clock chosen in CQ-H2.
+- New scheduled jobs: `ApprovalSlaJob` (every 5 min), `DepreciationJob` (nightly, batch), `LeaveAccrualJob` (daily, batch), `OutboxConsumerRelayJob` (every few seconds, default), optional `BudgetVarianceJob` (LATER). All loop over tenants per D-07 and read today from the BusinessClock (D-54).
 
 ## B.16 Testing strategy (Phase 2)
 
@@ -1385,8 +1385,8 @@ Which object rules the customer wants as user rules (stricter) is CQ-C3.
 
 | Slice | Change | Why |
 |---|---|---|
-| new 2.1b | business clock and time zone for defaults and schedules; close warning/block for pending documents; early lock rule | CQ-H2, CQ-C4, CQ-C5; small, cross-cutting, before 2.2 |
-| new 2.1c | numbering fix for receipts, claims, agent deposits across branches | A.7.6; before multi-branch go-live |
+| new 2.1b | business clock and time zone for defaults and schedules; close warning/block for pending documents; early lock rule — **done** (D-54, D-55, D-56) | CQ-H2, CQ-C4, CQ-C5 decided by the product owner |
+| new 2.1c | numbering fix for receipts, claims, agent deposits across branches — **done** as fix G5 (D-53) | A.7.6; before multi-branch go-live |
 | 2.2 | + outbox consumer relay (PD-7) | needed by 2.14 and useful for notifications |
 | 2.3 | + kernel `for_each` line groups (PD-3, PD-4) and cost centres (PD-5) | first slice that needs variable lines |
 | 2.6 | split: 2.6a petty cash (after 2.2), 2.6b expense claims (after 2.4 and 2.10) | claimant is an employee (PD-15) |
