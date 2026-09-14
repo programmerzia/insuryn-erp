@@ -471,7 +471,8 @@ await step(8, 'Home queue; allocate money in suspense to a policy', 'accountant'
 await step(9, 'Import the bank statement CSV, accept suggested matches, exceptions left', 'accountant', async (page, m) => {
     await nav('Bank');
     await click(page.locator('tbody tr').filter({ hasText: 'City Bank' }).first());
-    const open = page.getByRole('link', { name: /Open|statement|matching/i }).first();
+    // Gap fixes W7: only the page's own links (the sidebar's "Commission statements" matches /statement/ too).
+    const open = page.locator('main').getByRole('link', { name: /Open|statement|matching/i }).first();
     if (await open.count()) await click(open);
     else await press('Enter');
     await page.waitForURL(/\/bank\/[0-9a-f-]{36}/);
@@ -504,17 +505,21 @@ await step(10, 'Record office expenses (vendor bills and salaries are not built)
     await ensure(page.getByLabel('Date', { exact: true }), '', 'journal date', { accept: (v) => v !== '', typed: 't' });
     await type(page.getByLabel('Description'), 'Office rent for September');
     await type(page.getByLabel('Reason'), 'Rent invoice 9/26');
-    const accounts = page.getByLabel(/^Account, line/);
-    const expense = accounts.nth(0).locator('option', { hasText: /Office Rent|Rent/ });
-    if ((await expense.count()) === 0) {
+    // Gap fixes W7: journal accounts are a lookup since GA-31 — type the code or name and pick it.
+    const account = (index) => page.locator(`input#line-account-${index}`);
+    await type(account(0), 'Rent');
+    await page.waitForTimeout(800); // the lookup asks the server as the user types
+    const rent = page.getByRole('option').filter({ hasText: /Rent/ });
+    if ((await rent.count()) > 0) {
+        await rent.first().dispatchEvent('mousedown');
+        m.clicks += 1;
+    } else {
         m.leaves.push((await page.getByRole('button', { name: 'New account' }).count())
             ? 'no rent account in this chart: created inline (New account)'
             : 'no rent/office expense account in this chart: the accountant cannot add accounts — ask the Finance Manager, then come back');
+        await lookup(account(0), '5300', '5300');
     }
-    await accounts.nth(0).selectOption({ label: await ((await expense.count()) ? expense.first() : accounts.nth(0).locator('option', { hasText: 'Salaries' }).first()).innerText() });
-    m.clicks += 2;
-    await accounts.nth(1).selectOption({ label: await accounts.nth(1).locator('option', { hasText: 'Bank - Main' }).first().innerText() });
-    m.clicks += 2;
+    await lookup(account(1), '1010', '1010');
     await ensure(page.getByLabel('Side, line 2'), 'credit', 'side of line 2', { select: true });
     await type(page.getByLabel('Amount, line 1'), '85000');
     if ((await page.getByLabel('Amount, line 2').inputValue()).replace(/,/g, '') !== '85000.00') await type(page.getByLabel('Amount, line 2'), '85000');
@@ -534,13 +539,28 @@ await step(11, 'Close September: run the checklist', 'finance.manager', async (p
     await click(page.locator('tbody tr').filter({ hasText: /Sep(tember)? 2026/ }).first());
     await click(page.getByRole('button', { name: /Start close|Open the checklist/ }).first());
     await page.waitForURL(/\/close\//);
-    for (let i = 0; i < 14; i++) {
-        const work = page.getByRole('button', { name: /^Work on/ }).first();
-        if ((await work.count()) === 0) break;
-        await click(work);
+    // Gap fixes W7: as many rounds as the checklist has tasks (W4 added reconciliations and the year-end close); a task that posts (premium earning,
+    // year-end close) shows its journal first and is confirmed; a task that is refused or blocked is passed over, not retried.
+    const taskCount = await page.locator('ol[aria-label="Close tasks"] > li').count();
+    let passedOver = 0;
+    for (let i = 0; i < taskCount; i++) {
+        const open = page.getByRole('button', { name: /^Work on/ });
+        const before = await open.count();
+        if (before <= passedOver) break;
+        await click(open.nth(passedOver));
         const run = page.locator('li div.bg-surface-2 button').first();
-        if (await run.isDisabled()) break;
+        if (await run.isDisabled()) {
+            passedOver += 1;
+            await click(open.nth(passedOver - 1)); // close it again
+            continue;
+        }
+        const posts = /Review and run/.test(await run.innerText());
         await click(run);
+        if (posts) {
+            const lines = await confirmJournal().catch(() => null);
+            if (lines === null) m.notes.push('A posting task showed no journal preview.');
+        }
+        if ((await page.getByRole('button', { name: /^Work on/ }).count()) >= before) passedOver += 1;
     }
     const tasks = (await page.locator('ol[aria-label="Close tasks"] > li').allInnerTexts()).map((t) => t.split('\n').filter(Boolean).slice(0, 4).join(' · '));
     m.notes.push(`Tasks not done: ${tasks.filter((t) => !/· Done$/.test(t)).join(' | ') || 'none'}.`);
@@ -583,7 +603,10 @@ await step(13, 'Lock the period', 'finance.manager', async (page, m) => {
     await click(page.getByRole('button', { name: /Open the checklist/ }).first());
     const lock = page.getByRole('button', { name: 'Lock the period' });
     if ((await lock.count()) === 0 || (await lock.isDisabled())) {
+        // Gap fixes W7 (CQ-C5, D-56): the soft lock opens on the month's last day and the lock after month end; a CFO's early lock also needs the month
+        // soft-locked first, so before 30 September nobody locks it. The audit runs on 14 September: it records what the lock section says.
         m.notes.push(`Lock not available: ${(await page.locator('section[aria-label="Lock the period"]').innerText()).replace(/\s+/g, ' ')}`);
+        m.notes.push('Soft lock opens on 30 Sep, hard lock opens on 1 Oct (CQ-C5); the CFO\'s early lock with a reason also needs the soft lock, so no role locks September on 14 Sep.');
         return;
     }
     await click(lock);
@@ -592,7 +615,7 @@ await step(13, 'Lock the period', 'finance.manager', async (page, m) => {
 });
 
 // ── Quarter / year end ───────────────────────────────────────────────────────────────────────────────────
-await step(14, 'Regulatory exports: premium register by class, outstanding claims, UPR, agency register', 'auditor', async (page, m) => {
+await step(14, 'Regulatory exports: premium register by class, outstanding claims, UPR, agency register', 'finance.manager', async (page, m) => {
     await page.goto(`${base}/home`);
     await settle(page);
     await m.restart();
@@ -615,7 +638,7 @@ await step(14, 'Regulatory exports: premium register by class, outstanding claim
     if (await xlsx.count()) await click(xlsx.first());
     else m.leaves.push('agency register: no export on the producers queue');
     m.leaves.push('IDRA return forms: not built (G5)');
-    m.notes.push('Run as the auditor: the finance manager (who files returns in Part A) does not hold reports.regulatory.');
+    m.notes.push('Run as the finance manager, who files the returns in Part A and holds reports.regulatory (fix G3).');
 });
 
 // ── Output ───────────────────────────────────────────────────────────────────────────────────────────────
