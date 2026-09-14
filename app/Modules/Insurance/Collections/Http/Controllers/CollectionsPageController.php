@@ -23,6 +23,7 @@ use App\Modules\Insurance\Collections\Application\SuspenseService;
 use App\Modules\Insurance\Collections\Domain\Enums\ReceiptStatus;
 use App\Modules\Insurance\Collections\Domain\Models\Receipt;
 use App\Modules\Insurance\Collections\Domain\Models\SuspenseItem;
+use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
@@ -48,9 +49,10 @@ final class CollectionsPageController
 
     public function index(Request $request): Response
     {
-        $this->authorize($request);
+        // G2: opens for the area's permissions in any scope; a branch-scoped user lists only their branches' receipts.
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
-        $page = DB::table('receipts')->where('entity_id', $entity['id'])->orderByDesc('value_date')->orderByDesc('number')->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
+        $page = $reach->constrain(DB::table('receipts'), 'entity_id', 'branch_id')->where('entity_id', $entity['id'])->orderByDesc('value_date')->orderByDesc('number')->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
         $rows = [];
         foreach ($page->items() as $r) {
             /** @var object{id: string, number: string, channel: string, amount_minor: int|string, currency: string, value_date: string, reference: string|null, status: string, collected_by_agent_id: string|null} $r */
@@ -63,22 +65,23 @@ final class CollectionsPageController
 
     public function create(Request $request, FormDefaults $defaults): Response
     {
-        $actor = $this->authorize($request);
+        $actor = PageSupport::actor($request);
+        $reach = $this->permissions->authorizeArea($actor, self::AREA);
         $entity = PageSupport::entity();
         $policy = $request->query('policy');
 
         return Inertia::render('receipts/Create', [
             // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch, today and their last channel.
-            'prefill' => is_string($policy) && Str::isUuid($policy) ? $this->prefill($entity, $policy) : null,
+            'prefill' => is_string($policy) && Str::isUuid($policy) ? $this->prefill($entity, $policy, $reach) : null,
             'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => CarbonImmutable::today()->toDateString(),
                 'channel' => self::channel($defaults->remembered($actor, FormDefaults::LAST_RECEIPT_CHANNEL))],
             'entity' => $entity,
             'channels' => self::CHANNELS,
-            'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
+            'branches' => $reach->constrain(DB::table('branches'), 'entity_id', 'id')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('bank_name')
                 ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'agents' => DB::table('producers')->where('status', 'active')->orderBy('code')->get(['id', 'code'])->map(fn (object $a): array => (array) $a)->values()->all(),
-            'installments' => $this->outstandingInstallments($entity),
+            'installments' => $this->outstandingInstallments($entity, $reach),
         ]);
     }
 
@@ -107,8 +110,10 @@ final class CollectionsPageController
 
     public function show(Request $request, string $receipt): Response
     {
-        $actor = $this->authorize($request);
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeArea($actor, self::AREA);
         $model = Receipt::query()->findOrFail($receipt);
+        $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id)); // G2: another branch's receipt is 403
         $money = fn (int $minor): string => PageSupport::money($minor, $model->currency);
         $item = SuspenseItem::query()->where('receipt_id', $model->id)->first();
 
@@ -151,7 +156,7 @@ final class CollectionsPageController
             'ageing' => ['buckets' => array_map(fn (int $m): string => PageSupport::money($m, $entity['currency']), $ageing['buckets']), 'total' => PageSupport::money($ageing['total_minor'], $entity['currency']),
                 'items' => array_map(fn (array $i): array => ['id' => $i['id'], 'receipt_id' => $i['receipt_id'], 'receipt_number' => $i['receipt_number'], 'reference' => $i['reference'],
                     'aged_since' => $i['aged_since'], 'days' => $i['days'], 'open' => PageSupport::money($i['open_minor'], $entity['currency'])], $ageing['items'])],
-            'installments' => $this->outstandingInstallments($entity),
+            'installments' => $this->outstandingInstallments($entity, AreaReach::everywhere()),
         ]);
     }
 
@@ -320,14 +325,14 @@ final class CollectionsPageController
 
     /**
      * Flow fix X1: the receipt of a policy's premium — the total outstanding, allocated line by line to its unpaid installments, oldest due first; null when
-     * the policy is not this entity's, is not in force or owes nothing.
+     * the policy is not this entity's (or outside the user's branches), is not in force or owes nothing.
      *
      * @param array{id: string, currency: string} $entity
      * @return array{policy: array{id: string, number: string}, amount: string, branch_id: string, allocations: list<array{installment_id: string, label: string, amount: string, outstanding: string}>}|null
      */
-    private function prefill(array $entity, string $policyId): ?array
+    private function prefill(array $entity, string $policyId, AreaReach $reach): ?array
     {
-        $policy = DB::table('policies')->where('id', $policyId)->where('entity_id', $entity['id'])->whereIn('status', ['issued', 'active', 'lapsed', 'expired'])
+        $policy = $reach->constrain(DB::table('policies'), 'entity_id', 'branch_id')->where('id', $policyId)->where('entity_id', $entity['id'])->whereIn('status', ['issued', 'active', 'lapsed', 'expired'])
             ->first(['id', 'number', 'branch_id', 'currency']);
         $installments = $policy === null ? [] : NextSteps::outstandingInstallments($policyId);
         if ($policy === null || $installments === []) {
@@ -351,9 +356,9 @@ final class CollectionsPageController
      * @param array{id: string, currency: string} $entity
      * @return list<array{id: string, label: string, outstanding: string}>
      */
-    private function outstandingInstallments(array $entity): array
+    private function outstandingInstallments(array $entity, AreaReach $reach): array
     {
-        $rows = DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
+        $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
             ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->orderBy('i.due_date')->orderBy('p.number')->limit(500)
             ->get(['i.id', 'p.number', 'i.no', 'i.due_date', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
@@ -376,8 +381,10 @@ final class CollectionsPageController
 
     public function downloadDocument(Request $request, string $receipt, string $document, ObjectDocuments $documents): StreamedResponse
     {
-        $this->authorize($request);
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeArea($actor, self::AREA);
         $model = Receipt::query()->findOrFail($receipt);
+        $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id));
 
         return $documents->download($request, 'receipt', $model->id, $document);
     }

@@ -19,7 +19,6 @@ use App\Modules\Insurance\Underwriting\Domain\Enums\ProposalStatus;
 use App\Modules\Insurance\Underwriting\Domain\Models\Proposal;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
-use App\Modules\Platform\Authorization\PermissionDenied;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -55,8 +54,9 @@ final class ProposalPageController
     public function show(Request $request, string $proposal, ObjectHistory $history, ObjectDocuments $documents): Response
     {
         $actor = PageSupport::actor($request);
-        self::authorizeArea($this->permissions, $actor, self::AREA);
+        $this->permissions->authorizeArea($actor, self::AREA);
         $model = Proposal::query()->findOrFail($proposal);
+        $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id)); // G2: another branch's proposal is 403
         $can = fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id));
         $draft = $model->status === ProposalStatus::Draft;
         $subjects = [['proposal', $model->id]];
@@ -164,22 +164,11 @@ final class ProposalPageController
 
     public function downloadDocument(Request $request, string $proposal, string $document, ObjectDocuments $documents): StreamedResponse
     {
-        self::authorizeArea($this->permissions, PageSupport::actor($request), self::AREA);
+        $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $model = Proposal::query()->findOrFail($proposal);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id));
 
         return $documents->download($request, 'proposal', $model->id, $document);
-    }
-
-    /**
-     * Opens for holders of any of the permissions in any scope (branch-scoped roles); actions check the proposal's branch.
-     *
-     * @param list<string> $permissions
-     */
-    public static function authorizeArea(PermissionChecker $checker, string $actor, array $permissions): void
-    {
-        if (array_intersect($permissions, $checker->permissionsOf($actor)) === []) {
-            throw new PermissionDenied($actor, implode('|', $permissions));
-        }
     }
 
     /** @return array<string, mixed> */

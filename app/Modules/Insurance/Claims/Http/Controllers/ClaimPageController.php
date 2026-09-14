@@ -38,10 +38,11 @@ final class ClaimPageController
 
     public function index(Request $request): Response
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        // G2: opens for the area's permissions in any scope; a branch-scoped user lists only their branches' claims.
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $status = (string) $request->query('status', '');
         $entity = PageSupport::entity();
-        $page = DB::table('claims as c')->join('policies as p', 'p.id', '=', 'c.policy_id')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')
+        $page = $reach->constrain(DB::table('claims as c'), 'c.entity_id', 'c.branch_id')->join('policies as p', 'p.id', '=', 'c.policy_id')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')
             ->where('c.entity_id', $entity['id'])->when($status !== '', fn ($q) => $q->where('c.status', $status))->orderByDesc('c.reported_on')->orderByDesc('c.number')
             ->select(['c.id', 'c.number', 'c.status', 'c.loss_date', 'c.reported_on', 'c.reserve_minor', 'c.currency', 'p.number as policy_number', 'h.display_name'])->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
         $rows = [];
@@ -56,12 +57,12 @@ final class ClaimPageController
 
     public function create(Request $request): Response
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
 
         return Inertia::render('claims/Create', [
             'today' => CarbonImmutable::today()->toDateString(), // flow fix X2: reported on starts at today; the date of loss stays for the customer to say
-            'policies' => DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.entity_id', $entity['id'])->whereNotNull('p.number')
+            'policies' => $reach->constrain(DB::table('policies as p'), 'p.entity_id', 'p.branch_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.entity_id', $entity['id'])->whereNotNull('p.number')
                 ->whereIn('p.status', ['issued', 'active', 'expired', 'lapsed', 'cancelled', 'renewed'])->orderBy('p.number')
                 ->get(['p.id', 'p.number', 'h.display_name', 'p.inception', 'p.expiry'])->map(fn (object $p): array => (array) $p)->values()->all(),
         ]);
@@ -79,8 +80,9 @@ final class ClaimPageController
     public function show(Request $request, string $claim): Response
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, self::AREA);
+        $this->permissions->authorizeArea($actor, self::AREA);
         $model = Claim::query()->findOrFail($claim);
+        $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id)); // G2: another branch's claim is 403
         $money = fn (int $minor): string => PageSupport::money($minor, $model->currency);
         $can = fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id));
         $payments = ClaimPayment::query()->where('claim_id', $model->id)->orderBy('created_at')->get();
@@ -230,8 +232,9 @@ final class ClaimPageController
 
     public function downloadDocument(Request $request, string $claim, string $document, ObjectDocuments $documents): StreamedResponse
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $model = Claim::query()->findOrFail($claim);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id));
 
         return $documents->download($request, 'claim', $model->id, $document);
     }

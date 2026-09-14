@@ -40,10 +40,11 @@ final class QuotationPageController
 
     public function index(Request $request): Response
     {
-        $this->authorizeArea(PageSupport::actor($request), self::AREA);
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $this->quotations->expireDue(CarbonImmutable::today());
         $entity = PageSupport::entity();
-        $rows = DB::table('quotations as q')->leftJoin('parties as c', 'c.id', '=', 'q.customer_party_id')->leftJoin('products as p', 'p.id', '=', 'q.product_id')
+        // G2: a branch-scoped user lists only their branches' quotations.
+        $rows = $reach->constrain(DB::table('quotations as q'), 'q.entity_id', 'q.branch_id')->leftJoin('parties as c', 'c.id', '=', 'q.customer_party_id')->leftJoin('products as p', 'p.id', '=', 'q.product_id')
             ->leftJoin('producers as pr', 'pr.id', '=', 'q.producer_id')->leftJoin('users as u', 'u.id', '=', 'q.created_by')
             ->where('q.entity_id', $entity['id'])->orderByDesc('q.created_at')->limit(PageSupport::LIST_PAGE_SIZE)
             ->get(['q.id', 'q.number', 'q.status', 'q.inception', 'q.valid_until', 'q.sum_insured_minor', 'q.gross_premium_minor', 'q.currency', 'q.producer_eligible',
@@ -67,17 +68,20 @@ final class QuotationPageController
 
     public function create(Request $request): Response
     {
-        $this->authorizeArea(PageSupport::actor($request), [QuotationService::PERMISSION]);
+        $this->permissions->authorizeArea(PageSupport::actor($request), [QuotationService::PERMISSION]);
 
         return $this->workbench($request, null);
     }
 
     public function show(Request $request, string $quotation): Response
     {
-        $this->authorizeArea(PageSupport::actor($request), self::AREA);
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeArea($actor, self::AREA);
         $this->quotations->expireDue(CarbonImmutable::today());
+        $model = Quotation::query()->findOrFail($quotation);
+        $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id)); // G2: another branch's quotation is 403
 
-        return $this->workbench($request, Quotation::query()->findOrFail($quotation));
+        return $this->workbench($request, $model);
     }
 
     /** POST /quotations/rate — the live premium for the workbench; nothing is saved. Field problems come back per field. */
@@ -127,19 +131,6 @@ final class QuotationPageController
         return redirect("/quotations/{$quotation}")->with('status', 'Quotation declined.');
     }
 
-    /**
-     * A screen opens for someone holding any of the permissions in any scope (a branch officer's role is often scoped to the branch); each action then
-     * checks the quotation's own branch.
-     *
-     * @param list<string> $permissions
-     */
-    private function authorizeArea(string $actor, array $permissions): void
-    {
-        if (array_intersect($permissions, $this->permissions->permissionsOf($actor)) === []) {
-            throw new \App\Modules\Platform\Authorization\PermissionDenied($actor, implode('|', $permissions));
-        }
-    }
-
     /** Save draft, or save and issue (`intent=issue`): a refused issue keeps the saved draft open with the reason. */
     private function afterSave(Request $request, Quotation $quotation): RedirectResponse
     {
@@ -181,7 +172,7 @@ final class QuotationPageController
             'currency' => $entity['currency'],
             'today' => $today->toDateString(),
             'validDays' => QuotationService::validDays(),
-            'branches' => DB::table('branches')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
+            'branches' => $this->permissions->reach($actor, self::AREA)->constrain(DB::table('branches'), 'entity_id', 'id')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'products' => self::products(),
             'quotation' => $quotation === null ? null : $this->present($quotation),
             // Flow fix X6: a new quotation starts with the product this user saved last.

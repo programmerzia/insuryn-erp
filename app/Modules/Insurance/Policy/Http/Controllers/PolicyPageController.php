@@ -52,11 +52,12 @@ final class PolicyPageController
 
     public function index(Request $request): Response
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        // G2: opens for the area's permissions in any scope; a branch-scoped user lists only their branches' policies.
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $status = (string) $request->query('status', '');
         $search = trim((string) $request->query('search', ''));
         $entity = PageSupport::entity();
-        $page = DB::table('policies as p')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')->leftJoin('products as pr', 'pr.id', '=', 'p.product_id')
+        $page = $reach->constrain(DB::table('policies as p'), 'p.entity_id', 'p.branch_id')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')->leftJoin('products as pr', 'pr.id', '=', 'p.product_id')
             ->where('p.entity_id', $entity['id'])->when($status !== '', fn ($q) => $q->where('p.status', $status))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->whereRaw('p.number ilike ?', ["%{$search}%"])->orWhereRaw('h.display_name ilike ?', ["%{$search}%"])))
             ->orderByDesc('p.created_at')->select(['p.id', 'p.number', 'p.status', 'p.inception', 'p.expiry', 'p.gross_premium_minor', 'p.currency', 'h.display_name as policyholder', 'pr.code as product_code'])
@@ -71,13 +72,13 @@ final class PolicyPageController
 
     public function create(Request $request): Response
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
 
         return Inertia::render('policies/Create', [
             'entity' => PageSupport::entity(),
             // Flow fix X6: the form starts with the product this user quoted last.
             'lastProductId' => $this->defaults->remembered(PageSupport::actor($request), FormDefaults::LAST_PRODUCT),
-            'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
+            'branches' => $reach->constrain(DB::table('branches'), 'entity_id', 'id')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             // Slice R7: typing a premium stays only for products without a rating plan.
             'products' => DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))
                 ->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
@@ -108,8 +109,9 @@ final class PolicyPageController
     public function show(Request $request, string $policy): Response
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, self::AREA);
+        $this->permissions->authorizeArea($actor, self::AREA);
         $model = Policy::query()->findOrFail($policy);
+        $this->permissions->authorizeAny($actor, self::AREA, \App\Modules\Platform\Authorization\AuthorizationScope::branch($model->entity_id, $model->branch_id)); // G2: another branch's policy is 403
         $money = fn (int $minor): string => PageSupport::money($minor, $model->currency);
         $names = DB::table('parties')->pluck('display_name', 'id');
         $can = fn (string $permission): bool => $this->permissions->has($actor, $permission, \App\Modules\Platform\Authorization\AuthorizationScope::branch($model->entity_id, $model->branch_id));
@@ -314,8 +316,9 @@ final class PolicyPageController
 
     public function downloadDocument(Request $request, string $policy, string $document, ObjectDocuments $documents): StreamedResponse
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $model = Policy::query()->findOrFail($policy);
+        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA, \App\Modules\Platform\Authorization\AuthorizationScope::branch($model->entity_id, $model->branch_id));
 
         return $documents->download($request, 'policy', $model->id, $document);
     }

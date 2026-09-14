@@ -32,7 +32,7 @@ final class ReferralsPageController
     public function index(Request $request): Response
     {
         $actor = PageSupport::actor($request);
-        ProposalPageController::authorizeArea($this->permissions, $actor, [UnderwritingDecisions::PERMISSION]);
+        $this->permissions->authorizeArea($actor, [UnderwritingDecisions::PERMISSION]);
         $entity = PageSupport::entity();
         $mine = array_column(array_filter($this->inbox->decidableBy($actor), fn (array $a): bool => $a['object_type'] === 'proposal_referral'), 'object_id');
         $proposals = Proposal::query()->where('entity_id', $entity['id'])->whereNotNull('approval_id')

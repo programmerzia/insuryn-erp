@@ -50,6 +50,38 @@ final class PermissionChecker
     }
 
     /**
+     * G2: where the user holds any of $permissions — tenant-wide, in entities, or in branches (design §7.2 user_roles.scope).
+     *
+     * @param list<string> $permissions
+     */
+    public function reach(string $userId, array $permissions): AreaReach
+    {
+        $grants = DB::table('user_roles as ur')->join('role_permissions as rp', 'rp.role_id', '=', 'ur.role_id')
+            ->where('ur.user_id', $userId)->whereIn('rp.permission_code', $permissions)->distinct()->get(['ur.scope_type', 'ur.scope_id']);
+        $ids = fn (string $type): array => array_values(array_unique($grants->where('scope_type', $type)->pluck('scope_id')->map(fn (mixed $id): string => (string) $id)->all()));
+
+        return new AreaReach($grants->contains('scope_type', 'tenant'), $ids('entity'), $ids('branch'));
+    }
+
+    /**
+     * Opens a screen area to a holder of any of $permissions in any scope (a branch officer's role is usually scoped to the branch) and returns where they
+     * hold it, to limit its lists. A record page then checks the record's own scope with authorizeAny.
+     *
+     * @param list<string> $permissions
+     *
+     * @throws PermissionDenied naming the permissions, any of which would do
+     */
+    public function authorizeArea(string $userId, array $permissions): AreaReach
+    {
+        $reach = $this->reach($userId, $permissions);
+        if ($reach->isEmpty()) {
+            throw new PermissionDenied($userId, implode('|', $permissions));
+        }
+
+        return $reach;
+    }
+
+    /**
      * Every permission the user holds through any role, regardless of scope (role-assignment SoD checks).
      *
      * @return list<string>
