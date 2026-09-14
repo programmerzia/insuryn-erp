@@ -2890,6 +2890,7 @@ Findings of docs/gap-audit.md, in the order given; commits group related finding
 - **E2E:** `DB_DATABASE=erp_test_f scripts/e2e.sh` green on the demo of commit 659cb02 and on the final code.
 - **Not done:** help modules for distribution, refunds, cheques, agent cash, tariffs and admin screens (GA-30's third suggestion); non-premium endorsement types (name, address, mortgagee, period extension) and the ">0.01" sum insured hint (GA-25); search by provisional reference or cover note number (GA-29 is another item).
 - **Tests:** full Pest suite before each commit: 1,378 (659cb02), 1,383 (888a089), 1,388 (bb5950d) passed; Vitest 351 / 355 / 356; PHPStan 0 errors and vue-tsc green each time. New test files: `CustomerDetailsTest`, `ManualJournalVoucherTest`, `help-language.test.ts`; added cases in `PolicyRatingScreensTest`, `CoverNotesTest`, `AgentCashTest`, `CommissionPayoutTest`, `ClaimsCommissionApprovalsPagesTest`, `HowThisWorksTest`, `palette.test.ts`, `next-steps.test.ts`, `status.test.ts`.
+
 ### Gap fixes W4 — nightly jobs, next fiscal year and year-end, close reconciliations, approval previews — done
 Findings from `docs/gap-audit.md`, in the order given: GA-05, GA-15, GA-43, GA-04, GA-09. Assumptions A-201–A-204, decisions D-80–D-84.
 
