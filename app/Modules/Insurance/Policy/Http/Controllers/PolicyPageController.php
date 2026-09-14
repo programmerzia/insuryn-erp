@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Policy\Http\Controllers;
 
+use App\Http\Pages\FormDefaults;
 use App\Http\Pages\NextSteps;
 use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
@@ -46,6 +47,7 @@ final class PolicyPageController
         private readonly PayerStatementQuery $payers,
         private readonly PermissionChecker $permissions,
         private readonly NextSteps $nextSteps,
+        private readonly FormDefaults $defaults,
     ) {}
 
     public function index(Request $request): Response
@@ -73,6 +75,8 @@ final class PolicyPageController
 
         return Inertia::render('policies/Create', [
             'entity' => PageSupport::entity(),
+            // Flow fix X6: the form starts with the product this user quoted last.
+            'lastProductId' => $this->defaults->remembered(PageSupport::actor($request), FormDefaults::LAST_PRODUCT),
             'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             // Slice R7: typing a premium stays only for products without a rating plan.
             'products' => DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))
@@ -96,6 +100,7 @@ final class PolicyPageController
         $policy = $this->lifecycle->quote(new QuoteRequest($entity['id'], $data['branch_id'], $data['product_id'], $data['policyholder_party_id'], $data['agent_id'] ?? null,
             CarbonImmutable::parse($data['inception']), PageSupport::minor('premium', $data['premium'], $entity['currency']), $entity['currency'], (int) $data['installment_count'], $payers),
             PageSupport::actor($request));
+        $this->defaults->remember(PageSupport::actor($request), FormDefaults::LAST_PRODUCT, $data['product_id']);
 
         return redirect("/policies/{$policy->id}")->with('status', 'Quote created.');
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Quotation\Http\Controllers;
 
+use App\Http\Pages\FormDefaults;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
@@ -34,6 +35,7 @@ final class QuotationPageController
     public function __construct(
         private readonly QuotationService $quotations,
         private readonly PermissionChecker $permissions,
+        private readonly FormDefaults $defaults,
     ) {}
 
     public function index(Request $request): Response
@@ -96,6 +98,7 @@ final class QuotationPageController
     public function store(Request $request): RedirectResponse
     {
         $quotation = $this->quotations->saveDraft($this->terms($request), null, PageSupport::actor($request));
+        $this->defaults->remember(PageSupport::actor($request), FormDefaults::LAST_PRODUCT, $quotation->product_id);
 
         return $this->afterSave($request, $quotation);
     }
@@ -103,6 +106,7 @@ final class QuotationPageController
     public function update(Request $request, string $quotation): RedirectResponse
     {
         $saved = $this->quotations->saveDraft($this->terms($request), $quotation, PageSupport::actor($request));
+        $this->defaults->remember(PageSupport::actor($request), FormDefaults::LAST_PRODUCT, $saved->product_id);
 
         return $this->afterSave($request, $saved);
     }
@@ -180,6 +184,8 @@ final class QuotationPageController
             'branches' => DB::table('branches')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'products' => self::products(),
             'quotation' => $quotation === null ? null : $this->present($quotation),
+            // Flow fix X6: a new quotation starts with the product this user saved last.
+            'lastProductId' => $quotation === null ? $this->defaults->remembered($actor, FormDefaults::LAST_PRODUCT) : null,
             // Printing the issued quotation (composed at the app layer with the document generator).
             'generation' => $quotation === null ? null : app(\App\Http\Documents\GeneratedDocumentsController::class)->forQuotation($actor, $quotation->id),
             'can' => [

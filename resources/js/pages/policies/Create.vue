@@ -11,6 +11,7 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import Stepper from '@/components/forms/Stepper.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+import { startingProduct } from '@/lib/lastProduct';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { toast } from '@/lib/toasts';
@@ -24,12 +25,14 @@ const props = defineProps<{
     agents: { id: string; code: string; display_name: string }[];
     /** Slice R7: products priced by a tariff are not listed here; they are quoted in the quote workbench. */
     ratedProducts: number;
+    /** Flow fix X6: the product this user quoted last (the form starts with it; a saved draft still wins). */
+    lastProductId?: string | null;
 }>();
 
 const DRAFT = 'quote-create';
 const preferences = usePreferences();
 const form = useForm({
-    branch_id: props.branches[0]?.id ?? '', product_id: '', policyholder_party_id: '', agent_id: '', inception: '', premium: '', installment_count: 1,
+    branch_id: props.branches[0]?.id ?? '', product_id: startingProduct(null, props.lastProductId, props.products), policyholder_party_id: '', agent_id: '', inception: '', premium: '', installment_count: 1,
     payers: [] as { party_id: string; share_percent: string }[],
 });
 const holder = ref<LookupResult | null>(null);

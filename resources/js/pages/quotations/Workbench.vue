@@ -17,6 +17,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
 import { HttpError, requestJson } from '@/lib/http';
+import { startingProduct } from '@/lib/lastProduct';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import {
     type FormValues, formFields, initialValues, localProblems, problemMessage, type ProductVersionOption, ratingKey, type RatingResultData, riskInputs, versionOn,
@@ -39,6 +40,8 @@ const props = defineProps<{
     can: { edit: boolean; issue: boolean; decline: boolean; convert: boolean };
     /** Printing the issued quotation (null before the quotation is saved). */
     generation?: DocumentGeneration | null;
+    /** Flow fix X6: the product this user quoted last (a new quotation starts with it). */
+    lastProductId?: string | null;
 }>();
 
 const page = usePage<SharedProps>();
@@ -48,7 +51,7 @@ const q = props.quotation;
 
 const state = reactive({
     branch_id: q?.branch_id ?? preferences.branch_id ?? props.branches[0]?.id ?? '',
-    product_id: q?.product_id ?? '',
+    product_id: startingProduct(q?.product_id, props.lastProductId, props.products),
     inception: q?.inception ?? props.today,
     customer_party_id: q?.customer?.id ?? '',
     producer_id: q?.producer?.id ?? '',
