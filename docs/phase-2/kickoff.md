@@ -81,7 +81,7 @@ golden fixtures, reconciler and close task where it has them. Same operating rul
 
 | Slice | Name | Depends on | Notes |
 |---|---|---|---|
-| 2.0 | Phase 1 carry-over: CI, Playwright happy path, reserve property test, user and role admin screens | — | From the exit checklist |
+| 2.0 | Phase 1 carry-over: CI, Playwright happy path, reserve property test, user and role admin screens | — | Done (2.0a–2.0d) |
 | 2.1 | Design addendum v2 and Phase 2 customer questions | 2.0 can run in parallel | Done (docs only): [design addendum v2](../design-addendum-v2.md) (Part B proposes changes to this list, §B.18) and [customer questions](customer-questions.md); review both before 2.2 |
 | 2.2 | Workflow engine: sequential and parallel steps, delegation, escalation, SLA timers, rework | 2.1 | Grows `ApprovalService`; existing approval policies keep working |
 | 2.3 | Suppliers and AP bills, AP subledger reconciler, close task 7 (AP part) | 2.2 | |
@@ -100,5 +100,23 @@ golden fixtures, reconciler and close task where it has them. Same operating rul
 | 2.16 | Employee self-service (payslips, leave) | 2.11, 2.13 | |
 | 2.17 | Phase 2 exit pack | all | Same shape as Phase 1's |
 
-Suggested order: 2.0 and 2.1 first; then the Finance track (2.2 → 2.3 → 2.4 → 2.5 → 2.6 → 2.7 → 2.8 → 2.9) and the People
+### Approved changes and build order (product owner, 14 Sep 2026)
+
+The §B.18 proposals in the design addendum are approved, with these outcomes:
+
+| Slice | Decision |
+|---|---|
+| 2.1b | Added, built next: business clock (entity time zone, default Asia/Dhaka) for every business date; close lists documents pending in the period, soft lock warns, hard lock refuses; no hard lock before the period ends (CFO exception with a reason). Answers CQ-H2, CQ-C4, CQ-C5. |
+| 2.1c | Done as fix G5: receipt, claim and agent deposit numbers carry the branch code. |
+| 2.2 | Includes the outbox consumer relay (PD-7): commission payout messages to AP and payroll are not relayed today. |
+| 2.3 | Includes variable-length posting-rule line groups (PD-3, PD-4) and cost centres (PD-5). |
+| 2.6 | Split: 2.6a petty cash (after 2.2), 2.6b expense claims (after 2.4 and 2.10). |
+| 2.14 | AP route after 2.4; the payroll route waits for 2.13 **and** the answer to CQ-F4 (tax on commission paid through payroll; commission already has tax withheld when earned). |
+
+Build order by daily value to a non-life insurer:
+1. **2.2 → 2.3 → 2.4 (AP and payment runs) first.** Garages, surveyors, hospitals, rent and utilities are today's largest manual-journal workload (flow audit step 10), and AP closes the claim payee → vendor loop.
+2. **2.6a petty cash**, then **2.7 fixed assets** and **2.8 budgets**; 2.5 AR and 2.9 cash flow after AP.
+3. **People track last, and only after asking CQ "Is HR/payroll already run elsewhere?"** Many Bangladeshi insurers already run separate HR/payroll software. If they do, the Phase 2 MVP is a payroll journal import plus bank-file matching (a small slice replacing 2.10–2.13 for now). Full payroll (tax slabs, provident fund, gratuity, festival bonus) is built only if they have none.
+
+Original suggested order (superseded by the above): 2.0 and 2.1 first; then the Finance track (2.2 → 2.3 → 2.4 → 2.5 → 2.6 → 2.7 → 2.8 → 2.9) and the People
 track (2.10 → 2.11 → 2.12 → 2.13 → 2.15 → 2.16) can run in parallel after 2.2; 2.14 after both.
