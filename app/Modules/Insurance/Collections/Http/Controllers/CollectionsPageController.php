@@ -75,6 +75,8 @@ final class CollectionsPageController
         return Inertia::render('receipts/Create', [
             // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch, today and their last channel.
             'prefill' => is_string($policy) && Str::isUuid($policy) ? $this->prefill($entity, $policy, $reach) : null,
+            // GA-07: opened from Home's "Receipts to record" (/receipts/create?statement_line=…), the receipt starts with the bank line's amount, date and reference.
+            'statementLine' => is_string($line = $request->query('statement_line')) && Str::isUuid($line) ? self::statementLine($entity, $line) : null,
             'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => app(BusinessClock::class)->today()->toDateString(),
                 'channel' => self::channel($defaults->remembered($actor, FormDefaults::LAST_RECEIPT_CHANNEL))],
             'entity' => $entity,
@@ -378,6 +380,21 @@ final class CollectionsPageController
 
         return ['policy' => ['id' => (string) $policy->id, 'number' => (string) $policy->number], 'amount' => PageSupport::money(array_sum(array_column($installments, 'outstanding_minor')), $currency),
             'branch_id' => (string) $policy->branch_id, 'allocations' => $lines];
+    }
+
+    /**
+     * GA-07: an unmatched money-in line on one of the entity's bank statements, as receipt defaults.
+     *
+     * @param array{id: string, currency: string} $entity
+     * @return array{amount: string, value_date: string, reference: string|null, bank_account_id: string}|null
+     */
+    private static function statementLine(array $entity, string $lineId): ?array
+    {
+        $line = DB::table('bank_statement_lines as l')->join('bank_accounts as b', 'b.id', '=', 'l.bank_account_id')->where('l.id', $lineId)->where('b.entity_id', $entity['id'])
+            ->where('l.match_status', 'unmatched')->where('l.amount_minor', '>', 0)->first(['l.amount_minor', 'l.posted_on', 'l.reference', 'l.description', 'l.bank_account_id', 'b.currency']);
+
+        return $line === null ? null : ['amount' => PageSupport::money((int) $line->amount_minor, (string) $line->currency), 'value_date' => substr((string) $line->posted_on, 0, 10),
+            'reference' => $line->reference === null ? ($line->description === null ? null : (string) $line->description) : (string) $line->reference, 'bank_account_id' => (string) $line->bank_account_id];
     }
 
     /** The channel a receipt form starts with: the user's last one while it is still offered, else bank transfer. */

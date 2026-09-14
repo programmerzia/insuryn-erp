@@ -31,7 +31,9 @@ final class JournalPageController
 
         return $response->with([
             'dimensions' => $this->dimensions($journal),
-            'sourceLink' => $source === null || $source->source_type === null ? null : JournalSources::link((string) $source->source_type, (string) $source->source_id),
+            // GA-07: the source link shows only when the reader may open that screen.
+            'sourceLink' => $source === null || $source->source_type === null ? null
+                : JournalSources::linkFor((string) $source->source_type, (string) $source->source_id, $permissions->permissionsOf((string) $request->user()?->getAuthIdentifier())),
         ]);
     }
 

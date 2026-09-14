@@ -12,6 +12,36 @@ use Illuminate\Support\Facades\DB;
  */
 final class JournalSources
 {
+    /** Gap fix GA-07: the permissions each source page opens for (their page controllers' AREA), so a reader is never linked to a 403. */
+    private const AREAS = [
+        '/policies' => \App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController::AREA,
+        '/receipts' => \App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController::AREA,
+        '/refunds' => \App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController::AREA,
+        '/agent-cash' => \App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController::AREA,
+        '/claims' => \App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController::AREA,
+        '/commission' => \App\Modules\Insurance\Commission\Http\Controllers\CommissionPageController::AREA,
+    ];
+
+    /**
+     * The source page, only when the reader holds one of the permissions it opens for (in any scope; the page still checks the record's branch).
+     *
+     * @param list<string> $held the reader's permissions
+     */
+    public static function linkFor(string $type, string $id, array $held): ?string
+    {
+        $url = self::link($type, $id);
+        if ($url === null) {
+            return null;
+        }
+        foreach (self::AREAS as $prefix => $area) {
+            if ($url === $prefix || str_starts_with($url, $prefix.'/')) {
+                return array_intersect($area, $held) === [] ? null : $url;
+            }
+        }
+
+        return $url;
+    }
+
     /** The page of a journal's source record, or null when it has none. */
     public static function link(string $type, string $id): ?string
     {

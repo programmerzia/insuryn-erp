@@ -11,7 +11,7 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { usePermissions } from '@/lib/permissions';
+import { AREAS, usePermissions } from '@/lib/permissions';
 
 interface Option { id: string; code?: string; name?: string; display_name?: string }
 interface AgentRow { id: string; code: string; name: string; branch_id: string; parent_agent_id: string | null; commission_plan_id: string | null; status: string }
@@ -25,7 +25,8 @@ const branchName = (id: string) => props.branches.find((b) => b.id === id)?.name
 const planName = (id: string | null) => props.commissionPlans.find((p) => p.id === id)?.name ?? null;
 const parentCode = (id: string | null) => props.agents.find((a) => a.id === id)?.code ?? null;
 const columns = computed<DataColumn<AgentRow>[]>(() => [
-    { id: 'code', header: 'Code', value: (a) => a.code, width: 110, href: (a) => `/commission/agents/${a.id}` },
+    // GA-07: the agent statement opens only for the commission screens' permissions.
+    { id: 'code', header: 'Code', value: (a) => a.code, width: 110, href: (a) => (can(...AREAS.commission) ? `/commission/agents/${a.id}` : null) },
     { id: 'name', header: 'Name', value: (a) => a.name, width: 220 },
     { id: 'branch', header: 'Branch', value: (a) => branchName(a.branch_id), width: 140 },
     { id: 'plan', header: 'Commission plan', value: (a) => planName(a.commission_plan_id), width: 180, muted: true },

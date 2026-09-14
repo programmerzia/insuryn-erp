@@ -13,8 +13,11 @@ use App\Modules\Platform\Numbering\Exceptions\NumberingException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Feedback\ErrorPage;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -46,9 +49,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Browser forms get the reason written for people (UX brief §4); JSON keeps the domain message.
         $backToForm = fn (Request $request, string $message, string $reason) => back()->withInput($request->except(['password', 'password_confirmation', 'current_password']))
             ->withErrors(['form' => \App\Http\Feedback\ReasonMessages::forPeople($reason, $message), 'reason' => $reason]);
+        // Gap fix GA-07: a page the user may not open renders inside the application with who can give access, not as bare text.
         $exceptions->render(fn (PermissionDenied $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => 'PERMISSION_DENIED', 'permission' => $e->permission], 403)
-            : ($request->isMethod('GET') ? response('You do not have permission for this page.', 403) : $backToForm($request, 'You do not have permission for this action.', 'PERMISSION_DENIED')));
+            : ($request->isMethod('GET') ? ErrorPage::render($request, 403, $e->permission, $e) : $backToForm($request, 'You do not have permission for this action.', 'PERMISSION_DENIED')));
         $exceptions->render(fn (SodViolation $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));
@@ -62,4 +66,21 @@ return Application::configure(basePath: dirname(__DIR__))
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode]
                 + ($e instanceof \App\Modules\Accounting\Exceptions\PeriodTransitionException && $e->details !== [] ? ['details' => $e->details] : []), 422)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));
+        // Gap fix GA-07: other refusals (403 from `can:` middleware), missing pages and records (404), expired forms (419) and failures (500, 503) render the
+        // same in-app error page for browsers. JSON and API responses are unchanged; with APP_DEBUG a 500 keeps Laravel's debug page.
+        $exceptions->respond(function (SymfonyResponse $response, Throwable $e, Request $request) use ($wantsJson): SymfonyResponse {
+            $status = $response->getStatusCode();
+            if ($wantsJson($request) || $request->attributes->get(ErrorPage::RENDERED) === true || ! in_array($status, ErrorPage::STATUSES, true)
+                || ($status >= 500 && (bool) config('app.debug'))) {
+                return $response;
+            }
+
+            return ErrorPage::render($request, $status, null, $e);
+        });
+        // Gap fix GA-23: a refused permission is an expected outcome, not an application error: logged as a notice without a stack trace.
+        $exceptions->report(function (PermissionDenied $e): false {
+            Log::notice('Permission denied', ['user_id' => $e->userId, 'permission' => $e->permission]);
+
+            return false;
+        });
     })->create();

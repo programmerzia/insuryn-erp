@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+import { AREAS, usePermissions } from '@/lib/permissions';
 import { usePreferences } from '@/lib/preferences';
 import type { ProposalData } from '@/lib/proposals';
 
@@ -24,6 +25,8 @@ interface Referral extends ProposalData { risk: { label_en: string; label_bn: st
 const props = defineProps<{ referrals: Referral[]; currency: string }>();
 
 const preferences = usePreferences();
+// GA-07: finance and administrators decide referrals but do not open the quotes screen.
+const { can } = usePermissions();
 const active = ref<string | null>(null);
 const deciding = ref<Referral | null>(null);
 const form = useForm({ decision: 'approve', loading_percent: '', reason: '' });
@@ -63,7 +66,7 @@ const title = computed(() => (form.decision === 'decline' ? 'Decline' : form.dec
             :row-key="(r) => r.id"
             :currency="currency"
             empty-text="No proposals are referred to underwriting."
-            :empty-action="{ label: 'Open quotes', href: '/quotations' }"
+            :empty-action="can(...AREAS.quotes) ? { label: 'Open quotes', href: '/quotations' } : null"
             :inspector-title="(r) => r.number"
             :inspector-subtitle="(r) => r.customer"
         >

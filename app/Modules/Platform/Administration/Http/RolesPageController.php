@@ -6,6 +6,7 @@ namespace App\Modules\Platform\Administration\Http;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Platform\Administration\RoleAdministration;
+use App\Modules\Platform\Authorization\PermissionCatalogue;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Authorization\SodViolation;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
@@ -64,6 +65,9 @@ final class RolesPageController
             'role' => ['id' => (string) $model->id, 'code' => (string) $model->code, 'name' => (string) $model->name],
             'granted' => DB::table('role_permissions')->where('role_id', $model->id)->orderBy('permission_code')->pluck('permission_code')->all(),
             'catalogue' => self::catalogue(),
+            // GA-22: the user-level segregation rules, so ticking both sides of one shows a notice before saving.
+            'sodRules' => DB::table('sod_rules')->where('applies_to', 'user')->orderBy('code')->get(['permission_a', 'permission_b', 'mode'])
+                ->map(fn (object $r): array => ['a' => (string) $r->permission_a, 'b' => (string) $r->permission_b, 'mode' => (string) $r->mode])->values()->all(),
             'holders' => DB::table('user_roles as ur')->join('users as u', 'u.id', '=', 'ur.user_id')->where('ur.role_id', $model->id)->distinct()->orderBy('u.name')
                 ->get(['u.id', 'u.name', 'u.email', 'u.status'])->map(fn (object $u): array => (array) $u)->values()->all(),
         ]);
@@ -113,15 +117,13 @@ final class RolesPageController
         return $parts === [] ? "{$name}: nothing changed." : "{$name} updated: ".implode(', ', $parts).'.';
     }
 
-    /** @return list<array{label: string, permissions: list<array{code: string, label: string}>}> the catalogue grouped by context ("Accounting", "Claim") */
+    /**
+     * GA-22: the catalogue grouped by area with readable group names ("Cover notes", not "Cover_note") and what each permission grants.
+     *
+     * @return list<array{label: string, permissions: list<array{code: string, label: string, help: string|null}>}>
+     */
     private static function catalogue(): array
     {
-        $groups = [];
-        foreach (DB::table('permissions')->orderBy('code')->pluck('code') as $code) {
-            [$context, $action] = array_pad(explode('.', (string) $code, 2), 2, '');
-            $groups[$context][] = ['code' => (string) $code, 'label' => ucfirst(str_replace(['_', 'coa'], [' ', 'chart of accounts'], $action))];
-        }
-
-        return array_map(fn (string $context, array $permissions): array => ['label' => ucfirst($context), 'permissions' => $permissions], array_keys($groups), $groups);
+        return PermissionCatalogue::grouped(array_values(DB::table('permissions')->orderBy('code')->pluck('code')->map(fn (mixed $code): string => (string) $code)->all()));
     }
 }

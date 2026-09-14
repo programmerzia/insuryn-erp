@@ -159,7 +159,7 @@ final class ObjectHistory
             'document.attached' => 'Document '.($after['name'] ?? '').' attached'.$by,
             'document.generated' => (\App\Modules\Platform\Documents\Templates\DocumentTemplateCode::tryFrom((string) ($after['template_code'] ?? ''))?->title() ?? 'Document')
                 .' version '.(string) ($after['version'] ?? '').' generated'.$by, // slice R8
-            'user.invited' =>'Invited'.$by, 'user.invitation_sent' => 'Invitation sent again'.$by,
+            'user.invited' =>'Invited'.$by, 'user.invitation_sent' => 'Invitation sent again'.$by, 'user.password_set' => 'Password set',
             'user.deactivated' => 'Deactivated'.$by, 'user.reactivated' => 'Reactivated'.$by,
             'user_role.assigned' => 'Given '.$this->roleAndScope($after).$by,
             'user_role.revoked' => 'Removed from '.$this->roleAndScope($before).$by,

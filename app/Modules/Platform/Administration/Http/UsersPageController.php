@@ -39,6 +39,8 @@ final class UsersPageController
         $roles = DB::table('user_roles as ur')->join('roles as r', 'r.id', '=', 'ur.role_id')->orderBy('r.name')->get(['ur.user_id', 'r.name'])->groupBy('user_id');
 
         return Inertia::render('admin/users/Index', [
+            // GA-22: the invite drawer gives a first role (tenant-wide) straight away.
+            'roles' => DB::table('roles')->orderBy('name')->get(['id', 'name'])->map(fn (object $r): array => ['id' => (string) $r->id, 'name' => (string) $r->name])->values()->all(),
             'users' => User::query()->orderBy('name')->get(['id', 'name', 'email', 'status'])->map(fn (User $u): array => ['id' => $u->id, 'name' => $u->name, 'email' => $u->email,
                 'status' => $u->status, 'roles' => array_values(array_unique($roles->get($u->id, collect())->pluck('name')->map(fn ($n): string => (string) $n)->all()))])->values()->all(),
         ]);
@@ -47,14 +49,26 @@ final class UsersPageController
     public function store(Request $request): RedirectResponse
     {
         $this->permissions->authorize(PageSupport::actor($request), self::PERMISSION);
-        /** @var array{name: string, email: string} $data */
-        $data = $request->validate(['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', 'max:255']]);
+        /** @var array{name: string, email: string, role_id?: string|null} $data */
+        $data = $request->validate(['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', 'max:255'], 'role_id' => ['nullable', 'uuid', Rule::exists('roles', 'id')]]);
         if (User::query()->whereRaw('lower(email) = ?', [Str::lower($data['email'])])->exists()) {
             throw ValidationException::withMessages(['email' => 'A user with this email already exists.']);
         }
-        $user = $this->users->invite($data['name'], $data['email'], PageSupport::actor($request));
+        $actor = PageSupport::actor($request);
+        $user = $this->users->invite($data['name'], $data['email'], $actor);
+        $status = "Invitation sent to {$user->email}.";
+        $roleId = $data['role_id'] ?? null;
+        if (is_string($roleId) && $roleId !== '') {
+            $roleName = (string) DB::table('roles')->where('id', $roleId)->value('name');
+            try {
+                $this->assignments->assign($user->id, $roleId, 'tenant', TenantContext::id(), $actor);
+                $status .= " {$roleName} given for the whole organisation.";
+            } catch (SodViolation $violation) {
+                return redirect("/admin/users/{$user->id}")->with('status', $status)->withErrors(['form' => self::conflictSentence($violation, $user->name, $roleName)]);
+            }
+        }
 
-        return redirect("/admin/users/{$user->id}")->with('status', "Invitation sent to {$user->email}.");
+        return redirect("/admin/users/{$user->id}")->with('status', $status);
     }
 
     public function show(Request $request, string $user, ObjectHistory $history): Response
@@ -63,7 +77,9 @@ final class UsersPageController
         $model = User::query()->findOrFail($user);
 
         return Inertia::render('admin/users/Show', [
-            'user' => ['id' => $model->id, 'name' => $model->name, 'email' => $model->email, 'status' => $model->status, 'self' => $model->id === PageSupport::actor($request)],
+            'user' => ['id' => $model->id, 'name' => $model->name, 'email' => $model->email, 'status' => $model->status, 'self' => $model->id === PageSupport::actor($request),
+                // GA-22: an invitation is resent only while it is still open (invited, and no password set since).
+                'invitation_pending' => $model->status === 'active' && self::invitationPending($model->id)],
             'assignments' => $this->assignmentsOf($model->id),
             'roles' => DB::table('roles')->orderBy('name')->get(['id', 'name'])->map(fn (object $r): array => ['id' => (string) $r->id, 'name' => (string) $r->name])->values()->all(),
             'entities' => DB::table('legal_entities')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $e): array => (array) $e)->values()->all(),
@@ -132,6 +148,15 @@ final class UsersPageController
         $this->users->resendInvitation($model, $actor);
 
         return back()->with('status', "Invitation sent to {$model->email}.");
+    }
+
+    /** Invited (or re-invited) and has not set a password since: the latest of these audit events is an invitation. */
+    private static function invitationPending(string $userId): bool
+    {
+        $latest = DB::table('audit_events')->where('object_type', 'user')->where('object_id', $userId)->whereIn('action', ['user.invited', 'user.invitation_sent', 'user.password_set'])
+            ->orderByDesc('occurred_at')->orderByDesc('id')->value('action');
+
+        return in_array($latest, ['user.invited', 'user.invitation_sent'], true);
     }
 
     /** Holding conflicting permissions is not the action-time SOD_CONFLICT ("you took part in an earlier step"), so it gets its own reason. */

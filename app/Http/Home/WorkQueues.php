@@ -134,12 +134,34 @@ final class WorkQueues
         };
         $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
 
-        return match ($key) {
+        $filled = match ($key) {
             'claim_approvals', 'approvals_over_threshold' => $this->approvalBlock($block, $this->approvals($userId, $key === 'claim_approvals')),
             'close_progress' => $this->closeBlock($block),
             'cash_position' => $this->cashBlock($block, $today),
             default => [...$block, ...$this->rows($key, $userId)],
         };
+
+        return $key === 'receipts_to_record' ? $this->receiptsToRecordLinks($filled, $userId) : $filled;
+    }
+
+    /**
+     * GA-07: branch roles cannot open the bank screens, so their "Receipts to record" opens the receipt form filled in from the statement line.
+     *
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function receiptsToRecordLinks(array $block, string $userId): array
+    {
+        if (array_intersect(\App\Modules\Finance\Bank\Http\Controllers\BankPageController::AREA, $this->permissions->permissionsOf($userId)) !== []) {
+            return $block;
+        }
+        $rows = is_array($block['rows'] ?? null) ? array_values($block['rows']) : [];
+        $lineIds = $this->query('receipts_to_record', $userId)->limit(self::TOP)->pluck('l.id')->map(fn (mixed $id): string => (string) $id)->values()->all();
+        foreach ($rows as $index => $row) {
+            $rows[$index] = [...(array) $row, 'href' => '/receipts/create?statement_line='.($lineIds[$index] ?? '')];
+        }
+
+        return [...$block, 'href' => '/receipts/create', 'emptyAction' => ['label' => 'Record a receipt', 'href' => '/receipts/create'], 'rows' => $rows];
     }
 
     /** @return array{count: int, columns: list<array{id: string, label: string, type: string}>, rows: list<array{href: string|null, cells: array<string, string|null>}>} */
@@ -171,7 +193,7 @@ final class WorkQueues
                 ->orderBy('o.oldest_due')->select(['p.id', 'p.number', 'h.display_name', 'o.oldest_due']),
             'receipts_to_record', 'unmatched_bank_lines' => DB::table('bank_statement_lines as l')->join('bank_accounts as b', 'b.id', '=', 'l.bank_account_id')->where('l.match_status', 'unmatched')
                 ->when($key === 'receipts_to_record', fn (Builder $q) => $q->where('l.amount_minor', '>', 0))
-                ->orderBy('l.posted_on')->select(['l.id', 'l.bank_account_id', 'l.posted_on', 'l.reference', 'l.description', 'l.amount_minor', 'b.currency', 'b.bank_name']),
+                ->orderBy('l.posted_on')->orderBy('l.id')->select(['l.id', 'l.bank_account_id', 'l.posted_on', 'l.reference', 'l.description', 'l.amount_minor', 'b.currency', 'b.bank_name']),
             // Issued quotations still valid (Phase 3 quote workbench) and Phase 1 policy quotes, earliest cover start first.
             'quotes' => DB::query()->fromSub($this->within($userId, QuotationPageController::AREA, DB::table('quotations as q'), 'q')->leftJoin('parties as h', 'h.id', '=', 'q.customer_party_id')->where('q.status', 'issued')
                 ->where('q.valid_until', '>=', $today->toDateString())

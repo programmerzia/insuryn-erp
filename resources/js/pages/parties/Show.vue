@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate } from '@/lib/format';
+import { AREAS, usePermissions } from '@/lib/permissions';
 
 const props = defineProps<{
     party: { id: string; kind: string; display_name: string; tax_id: string | null; roles: string[] };
@@ -17,6 +18,7 @@ const props = defineProps<{
 }>();
 
 const form = useForm({ bank_name: '', account_number: '', is_default: false });
+const { can } = usePermissions();
 </script>
 
 <template>
@@ -35,7 +37,8 @@ const form = useForm({ bank_name: '', account_number: '', is_default: false });
                     <li v-if="bankAccounts.length === 0" class="text-ink-2">No bank accounts.</li>
                 </ul>
                 <FormBanner />
-                <form class="mt-4 grid gap-3" @submit.prevent="form.post(`/parties/${props.party.id}/bank-accounts`, { onSuccess: () => form.reset() })">
+                <!-- GA-07: only people who maintain customers add their bank accounts. -->
+                <form v-if="can('party.manage')" class="mt-4 grid gap-3" @submit.prevent="form.post(`/parties/${props.party.id}/bank-accounts`, { onSuccess: () => form.reset() })">
                     <Field id="bank_name" label="Bank" :error="form.errors.bank_name"><Input id="bank_name" v-model="form.bank_name" /></Field>
                     <Field id="account_number" label="Account number" :error="form.errors.account_number"><Input id="account_number" v-model="form.account_number" /></Field>
                     <label class="flex items-center gap-2 text-ui text-ink-2"><input v-model="form.is_default" type="checkbox" class="size-4 accent-brick" /> Default account</label>
@@ -46,7 +49,8 @@ const form = useForm({ bank_name: '', account_number: '', is_default: false });
                 <h2 class="text-section font-semibold">Policies held</h2>
                 <ul class="mt-3 grid gap-2 text-ui">
                     <li v-for="policy in policies" :key="policy.id" class="flex items-center justify-between">
-                        <Link :href="`/policies/${policy.id}`" class="text-accent-text hover:underline">{{ policy.number ?? 'Quote' }}</Link>
+                        <Link v-if="can(...AREAS.policies)" :href="`/policies/${policy.id}`" class="text-accent-text hover:underline">{{ policy.number ?? 'Quote' }}</Link>
+                        <span v-else>{{ policy.number ?? 'Quote' }}</span>
                         <span class="text-ink-2">{{ formatDate(policy.inception) }} – {{ formatDate(policy.expiry) }}</span>
                         <StatusBadge :status="policy.status" />
                     </li>

@@ -26,10 +26,13 @@ const props = defineProps<{
     defaults: ReceiptDefaults;
     /** GA-03 (D-65): branches where this user allocates; elsewhere the money is held in suspense, noted for the policy, until a branch manager allocates it. */
     allocateBranchIds?: string[];
+    /** GA-07: the bank statement line the receipt is recorded for (Home "Receipts to record"). */
+    statementLine?: { amount: string; value_date: string; reference: string | null; bank_account_id: string } | null;
 }>();
 
 const form = useForm({
-    ...initialReceipt(props.prefill, props.defaults, props.branches), reference: '', bank_account_id: '',
+    ...initialReceipt(props.prefill, props.defaults, props.branches), reference: props.statementLine?.reference ?? '', bank_account_id: props.statementLine?.bank_account_id ?? '',
+    ...(props.statementLine ? { amount: props.statementLine.amount, value_date: props.statementLine.value_date, channel: 'bank_transfer' } : {}),
     cheque_no: '', cheque_bank: '', cheque_date: '', collected_by_agent_id: '',
 });
 const dateErrors = ref<Record<string, string | null>>({});

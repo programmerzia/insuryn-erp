@@ -3,7 +3,7 @@ import type { TimelineEntry } from '@/components/object/types';
 import { formatDate } from '@/lib/format';
 
 /** The object's story, newest first, in plain sentences (brief §6.2). */
-defineProps<{ entries: TimelineEntry[] }>();
+defineProps<{ entries: TimelineEntry[]; emptyText?: string }>();
 </script>
 
 <template>
@@ -17,5 +17,5 @@ defineProps<{ entries: TimelineEntry[] }>();
             <p class="py-1.5 text-ui">{{ entry.sentence }}</p>
         </li>
     </ol>
-    <p v-else class="text-ui text-ink-2">Nothing has happened to this record yet.</p>
+    <p v-else class="text-ui text-ink-2">{{ emptyText ?? 'Nothing has happened to this record yet.' }}</p>
 </template>

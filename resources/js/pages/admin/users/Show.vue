@@ -16,7 +16,7 @@ import { confirmAction } from '@/lib/confirm';
 interface Assignment { role_id: string; role: string; scope_type: string; scope_id: string; scope: string }
 interface Place { id: string; code: string; name: string }
 const props = defineProps<{
-    user: { id: string; name: string; email: string; status: string; self: boolean };
+    user: { id: string; name: string; email: string; status: string; self: boolean; invitation_pending?: boolean };
     assignments: Assignment[];
     roles: { id: string; name: string }[];
     entities: Place[];
@@ -53,12 +53,13 @@ async function deactivate(): Promise<void> {
                 <Link href="/admin/users" class="text-dense text-accent-text hover:underline">Users</Link>
                 <div class="flex items-center gap-3">
                     <h1 class="text-title font-semibold">{{ user.name }}</h1>
-                    <StatusBadge :status="user.status" />
+                    <StatusBadge :status="user.invitation_pending ? 'invited' : user.status" />
                 </div>
                 <p class="text-ui text-ink-2">{{ user.email }}</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <Button v-if="user.status === 'active'" variant="secondary" @click="router.post(`${base}/invitation`, {}, { preserveScroll: true })">Resend invitation</Button>
+                <!-- GA-22: only while the invitation is still open. -->
+                <Button v-if="user.status === 'active' && user.invitation_pending" variant="secondary" @click="router.post(`${base}/invitation`, {}, { preserveScroll: true })">Resend invitation</Button>
                 <Button v-if="user.status === 'active' && !user.self" variant="danger" @click="deactivate">Deactivate</Button>
                 <Button v-if="user.status !== 'active'" variant="secondary" @click="router.post(`${base}/reactivate`, {}, { preserveScroll: true })">Reactivate</Button>
             </div>
@@ -104,7 +105,7 @@ async function deactivate(): Promise<void> {
 
         <section class="mt-8" aria-labelledby="timeline-heading">
             <h2 id="timeline-heading" class="mb-2 text-section font-semibold">Timeline</h2>
-            <Timeline :entries="timeline" />
+            <Timeline :entries="timeline" :empty-text="assignments.length ? 'No changes recorded yet. Roles given when the organisation was set up show above, not here.' : undefined" />
         </section>
     </AppLayout>
 </template>
