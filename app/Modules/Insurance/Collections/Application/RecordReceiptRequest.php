@@ -23,6 +23,8 @@ final readonly class RecordReceiptRequest
         public array $allocations,
         public ?ChequeDetails $cheque = null,
         public ?string $collectedByAgentId = null,
+        /** GA-03 (D-65): the policy the money was taken for, noted on a receipt recorded without allocations so whoever allocates knows where it goes. */
+        public ?string $forPolicyId = null,
     ) {}
 
     public function allocatedMinor(): int

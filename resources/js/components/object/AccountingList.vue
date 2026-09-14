@@ -28,7 +28,7 @@ const captions = useLineCaptions();
                     <tr v-for="(line, index) in journal.lines" :key="index" class="h-7 align-top">
                         <td class="px-3 py-1" :class="line.credit ? 'pl-8' : ''">
                             <span class="block truncate"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</span>
-                            <span v-if="captionFor(captions, line.role, line.debit ? 'debit' : 'credit')" class="block text-ink-2" data-caption>{{ captionFor(captions, line.role, line.debit ? 'debit' : 'credit') }}</span>
+                            <span v-if="captionFor(captions, line.role, line.debit ? 'debit' : 'credit', journal.event)" class="block text-ink-2" data-caption>{{ captionFor(captions, line.role, line.debit ? 'debit' : 'credit', journal.event) }}</span>
                         </td>
                         <td class="num px-3 py-1">{{ formatMoney(line.debit) }}</td>
                         <td class="num px-3 py-1">{{ formatMoney(line.credit) }}</td>

@@ -5,6 +5,7 @@ import { computed } from 'vue';
 import PinLink from '@/components/shell/PinLink.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { eventLabel } from '@/lib/events';
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { useOnboarding } from '@/lib/onboarding';
@@ -43,7 +44,8 @@ const waiting = computed(() => props.queues.reduce((sum, q) => sum + (q.cash ? 0
 
 function cell(type: string, value: string | null | undefined): string {
     if (value === null || value === undefined) return '';
-    return type === 'money' ? formatMoney(value) : type === 'date' ? formatDate(value) : value;
+    // GA-08: accounting event codes are shown in plain words.
+    return type === 'money' ? formatMoney(value) : type === 'date' ? formatDate(value) : type === 'event' ? eventLabel(value) : value;
 }
 
 /** 30-day bars on one scale: bar heights from BigInt minor units (no floats in the amounts), scaled to 40px. */

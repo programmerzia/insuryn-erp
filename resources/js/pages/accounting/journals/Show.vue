@@ -134,7 +134,7 @@ function rejectReversal(): void {
                                 <td class="border-b border-line px-3 text-ink-2 tabular-nums">{{ line.lineNo }}</td>
                                 <td class="border-b border-line px-3 py-1" :class="line.side === 'credit' ? 'pl-7' : ''">
                                     <span class="block truncate"><span class="text-ink-2 tabular-nums">{{ line.account.code }}</span> {{ line.account.name }}</span>
-                                    <span v-if="captionFor(captions, line.role, line.side)" class="block text-dense text-ink-2">{{ captionFor(captions, line.role, line.side) }}</span>
+                                    <span v-if="captionFor(captions, line.role, line.side, journal.event?.type)" class="block text-dense text-ink-2">{{ captionFor(captions, line.role, line.side, journal.event?.type) }}</span>
                                 </td>
                                 <td class="border-b border-line px-3 py-1">
                                     <span class="flex flex-wrap items-center gap-1">

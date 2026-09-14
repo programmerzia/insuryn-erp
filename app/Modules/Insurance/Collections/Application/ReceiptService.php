@@ -51,6 +51,7 @@ final class ReceiptService
             throw new BusinessRuleViolation('ALLOCATION_EXCEEDS_RECEIPT', "Allocations of {$request->allocatedMinor()} exceed the receipt of {$request->amountMinor}.");
         }
         $this->assertAgentCollection($request);
+        $this->assertNotedPolicy($request);
         $this->assertCheque($request);
         if ($request->bankAccountId !== null) {
             $this->bankAccounts->glAccountFor($request->bankAccountId, $request->entityId, $request->currency);
@@ -63,7 +64,7 @@ final class ReceiptService
                 'channel' => $request->channel, 'amount_minor' => $request->amountMinor, 'currency' => $request->currency,
                 'value_date' => $request->valueDate->toDateString(), 'received_at' => CarbonImmutable::now(), 'bank_account_id' => $request->bankAccountId,
                 'reference' => $request->reference, 'status' => $this->statusFor($request), 'created_by' => $actorUserId,
-                'collected_by_agent_id' => $request->collectedByAgentId, 'cheque_no' => $request->cheque?->number, 'cheque_bank' => $request->cheque?->bank, 'cheque_date' => $request->cheque?->date->toDateString(),
+                'collected_by_agent_id' => $request->collectedByAgentId, 'for_policy_id' => $request->forPolicyId, 'cheque_no' => $request->cheque?->number, 'cheque_bank' => $request->cheque?->bank, 'cheque_date' => $request->cheque?->date->toDateString(),
             ]);
             $this->numbers->markUsed($number->id, 'receipt', $receipt->id);
             foreach ($request->allocations as $line) {
@@ -77,11 +78,29 @@ final class ReceiptService
                 $this->accounting->receiptRecorded($receipt, $item);
             }
             $this->audit->record('receipt.recorded', AuditSubject::of('receipt', $receipt->id), null,
-                ['number' => $receipt->number, 'amount_minor' => $receipt->amount_minor, 'allocated_minor' => $request->allocatedMinor(), 'suspense_minor' => $remainder],
+                ['number' => $receipt->number, 'amount_minor' => $receipt->amount_minor, 'allocated_minor' => $request->allocatedMinor(), 'suspense_minor' => $remainder]
+                    + ($request->forPolicyId === null ? [] : ['for_policy_id' => $request->forPolicyId]),
                 null, 'receipt.create', Actor::user($actorUserId));
 
             return $receipt;
         });
+    }
+
+    /**
+     * GA-03 (D-65): the noted policy is one of the receipt's entity, in force or with premium still collected (issued, active, lapsed, expired or cancelled).
+     *
+     * @throws BusinessRuleViolation UNKNOWN_POLICY
+     */
+    private function assertNotedPolicy(RecordReceiptRequest $request): void
+    {
+        if ($request->forPolicyId === null) {
+            return;
+        }
+        $known = DB::table('policies')->where('id', $request->forPolicyId)->where('entity_id', $request->entityId)
+            ->whereIn('status', ['issued', 'active', 'lapsed', 'expired', 'cancelled'])->exists();
+        if (! $known) {
+            throw new BusinessRuleViolation('UNKNOWN_POLICY', "Policy {$request->forPolicyId} is not a policy of this company whose premium can be received.");
+        }
     }
 
     /** @throws BusinessRuleViolation CHEQUE_DETAILS_REQUIRED | DUPLICATE_CHEQUE (a cheque is presented once unless it bounced) */

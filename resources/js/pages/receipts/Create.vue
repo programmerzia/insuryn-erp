@@ -12,7 +12,7 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { type PreviewResult, previewJournal } from '@/lib/preview';
-import { initialReceipt, type ReceiptDefaults, type ReceiptPrefill } from '@/lib/receiptForm';
+import { initialReceipt, receiptAllocates, receiptPayload, type ReceiptDefaults, type ReceiptPrefill } from '@/lib/receiptForm';
 
 const props = defineProps<{
     entity: { code: string; currency: string };
@@ -24,6 +24,8 @@ const props = defineProps<{
     /** Flow fix X1: filled in from the policy the receipt was opened from (/receipts/create?policy=…). */
     prefill: ReceiptPrefill | null;
     defaults: ReceiptDefaults;
+    /** GA-03 (D-65): branches where this user allocates; elsewhere the money is held in suspense, noted for the policy, until a branch manager allocates it. */
+    allocateBranchIds?: string[];
 }>();
 
 const form = useForm({
@@ -40,7 +42,8 @@ const remaining = computed(() => (received.value === null ? null : received.valu
 const preview = ref<PreviewResult | null>(null);
 const previewOpen = ref(false);
 const cancelHref = props.prefill ? `/policies/${props.prefill.policy.id}` : '/receipts';
-const payload = () => ({ ...form.data(), allocations: form.allocations.map(({ installment_id, amount }) => ({ installment_id, amount })) });
+const canAllocate = computed(() => receiptAllocates(props.allocateBranchIds, form.branch_id));
+const payload = () => receiptPayload(form.data(), canAllocate.value, props.prefill?.policy.id ?? null);
 
 async function review(): Promise<void> {
     form.clearErrors();
@@ -61,7 +64,9 @@ function post(): void {
 <template>
     <AppLayout help="receipts" title="Record a receipt">
         <h1 class="text-title font-semibold">Record a receipt</h1>
-        <p v-if="prefill" class="mb-5 text-ui text-ink-2">The premium outstanding on {{ prefill.policy.number }}, allocated to its unpaid installments. Change the amount if the customer paid less; anything left over is held in suspense.</p>
+        <p v-if="prefill && !canAllocate" class="mb-5 text-ui text-ink-2">The premium outstanding on {{ prefill.policy.number }}. Change the amount if the customer paid less. The money is held in suspense for {{ prefill.policy.number }}; your branch manager allocates it to the installments.</p>
+        <p v-else-if="prefill" class="mb-5 text-ui text-ink-2">The premium outstanding on {{ prefill.policy.number }}, allocated to its unpaid installments. Change the amount if the customer paid less; anything left over is held in suspense.</p>
+        <p v-else-if="!canAllocate" class="mb-5 text-ui text-ink-2">The money is held in suspense until your branch manager allocates it to installments.</p>
         <p v-else class="mb-5 text-ui text-ink-2">Allocate the money to installments now; anything left over is held in suspense.</p>
         <FormLayout data-tour="receipt-form" submit-label="Review and post" :cancel-href="cancelHref":dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review">
             <Field id="amount" :label="`Amount received (${entity.currency})`" :error="form.errors.amount" hint="↑ and ↓ add or take away 1,000.">
@@ -97,7 +102,7 @@ function post(): void {
                 <SelectInput v-model="form.bank_account_id" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" />
             </Field>
 
-            <fieldset class="grid gap-2">
+            <fieldset v-if="canAllocate" class="grid gap-2">
                 <legend class="mb-1 text-ui font-medium">Allocate to installments</legend>
                 <div v-for="(line, index) in form.allocations" :key="index" class="grid grid-cols-[minmax(0,1fr)_140px_32px] items-start gap-2">
                     <div>

@@ -34,3 +34,11 @@ account role (do not translate it); the others say what a debit or a credit to t
 | employee_tax_payable | Employee tax paid to the government | Tax withheld from salaries, owed to the government |
 | pf_payable | Provident fund paid over | Provident fund we owe |
 | retained_earnings | Retained earnings reduced | Profit kept in the company, or a balance brought forward |
+
+## When one event changes what a line means
+
+The event type and account role come first (do not translate them); the caption replaces the one above for that event only.
+
+| Event | Role | Debit | Credit |
+|---|---|---|---|
+| POLICY_CANCELLED | unearned_premium | Premium for cover not given, taken off the bill or returned to the customer | Cover not yet provided — a liability until time passes |

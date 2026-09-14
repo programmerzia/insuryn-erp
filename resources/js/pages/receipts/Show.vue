@@ -15,7 +15,9 @@ import { useMoneyForm } from '@/lib/moneyForm';
 import { usePreferences } from '@/lib/preferences';
 
 const props = defineProps<{
-    receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null };
+    receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null;
+        /** GA-03: the policy the money was taken for while it waits in suspense. */
+        for_policy?: { id: string; number: string } | null };
     allocations: { id: string; policy_number: string | null; amount: string; posted_on: string; reversed_on: string | null }[];
     suspense: { id: string; amount: string; open: string; status: string } | null;
     /** Flow fix X5: print from the header (then download what was printed); allocate while part of the receipt waits in suspense. */
@@ -69,6 +71,10 @@ const facts = computed(() => [
                 <Link v-if="actions.allocate && suspense" :href="`/receipts/${receipt.id}/allocate`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Allocate {{ formatMoney(suspense.open) }}</Link>
             </template>
             <template #overview>
+                <p v-if="receipt.for_policy && suspense && suspense.status === 'open'" class="mb-3 text-ui text-ink-2">
+                    Taken for <Link :href="`/policies/${receipt.for_policy.id}`" class="text-accent-text hover:underline">{{ receipt.for_policy.number }}</Link>.
+                    {{ actions.allocate ? 'Allocate it to the policy\'s installments.' : 'It is held in suspense until your branch manager allocates it.' }}
+                </p>
                 <h2 class="mb-2 text-ui font-medium">Allocations</h2>
                 <div class="max-w-[760px] overflow-x-auto border border-line">
                     <table class="w-full table-fixed border-separate border-spacing-0 text-dense">

@@ -47,7 +47,7 @@ const captions = useLineCaptions();
                                 <tr v-for="(line, i) in journal.lines" :key="i" class="h-8 align-top">
                                     <td class="border-b border-line px-2 py-1.5" :class="line.credit ? 'pl-6' : ''">
                                         <span class="block truncate"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</span>
-                                        <span v-if="captionFor(captions, line.role, line.debit ? 'debit' : 'credit')" class="block text-ink-2">{{ captionFor(captions, line.role, line.debit ? 'debit' : 'credit') }}</span>
+                                        <span v-if="captionFor(captions, line.role, line.debit ? 'debit' : 'credit', journal.event)" class="block text-ink-2">{{ captionFor(captions, line.role, line.debit ? 'debit' : 'credit', journal.event) }}</span>
                                     </td>
                                     <td class="num border-b border-line px-2 py-1.5">{{ formatMoney(line.debit) }}</td>
                                     <td class="num border-b border-line px-2 py-1.5">{{ formatMoney(line.credit) }}</td>

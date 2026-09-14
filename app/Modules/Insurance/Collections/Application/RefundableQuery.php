@@ -10,6 +10,15 @@ use Illuminate\Support\Facades\DB;
 /** Cancelled policies with refund still due: Σ cancellation refund_due − refunds requested or released (the RefundService cap). */
 final class RefundableQuery
 {
+    /** What can still be requested as a refund on one policy: its cancellations' refund due less refunds requested or released (0 when none). */
+    public function availableMinor(string $policyId): int
+    {
+        $due = (int) DB::table('policy_transactions')->where('policy_id', $policyId)->where('type', 'cancellation')->selectRaw("coalesce(sum((amounts->>'refund_due')::bigint), 0) as due")->value('due');
+        $claimed = (int) DB::table('refunds')->where('policy_id', $policyId)->whereIn('status', ['requested', 'released'])->sum('amount_minor');
+
+        return max(0, $due - $claimed);
+    }
+
     /** @return list<array{policy_id: string, policy_number: string|null, policyholder: string, currency: string, available_minor: int}> */
     public function refundable(string $entityId, ?AreaReach $reach = null): array
     {

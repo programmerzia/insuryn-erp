@@ -40,6 +40,16 @@ final class JournalSources
         return $sources;
     }
 
+    /**
+     * The page and label of a source record by its type and id (GA-08: an accounting event that did not post links the record it came from).
+     *
+     * @return array{url: string|null, label: string}
+     */
+    public static function source(string $type, string $id): array
+    {
+        return self::resolve($type, $id);
+    }
+
     /** @return array{url: string|null, label: string} */
     private static function resolve(string $type, string $id): array
     {

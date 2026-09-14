@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonImmutable|null $cheque_date
  * @property CarbonImmutable|null $bounced_on
  * @property string|null $bounce_reason
+ * @property string|null $for_policy_id
  */
 final class Receipt extends Model
 {

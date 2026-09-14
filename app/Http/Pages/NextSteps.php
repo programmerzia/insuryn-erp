@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Pages;
 
+use App\Modules\Insurance\Collections\Application\RefundableQuery;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Documents\Generation\DocumentGenerator;
@@ -33,12 +34,18 @@ final class NextSteps
         return $rows;
     }
 
+    /**
+     * Policy statuses whose unpaid premium is still collected. GA-24: a cancelled policy keeps the premium earned up to the cancellation date that the
+     * customer has not paid (the cancellation credits only the unearned part), so it is collected like any other.
+     */
+    public const COLLECTABLE_STATUSES = ['issued', 'active', 'lapsed', 'expired', 'cancelled'];
+
     /** Whether the user may record the premium receipt of this policy now: money is outstanding and they hold receipt.create in the policy's branch. */
     public function canRecordReceipt(string $userId, string $policyId): bool
     {
         $policy = DB::table('policies')->where('id', $policyId)->first(['entity_id', 'branch_id', 'status']);
 
-        return $policy !== null && in_array((string) $policy->status, ['issued', 'active', 'lapsed', 'expired'], true)
+        return $policy !== null && in_array((string) $policy->status, self::COLLECTABLE_STATUSES, true)
             && $this->permissions->has($userId, 'receipt.create', AuthorizationScope::branch((string) $policy->entity_id, (string) $policy->branch_id))
             && self::outstandingInstallments($policyId) !== [];
     }
@@ -56,6 +63,34 @@ final class NextSteps
     public function afterReceipt(string $userId, string $receiptId): ?array
     {
         return $this->canPrintReceipt($userId, $receiptId) ? ['label' => 'Print receipt', 'url' => "/receipts/{$receiptId}/generated-documents", 'method' => 'post'] : null;
+    }
+
+    /**
+     * GA-01 / GA-24: after a cancellation, the money still to settle with the customer — the refund owed to them (when the user may request refunds in
+     * the policy's branch), else the earned premium they still owe (when the user may record receipts there). Nothing when both are settled.
+     *
+     * @return array{label: string, url: string, prompt: string}|null
+     */
+    public function afterCancel(string $userId, string $policyId): ?array
+    {
+        $policy = DB::table('policies')->where('id', $policyId)->first(['entity_id', 'branch_id', 'currency']);
+        if ($policy === null) {
+            return null;
+        }
+        $refundable = app(RefundableQuery::class)->availableMinor($policyId);
+        if ($refundable > 0 && $this->permissions->has($userId, 'receipt.refund_request', AuthorizationScope::branch((string) $policy->entity_id, (string) $policy->branch_id))) {
+            $amount = PageSupport::money($refundable, (string) $policy->currency);
+
+            return ['label' => "Request the refund of {$amount}", 'url' => "/refunds?policy={$policyId}", 'prompt' => "The customer is owed {$amount}. Request the refund?"];
+        }
+        $owed = array_sum(array_column(self::outstandingInstallments($policyId), 'outstanding_minor'));
+        if ($this->canRecordReceipt($userId, $policyId)) {
+            $amount = PageSupport::money($owed, (string) $policy->currency);
+
+            return ['label' => "Collect {$amount}", 'url' => "/receipts/create?policy={$policyId}", 'prompt' => "The customer still owes {$amount} of premium earned before the cancellation."];
+        }
+
+        return null;
     }
 
     /** @return array{label: string, url: string, prompt: string}|null */

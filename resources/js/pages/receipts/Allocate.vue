@@ -21,9 +21,10 @@ import { useUnsavedGuard } from '@/lib/unsaved';
  * UX brief §6.3 allocation workbench: the receipt on the left with a running remaining balance, candidate installments on the right (the
  * payer's own first). ↑↓ and Enter add the active installment for as much as it needs, up to what is left; one commit allocates every line.
  */
-interface Candidate { id: string; policy_number: string; no: number; due_date: string; payer: string; outstanding: string; payer_matches: boolean }
+interface Candidate { id: string; policy_number: string; no: number; due_date: string; payer: string; outstanding: string; payer_matches: boolean; for_this_policy?: boolean }
 const props = defineProps<{
-    receipt: { id: string; number: string; amount: string; currency: string; value_date: string; reference: string | null; channel: string; status: string; payer: string | null; open: string };
+    /** GA-03: `for_policy` is the policy the money was taken for at the counter (its installments are listed first). */
+    receipt: { id: string; number: string; amount: string; currency: string; value_date: string; reference: string | null; channel: string; status: string; payer: string | null; open: string; for_policy?: string | null };
     suspenseItemId: string | null;
     candidates: Candidate[];
     today: string;
@@ -44,7 +45,7 @@ const previewOpen = ref(false);
 useUnsavedGuard(() => form.lines.length > 0 && !form.processing && !form.wasSuccessful);
 
 const columns: DataColumn<Candidate>[] = [
-    { id: 'policy', header: 'Installment', value: (c) => `${c.policy_number} #${c.no}`, width: 170 },
+    { id: 'policy', header: 'Installment', value: (c) => `${c.policy_number} #${c.no}${c.for_this_policy ? ' (taken for)' : ''}`, width: 190 },
     { id: 'payer', header: 'Payer', value: (c) => (c.payer_matches ? `${c.payer} (this payer)` : c.payer), width: 220 },
     { id: 'due', header: 'Due', type: 'date', value: (c) => c.due_date },
     { id: 'outstanding', header: 'Outstanding', type: 'money', value: (c) => c.outstanding },
@@ -85,7 +86,7 @@ useShortcut('inspector.primary', () => void review(), { allowInInputs: true });
                     <h1 class="text-title font-semibold">Allocate {{ receipt.number }}</h1>
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                    <DetailList :items="[{ label: 'Payer', value: receipt.payer }, { label: 'Value date', value: formatDate(receipt.value_date) }, { label: 'Reference', value: receipt.reference }, { label: 'Received', value: `${formatMoney(receipt.amount)} ${receipt.currency}`, num: true }]" />
+                    <DetailList :items="[{ label: 'Payer', value: receipt.payer }, { label: 'Value date', value: formatDate(receipt.value_date) }, { label: 'Reference', value: receipt.reference }, { label: 'Taken for', value: receipt.for_policy ?? null }, { label: 'Received', value: `${formatMoney(receipt.amount)} ${receipt.currency}`, num: true }]" />
                     <h2 class="mt-5 mb-2 text-ui font-medium">Lines</h2>
                     <p v-if="form.lines.length === 0" class="text-ui text-ink-2">Pick an installment on the right and press Enter. The amount fills with what it needs, up to what is left.</p>
                     <ul class="grid gap-2">

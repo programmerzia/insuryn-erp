@@ -154,6 +154,9 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     Route::post('journals/{journal}/reversal-requests', [ManualJournalPageController::class, 'requestReversal'])->whereUuid('journal');
     Route::post('reversal-requests/{reversalRequest}/{decision}', [ManualJournalPageController::class, 'decideReversal'])->whereUuid('reversalRequest')->whereIn('decision', ['approve', 'reject'])->middleware('moves-money');
     Route::get('journals/{journal}', \App\Http\Pages\JournalPageController::class)->name('journals.show');
+    // Gap fix GA-08: accounting events that failed or wait too long, with Requeue (accounting.requeue_event, checked by the service).
+    Route::get('events', [\App\Http\Pages\AccountingEventsPageController::class, 'index'])->name('events.index');
+    Route::post('events/{event}/requeue', [\App\Http\Pages\AccountingEventsPageController::class, 'requeue'])->whereUuid('event')->name('events.requeue');
     Route::get('imports', [ImportController::class, 'page'])->name('imports');
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
 });

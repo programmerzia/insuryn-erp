@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { initialReceipt } from '@/lib/receiptForm';
+import { initialReceipt, receiptAllocates, receiptPayload } from '@/lib/receiptForm';
 import { confirmationToast, followStep } from '@/lib/toasts';
 
 /** Flow fix X1: after issuing, the confirmation offers the receipt; the receipt opened from a policy starts filled in. */
@@ -61,5 +61,20 @@ describe('initial receipt', () => {
         expect(initialReceipt(null, defaults, branches)).toEqual({ branch_id: 'ctg', channel: 'cash', amount: '', value_date: '2026-09-15', allocations: [] });
         expect(initialReceipt(null, { ...defaults, branch_id: null }, branches).branch_id).toBe('ho');
         expect(initialReceipt(null, { ...defaults, branch_id: 'closed' }, branches).branch_id).toBe('ho');
+    });
+});
+
+describe('receipt posted by someone who does not allocate (GA-03)', () => {
+    const data = { branch_id: 'ho', amount: '120,000.00', allocations: [{ installment_id: 'i1', amount: '120,000.00', outstanding: '120,000.00', label: 'POL-1 #1' }] };
+
+    it('allocates only in the branches the user allocates in; without the list, as before', () => {
+        expect(receiptAllocates(['ho'], 'ho')).toBe(true);
+        expect(receiptAllocates([], 'ho')).toBe(false);
+        expect(receiptAllocates(undefined, 'ho')).toBe(true);
+    });
+
+    it('sends no allocation lines and notes the policy when the user does not allocate', () => {
+        expect(receiptPayload(data, false, 'p1')).toEqual({ branch_id: 'ho', amount: '120,000.00', allocations: [], for_policy_id: 'p1' });
+        expect(receiptPayload(data, true, null)).toEqual({ branch_id: 'ho', amount: '120,000.00', allocations: [{ installment_id: 'i1', amount: '120,000.00' }], for_policy_id: null });
     });
 });

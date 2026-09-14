@@ -263,9 +263,11 @@ final class PolicyPageController
     {
         /** @var array{cancel_date: string, reason: string} $data */
         $data = $request->validate(['cancel_date' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000']]);
-        $this->lifecycle->cancel($policy, CarbonImmutable::parse($data['cancel_date']), $data['reason'], PageSupport::actor($request));
+        $actor = PageSupport::actor($request);
+        $this->lifecycle->cancel($policy, CarbonImmutable::parse($data['cancel_date']), $data['reason'], $actor);
 
-        return redirect("/policies/{$policy}")->with('status', 'Policy cancelled.');
+        // GA-01 / GA-24: settling the money is the next step — the refund owed to the customer, or the earned premium they still owe.
+        return redirect("/policies/{$policy}")->with('status', 'Policy cancelled.')->with('next', $this->nextSteps->afterCancel($actor, $policy));
     }
 
     public function transition(Request $request, string $policy, string $action): RedirectResponse

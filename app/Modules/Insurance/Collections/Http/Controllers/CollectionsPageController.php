@@ -70,6 +70,7 @@ final class CollectionsPageController
         $reach = $this->permissions->authorizeArea($actor, self::AREA);
         $entity = PageSupport::entity();
         $policy = $request->query('policy');
+        $branches = $reach->constrain(DB::table('branches'), 'entity_id', 'id')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all();
 
         return Inertia::render('receipts/Create', [
             // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch, today and their last channel.
@@ -78,7 +79,10 @@ final class CollectionsPageController
                 'channel' => self::channel($defaults->remembered($actor, FormDefaults::LAST_RECEIPT_CHANNEL))],
             'entity' => $entity,
             'channels' => self::CHANNELS,
-            'branches' => $reach->constrain(DB::table('branches'), 'entity_id', 'id')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
+            'branches' => $branches,
+            // GA-03 (D-65): the branches where this user allocates money to installments; elsewhere the receipt is recorded into suspense for someone who does.
+            'allocateBranchIds' => array_values(array_map(fn (array $b): string => (string) $b['id'], array_filter($branches,
+                fn (array $b): bool => $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($entity['id'], (string) $b['id']))))),
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('bank_name')
                 ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
             'agents' => DB::table('producers')->where('status', 'active')->orderBy('code')->get(['id', 'code'])->map(fn (object $a): array => (array) $a)->values()->all(),
@@ -88,11 +92,11 @@ final class CollectionsPageController
 
     public function store(Request $request, ReceiptService $receipts, FormDefaults $defaults, NextSteps $nextSteps): RedirectResponse
     {
-        /** @var array{branch_id: string, channel: string, amount: string, value_date: string, reference?: string|null, bank_account_id?: string|null, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null, allocations?: list<array{installment_id: string, amount: string}>} $data */
+        /** @var array{branch_id: string, channel: string, amount: string, value_date: string, reference?: string|null, bank_account_id?: string|null, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null, for_policy_id?: string|null, allocations?: list<array{installment_id: string, amount: string}>} $data */
         $data = $request->validate(['branch_id' => ['required', 'uuid'], 'channel' => ['required', 'in:'.implode(',', self::CHANNELS)], 'amount' => ['required', 'string'],
             'value_date' => ['required', 'date_format:Y-m-d'], 'reference' => ['nullable', 'string', 'max:255'], 'bank_account_id' => ['nullable', 'uuid'],
             'cheque_no' => ['nullable', 'string', 'max:64'], 'cheque_bank' => ['nullable', 'string', 'max:255'], 'cheque_date' => ['nullable', 'date_format:Y-m-d'],
-            'collected_by_agent_id' => ['nullable', 'uuid'], 'allocations' => ['sometimes', 'array'], 'allocations.*.installment_id' => ['required', 'uuid'], 'allocations.*.amount' => ['required', 'string']]);
+            'collected_by_agent_id' => ['nullable', 'uuid'], 'for_policy_id' => ['nullable', 'uuid'], 'allocations' => ['sometimes', 'array'], 'allocations.*.installment_id' => ['required', 'uuid'], 'allocations.*.amount' => ['required', 'string']]);
         $entity = PageSupport::entity();
         $allocations = [];
         foreach ($data['allocations'] ?? [] as $index => $line) {
@@ -102,11 +106,16 @@ final class CollectionsPageController
             ? new ChequeDetails($data['cheque_no'], $data['cheque_bank'], CarbonImmutable::parse($data['cheque_date'])) : null;
         $receipt = $receipts->record(new RecordReceiptRequest($entity['id'], $data['branch_id'], null, $data['channel'], PageSupport::minor('amount', $data['amount'], $entity['currency']),
             $entity['currency'], CarbonImmutable::parse($data['value_date']), $data['bank_account_id'] ?? null, $data['reference'] ?? null, $allocations, $cheque,
-            ($data['collected_by_agent_id'] ?? '') === '' ? null : $data['collected_by_agent_id']), PageSupport::actor($request));
+            ($data['collected_by_agent_id'] ?? '') === '' ? null : $data['collected_by_agent_id'], ($data['for_policy_id'] ?? '') === '' ? null : $data['for_policy_id']), PageSupport::actor($request));
         $defaults->remember(PageSupport::actor($request), FormDefaults::LAST_RECEIPT_CHANNEL, $data['channel']);
+        $status = "Receipt {$receipt->number} recorded.";
+        if ($receipt->for_policy_id !== null && $allocations === [] && ! $this->permissions->has(PageSupport::actor($request), 'receipt.allocate', AuthorizationScope::branch($receipt->entity_id, $receipt->branch_id))) {
+            $number = (string) DB::table('policies')->where('id', $receipt->for_policy_id)->value('number');
+            $status .= " The money is held in suspense for {$number}; your branch manager allocates it.";
+        }
 
         // Flow fix X5: printing the receipt for the customer is the next step.
-        return redirect("/receipts/{$receipt->id}")->with('status', "Receipt {$receipt->number} recorded.")->with('next', $nextSteps->afterReceipt(PageSupport::actor($request), $receipt->id));
+        return redirect("/receipts/{$receipt->id}")->with('status', $status)->with('next', $nextSteps->afterReceipt(PageSupport::actor($request), $receipt->id));
     }
 
     public function show(Request $request, string $receipt): Response
@@ -121,7 +130,9 @@ final class CollectionsPageController
         return Inertia::render('receipts/Show', [
             'receipt' => ['id' => $model->id, 'number' => $model->number, 'channel' => $model->channel, 'amount' => $money($model->amount_minor), 'value_date' => $model->value_date->toDateString(),
                 'reference' => $model->reference, 'status' => $model->status->value, 'cheque_no' => $model->cheque_no, 'cheque_bank' => $model->cheque_bank,
-                'bounced_on' => $model->bounced_on?->toDateString(), 'bounce_reason' => $model->bounce_reason],
+                'bounced_on' => $model->bounced_on?->toDateString(), 'bounce_reason' => $model->bounce_reason,
+                // GA-03: the policy the money was taken for, while it waits in suspense for someone who allocates.
+                'for_policy' => $model->for_policy_id === null ? null : ['id' => $model->for_policy_id, 'number' => (string) DB::table('policies')->where('id', $model->for_policy_id)->value('number')]],
             'allocations' => DB::table('receipt_allocations as a')->leftJoin('policies as p', 'p.id', '=', 'a.policy_id')->where('a.receipt_id', $model->id)->orderBy('a.allocated_at')
                 ->get(['a.id', 'p.number', 'a.amount_minor', 'a.posted_on', 'a.reversed_on'])
                 ->map(fn (object $a): array => ['id' => (string) $a->id, 'policy_number' => $a->number, 'amount' => $money((int) $a->amount_minor), 'posted_on' => (string) $a->posted_on,
@@ -178,26 +189,28 @@ final class CollectionsPageController
         $actor = PageSupport::actor($request);
         $reach = $this->permissions->authorizeArea($actor, self::AREA);
         $entity = PageSupport::entity();
-        $r = DB::table('receipts as r')->leftJoin('parties as p', 'p.id', '=', 'r.party_id')->where('r.id', $receipt)
-            ->first(['r.id', 'r.number', 'r.party_id', 'r.entity_id', 'r.branch_id', 'r.amount_minor', 'r.currency', 'r.value_date', 'r.reference', 'r.channel', 'r.status', 'p.display_name']) ?? abort(404);
+        $r = DB::table('receipts as r')->leftJoin('parties as p', 'p.id', '=', 'r.party_id')->leftJoin('policies as fp', 'fp.id', '=', 'r.for_policy_id')->where('r.id', $receipt)
+            ->first(['r.id', 'r.number', 'r.party_id', 'r.entity_id', 'r.branch_id', 'r.amount_minor', 'r.currency', 'r.value_date', 'r.reference', 'r.channel', 'r.status', 'p.display_name', 'r.for_policy_id', 'fp.number as for_policy_number']) ?? abort(404);
         $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch((string) $r->entity_id, (string) $r->branch_id)); // H1: another branch's receipt is 403
         $item = DB::table('suspense_items')->where('receipt_id', $receipt)->where('status', 'open')->first(['id', 'amount_minor', 'allocated_minor']);
         $candidates = [];
         // H1: candidate installments only on the user's branches' policies.
         $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
             ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
-            ->orderByRaw('case when i.payer_party_id = ? then 0 else 1 end', [$r->party_id])->orderBy('i.due_date')->orderBy('p.number')->limit(500)
+            // GA-03: the policy the money was taken for comes first, then the payer's own installments.
+            ->orderByRaw('case when p.id = ? then 0 when i.payer_party_id = ? then 1 else 2 end', [$r->for_policy_id, $r->party_id])->orderBy('i.due_date')->orderBy('p.number')->limit(500)
             ->get(['i.id', 'i.no', 'i.due_date', 'i.payer_party_id', 'p.number', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
         foreach ($rows as $row) {
             $candidates[] = ['id' => (string) $row->id, 'policy_number' => (string) $row->number, 'no' => (int) $row->no, 'due_date' => (string) $row->due_date,
                 'payer' => (string) $row->display_name, 'outstanding' => PageSupport::money((int) $row->outstanding, $entity['currency']),
-                'payer_matches' => $r->party_id !== null && $row->payer_party_id === $r->party_id];
+                'payer_matches' => $r->party_id !== null && $row->payer_party_id === $r->party_id, 'for_this_policy' => $r->for_policy_number !== null && $row->number === $r->for_policy_number];
         }
 
         return Inertia::render('receipts/Allocate', [
             'receipt' => ['id' => (string) $r->id, 'number' => (string) $r->number, 'amount' => PageSupport::money((int) $r->amount_minor, (string) $r->currency), 'currency' => (string) $r->currency,
                 'value_date' => (string) $r->value_date, 'reference' => $r->reference, 'channel' => (string) $r->channel, 'status' => (string) $r->status, 'payer' => $r->display_name,
-                'open' => PageSupport::money($item === null ? 0 : (int) $item->amount_minor - (int) $item->allocated_minor, (string) $r->currency)],
+                'open' => PageSupport::money($item === null ? 0 : (int) $item->amount_minor - (int) $item->allocated_minor, (string) $r->currency),
+                'for_policy' => $r->for_policy_number === null ? null : (string) $r->for_policy_number],
             'suspenseItemId' => $item === null ? null : (string) $item->id,
             'candidates' => $candidates,
             'today' => app(BusinessClock::class)->today($entity['id'])->toDateString(), // slice 2.1b: the company's today, not the browser's
@@ -234,8 +247,19 @@ final class CollectionsPageController
         $reach = $this->permissions->authorizeArea($actor, self::AREA); // H1: a branch-scoped user sees only their branches' refunds
         $entity = PageSupport::entity();
 
+        $rows = array_map(fn (array $r): array => $r + ['available' => PageSupport::money($r['available_minor'], $r['currency'])], $refundable->refundable($entity['id'], $reach));
+        $policy = $request->query('policy');
+        // GA-01: opened from a cancellation (/refunds?policy=…) the request starts with that policy and everything still refundable on it.
+        $prefill = null;
+        foreach ($rows as $row) {
+            if ($row['policy_id'] === $policy) {
+                $prefill = ['policy_id' => $row['policy_id'], 'amount' => $row['available'], 'reason' => 'Policy cancelled'];
+            }
+        }
+
         return Inertia::render('refunds/Index', [
-            'refundable' => array_map(fn (array $r): array => $r + ['available' => PageSupport::money($r['available_minor'], $r['currency'])], $refundable->refundable($entity['id'], $reach)),
+            'refundable' => $rows,
+            'prefill' => $prefill,
             'refunds' => $reach->constrain(DB::table('refunds as r'), 'r.entity_id', 'r.branch_id')->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')->where('r.entity_id', $entity['id'])->orderByDesc('r.requested_at')->limit(100)
                 ->get(['r.id', 'p.number', 'r.amount_minor', 'r.currency', 'r.reason', 'r.status', 'r.requested_at', 'r.decision_reason'])
                 ->map(fn (object $r): array => ['id' => (string) $r->id, 'policy_number' => $r->number, 'amount' => PageSupport::money((int) $r->amount_minor, (string) $r->currency),
@@ -342,7 +366,7 @@ final class CollectionsPageController
      */
     private function prefill(array $entity, string $policyId, AreaReach $reach): ?array
     {
-        $policy = $reach->constrain(DB::table('policies'), 'entity_id', 'branch_id')->where('id', $policyId)->where('entity_id', $entity['id'])->whereIn('status', ['issued', 'active', 'lapsed', 'expired'])
+        $policy = $reach->constrain(DB::table('policies'), 'entity_id', 'branch_id')->where('id', $policyId)->where('entity_id', $entity['id'])->whereIn('status', NextSteps::COLLECTABLE_STATUSES)
             ->first(['id', 'number', 'branch_id', 'currency']);
         $installments = $policy === null ? [] : NextSteps::outstandingInstallments($policyId);
         if ($policy === null || $installments === []) {

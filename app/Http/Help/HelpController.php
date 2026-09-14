@@ -23,7 +23,7 @@ final class HelpController
         $locale = is_string($requested) && in_array($requested, HelpContent::LOCALES, true) ? $requested : (is_string($saved) ? $saved : 'en');
 
         if ($module === 'roles') {
-            return response()->json(['locale' => $locale, 'captions' => $help->roleCaptions($locale)]);
+            return response()->json(['locale' => $locale, 'captions' => [...$help->roleCaptions($locale), ...$help->eventCaptions($locale)]]);
         }
         if ($module === 'tour') {
             return response()->json(['locale' => $locale, 'steps' => $help->tour($locale)]);

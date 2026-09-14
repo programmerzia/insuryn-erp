@@ -18,11 +18,17 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 
 interface RefundRow { id: string; policy_number: string | null; amount: string; reason: string; status: string; requested_at: string; decision_reason: string | null }
-const props = defineProps<{ refundable: { policy_id: string; policy_number: string | null; policyholder: string; available: string }[]; refunds: RefundRow[]; can: { request: boolean; release: boolean } }>();
+const props = defineProps<{
+    refundable: { policy_id: string; policy_number: string | null; policyholder: string; available: string }[];
+    refunds: RefundRow[];
+    can: { request: boolean; release: boolean };
+    /** GA-01: opened from a cancellation, the request starts with that policy and what is still refundable on it. */
+    prefill?: { policy_id: string; amount: string; reason: string } | null;
+}>();
 
 const active = ref<string | null>(null);
-const requesting = ref(false);
-const requestForm = useForm({ policy_id: '', amount: '', reason: '' });
+const requesting = ref(Boolean(props.prefill && props.can.request));
+const requestForm = useForm({ policy_id: props.prefill?.policy_id ?? '', amount: props.prefill?.amount ?? '', reason: props.prefill?.reason ?? '' });
 const paidOn = ref('');
 const rejectReason = ref('');
 const confirm = useJournalConfirm();

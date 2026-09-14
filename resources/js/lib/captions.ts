@@ -16,9 +16,13 @@ function load(locale: 'en' | 'bn'): Promise<Captions> {
     return cache.get(locale)!;
 }
 
-/** The caption for a line, or null when its account has no role (an ordinary expense account) or the captions are not loaded yet. */
-export function captionFor(captions: Captions, role: string | null | undefined, side: 'debit' | 'credit'): string | null {
-    return role ? (captions[role]?.[side] ?? null) : null;
+/**
+ * The caption for a line, or null when its account has no role (an ordinary expense account) or the captions are not loaded yet. GA-24: a caption
+ * written for the journal's event (`<EVENT_TYPE>:<role>`, e.g. the unearned premium a cancellation releases) wins over the role's own.
+ */
+export function captionFor(captions: Captions, role: string | null | undefined, side: 'debit' | 'credit', event?: string | null): string | null {
+    if (!role) return null;
+    return (event ? captions[`${event}:${role}`]?.[side] : undefined) ?? captions[role]?.[side] ?? null;
 }
 
 /** Captions in the user's language, reloaded when the language changes. */

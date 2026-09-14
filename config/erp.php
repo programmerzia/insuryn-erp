@@ -21,6 +21,8 @@ return [
         'transient_retry_attempts' => 5,
         // Roles an event may point at a specific account through payload.account_overrides (design §4.2: a receipt's bank account).
         'overridable_roles' => ['bank_main'],
+        // ASSUMPTION A-173 (gap fix GA-08): a queued event not posted after this many minutes is listed as stuck on Accounting events (the worker was down).
+        'stale_after_minutes' => (int) env('ERP_POSTING_STALE_AFTER_MINUTES', 15),
     ],
     'outbox' => [
         // ASSUMPTION: A-186 (gap audit GA-46) — outbox messages with no subscriber in this build; the relay marks them relayed. Messages waiting for a

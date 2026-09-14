@@ -28,6 +28,7 @@ final class ReasonMessages
         'CLOSE_TASK_MISSING' => 'That close task no longer exists. Refresh the page.',
         'INVALID_BANK_ACCOUNT' => 'Choose an active bank account of this entity in the same currency.',
         'UNKNOWN_AGENT' => 'Choose an active agent.',
+        'UNKNOWN_POLICY' => 'The receipt was taken for a policy that cannot receive premium. Open the receipt from an issued policy.',
         'UNKNOWN_PAYER' => 'Every payer must be a customer or company already set up.',
         'COMMISSION_PLAN_MISSING' => 'The commission plan on the product or agent no longer exists. Choose another plan.',
         'SOD_CONFLICT' => 'You took part in an earlier step of this, so someone else has to do this one.',

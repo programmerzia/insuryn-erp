@@ -32,3 +32,22 @@ export function initialReceipt(prefill: ReceiptPrefill | null | undefined, defau
         allocations: (prefill?.allocations ?? []).map((line) => ({ installment_id: line.installment_id, amount: line.amount, outstanding: line.outstanding, label: line.label })),
     };
 }
+
+/** GA-03 (D-65): whether the receipt form allocates in this branch. Without the list the form allocates, as before. */
+export function receiptAllocates(allocateBranchIds: string[] | undefined, branchId: string): boolean {
+    return allocateBranchIds === undefined || allocateBranchIds.includes(branchId);
+}
+
+/**
+ * What the receipt form posts. Someone who does not allocate in the branch sends no allocation lines; opened from a policy, the receipt notes that
+ * policy (`for_policy_id`) so the money waits in suspense marked for it.
+ */
+export function receiptPayload<T extends { allocations: ReceiptAllocationLine[] }>(data: T, allocates: boolean, policyId: string | null): Omit<T, 'allocations'> & {
+    allocations: { installment_id: string; amount: string }[]; for_policy_id: string | null;
+} {
+    return {
+        ...data,
+        allocations: allocates ? data.allocations.map(({ installment_id, amount }) => ({ installment_id, amount })) : [],
+        for_policy_id: policyId,
+    };
+}

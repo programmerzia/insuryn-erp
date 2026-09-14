@@ -74,6 +74,28 @@ final class HelpContent
         return $captions;
     }
 
+    /**
+     * GA-24: a few lines mean something else in one event — the unearned premium debited by a cancellation is premium for cover not given, not cover
+     * provided. The second table of resources/help/roles.<locale>.md ("Event | Role | Debit | Credit") lists them; keyed `<EVENT_TYPE>:<role>`.
+     *
+     * @return array<string, array{debit: string, credit: string}>
+     */
+    public function eventCaptions(string $locale): array
+    {
+        if (! in_array($locale, self::LOCALES, true)) {
+            throw new InvalidArgumentException("No captions in {$locale}.");
+        }
+        $captions = [];
+        foreach (file(resource_path("help/roles.{$locale}.md"), FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            $cells = array_map('trim', explode('|', trim($line, " |")));
+            if (count($cells) === 4 && preg_match('/^[A-Z][A-Z_]*$/', $cells[0]) === 1 && preg_match('/^[a-z][a-z_]*$/', $cells[1]) === 1) {
+                $captions["{$cells[0]}:{$cells[1]}"] = ['debit' => $cells[2], 'credit' => $cells[3]];
+            }
+        }
+
+        return $captions;
+    }
+
     public function render(string $markdown): string
     {
         return Str::markdown($markdown, ['html_input' => 'escape', 'allow_unsafe_links' => false]);

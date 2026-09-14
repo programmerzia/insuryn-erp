@@ -95,12 +95,12 @@ it('gives every seeded role its own work queues', function (string $role, array 
         ->where('queues', fn ($queues): bool => array_column(json_decode((string) json_encode($queues), true), 'title') === $titles));
 })->with([
     'branch officer' => ['branch_officer', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up']],
-    'branch manager' => ['branch_manager', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up']],
-    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals awaiting my approval', 'Failed accounting events']],
+    'branch manager' => ['branch_manager', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Receipts to allocate']],
+    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events']],
     'claims officer' => ['claims_officer', ['Claims awaiting reserve', 'Awaiting my approval', 'Payments to release']],
     'claims manager' => ['claims_manager', ['Claims awaiting reserve', 'Claims to settle', 'Awaiting my approval', 'Payments to release']],
-    'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release']],
-    'cfo' => ['cfo', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release']],
+    'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release', 'Failed accounting events']],
+    'cfo' => ['cfo', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release', 'Failed accounting events']],
     'auditor' => ['auditor', ['Recent reversals and adjustments', 'Period reopen events', 'Control-account manual postings']],
     'tenant admin' => ['tenant_admin', []],
 ]);
@@ -117,7 +117,7 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
     $accountant = ($this->asRole)('accountant');
     actingAs($accountant)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('queues.0.count', 1)->where('queues.0.rows.0.cells.amount', '2,500.00')
-        ->where('queues.1.count', 1)->where('queues.2.count', 0)->where('queues.3.count', 0) // the accountant template cannot approve journals (§7.2)
+        ->where('queues.1.count', 1)->where('queues.2.key', 'journals_submitted')->where('queues.2.count', 0)->where('queues.3.count', 0) // GA-13: the accountant template cannot approve journals (§7.2), so follows its own
         ->where('shell.badges.suspense', 1)->where('shell.badges.bank', 1));
     actingAs(($this->asRole)('accountant', 'finance_manager'))->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('queues.2.key', 'journals_to_approve')->where('queues.2.count', 1)->where('queues.2.rows.0.cells.description', 'Rent')->where('shell.badges.journals', 1));
@@ -136,7 +136,7 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
 
 it('shows each queue once for a user with several roles, and lands everyone on home after sign-in', function (): void {
     actingAs(($this->asRole)('branch_manager', 'branch_officer', 'accountant'))->get('/home', $this->headers)
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 8));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 9));
     expect(config('fortify.home'))->toBe('/home');
     actingAs(($this->asRole)('auditor'))->get('/', $this->headers)->assertRedirect('/home');
 });

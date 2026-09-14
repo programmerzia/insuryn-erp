@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Home;
 
 use App\Http\Pages\PageSupport;
+use App\Modules\Accounting\Application\Events\StuckAccountingEvents;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
@@ -27,13 +28,16 @@ final class WorkQueues
     /** Brief §5 blocks per role template, top to bottom. SLA breaches are not listed: claim SLA timers are not built (exit checklist). */
     public const BY_ROLE = [
         'branch_officer' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes'],
-        'branch_manager' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes'],
+        // GA-03 (D-65): the branch manager allocates the premium officers record into suspense for a policy.
+        'branch_manager' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes', 'receipts_to_allocate'],
+        // GA-13: journals_to_approve becomes journals_submitted for someone who cannot approve journals (the accountant template, §7.2) — see keysFor.
         'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events'],
         'claims_officer' => ['claims_awaiting_reserve', 'claim_approvals', 'payments_to_release'],
         // Flow fix X3: the claims manager decides settlements of reserved claims; finance releases requested claim payments.
         'claims_manager' => ['claims_awaiting_reserve', 'claims_to_settle', 'claim_approvals', 'payments_to_release'],
-        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release'],
-        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release'],
+        // GA-08: the finance manager and CFO requeue accounting events that did not post, so they see them too.
+        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events'],
+        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
     ];
 
@@ -57,6 +61,10 @@ final class WorkQueues
             if (in_array($role, $roles, true)) {
                 array_push($keys, ...$queues);
             }
+        }
+        // GA-13: "Journals awaiting my approval" was always empty for someone who cannot approve; they follow the journals they submitted instead.
+        if (in_array('journals_to_approve', $keys, true) && ! $this->permissions->has($userId, 'accounting.approve_journal')) {
+            $keys = array_map(fn (string $key): string => $key === 'journals_to_approve' ? 'journals_submitted' : $key, $keys);
         }
 
         return array_values(array_unique($keys));
@@ -105,10 +113,12 @@ final class WorkQueues
             'lapsing_policies' => ['Lapsing policies', '/dunning', 'No policy is close to lapsing.', ['See payment reminders', '/dunning']],
             'receipts_to_record' => ['Receipts to record', '/bank', 'Every credit on the bank statements has a receipt.', ['Import a bank statement', '/bank']],
             'quotes' => ['Quotes to follow up', '/quotations', 'No open quotes.', ['New quote', '/quotations/create']],
+            'receipts_to_allocate' => ['Receipts to allocate', '/suspense', 'No receipt taken for a policy is waiting to be allocated.', ['Record a receipt', '/receipts/create']],
             'unallocated_receipts' => ['Unallocated receipts', '/suspense', 'No unallocated receipts.', ['Import a bank statement', '/bank']],
             'unmatched_bank_lines' => ['Unmatched bank lines', '/bank', 'Every statement line is matched or explained.', ['Import a bank statement', '/bank']],
+            'journals_submitted' => ['Journals I submitted', '/accounting/journals?f.status=pending_approval', 'None of your journals is in draft, waiting for approval or recently rejected.', ['New manual journal', '/accounting/journals/create']],
             'journals_to_approve' => ['Journals awaiting my approval', '/accounting/journals?f.status=pending_approval', 'No journals are waiting for you.', ['Open journals', '/accounting/journals']],
-            'failed_events' => ['Failed accounting events', null, 'Every accounting event posted.', ['Open journals', '/accounting/journals']],
+            'failed_events' => ['Failed accounting events', '/accounting/events', 'Every accounting event posted.', ['Open journals', '/accounting/journals']],
             'claims_awaiting_reserve' => ['Claims awaiting reserve', '/claims?status=registered', 'Every open claim has a reserve.', ['Register a claim', '/claims/create']],
             'claims_to_settle' => ['Claims to settle', '/claims?status=reserved', 'No reserved claim is waiting for a settlement decision.', ['Open claims', '/claims']],
             'claim_approvals' => ['Awaiting my approval', '/approvals', 'No claim approvals are waiting for you.', ['Open claims', '/claims']],
@@ -171,11 +181,20 @@ final class WorkQueues
                 ->orderBy('inception')->select(['kind', 'id', 'number', 'display_name', 'inception', 'gross_premium_minor', 'currency']),
             'unallocated_receipts' => $this->within($userId, CollectionsPageController::AREA, DB::table('suspense_items as s'), 'r')->join('receipts as r', 'r.id', '=', 's.receipt_id')->where('s.status', 'open')
                 ->orderBy('s.aged_since')->select(['s.id', 'r.id as receipt_id', 'r.number', 'r.reference', 's.aged_since', 'r.currency', DB::raw('s.amount_minor - s.allocated_minor as open_minor')]),
+            'receipts_to_allocate' => $this->within($userId, CollectionsPageController::AREA, DB::table('suspense_items as s'), 'r')->join('receipts as r', 'r.id', '=', 's.receipt_id')->join('policies as p', 'p.id', '=', 'r.for_policy_id')
+                ->where('s.status', 'open')->whereColumn('s.allocated_minor', '<', 's.amount_minor')
+                ->orderBy('s.aged_since')->select(['r.id as receipt_id', 'r.number', 'p.number as policy_number', 's.aged_since', 'r.currency', DB::raw('s.amount_minor - s.allocated_minor as open_minor')]),
             'journals_to_approve' => DB::table('journals as j')->where('j.status', 'pending_approval')->where('j.created_by', '<>', $userId)
                 ->when(! $this->permissions->has($userId, 'accounting.approve_journal'), fn (Builder $q) => $q->whereRaw('false'))
                 ->orderBy('j.created_at')->select(['j.id', 'j.transaction_date', 'j.description', 'j.currency',
                     DB::raw("(select coalesce(sum(amount_minor), 0) from journal_lines l where l.journal_id = j.id and l.side = 'debit') as total_minor")]),
-            'failed_events' => DB::table('accounting_events')->where('status', 'failed')->orderByDesc('created_at')->select(['id', 'event_type', 'transaction_date', 'failure_reason']),
+            // GA-13: manual journals this user prepared that are still drafts, wait for approval, or were rejected (cancelled) in the last 30 days, newest first.
+            'journals_submitted' => DB::table('journals as j')->where('j.created_by', $userId)->whereIn('j.kind', ['manual', 'adjustment'])
+                ->where(fn (Builder $q) => $q->whereIn('j.status', ['draft', 'pending_approval'])->orWhere(fn (Builder $c) => $c->where('j.status', 'cancelled')->where('j.created_at', '>=', $today->subDays(30))))
+                ->orderByDesc('j.created_at')->select(['j.id', 'j.transaction_date', 'j.description', 'j.status', 'j.currency',
+                    DB::raw("(select coalesce(sum(amount_minor), 0) from journal_lines l where l.journal_id = j.id and l.side = 'debit') as total_minor")]),
+            // GA-08: failed events and events queued longer than erp.posting.stale_after_minutes (the posting worker is not running).
+            'failed_events' => app(StuckAccountingEvents::class)->query(CarbonImmutable::now())->reorder()->orderByDesc('created_at')->select(['id', 'event_type', 'status', 'transaction_date', 'failure_reason']),
             'claims_awaiting_reserve' => $this->within($userId, ClaimPageController::AREA, DB::table('claims as c'), 'c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'registered')->where('c.reserve_minor', 0)
                 ->orderBy('c.reported_on')->select(['c.id', 'c.number', 'p.number as policy_number', 'c.description', 'c.reported_on']),
             // Reserved claims with nothing committed against the reserve yet: the settlement decision (approve a payment) is still to make.
@@ -232,10 +251,15 @@ final class WorkQueues
                     'cells' => ['number' => $r->number ?? 'Policy quote', 'holder' => $r->display_name, 'inception' => $r->inception, 'premium' => $money($r, 'gross_premium_minor')]]],
             'unallocated_receipts' => [[$col('receipt', 'Receipt'), $col('reference', 'Reference'), $col('since', 'Waiting since', 'date'), $col('amount', 'Unallocated', 'money')],
                 fn (\stdClass $r): array => ['href' => "/receipts/{$r->receipt_id}", 'cells' => ['receipt' => $r->number, 'reference' => $r->reference, 'since' => $r->aged_since, 'amount' => $money($r, 'open_minor')]]],
+            'receipts_to_allocate' => [[$col('receipt', 'Receipt'), $col('policy', 'Taken for'), $col('since', 'Waiting since', 'date'), $col('amount', 'To allocate', 'money')],
+                fn (\stdClass $r): array => ['href' => "/receipts/{$r->receipt_id}/allocate", 'cells' => ['receipt' => $r->number, 'policy' => $r->policy_number, 'since' => $r->aged_since, 'amount' => $money($r, 'open_minor')]]],
             'journals_to_approve' => [[$col('description', 'Description'), $col('date', 'Date', 'date'), $col('amount', 'Amount', 'money')],
                 fn (\stdClass $r): array => ['href' => "/accounting/journals/{$r->id}", 'cells' => ['description' => $r->description, 'date' => $r->transaction_date, 'amount' => $money($r, 'total_minor')]]],
-            'failed_events' => [[$col('event', 'Event'), $col('date', 'Date', 'date'), $col('reason', 'Why it failed')],
-                fn (\stdClass $r): array => ['href' => null, 'cells' => ['event' => $r->event_type, 'date' => $r->transaction_date, 'reason' => $r->failure_reason]]],
+            'journals_submitted' => [[$col('description', 'Description'), $col('status', 'Status', 'status'), $col('date', 'Date', 'date'), $col('amount', 'Amount', 'money')],
+                fn (\stdClass $r): array => ['href' => "/accounting/journals/{$r->id}", 'cells' => ['description' => $r->description, 'status' => $r->status, 'date' => $r->transaction_date, 'amount' => $money($r, 'total_minor')]]],
+            'failed_events' => [[$col('event', 'Event', 'event'), $col('date', 'Date', 'date'), $col('reason', 'Why it did not post')],
+                fn (\stdClass $r): array => ['href' => '/accounting/events', 'cells' => ['event' => $r->event_type, 'date' => $r->transaction_date,
+                    'reason' => $r->failure_reason ?? 'Not posted after '.StuckAccountingEvents::staleAfterMinutes().' minutes']]],
             'claims_awaiting_reserve' => [[$col('claim', 'Claim'), $col('policy', 'Policy'), $col('description', 'What happened'), $col('reported', 'Reported', 'date')],
                 fn (\stdClass $r): array => ['href' => "/claims/{$r->id}", 'cells' => ['claim' => $r->number, 'policy' => $r->policy_number, 'description' => $r->description, 'reported' => $r->reported_on]]],
             'claims_to_settle' => [[$col('claim', 'Claim'), $col('policy', 'Policy'), $col('reported', 'Reported', 'date'), $col('reserve', 'Reserve', 'money')],

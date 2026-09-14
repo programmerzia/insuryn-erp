@@ -9,6 +9,17 @@ describe('journal line captions (session S5)', () => {
         expect(captionFor(captions, 'premium_receivable', 'credit')).toBe('Customer paid, so owes us less');
     });
 
+    it('prefers the caption written for the journal\'s event (GA-24), else the role\'s own', () => {
+        const withEvents = {
+            unearned_premium: { debit: 'Cover has been provided', credit: 'Cover not yet provided' },
+            'POLICY_CANCELLED:unearned_premium': { debit: 'Premium for cover not given', credit: 'Cover not yet provided' },
+        };
+        expect(captionFor(withEvents, 'unearned_premium', 'debit', 'POLICY_CANCELLED')).toBe('Premium for cover not given');
+        expect(captionFor(withEvents, 'unearned_premium', 'debit', 'PREMIUM_EARNED')).toBe('Cover has been provided');
+        expect(captionFor(withEvents, 'unearned_premium', 'debit')).toBe('Cover has been provided');
+        expect(captionFor(withEvents, 'unearned_premium', 'debit', null)).toBe('Cover has been provided');
+    });
+
     it('has no caption for a line without a role or with an unknown role', () => {
         expect(captionFor(captions, null, 'debit')).toBeNull();
         expect(captionFor(captions, 'office_rent', 'debit')).toBeNull();
