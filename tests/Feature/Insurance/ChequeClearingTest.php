@@ -129,14 +129,18 @@ it('reverses a cheque bounced before clearing out of clearing, books the bank ch
     actingAs($officer)->get("/policies/{$this->policyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('policies/Show')
         ->has('bouncedPremium', 1)->where('bouncedPremium.0.cheque_no', '900003')->where('bouncedPremium.0.installment_no', 1)->where('bouncedPremium.0.outstanding', '40,000.00')
         ->where('bouncedPremium.0.bounced_on', '2026-09-15'));
-    actingAs($officer)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('queues.5.key', 'bounced_premium')->where('queues.5.count', 1)->where('queues.5.rows.0.cells.policy', $number) // after GA-03's receipts to allocate
-        ->where('queues.5.rows.0.cells.amount', '40,000.00')->where('queues.5.rows.0.href', "/policies/{$this->policyId}"));
+    // The bounced-premium queue is found by key: GA-26 added queues before it.
+    $bounced = fn (array $props): array => collect($props['queues'])->firstWhere('key', 'bounced_premium');
+    $home = actingAs($officer)->get('/home', $this->headers)->assertOk()->viewData('page')['props'];
+    expect($bounced($home)['count'])->toBe(1)
+        ->and($bounced($home)['rows'][0]['cells']['policy'])->toBe($number)
+        ->and($bounced($home)['rows'][0]['cells']['amount'])->toBe('40,000.00')
+        ->and($bounced($home)['rows'][0]['href'])->toBe("/policies/{$this->policyId}");
 
     asTenant($this->ctx['tenant_id'], fn () => app(ReceiptService::class)->record(new RecordReceiptRequest($this->ctx['entity_id'], $this->ctx['branch_id'], null, 'bank_transfer', 4_000_000, 'BDT',
         CarbonImmutable::parse('2026-09-16'), $this->bankAccountId, 'TRF', [new AllocationLine($this->installments[0], 4_000_000)]), $this->world['admin']));
     actingAs($officer)->get("/policies/{$this->policyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->has('bouncedPremium', 0));
-    actingAs($officer)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('queues.5.key', 'bounced_premium')->where('queues.5.count', 0));
+    expect($bounced(actingAs($officer)->get('/home', $this->headers)->assertOk()->viewData('page')['props'])['count'])->toBe(0);
 });
 
 it('posts cheques straight to the bank for a company without a cheques-in-clearing account', function (): void {

@@ -57,8 +57,8 @@ it('lets whoever records agent deposits pick the agent by code or name, shown as
     $collections = ($this->userWith)(['receipt.create']);
     actingAs($collections)->getJson('/lookup/agent?q=jamal', $this->headers)->assertOk()
         ->assertJsonPath('results.0.id', $this->world['agent_id'])->assertJsonPath('results.0.label', 'AG-001 · Jamal Agent');
-    actingAs($collections)->get('/agent-cash', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->component('agentCash/Index')->where('agents.0.code', 'AG-001')->where('agents.0.name', 'Jamal Agent'));
+    // GA-40: the deposit drawer looks agents up for agent cash (the user's branches) instead of receiving every agent as a prop.
+    actingAs($collections)->getJson('/lookup/agent?for=agent-cash&q=AG-001', $this->headers)->assertOk()->assertJsonPath('results.0.label', 'AG-001 · Jamal Agent');
 });
 
 it('gives every money drawer the company today, not the server clock', function (): void {

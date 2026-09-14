@@ -64,10 +64,12 @@ Columns in the tables below:
 | GA-25, GA-28, GA-31 | `adaa9c3` fix(policies) | Fixed. GA-25: premium-free endorsement types not built yet. |
 | GA-05 | `0c51620` fix(close) | Fixed |
 | GA-15, GA-43, GA-04, GA-09 | `f5eb391` fix(close) | Fixed. GA-04: claim payment and reopen approvals show no lines preview yet. |
-| GA-24 | `0f99fa7` | Partly: cancel date default, refund/collect next step and caption fixed; "write off small balance" not built yet. |
+| GA-24 | `0f99fa7` + W7 | Fixed (write-off added in W7). |
 | GA-19, GA-18 | `91cd588` fix(onboarding) | Fixed. GA-19's payout preview is the statement run's draft (the Phase 1 payout drawer was removed by GA-10). |
 | GA-14, GA-27, GA-21 | `88c7ad4` fix(collections) | Fixed. GA-14: clearing applies once a tenant maps `cheques_in_clearing` (A-215, verify). |
-| GA-16, GA-26, GA-29, GA-40 | — | In progress (W6). |
+| GA-26, GA-29 | `69c0f83` fix(home) | Fixed |
+| GA-40, GA-16 | `cc171d6` fix(ux) | Fixed. Phone width is checked by tests/e2e/phone-width.mjs. |
+| GA-24 remainder, GA-25 remainder, GA-04 remainder | W7 commits | Fixed: write-off behind approval, premium-free endorsements, approval previews for claim payments and period reopen. |
 
 ## 1. Fix first (top 15)
 
