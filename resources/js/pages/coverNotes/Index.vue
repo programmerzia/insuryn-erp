@@ -51,7 +51,7 @@ const columns: DataColumn<CoverNoteRow>[] = [
 </script>
 
 <template>
-    <AppLayout help="policies" title="Cover notes" fill>
+    <AppLayout help="quotes" title="Cover notes" fill>
         <QueueView
             id="cover-notes"
             v-model:active="active"

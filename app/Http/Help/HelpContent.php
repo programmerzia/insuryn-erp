@@ -13,7 +13,7 @@ use InvalidArgumentException;
  */
 final class HelpContent
 {
-    public const MODULES = ['policies', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports'];
+    public const MODULES = ['quotes', 'policies', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports'];
 
     public const LOCALES = ['en', 'bn'];
 

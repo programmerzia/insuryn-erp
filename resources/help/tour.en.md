@@ -4,9 +4,13 @@
 ### Your work queues
 Home lists what needs you: unallocated receipts, unmatched bank lines, claims waiting for a reserve, the month-end close. The tour follows one week of work from here, the way the market cross-check describes it.
 
-## issue-policy
-### Issue a policy
-A customer wants motor insurance. Pick *Motor Comprehensive*, choose the customer, enter the premium and create the quote, then issue it on the policy page. Behind the scenes the system records Premium receivable, Unearned premium and VAT payable; click *View accounting* on the policy to see it.
+## quote
+### Quote, propose and issue the policy
+A customer wants motor insurance. Pick *Motor Comprehensive*, fill in the vehicle and the sum insured, and the premium is calculated from the tariff while you type; issue the quotation to hold the price. When the customer accepts, make the proposal, verify their identity and submit it, then issue the policy from the proposal page: the system records Premium receivable, Unearned premium, VAT and stamp duty.
+
+## referrals
+### Decide referred proposals
+A proposal above the submitter's underwriting limit, with a risk flag, a vehicle already insured or an unlicensed agent comes here instead of being approved automatically. Someone other than the person who prepared it approves it, declines it, or approves it with a loading and a reason that the policy keeps as a special term.
 
 ## receive
 ### Receive the premium

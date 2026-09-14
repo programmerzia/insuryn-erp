@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { requestJson } from '@/lib/http';
 
 /** Session S3 "How this works": the module whose help the current page offers (set by AppLayout's `help` prop), and the words, cached per language. */
-export type HelpModule = 'policies' | 'receipts' | 'bank' | 'claims' | 'commission' | 'accounting' | 'close' | 'reports';
+export type HelpModule = 'quotes' | 'policies' | 'receipts' | 'bank' | 'claims' | 'commission' | 'accounting' | 'close' | 'reports';
 export interface HelpText {
     module: HelpModule;
     locale: 'en' | 'bn';

@@ -19,13 +19,13 @@ beforeEach(function (): void {
 });
 
 it('serves the tour steps of the Part A flow in order, in English and Bangla', function (): void {
-    $ids = ['home', 'issue-policy', 'receive', 'suspense', 'bank', 'register-claim', 'settle-claim', 'close'];
+    $ids = ['home', 'quote', 'referrals', 'receive', 'suspense', 'bank', 'register-claim', 'settle-claim', 'close'];
     $english = actingAs($this->user)->getJson('/help/tour', $this->headers)->assertOk()->assertJsonPath('locale', 'en')->json('steps');
     $bangla = actingAs($this->user)->getJson('/help/tour?locale=bn', $this->headers)->assertOk()->json('steps');
 
     expect(array_column($english, 'id'))->toBe($ids)
         ->and(array_column($bangla, 'id'))->toBe($ids)
-        ->and($english[1]['title'])->toBe('Issue a policy')
+        ->and($english[1]['title'])->toBe('Quote, propose and issue the policy')
         ->and($english[0]['html'])->toContain('<p>');
     foreach ([...$english, ...$bangla] as $step) {
         expect($step['title'])->not->toBe('')->and(strip_tags($step['html']))->not->toBe('');

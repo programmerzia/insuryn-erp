@@ -30,7 +30,7 @@ const columns: DataColumn<QuotationRow>[] = [
 </script>
 
 <template>
-    <AppLayout help="policies" title="Quotes" fill>
+    <AppLayout help="quotes" title="Quotes" fill>
         <QueueView
             id="quotations"
             v-model:active="active"

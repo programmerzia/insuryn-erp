@@ -13,8 +13,9 @@ describe('guided tour', () => {
     it('knows when a user can do a step, only look at it, or not open its page', () => {
         const step = (id: string) => tourSteps.find((s) => s.id === id)!;
         expect(stepAccess(step('home'), new Set())).toBe('act');
-        expect(stepAccess(step('issue-policy'), new Set(['policy.create', 'policy.issue']))).toBe('act');
-        expect(stepAccess(step('issue-policy'), new Set(['receipt.allocate']))).toBe('view');
+        expect(stepAccess(step('quote'), new Set(['quotation.create']))).toBe('act');
+        expect(stepAccess(step('quote'), new Set(['policy.create']))).toBe('view');
+        expect(stepAccess(step('referrals'), new Set(['quotation.create']))).toBe('none');
         expect(stepAccess(step('close'), new Set(['policy.issue']))).toBe('none');
     });
 

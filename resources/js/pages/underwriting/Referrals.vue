@@ -53,8 +53,8 @@ const title = computed(() => (form.decision === 'decline' ? 'Decline' : form.dec
 </script>
 
 <template>
-    <AppLayout help="policies" title="Referrals" fill>
-        <QueueView
+    <AppLayout help="quotes" title="Referrals" fill>
+        <QueueView data-tour="referrals-queue"
             id="underwriting-referrals"
             v-model:active="active"
             title="Referrals"

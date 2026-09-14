@@ -20,7 +20,7 @@ beforeEach(function (): void {
 });
 
 it('has English and Bangla help for every module, each five to eight sentences with the three parts', function (): void {
-    expect(HelpContent::MODULES)->toBe(['policies', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports']);
+    expect(HelpContent::MODULES)->toBe(['quotes', 'policies', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports']);
     foreach (HelpContent::MODULES as $module) {
         foreach (['en', 'bn'] as $locale) {
             $path = resource_path("help/{$module}.{$locale}.md");
@@ -59,6 +59,7 @@ it('never passes raw HTML from the help files through', function (): void {
 
 it('opens the panel on every module screen', function (): void {
     $pages = [
+        'quotes' => ['quotations/Index', 'quotations/Workbench', 'proposals/Show', 'coverNotes/Index', 'underwriting/Referrals'],
         'policies' => ['policies/Index', 'policies/Show', 'policies/Create'],
         'receipts' => ['receipts/Index', 'receipts/Show', 'receipts/Create', 'receipts/Allocate', 'suspense/Index'],
         'bank' => ['bank/Index', 'bank/Show'],

@@ -2290,3 +2290,13 @@ Scope: review only; only the critical finding was fixed.
 - Not done, and why: credit by producer or customer type and linking a pre-issue receipt to the premium-received reference (A-117 gaps: no receipt target before issue); multi-payer
   shares when issuing from a proposal (A-121); the premium register and reports still show gross, net and tax (stamp duty is gross − net − tax there); renewals of rated policies (R9);
   the flow audit was not rerun; no role template holds `policy.endorse` (Phase 1 gap, unchanged).
+
+### R10b — "How this works" and the guided tour start at Quote — done
+- Help: new module `quotes` (`resources/help/quotes.en.md`, `.bn.md`) on the quote workbench, quotations list, proposal page, referral queue and cover notes queue — what a
+  quote, proposal, underwriting referral and cover note are, that none of them posts accounting, and that the policy is issued from the approved proposal. `policies` help now says
+  rated products start in Quotes, the premium is frozen at issue, stamp duty is recorded, and a risk change is a re-rating endorsement.
+- Tour: step 2 is now *Quote, propose and issue the policy* on `/quotations/create` (was Policies → New), followed by a new *Decide referred proposals* step on
+  `/underwriting/referrals` (branch manager); nine steps, EN and BN. The role hint names the Branch Manager for referrals.
+- Screenshots of the Phase 3 screens: `storage/ux-screenshots/p3-quotes/` (quotes, quote workbench, new quote, referrals, referred proposal, cover notes, policy Rating and
+  Documents tabs) and `storage/ux-screenshots/p3-admin/` (tariffs, plan, tables, templates, template editor, underwriting limits).
+- Test changes: `HowThisWorksTest` expects the `quotes` module and its five screens; `GuidedTourTest` and `tour.test.ts` expect the new step ids.

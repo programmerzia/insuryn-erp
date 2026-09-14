@@ -69,7 +69,7 @@ const facts = computed(() => [
 </script>
 
 <template>
-    <AppLayout help="policies" :title="proposal.number">
+    <AppLayout help="quotes" :title="proposal.number">
         <ObjectPage
             :title="proposal.number"
             :subtitle="`${proposal.customer} · ${proposal.product} · ${proposal.producer ? `producer ${proposal.producer}` : 'direct'} · from quotation ${proposal.quotation.number}`"

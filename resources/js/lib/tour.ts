@@ -25,7 +25,8 @@ export interface TourText {
 
 export const tourSteps: TourStep[] = [
     { id: 'home', href: '/home', target: 'home-queues', area: 'home', act: null, role: null },
-    { id: 'issue-policy', href: '/policies/create', target: 'policy-form', area: 'policies', act: 'policy.issue', role: 'branch_officer' },
+    { id: 'quote', href: '/quotations/create', target: 'quote-workbench', area: 'quotes', act: 'quotation.create', role: 'branch_officer' },
+    { id: 'referrals', href: '/underwriting/referrals', target: 'referrals-queue', area: 'referrals', act: 'underwriting.decide', role: 'branch_manager' },
     { id: 'receive', href: '/receipts/create', target: 'receipt-form', area: 'receipts', act: 'receipt.create', role: 'branch_officer' },
     { id: 'suspense', href: '/suspense', target: 'suspense-queue', area: 'suspense', act: 'receipt.allocate', role: 'accountant' },
     { id: 'bank', href: '/bank', target: 'bank-accounts', area: 'bank', act: 'bank.import', role: 'accountant' },
@@ -41,7 +42,7 @@ export function stepAccess(step: TourStep, held: ReadonlySet<string>): StepAcces
     return step.act === null || held.has(step.act) ? 'act' : 'view';
 }
 
-export const roleNames: Record<string, string> = { branch_officer: 'Branch Officer', accountant: 'Accountant', claims_officer: 'Claims Officer', finance_manager: 'Finance Manager' };
+export const roleNames: Record<string, string> = { branch_officer: 'Branch Officer', branch_manager: 'Branch Manager', accountant: 'Accountant', claims_officer: 'Claims Officer', finance_manager: 'Finance Manager' };
 
 export type TourMove = 'start' | 'next' | 'back' | 'dismiss' | 'resume';
 

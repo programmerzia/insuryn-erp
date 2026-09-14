@@ -156,8 +156,8 @@ const validUntil = computed(() => q?.valid_until ?? null);
 </script>
 
 <template>
-    <AppLayout help="policies" :title="title">
-        <div class="px-6 py-4">
+    <AppLayout help="quotes" :title="title">
+        <div data-tour="quote-workbench" class="px-6 py-4">
             <div class="mb-4 flex flex-wrap items-center gap-3">
                 <Link href="/quotations" class="text-ui text-ink-2 hover:text-ink">Quotes</Link>
                 <span class="text-ink-2" aria-hidden="true">/</span>
