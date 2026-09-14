@@ -14,14 +14,9 @@ final class PermissionCatalogue
     public const GROUPS = [
         'quotation' => 'Quotes', 'underwriting' => 'Underwriting', 'cover_note' => 'Cover notes', 'policy' => 'Policies', 'renewal' => 'Renewals',
         'receipt' => 'Receipts and refunds', 'claim' => 'Claims', 'commission' => 'Commission', 'agent' => 'Agents and producers', 'party' => 'Customers',
-        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
+        'product' => 'Products', 'rating' => 'Tariffs', 'ri' => 'Reinsurance', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'fa' => 'Fixed assets',
+        'budget' => 'Budgets', 'pettycash' => 'Petty cash', 'hr' => 'People', 'payroll' => 'Payroll', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'regulatory' => 'Regulatory returns', 'provisions' => 'Technical provisions', 'audit' => 'Audit', 'platform' => 'Administration',
-        'numbering' => 'Numbering', 'ri' => 'Reinsurance', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
-        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
-        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
-        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'budget' => 'Budgets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
-        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'budget' => 'Budgets', 'pettycash' => 'Petty cash', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
-        'numbering' => 'Numbering', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
     /** @var array<string, array{0: string, 1: string}> code → [label, one-line help] */

@@ -130,7 +130,16 @@ it('reverses a cheque bounced before clearing out of clearing, books the bank ch
         ->has('bouncedPremium', 1)->where('bouncedPremium.0.cheque_no', '900003')->where('bouncedPremium.0.installment_no', 1)->where('bouncedPremium.0.outstanding', '40,000.00')
         ->where('bouncedPremium.0.bounced_on', '2026-09-15'));
     // The bounced-premium queue is found by key: GA-26 added queues before it.
-    $bounced = fn (array $props): array => collect($props['queues'])->firstWhere('key', 'bounced_premium');
+    /** @param array{queues: list<array{key: string, count: int, rows: list<array{href: string, cells: array<string, string>}>}>} $props */
+    $bounced = function (array $props): array {
+        foreach ($props['queues'] as $queue) {
+            if ($queue['key'] === 'bounced_premium') {
+                return $queue;
+            }
+        }
+
+        return ['key' => '', 'count' => -1, 'rows' => []];
+    };
     $home = actingAs($officer)->get('/home', $this->headers)->assertOk()->viewData('page')['props'];
     expect($bounced($home)['count'])->toBe(1)
         ->and($bounced($home)['rows'][0]['cells']['policy'])->toBe($number)

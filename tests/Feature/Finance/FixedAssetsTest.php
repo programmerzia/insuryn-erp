@@ -89,7 +89,7 @@ it('rounds straight line so the last month absorbs the residual, and reduces the
 });
 
 it('shows the register, the depreciation preview and the classes screens', function (): void {
-    $user = asTenant($this->ctx['tenant_id'], fn (): User => User::query()->findOrFail($this->finance));
+    $user = asTenant($this->ctx['tenant_id'], fn (): User => User::query()->whereKey((string) $this->finance)->firstOrFail());
     actingAs($user)->get('/fixed-assets', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('fixedAssets/Index', false));
     actingAs($user)->get('/fixed-assets/classes', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('fixedAssets/Classes', false));
     actingAs($user)->get('/fixed-assets/depreciation', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('fixedAssets/Depreciation', false));
