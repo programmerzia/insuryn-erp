@@ -2797,3 +2797,30 @@ Follow-ups to G1–G4 and 2.0d, one commit each (`fix(…): Hn – …`).
   - Tests: `ClaimsTest` +1 (reopen → supplementary reserve → recovery → close releasing 5,000.00; reopen → recovery → close with nothing to release; an unpaid reserved claim still refused), `ClaimsCommissionApprovalsPagesTest` (page actions and posting after reopening). `ClaimLifecycleModel` predicts close for a reopened paid claim and recovery on any paid claim, draws them more often, and the property test requires "close accepted on a reopened paid claim" and "recover accepted on a reopened paid claim" to occur with 50 runs or more. `PROPERTY_RUNS=300`: green (185 s).
   - Final gate: 1,388 Pest tests, 349 Vitest tests green, PHPStan 0 errors, vue-tsc green.
   - Design §5.5 is not edited; D-61 records the added transitions (reserved-after-reopen ─close─▶ closed; recovery on any paid claim).
+### Gap fixes W2 — reports, accounting correctness, formats, documents — done
+Findings from docs/gap-audit.md, grouped two to four per commit (`fix(<area>): GA-xx, … – …`).
+
+| Finding | What changed | Commit |
+|---|---|---|
+| GA-02 | Hierarchy tree opens without a compensation scheme (no uuid comparison with ''); an unknown scheme parameter is ignored | e86bc88 |
+| GA-06 | Loss ratio: signed ratio as "(1,230.77)%"; Claims incurred, Recoveries and Net incurred columns; recoveries count in the month received (D-72); report columns sized to header and values | e86bc88 |
+| GA-34 | Report labels (class names, New business, Reserved, HO no longer "Ho"); premium register Stamp duty column and totals; suspense ageing, agent cash, commission statements and trial balance export from the reports index through the X12 path (D-73) | e86bc88 |
+| GA-45 | PREMIUM_EARNED names its ledger row as source; older journals still resolve to the policy | e86bc88 |
+| GA-42 | Commission on the net premium share of each allocation (A-181, D-70, CQ-F8), `erp.commission.premium_received_base` | 7e381b3 |
+| GA-44 | Part A demo products and the wizard's first product earn `daily_365` (A-182, D-71, CQ-D1) | 7e381b3 |
+| GA-36 | `formatMonth` / `formatDateTime`; money in parentheses on the producer page and statement run; claims list "Incurred" | 3a6271b |
+| GA-33 | Inline producer draft no longer throws without a date | 3a6271b |
+| GA-41 | Claim acknowledgement and discharge voucher providers, "Print" on the claim's Documents tab (A-183), `document.generate` for claims roles (A-184, migration `2026_09_30_000071`), documents on the producer page (A-185) | 3a6271b |
+| GA-32 | Agent commission statement header: title does not shrink, toolbar wraps | f58689d |
+| GA-39 | Shared table toolbar wraps below the title; underwriting limits header without the duplicate "(BDT)" | f58689d |
+| GA-46 | Relay marks no-subscriber announcements relayed (A-186); unchanged clean reconciliation runs are reused | 1c28ac3 |
+| GA-47 | Tenant `dimension_requirements` enforced by the posting engine and seeded (branch, product, lob on policy, earning and claim events; A-187, D-74, migration `2026_09_30_000072`) | 1c28ac3 |
+
+- **Migrations:** `2026_09_30_000071_grant_claims_roles_document_generate`, `2026_09_30_000072_seed_dimension_requirements`.
+- **Tests changed with the requirement:** commission amounts now 10% of the net share of the 15% VAT-inclusive test premium (`CommissionTest`, `CommissionPayoutTest`, `ChequeBounceTest`, `ReportsTest`, `SubledgerReconciliationTest`, `ClaimsCommissionApprovalsPagesTest`); report labels and export header (`RenewalsTest`, `UnearnedPremiumReportTest`, `ReportExportTest`); `SetupWizardTest` asserts the earning method. No golden fixture or posting rule changed.
+- **New tests:** `HierarchyWithoutSchemeTest`, `LossRatioPageTest`, `EarningJournalSourceTest`, `CommissionNetPremiumBaseTest`, `ClaimAndProducerDocumentsTest`, `OutboxAndDimensionHygieneTest`; Vitest `gap-formats`, `gap-report-columns`.
+- **Found, not changed:**
+  - The rating breakdown already shows negatives in parentheses; no raw negative was found there.
+  - `DocumentList`'s upload date and the generated documents list use `formatDate` only (no time), unchanged.
+  - Existing tenants' demo data keeps the commission and earning posted under the old base and method; only new postings change.
+- **Gate (on 1c28ac3):** 1,390 Pest tests green, 357 Vitest tests green, PHPStan 0 errors, vue-tsc green.
