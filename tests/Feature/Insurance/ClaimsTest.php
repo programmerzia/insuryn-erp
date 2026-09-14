@@ -204,6 +204,45 @@ it('records recoveries only after payment, and rejects or reopens claims keeping
     });
 });
 
+it('closes a reopened paid claim without paying more, releasing the reserve set after reopening, and records a recovery on it (follow-up H3)', function (): void {
+    asTenant($this->ctx['tenant_id'], function (): void {
+        $claim = ($this->claims)()->register($this->policyId, ($this->on)('2026-09-05'), 'Collision', $this->officer, ($this->on)('2026-09-06'));
+        ($this->claims)()->reserve($claim->id, 2_000_000, 'Initial', $this->officer, ($this->on)('2026-09-06'));
+        $payment = ($this->payments)()->approve($claim->id, 1_800_000, $this->world['policyholder_id'], $this->manager, ($this->on)('2026-09-07'));
+        ($this->payments)()->requestRelease($payment->id, $this->manager, null);
+        ($this->payments)()->release($payment->id, $this->finance, ($this->on)('2026-09-08'));
+        ($this->claims)()->close($claim->id, 'Settled', $this->manager, ($this->on)('2026-09-10'));
+
+        // Reopened for a supplementary bill: a reserve is set, then nothing more is paid.
+        ($this->claims)()->reopen($claim->id, 'Supplementary bill', $this->manager, ($this->on)('2026-09-20'));
+        ($this->claims)()->reserve($claim->id, 2_300_000, 'Supplementary bill', $this->officer, ($this->on)('2026-09-21'));
+        expect(DB::table('claims')->where('id', $claim->id)->value('status'))->toBe('reserved')->and(($this->outstanding)($claim->id))->toBe(500_000);
+
+        // A recovery comes in while it is open again: the claim was paid, so it is taken.
+        ($this->claims)()->recover($claim->id, 'salvage', 250_000, null, 'SALV-9', $this->manager, ($this->on)('2026-09-22'));
+        ($this->claims)()->close($claim->id, 'Supplementary bill not covered', $this->manager, ($this->on)('2026-09-25'));
+
+        expect(DB::table('claims')->where('id', $claim->id)->first(['status', 'reserve_minor', 'closed_on']))->toEqual((object) ['status' => 'closed', 'reserve_minor' => 1_800_000, 'closed_on' => '2026-09-25'])
+            ->and(($this->outstanding)($claim->id))->toBe(0)
+            ->and(claimLines('CLAIM_CLOSED', 1))->toBe([['role' => 'claims_outstanding', 'side' => 'debit', 'amount' => 500_000], ['role' => 'claims_expense', 'side' => 'credit', 'amount' => 500_000]])
+            ->and(claimLines('CLAIM_RECOVERED'))->toBe([['role' => 'bank_main', 'side' => 'debit', 'amount' => 250_000], ['role' => 'claims_recovery_income', 'side' => 'credit', 'amount' => 250_000]])
+            ->and(DB::table('claim_reserves')->where('claim_id', $claim->id)->orderByDesc('version')->value('kind'))->toBe('close_release');
+
+        // Reopened again, a recovery is still taken, and the claim closes with nothing to release.
+        ($this->claims)()->reopen($claim->id, 'Third party paid', $this->manager, ($this->on)('2026-10-01'));
+        ($this->claims)()->recover($claim->id, 'third_party', 100_000, null, 'TP-1', $this->manager, ($this->on)('2026-10-02'));
+        ($this->claims)()->close($claim->id, 'Recovered', $this->manager, ($this->on)('2026-10-03'));
+        expect(DB::table('claims')->where('id', $claim->id)->value('status'))->toBe('closed')->and(($this->outstanding)($claim->id))->toBe(0)
+            ->and(DB::table('claim_recoveries')->where('claim_id', $claim->id)->sum('amount_minor'))->toEqual(350_000);
+
+        // A reserved claim that was never paid still cannot close or take a recovery: it is paid or rejected.
+        $unpaid = ($this->claims)()->register($this->policyId, ($this->on)('2026-09-05'), 'Glass', $this->officer, ($this->on)('2026-09-06'));
+        ($this->claims)()->reserve($unpaid->id, 400_000, 'Initial', $this->officer, ($this->on)('2026-09-06'));
+        expect(thrownBy(fn () => ($this->claims)()->close($unpaid->id, 'Nothing paid', $this->manager, ($this->on)('2026-09-07')), BusinessRuleViolation::class)->reasonCode)->toBe('INVALID_CLAIM_TRANSITION')
+            ->and(thrownBy(fn () => ($this->claims)()->recover($unpaid->id, 'salvage', 1_000, null, null, $this->manager, ($this->on)('2026-09-07')), BusinessRuleViolation::class)->reasonCode)->toBe('CLAIM_NOT_PAID');
+    });
+});
+
 it('drives claims over the API with the claim permissions', function (): void {
     $headers = ['X-Tenant' => $this->ctx['tenant_id'], 'Accept' => 'application/json'];
     $officer = asTenant($this->ctx['tenant_id'], fn () => App\Models\User::query()->findOrFail((string) $this->officer));

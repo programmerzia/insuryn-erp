@@ -21,7 +21,8 @@ use Tests\Support\Property\SeededGenerator;
 /**
  * Slice 2.0d (Phase 1 exit checklist: "generator-based property test for the claim reserve lifecycle"). Random but valid-shaped operation
  * sequences drive the real claim services — register, reserve/adjust, approve within and over the approval limit, approval decisions,
- * request release, release within and over the limit, close, reject, reopen (direct and by approval), recovery — on a fresh claim per run,
+ * request release, release within and over the limit, close, reject, reopen (direct and by approval), recovery, and (follow-up H3) closing or recovering on a
+ * paid claim that was reopened — on a fresh claim per run,
  * with actors that satisfy SoD (claim.reserve ✕ claim.approve, claim.pay_request ✕ claim.pay_release). The posting worker runs
  * synchronously (QUEUE_CONNECTION=sync). After EVERY operation the claim is compared with ClaimLifecycleModel and the invariants below.
  *
@@ -186,6 +187,7 @@ it('keeps the claim reserve, its GL and the claims subledger consistent through 
                     $op = $model->draw($gen);
                     $log[] = $op->describe()." on {$on->toDateString()}";
                     $expected = $model->refusal($op);
+                    $reopenedPaid = $model->reopenedPaid();
                     $before = claimPropertySnapshot($claim->id);
                     $paymentId = null;
                     try {
@@ -210,6 +212,10 @@ it('keeps the claim reserve, its GL and the claims subledger consistent through 
 
                     $key = $op->kind.' '.($refused ?? 'accepted');
                     $coverage[$key] = ($coverage[$key] ?? 0) + 1;
+                    if ($reopenedPaid && $refused === null && in_array($op->kind, ['close', 'recover'], true)) {
+                        // Follow-up H3: closing or recovering on a paid claim that was reopened, without a new payment.
+                        $coverage["{$op->kind} accepted on a reopened paid claim"] = ($coverage["{$op->kind} accepted on a reopened paid claim"] ?? 0) + 1;
+                    }
                     expect($refused)->toBe($expected);
                     if ($refused !== null) {
                         expect(claimPropertySnapshot($claim->id))->toBe($before);
@@ -238,7 +244,8 @@ it('keeps the claim reserve, its GL and the claims subledger consistent through 
             'reserve RESERVE_UNCHANGED', 'reserve RESERVE_BELOW_APPROVED', 'approve APPROVAL_EXCEEDS_RESERVE', 'approve INVALID_AMOUNT', 'approve INVALID_CLAIM_TRANSITION',
             'request_release INVALID_PAYMENT_TRANSITION', 'release INVALID_PAYMENT_TRANSITION', 'close PAYMENTS_OUTSTANDING', 'close INVALID_CLAIM_TRANSITION',
             'reject REASON_REQUIRED', 'reject INVALID_CLAIM_TRANSITION', 'reopen REASON_REQUIRED', 'reopen INVALID_CLAIM_TRANSITION', 'reopen REOPEN_PENDING',
-            'recover CLAIM_NOT_PAID', 'recover INVALID_AMOUNT', 'recover INVALID_RECOVERY_TYPE'];
+            'recover CLAIM_NOT_PAID', 'recover INVALID_AMOUNT', 'recover INVALID_RECOVERY_TYPE',
+            'close accepted on a reopened paid claim', 'recover accepted on a reopened paid claim'];
         expect(array_values(array_diff($expectedOutcomes, array_keys($coverage))))->toBe([]);
     }
 });

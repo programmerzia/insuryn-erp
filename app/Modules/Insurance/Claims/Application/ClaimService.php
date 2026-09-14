@@ -95,13 +95,21 @@ final class ClaimService
         });
     }
 
-    /** @throws BusinessRuleViolation PAYMENTS_OUTSTANDING | INVALID_CLAIM_TRANSITION */
+    /**
+     * Closes an approved or paid claim — or (follow-up H3, D-61) a paid claim that was reopened and is reserved again, when nothing more is paid: the reserve set
+     * after reopening is released with the normal CLAIM_CLOSED journal.
+     *
+     * @throws BusinessRuleViolation PAYMENTS_OUTSTANDING | INVALID_CLAIM_TRANSITION
+     */
     public function close(string $claimId, string $reason, string $actorUserId, CarbonImmutable $on): Claim
     {
         $this->authorize($claimId, 'claim.close', $actorUserId);
 
         return DB::transaction(function () use ($claimId, $reason, $actorUserId, $on): Claim {
-            $claim = $this->lock($claimId, [ClaimStatus::Approved, ClaimStatus::Paid], 'close');
+            $claim = Claim::query()->whereKey($claimId)->lockForUpdate()->firstOrFail();
+            if (! $this->closable($claim)) {
+                throw new BusinessRuleViolation('INVALID_CLAIM_TRANSITION', "A {$claim->status->value} claim cannot close.");
+            }
             if (ClaimPayment::query()->where('claim_id', $claim->id)->whereIn('status', ClaimPaymentStatus::unsettled())->exists()) {
                 throw new BusinessRuleViolation('PAYMENTS_OUTSTANDING', "Claim {$claim->number} has payments not yet paid or rejected.");
             }
@@ -167,6 +175,23 @@ final class ClaimService
     }
 
     /**
+     * Whether the claim's status lets it close: approved or paid, or reserved again after a reopening with money already paid (follow-up H3). A claim returns to
+     * reserved with a paid payment only by reopening. Payments still unsettled are checked by `close` (PAYMENTS_OUTSTANDING).
+     * ASSUMPTION: A-162 — a reopened paid claim ends by closing without paying more; a recovery is taken on any claim with money paid.
+     */
+    public function closable(Claim $claim): bool
+    {
+        return in_array($claim->status, [ClaimStatus::Approved, ClaimStatus::Paid], true)
+            || ($claim->status === ClaimStatus::Reserved && $this->reserves->paidMinor($claim->id) > 0);
+    }
+
+    /** Follow-up H3 (design §5.5 "recovery* (any time after paid)"): a recovery is taken once anything was paid on the claim, whatever its status now. */
+    public function recoverable(Claim $claim): bool
+    {
+        return $this->reserves->paidMinor($claim->id) > 0;
+    }
+
+    /**
      * Design §4.8 recovery in cash, any time after payment. Interpretation: recorded under claim.pay_request (claims manager handles claim money).
      *
      * @throws BusinessRuleViolation INVALID_AMOUNT | INVALID_RECOVERY_TYPE | CLAIM_NOT_PAID
@@ -183,7 +208,7 @@ final class ClaimService
 
         return DB::transaction(function () use ($claimId, $type, $amountMinor, $bankAccountId, $reference, $actorUserId, $receivedOn): ClaimRecovery {
             $claim = Claim::query()->whereKey($claimId)->lockForUpdate()->firstOrFail();
-            if (! in_array($claim->status, [ClaimStatus::Paid, ClaimStatus::Closed], true)) {
+            if (! $this->recoverable($claim)) {
                 throw new BusinessRuleViolation('CLAIM_NOT_PAID', "Claim {$claim->number} has not been paid; recoveries come after payment.");
             }
             $recovery = ClaimRecovery::query()->create(['claim_id' => $claim->id, 'type' => $type, 'amount_minor' => $amountMinor, 'currency' => $claim->currency,

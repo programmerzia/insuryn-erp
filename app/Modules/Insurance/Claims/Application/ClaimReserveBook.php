@@ -37,6 +37,12 @@ final class ClaimReserveBook
         return (int) ClaimPayment::query()->where('claim_id', $claimId)->whereIn('status', ClaimPaymentStatus::committed())->sum('amount_minor');
     }
 
+    /** Amount paid on the claim over its whole life (CLAIM_PAID). */
+    public function paidMinor(string $claimId): int
+    {
+        return (int) ClaimPayment::query()->where('claim_id', $claimId)->where('status', ClaimPaymentStatus::Paid->value)->sum('amount_minor');
+    }
+
     /** Amount that has passed CLAIM_APPROVED, i.e. moved out of claims_outstanding. */
     public function approvedMinor(string $claimId): int
     {

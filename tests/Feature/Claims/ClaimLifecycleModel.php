@@ -73,6 +73,12 @@ final class ClaimLifecycleModel
         return count($this->paymentsIn('paid'));
     }
 
+    /** Follow-up H3: reopened after being paid — `reserved` with money already paid (a claim only returns to reserved with payments by reopening). */
+    public function reopenedPaid(): bool
+    {
+        return $this->status === 'reserved' && $this->paid() > 0;
+    }
+
     /** @return list<string> */
     public function paymentsIn(string $status): array
     {
@@ -100,8 +106,9 @@ final class ClaimLifecycleModel
             },
             'request_release' => $payment !== null && $payment['status'] === 'approved' ? null : 'INVALID_PAYMENT_TRANSITION',
             'release' => $payment !== null && $payment['status'] === 'release_requested' ? null : 'INVALID_PAYMENT_TRANSITION',
+            // Follow-up H3 (D-61): a reopened claim that was paid is `reserved` again and closes without a new payment.
             'close' => match (true) {
-                ! in_array($this->status, ['approved', 'paid'], true) => 'INVALID_CLAIM_TRANSITION',
+                ! in_array($this->status, ['approved', 'paid'], true) && ! $this->reopenedPaid() => 'INVALID_CLAIM_TRANSITION',
                 $this->hasUnsettled() => 'PAYMENTS_OUTSTANDING',
                 default => null,
             },
@@ -120,7 +127,8 @@ final class ClaimLifecycleModel
             'recover' => match (true) {
                 $op->amount <= 0 => 'INVALID_AMOUNT',
                 ! in_array($op->type, ['salvage', 'subrogation', 'third_party'], true) => 'INVALID_RECOVERY_TYPE',
-                ! in_array($this->status, ['paid', 'closed'], true) => 'CLAIM_NOT_PAID',
+                // Follow-up H3 (D-61): §5.5 "recovery* (any time after paid)": whenever anything was ever paid on the claim, whatever its status now.
+                $this->paid() === 0 => 'CLAIM_NOT_PAID',
                 default => null,
             },
             // Approval decisions are only drawn for an approval that is pending, and no claim rule refuses them.
@@ -208,11 +216,11 @@ final class ClaimLifecycleModel
             'request_release' => $all === [] ? 0 : ($approved !== [] ? 20 : 1),
             'release' => $all === [] ? 0 : ($requested !== [] ? 20 : 1),
             'decide_release' => $releasing !== [] ? 15 : 0,
-            'close' => in_array($this->status, ['approved', 'paid'], true) ? ($this->hasUnsettled() ? 3 : 25) : 1,
+            'close' => in_array($this->status, ['approved', 'paid'], true) || $this->reopenedPaid() ? ($this->hasUnsettled() ? 3 : 25) : 1,
             'reject' => in_array($this->status, ['registered', 'reserved'], true) ? 2 : 1,
             'reopen' => $this->status === 'closed' ? 15 : 1,
             'decide_reopen' => $this->reopenPending ? 15 : 0,
-            'recover' => in_array($this->status, ['paid', 'closed'], true) ? 6 : 2,
+            'recover' => $this->paid() > 0 ? ($this->reopenedPaid() ? 10 : 6) : 2,
         ]);
 
         return match ($kind) {

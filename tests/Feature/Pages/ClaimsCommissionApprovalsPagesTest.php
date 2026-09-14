@@ -67,6 +67,16 @@ it('takes a claim from registration to close, with release by someone else', fun
         ->where('claim.status', 'closed')->where('claim.reserve', '20,000.00')->has('reserves', 2)->where('reserves.1.delta', '-10,000.00')
         ->has('payments', 1)->where('payments.0.status', 'paid')->has('recoveries', 1)->where('actions.reopen', true)->where('actions.close', false));
     actingAs($officer)->get('/claims?status=closed', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('claims/Index')->has('claims.data', 1));
+
+    // Follow-up H3: reopened for a supplementary bill that is not paid, the claim offers Close and Record recovery again, and closes.
+    actingAs($manager)->post("/claims/{$claimId}/reopen", ['reason' => 'Supplementary bill', 'on' => '2026-09-13'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($officer)->post("/claims/{$claimId}/reserve", ['reserve' => '24,000.00', 'reason' => 'Supplementary bill', 'on' => '2026-09-13'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($manager)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('claim.status', 'reserved')->where('actions.close', true)->where('actions.recover', true)->where('actions.reopen', false));
+    actingAs($manager)->post("/claims/{$claimId}/recover", ['type' => 'subrogation', 'amount' => '500.00', 'received_on' => '2026-09-14'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($manager)->post("/claims/{$claimId}/close", ['reason' => 'Bill not covered', 'on' => '2026-09-15'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($manager)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('claim.status', 'closed')->where('claim.reserve', '20,000.00')->has('recoveries', 2)->where('actions.close', false));
 });
 
 it('hides reopen while a reopening waits for approval and explains a second request', function (): void {
