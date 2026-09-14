@@ -146,3 +146,36 @@ it('exposes approval and payment over the API with the commission permissions', 
     Pest\Laravel\actingAs($approver)->postJson("/api/insurance/commission-statements/{$statementId}/pay", ['paid_on' => '2026-10-05'], $headers)->assertForbidden();
     Pest\Laravel\actingAs($payer)->postJson("/api/insurance/commission-statements/{$statementId}/pay", ['paid_on' => '2026-10-05'], $headers)->assertOk()->assertJsonPath('data.status', 'paid');
 });
+
+it('lets the shipped roles pay commission: the finance manager approves and the accountant pays (G3, A-138)', function (): void {
+    $templates = App\Modules\Platform\Authorization\RoleTemplates::all();
+    expect($templates['accountant']['permissions'])->toContain('commission.pay')
+        ->and($templates['finance_manager']['permissions'])->toContain('commission.approve')
+        ->and(in_array('commission.pay', $templates['finance_manager']['permissions'], true))->toBeFalse()
+        ->and(in_array('commission.pay', $templates['cfo']['permissions'], true))->toBeFalse()
+        // No template holds both sides of commission.approve ✕ commission.pay.
+        ->and(array_keys(array_filter($templates, fn (array $t): bool => in_array('commission.approve', $t['permissions'], true) && in_array('commission.pay', $t['permissions'], true))))->toBe([]);
+
+    seedRoleTemplates($this->ctx['tenant_id']);
+    asTenant($this->ctx['tenant_id'], function (): void {
+        $admin = userWithPermissions($this->ctx['tenant_id'], ['platform.manage_users']);
+        $person = function (string $roleCode) use ($admin): string {
+            $id = userWithPermissions($this->ctx['tenant_id'], []);
+            $roleId = (string) DB::table('roles')->where('code', $roleCode)->value('id');
+            expect(app(App\Modules\Platform\Authorization\RoleAssignmentService::class)->assign($id, $roleId, 'tenant', $this->ctx['tenant_id'], $admin))->toBe([]);
+
+            return $id;
+        };
+        $finance = $person('finance_manager');
+        $accountant = $person('accountant');
+        ($this->receive)(0, 4_000_000, '2026-09-10');
+        $payouts = app(CommissionPayoutService::class);
+
+        $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $finance, CarbonImmutable::parse('2026-10-02'));
+        expect(thrownBy(fn () => $payouts->pay($statement->id, null, $finance, CarbonImmutable::parse('2026-10-05')), PermissionDenied::class))->toBeInstanceOf(PermissionDenied::class);
+        $payouts->pay($statement->id, null, $accountant, CarbonImmutable::parse('2026-10-05'));
+
+        expect(DB::table('commission_statements')->where('id', $statement->id)->value('status'))->toBe('paid')
+            ->and(DB::table('audit_events')->where('action', 'sod.warning')->count())->toBe(0);
+    });
+});

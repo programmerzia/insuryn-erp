@@ -39,7 +39,9 @@ final class RoleTemplates
         // ASSUMPTION A-69 (slice R2): no §7.2 template covers tariffs; the finance manager (and CFO) draft and approve rating plans — never the same plan (SoD object rule).
         'rating.manage_plans', 'rating.approve_plans',
         // ASSUMPTION A-86 (slice R5): no §7.2 template decides underwriting referrals; the finance manager (and CFO) do, within their underwriting limits.
-        'underwriting.decide'];
+        'underwriting.decide',
+        // Fix G3 (flow audit, Part A step 14): the finance manager (and CFO) file the regulatory returns, such as the IDRA agency register.
+        'reports.regulatory'];
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */
@@ -53,10 +55,15 @@ final class RoleTemplates
                 // ASSUMPTION A-86 (slice R5): the branch manager decides underwriting referrals within their limit, never on a proposal they prepared (SoD).
                 'underwriting.decide',
                 // ASSUMPTION A-94 (slice R6): cancelling evidence of cover is a branch manager's decision.
-                'cover_note.cancel']],
+                'cover_note.cancel',
+                // ASSUMPTION A-137 (fix G3): §7.2 gives no role policy.endorse; changing an issued policy is a branch manager's decision (not the officer's).
+                'policy.endorse']],
             'claims_officer' => ['name' => 'Claims Officer', 'permissions' => self::CLAIMS_OFFICER],
             'claims_manager' => ['name' => 'Claims Manager', 'permissions' => [...self::CLAIMS_OFFICER, 'claim.approve', 'claim.pay_request', 'claim.close']],
-            'accountant' => ['name' => 'Accountant', 'permissions' => self::ACCOUNTANT],
+            'accountant' => ['name' => 'Accountant', 'permissions' => [...self::ACCOUNTANT,
+                // ASSUMPTION A-138 (fix G3): §7.2 gives no role commission.pay; the accountant pays the statement the finance manager approved. Not in ACCOUNTANT, so the
+                // finance manager and CFO (built on it) never hold both sides of commission.approve ✕ commission.pay.
+                'commission.pay']],
             'finance_manager' => ['name' => 'Finance Manager', 'permissions' => $financeManager],
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
             self::AUDITOR => ['name' => 'Auditor', 'permissions' => self::READ_ONLY_PERMISSIONS],
