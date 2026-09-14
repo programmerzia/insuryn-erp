@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma } from 'lucide-vue-next';
+import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). GA-37: each label is the title of the page it opens, in the words of docs/glossary.md, and no two items share an icon. Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -21,6 +21,7 @@ export interface NavItem {
 
 const reader = 'reports.financial';
 const collections = ['receipt.create', 'receipt.allocate', 'receipt.refund_request', 'receipt.refund_release', reader];
+const people = ['hr.manage_employees', 'payroll.prepare', 'payroll.approve', 'payroll.pay', 'payroll.manage_rules']; // People and Payroll MVP
 const claims = ['claim.register', 'claim.reserve', 'claim.approve', 'claim.pay_request', 'claim.pay_release', 'claim.close', reader];
 
 export const navigation: NavItem[] = [
@@ -38,6 +39,9 @@ export const navigation: NavItem[] = [
     { id: 'approvals', page: 'approvals/Index', label: 'Approvals', href: '/approvals', icon: CheckCheck, any: [], badge: 'approvals' },
     // GA-10: one monthly commission run is the only place commission is approved and paid; /commission is its read-only history, linked from there.
     { id: 'statement-run', detail: 'commission/Index', page: 'distribution/statements/Index', label: 'Commission statements', href: '/distribution/statements', icon: Percent, any: ['commission.approve', 'commission.pay', reader] },
+    // People and Payroll MVP (addendum §B.9–§B.11).
+    { id: 'payroll-runs', detail: 'people/payroll/Show', page: 'people/payroll/Index', label: 'Payroll runs', href: '/people/payroll', icon: HandCoins, any: people },
+    { id: 'employees', detail: 'people/employees/Show', page: 'people/employees/Index', label: 'Employees', href: '/people/employees', icon: IdCard, any: people },
     { id: 'journals', detail: 'accounting/journals/Show', page: 'accounting/journals/Index', label: 'Journals', href: '/accounting/journals', icon: BookOpen, any: ['accounting.view_journals'], badge: 'journals' },
     { id: 'trial-balance', detail: 'reports/Show', page: 'accounting/TrialBalance', label: 'Trial balance', href: '/accounting/trial-balance', icon: Scale, any: [reader] },
     { id: 'close', detail: 'close/Run', page: 'close/Index', label: 'Month-end close', href: '/close', icon: CalendarCheck, any: ['periods.soft_lock', 'periods.lock', 'periods.reopen', reader], badge: 'close' },
@@ -54,6 +58,8 @@ export const navigation: NavItem[] = [
     { id: 'targets', page: 'distribution/targets/Index', label: 'Targets', href: '/distribution/targets', icon: Target, any: ['agent.manage', 'commission.approve', reader], secondary: true },
     { id: 'tariffs', detail: 'rating/plans/Show', page: 'rating/plans/Index', label: 'Tariffs', href: '/rating/plans', icon: Grid3x3, any: ['rating.manage_plans', 'rating.approve_plans'], secondary: true },
     { id: 'products', label: 'Products', href: '/products', icon: Package, any: ['product.manage', 'policy.create', reader], secondary: true },
+    { id: 'payslips', page: 'people/payslips/Index', label: 'Payslips', href: '/people/payslips', icon: ReceiptText, any: people, secondary: true },
+    { id: 'payroll-settings', page: 'people/settings/Index', label: 'Salary structures and tax slabs', href: '/people/payroll-settings', icon: SlidersHorizontal, any: people, secondary: true },
     { id: 'refunds', label: 'Refunds', href: '/refunds', icon: BanknoteArrowDown, any: collections, secondary: true },
     { id: 'agent-cash', label: 'Agent cash', href: '/agent-cash', icon: Wallet, any: collections, secondary: true },
     { id: 'cheques', label: 'Cheque register', href: '/cheques', icon: Receipt, any: collections, secondary: true },
