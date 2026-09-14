@@ -65,6 +65,20 @@ function openPayment(): void {
     payment.form.reset();
     drawer.value = 'payment';
 }
+// Flow fix X2: events recorded as they happen start at today.
+function openDrawer(name: 'reserve' | 'recover' | 'reject' | 'reopen'): void {
+    if (name === 'reserve') {
+        reserve.form.defaults({ reserve: '', reason: '', on: props.today });
+        reserve.form.reset();
+    } else if (name === 'recover') {
+        recover.form.defaults({ type: 'salvage', amount: '', received_on: props.today, reference: '', bank_account_id: '' });
+        recover.form.reset();
+    } else {
+        decision.defaults({ reason: '', on: props.today });
+        decision.reset();
+    }
+    drawer.value = name;
+}
 function openClose(): void {
     closing.form.defaults({ reason: '', on: props.today });
     closing.form.reset();
@@ -106,12 +120,12 @@ function openRelease(id: string): void {
             transactions-label="Reserves and payments"
         >
             <template #actions>
-                <button v-if="actions.recover" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'recover'">Record recovery</button>
-                <button v-if="actions.reopen" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reopen'">Reopen</button>
-                <button v-if="actions.reject" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'reject'">Reject</button>
+                <button v-if="actions.recover" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openDrawer('recover')">Record recovery</button>
+                <button v-if="actions.reopen" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openDrawer('reopen')">Reopen</button>
+                <button v-if="actions.reject" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="openDrawer('reject')">Reject</button>
                 <button v-if="actions.close" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openClose">Close claim</button>
                 <button v-if="actions.approve" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openPayment">Approve payment</button>
-                <button v-if="actions.reserve" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'reserve'">Set reserve</button>
+                <button v-if="actions.reserve" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="openDrawer('reserve')">Set reserve</button>
             </template>
             <template #overview>
                 <div class="grid max-w-[1100px] gap-6 lg:grid-cols-2">

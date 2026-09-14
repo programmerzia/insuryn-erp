@@ -60,6 +60,7 @@ final class ClaimPageController
         $entity = PageSupport::entity();
 
         return Inertia::render('claims/Create', [
+            'today' => CarbonImmutable::today()->toDateString(), // flow fix X2: reported on starts at today; the date of loss stays for the customer to say
             'policies' => DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.entity_id', $entity['id'])->whereNotNull('p.number')
                 ->whereIn('p.status', ['issued', 'active', 'expired', 'lapsed', 'cancelled', 'renewed'])->orderBy('p.number')
                 ->get(['p.id', 'p.number', 'h.display_name', 'p.inception', 'p.expiry'])->map(fn (object $p): array => (array) $p)->values()->all(),

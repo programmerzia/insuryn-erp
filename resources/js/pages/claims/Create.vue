@@ -11,11 +11,11 @@ import { formatDate } from '@/lib/format';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { toast } from '@/lib/toasts';
 
-const props = defineProps<{ policies: { id: string; number: string; display_name: string; inception: string; expiry: string }[] }>();
+const props = defineProps<{ policies: { id: string; number: string; display_name: string; inception: string; expiry: string }[]; today: string }>();
 
 const DRAFT = 'drafts.claim-register';
 const preferences = usePreferences();
-const form = useForm({ policy_id: '', loss_date: '', reported_on: '', description: '' });
+const form = useForm({ policy_id: '', loss_date: '', reported_on: props.today, description: '' });
 const policy = ref<LookupResult | null>(null);
 const step = ref(0);
 const steps = [{ id: 'policy', label: 'Policy' }, { id: 'loss', label: 'The loss' }, { id: 'review', label: 'Review' }];

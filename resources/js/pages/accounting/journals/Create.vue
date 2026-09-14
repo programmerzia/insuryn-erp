@@ -17,11 +17,12 @@ const props = defineProps<{
     kinds: string[];
     accounts: { id: string; code: string; name: string; is_control: boolean }[];
     branches: { id: string; code: string; name: string }[];
+    today: string;
 }>();
 
 type Line = { account_id: string; side: string; amount: string; branch_id: string; memo: string };
 const blank = (side: string): Line => ({ account_id: '', side, amount: '', branch_id: props.branches[0]?.id ?? '', memo: '' });
-const form = useForm({ transaction_date: '', description: '', kind: 'manual', reason: '', lines: [blank('debit'), blank('credit')] });
+const form = useForm({ transaction_date: props.today, description: '', kind: 'manual', reason: '', lines: [blank('debit'), blank('credit')] });
 const accountOptions = props.accounts.map((a) => ({ value: a.id, label: `${a.code} ${a.name}${a.is_control ? ' (control account)' : ''}` }));
 const errorFor = (index: number, field: string): string | undefined => (form.errors as Record<string, string>)[`lines.${index}.${field}`];
 const totals = computed(() => {

@@ -28,6 +28,7 @@ final class ManualJournalPageController
 
         return Inertia::render('accounting/journals/Create', [
             'entity' => $entity,
+            'today' => CarbonImmutable::today()->toDateString(), // flow fix X2: a manual journal is dated today unless changed
             'kinds' => [JournalKind::Manual->value, JournalKind::Adjustment->value],
             'accounts' => DB::table('accounts')->where('entity_id', $entity['id'])->where('is_postable', true)->where('status', 'active')->orderBy('code')
                 ->get(['id', 'code', 'name', 'is_control'])->map(fn (object $a): array => ['id' => (string) $a->id, 'code' => (string) $a->code, 'name' => (string) $a->name, 'is_control' => (bool) $a->is_control])->values()->all(),

@@ -31,11 +31,12 @@ const props = defineProps<{
     reversalRequest?: { id: string; status: string; on: string; reason: string; viaApproval: boolean } | null;
     dimensions?: Record<number, { name: string; value: string }[]>;
     sourceLink?: string | null;
+    today?: string;
 }>();
 
 const actions = computed(() => props.actions ?? { approve: false, requestReversal: false, decideReversal: false });
 const reversing = ref(false);
-const reversal = ref({ on: '', reason: '' });
+const reversal = ref({ on: props.today ?? '', reason: '' });
 const rejectReason = ref('');
 const confirm = useJournalConfirm();
 const captions = useLineCaptions();
