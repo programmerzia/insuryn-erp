@@ -52,6 +52,7 @@ function file(form: FormRow): void {
         <div class="flex min-h-11 flex-wrap items-center gap-2 border-b border-line px-3 py-1">
             <h1 class="mr-3 text-section font-semibold">Regulatory returns</h1>
             <Button v-if="can.generate" size="md" @click="generate">{{ generated ? 'Generate again' : 'Generate returns' }}</Button>
+            <span v-else class="text-ui text-ink-2" data-testid="permission-hint">Only the finance manager or CFO can generate returns.</span>
             <label class="sr-only" for="return-period">Period</label>
             <SelectInput id="return-period" :model-value="period.key" class="w-60" :options="periods" @update:model-value="(v) => go({ period: String(v) })" />
             <span class="text-ui text-ink-2">{{ generated }} of {{ forms.length }} generated · {{ filed }} filed</span>

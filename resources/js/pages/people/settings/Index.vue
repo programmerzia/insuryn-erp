@@ -82,7 +82,7 @@ const slabColumns: DataColumn<SlabRow>[] = [
     <AppLayout title="Payroll settings">
         <div class="px-6 py-4">
             <h1 class="text-title font-semibold">Payroll settings</h1>
-            <p class="mt-1 max-w-[900px] text-ui text-ink-2">The payroll is calculated only from these values. They are placeholders marked <strong>verify</strong> until HR and finance confirm them against the Finance Act and the company's service rules.</p>
+            <p class="mt-1 max-w-[900px] text-ui text-ink-2">The payroll is calculated only from these values. They are placeholders marked <strong>verify</strong> until HR and finance confirm them against the Finance Act and the company's service rules.<template v-if="!can.manage"> Only the HR manager can change them.</template></p>
             <FormBanner />
 
             <section class="mt-6 max-w-[1100px]">

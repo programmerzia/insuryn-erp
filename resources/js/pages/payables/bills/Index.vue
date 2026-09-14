@@ -53,6 +53,7 @@ function show(view: string): void {
             empty-text="No supplier bills in this view."
             :empty-action="canEnter && view === 'all' ? { label: 'Enter a bill', href: '/payables/bills/create' } : null"
             :action="canEnter ? { label: 'Enter a bill', href: '/payables/bills/create' } : null"
+            :hint="canEnter ? null : 'Only the accountant can enter supplier bills.'"
             :inspector-title="(b) => b.number"
             :inspector-subtitle="(b) => `${b.supplier} · ${b.reference}`"
         >

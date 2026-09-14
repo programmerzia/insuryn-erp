@@ -25,7 +25,7 @@ php artisan schedule:work &                                    # nightly jobs
 | 6 | finance.manager | Payments to release → pay. Approvals inbox with journal lines. | Home |
 | 7 | accountant | **Bank**: import statement, accept matches, record receipt from an unknown line. **Payables**: suppliers (landlord, DESCO, garage), bill with VAT/VDS/TDS, payment run. | Bank, Payables |
 | 8 | cfo | Release the payment run; download the BEFTN file. Expense vs budget on Home. | Home → Payment runs |
-| 9 | hr.manager | **People**: 30 employees, August payroll paid, September preview, payslip PDF. | People |
+| 9 | hr.manager (or admin, who also holds HR Manager in the demo) | **HR & Payroll**: 30 employees, August payroll paid, September preview, payslip PDF. | HR & Payroll |
 | 10 | finance.manager | **Reinsurance**: treaties, the SBC share, the 150 crore garment factory (POL-HO-2026-000008) split by SBC, the surplus treaty and facultative cover; reinsurer statements and bordereaux. | Reinsurance |
 | 11 | finance.manager | **Fixed assets, budgets, petty cash**: asset register and depreciation, budget variance (HO marketing 36% over), petty cash floats. | Fixed assets, Budgets, Petty cash |
 | 12 | finance.manager | **Month-end close** checklist: reconciliations (premium, claims, commission, UPR, VAT, stamp duty, AP, reinsurance, fixed assets, payroll), nightly jobs, pending documents. **Trial balance** → account activity → source policy. P&L ↔ balance sheet. | Close, Trial balance |

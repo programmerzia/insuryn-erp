@@ -51,6 +51,7 @@ const prepare = computed(() => (props.canPrepare ? { label: 'Prepare statement' 
             :currency="currency"
             empty-text="No statements yet. Prepare one for a reinsurer and quarter."
             :action="prepare"
+            :hint="canPrepare ? null : 'Only the finance manager or CFO can prepare a statement.'"
             :inspector-title="(s) => `${s.number} · ${s.quarter}`"
             :inspector-subtitle="(s) => s.reinsurer"
             @action="drawer = true"

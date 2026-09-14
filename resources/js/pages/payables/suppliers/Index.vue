@@ -51,6 +51,7 @@ function submit(): void {
             empty-text="No suppliers yet: add the landlord, utilities and garages you pay."
             :empty-action="canManage ? { label: 'Add a supplier' } : null"
             :action="canManage ? { label: 'Add a supplier' } : null"
+            :hint="canManage ? null : 'Only the accountant, finance manager or CFO can add suppliers.'"
             :inspector-title="(s) => s.name"
             :inspector-subtitle="(s) => `${s.code} · ${s.category_label}`"
             @action="adding = true"

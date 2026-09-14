@@ -47,8 +47,10 @@ const props = withDefaults(
         emptyAction?: { label: string; href?: string } | null;
         /** GA-40: how many rows the server has when `rows` is only the first part of them (a capped list without pages). */
         total?: number | null;
+        /** Under the empty sentence when there is no action for this reader: who can take it. */
+        emptyHint?: string | null;
     }>(),
-    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false, emptyAction: null, total: null },
+    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false, emptyAction: null, total: null, emptyHint: null },
 );
 const emit = defineEmits<{ open: [row: T]; close: []; emptyAction: [] }>();
 const active = defineModel<string | null>('active', { default: null });
@@ -380,6 +382,7 @@ defineExpose({ state, focusRow });
                                             <Link v-if="emptyAction.href" :href="emptyAction.href" class="mt-3 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">{{ emptyAction.label }}</Link>
                                             <button v-else type="button" class="mt-3 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="emit('emptyAction')">{{ emptyAction.label }}</button>
                                         </template>
+                                        <p v-else-if="!activeFilters && emptyHint" class="mt-1">{{ emptyHint }}</p>
                                     </slot>
                                     <button v-if="activeFilters" type="button" class="mt-2 text-accent-text hover:underline" @click="state.columnFilters.value = []">Clear filters</button>
                                 </td>

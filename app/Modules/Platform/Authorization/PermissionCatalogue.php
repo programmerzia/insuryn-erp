@@ -15,7 +15,7 @@ final class PermissionCatalogue
         'quotation' => 'Quotes', 'underwriting' => 'Underwriting', 'cover_note' => 'Cover notes', 'policy' => 'Policies', 'renewal' => 'Renewals',
         'receipt' => 'Receipts and refunds', 'claim' => 'Claims', 'commission' => 'Commission', 'agent' => 'Agents and producers', 'party' => 'Customers',
         'product' => 'Products', 'rating' => 'Tariffs', 'ri' => 'Reinsurance', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'fa' => 'Fixed assets',
-        'budget' => 'Budgets', 'pettycash' => 'Petty cash', 'hr' => 'People', 'payroll' => 'Payroll', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
+        'budget' => 'Budgets', 'pettycash' => 'Petty cash', 'hr' => 'HR', 'payroll' => 'Payroll', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'regulatory' => 'Regulatory returns', 'provisions' => 'Technical provisions', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 

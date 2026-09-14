@@ -63,6 +63,7 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
             currency="BDT"
             empty-text="No fixed assets yet. Capitalise the company's furniture, computers and vehicles here."
             :action="can.manage && classes.length ? { label: 'Capitalise an asset' } : null"
+            :hint="can.manage ? null : 'Only the accountant can capitalise an asset.'"
             :empty-action="classes.length ? null : { label: 'Set up asset classes', href: '/fixed-assets/classes' }"
             :inspector-title="(r) => r.number"
             :inspector-subtitle="(r) => r.description"

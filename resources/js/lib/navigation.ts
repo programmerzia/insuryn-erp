@@ -39,7 +39,7 @@ export const sections: NavSection[] = [
     { id: 'claims', label: 'Claims', open: true },
     { id: 'payables', label: 'Payables', open: false },
     { id: 'reinsurance', label: 'Reinsurance', open: false },
-    { id: 'people', label: 'People', open: false },
+    { id: 'people', label: 'HR & Payroll', open: false },
     { id: 'assets', label: 'Assets & budgets', open: false },
     { id: 'accounting', label: 'Accounting', open: false },
     { id: 'regulatory', label: 'Regulatory', open: false },

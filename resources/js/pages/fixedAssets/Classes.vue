@@ -59,6 +59,7 @@ function save(): void {
             currency="BDT"
             empty-text="No asset classes yet. Add the usual classes (furniture, IT equipment, vehicles, office equipment, leasehold improvements) and check their rates."
             :action="can.manage ? { label: 'New class' } : null"
+            :hint="can.manage ? null : 'Only the accountant can add asset classes.'"
             :inspector-title="(r) => r.name"
             :primary-label="() => (can.manage ? 'Edit class' : undefined)"
             @action="edit(null)"

@@ -76,7 +76,7 @@ Bangla terms follow the words Bangladeshi non-life insurers and IDRA commonly us
 | IBNR | Incurred but not reported (after first use) | Claims that have happened but have not been reported yet, estimated in the technical provisions run. | আইবিএনআর (সংঘটিত কিন্তু অপ্রতিবেদিত দাবি) |
 | Regulatory returns | IDRA reports, filings | The returns sent to IDRA each period; generated, reviewed and marked filed. | নিয়ন্ত্রক রিটার্ন |
 
-## People and payroll
+## HR & Payroll
 
 | Use | Not | Meaning | Bangla |
 |---|---|---|---|

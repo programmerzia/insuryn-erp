@@ -46,6 +46,7 @@ function calculate(): void {
             currency="BDT"
             empty-text="No payroll runs yet: calculate the first month."
             :empty-action="can.prepare ? { label: 'Calculate payroll' } : null"
+            :hint="can.prepare ? null : 'Only the HR manager can calculate payroll.'"
             :inspector-title="(r) => `Payroll ${formatMonth(r.period, 'long')}`"
             :inspector-subtitle="(r) => r.number ?? 'Preview'"
             @action="calculate"

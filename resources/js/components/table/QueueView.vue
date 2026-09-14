@@ -30,8 +30,10 @@ const props = withDefaults(
         emptyAction?: { label: string; href?: string } | null;
         /** GA-40: the server's row count when `rows` are only the first of them (a capped list without pages). */
         total?: number | null;
+        /** One line next to the title (and under the empty state) when the reader lacks the queue's primary action: who can take it. */
+        hint?: string | null;
     }>(),
-    { currency: undefined, page: undefined, selectable: false, action: null, inspectorTitle: undefined, inspectorSubtitle: undefined, primaryLabel: undefined, urlSync: true, emptyAction: null, total: null },
+    { currency: undefined, page: undefined, selectable: false, action: null, inspectorTitle: undefined, inspectorSubtitle: undefined, primaryLabel: undefined, urlSync: true, emptyAction: null, total: null, hint: null },
 );
 const emit = defineEmits<{ action: []; primary: [row: T] }>();
 const active = defineModel<string | null>('active', { default: null });
@@ -54,6 +56,7 @@ const selected = computed(() => (active.value === null ? null : (props.rows.find
             :selectable="selectable"
             :empty-text="emptyText"
             :empty-action="emptyState"
+            :empty-hint="hint"
             :url-sync="urlSync"
             :export-name="id"
             @close="active = null"
@@ -65,6 +68,7 @@ const selected = computed(() => (active.value === null ? null : (props.rows.find
                     <Link v-if="action.href" :href="action.href" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">{{ action.label }}</Link>
                     <button v-else type="button" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="emit('action')">{{ action.label }}</button>
                 </template>
+                <span v-else-if="hint" class="text-ui text-ink-2" data-testid="permission-hint">{{ hint }}</span>
                 <slot name="toolbar" />
             </template>
             <template #bulk="scope"><slot name="bulk" v-bind="scope" /></template>

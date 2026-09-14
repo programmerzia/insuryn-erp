@@ -141,6 +141,13 @@ final class PartADemoSeeder extends Seeder
             // next claim payment from 500,000 routes to the finance manager and then the CFO.
             TenantContext::run($context['tenant_id'], fn (): int => app(ApprovalPolicyService::class)->acceptDefaults(CarbonImmutable::today(),
                 (string) DB::table('users')->where('email', "admin@{$slug}.local")->value('id')));
+            // Demo convenience: the admin who presents also holds HR Manager (hire, payroll rules, calculate payroll), so the HR & Payroll pages have
+            // their actions from the first sign-in. HR Manager has no accounting.* permission, so the §7.3 rule with platform.manage_roles holds.
+            TenantContext::run($context['tenant_id'], function () use ($context, $slug): void {
+                $adminId = (string) DB::table('users')->where('email', "admin@{$slug}.local")->value('id');
+                $roleId = (string) DB::table('roles')->where('code', 'hr_manager')->value('id');
+                DB::table('user_roles')->insertOrIgnore(['tenant_id' => $context['tenant_id'], 'user_id' => $adminId, 'role_id' => $roleId, 'scope_type' => 'tenant', 'scope_id' => $context['tenant_id']]);
+            });
         });
         dispatch_sync(new OutboxRelayJob());
 

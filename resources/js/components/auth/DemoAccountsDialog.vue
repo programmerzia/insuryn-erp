@@ -3,7 +3,7 @@ import { X } from 'lucide-vue-next';
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { Button } from '@/components/ui/button';
 
-export type DemoAccount = { email: string; name: string; roles: string[]; password: string };
+export type DemoAccount = { email: string; name: string; roles: string[]; description?: string; password: string };
 
 /** Local only: the seeded accounts of this tenant. Choosing one fills the sign-in form; the person still signs in themselves. */
 defineProps<{ accounts: DemoAccount[] }>();
@@ -44,6 +44,7 @@ function onCloseAutoFocus(event: Event): void {
                         <div class="min-w-0">
                             <p class="text-ui font-medium">{{ account.roles.length ? account.roles.join(', ') : account.name }}</p>
                             <p class="truncate text-dense text-ink-2">{{ account.email }}</p>
+                            <p v-if="account.description" class="text-dense text-ink-2">{{ account.description }}</p>
                         </div>
                         <Button variant="secondary" size="sm" :aria-label="`Use ${account.email}`" @click="choose(account)">Use</Button>
                     </li>

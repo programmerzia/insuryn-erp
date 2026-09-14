@@ -43,6 +43,7 @@ const columns: DataColumn<BudgetRow>[] = [
             currency="BDT"
             empty-text="No budgets yet. Prepare this year's budget by account, branch and month."
             :action="can.prepare ? { label: 'New budget' } : null"
+            :hint="can.prepare ? null : 'Only the accountant can prepare a budget.'"
             :inspector-title="(r) => `${r.name} ${r.year}`"
             :inspector-subtitle="(r) => `${r.code} · version ${r.version}`"
             :primary-label="() => 'Open the budget'"

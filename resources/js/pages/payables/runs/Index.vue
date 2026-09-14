@@ -38,6 +38,7 @@ const columns: DataColumn<RunRow>[] = [
             currency="BDT"
             empty-text="No payment runs yet: pay the bills that fall due."
             :action="canPrepare ? { label: 'New payment run', href: '/payables/payment-runs/create' } : null"
+            :hint="canPrepare ? null : 'Only the accountant can prepare a payment run.'"
             :inspector-title="(r) => r.number"
             :inspector-subtitle="(r) => `${r.bills} bills · ${r.bank}`"
         >

@@ -71,6 +71,7 @@ function approve(): void {
             <div class="ml-auto flex items-center gap-2">
                 <Link href="/regulatory" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2">Regulatory dashboard</Link>
                 <Button v-if="editable" :variant="run ? 'secondary' : 'primary'" @click="prepare">{{ run ? (changed ? 'Recalculate with these methods' : 'Recalculate') : 'Prepare run' }}</Button>
+                <span v-else-if="!can.run" class="text-ui text-ink-2" data-testid="permission-hint">Only the finance manager or CFO can prepare a run.</span>
                 <Button v-if="can.run && run?.status === 'draft'" @click="review">Mark reviewed</Button>
                 <Button v-if="can.approve && run?.status === 'reviewed' && !run.sod_blocked" @click="approve">Approve and post</Button>
             </div>

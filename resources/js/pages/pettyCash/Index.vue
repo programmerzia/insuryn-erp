@@ -52,6 +52,7 @@ const columns: DataColumn<FloatRow>[] = [
             currency="BDT"
             empty-text="No petty cash floats yet. Give each branch a float for small expenses."
             :action="can.create ? { label: 'New float' } : null"
+            :hint="can.create ? null : 'Only the finance manager or CFO can open a float.'"
             :inspector-title="(r) => `${r.code} ${r.name}`"
             :inspector-subtitle="(r) => `${r.branch} · held by ${r.custodian}`"
             :primary-label="() => 'Open the float'"

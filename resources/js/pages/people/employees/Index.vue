@@ -65,6 +65,7 @@ const columns: DataColumn<EmployeeRow>[] = [
             currency="BDT"
             :empty-text="emptyText"
             :action="can.manage ? { label: 'Hire employee' } : null"
+            :hint="can.manage ? null : 'Only the HR manager can hire employees.'"
             :empty-action="filters.missing ? { label: 'Show every employee', href: '/people/employees' } : null"
             :inspector-title="(e) => `${e.code} · ${e.name}`"
             :inspector-subtitle="(e) => [e.designation, e.branch].filter(Boolean).join(' · ')"

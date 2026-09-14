@@ -65,6 +65,7 @@ const newTreaty = computed(() => (props.canManage ? { label: 'New treaty', href:
             :currency="currency"
             empty-text="No treaties yet: every risk is retained."
             :action="newTreaty"
+            :hint="canManage ? null : 'Only the finance manager or CFO can create treaties.'"
             :inspector-title="(t) => t.code"
             :inspector-subtitle="(t) => t.name"
         >
