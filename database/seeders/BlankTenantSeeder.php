@@ -34,6 +34,7 @@ final class BlankTenantSeeder extends Seeder
         TenantContext::run($tenantId, function () use ($tenantId): void {
             RoleTemplates::seedCurrentTenant();
             app(DocumentTemplates::class)->seedCurrentTenant(); // slice R8: default document templates, English and Bangla
+            \App\Modules\Accounting\Application\Posting\TenantDimensionRequirements::seedCurrentTenant($tenantId); // gap audit GA-47 (A-187)
             foreach (PermissionsSeeder::SOD as $i => [$a, $b, $appliesTo]) {
                 DB::table('sod_rules')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'code' => 'SOD'.($i + 1), 'permission_a' => $a, 'permission_b' => $b, 'mode' => 'block', 'applies_to' => $appliesTo]);
             }

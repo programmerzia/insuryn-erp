@@ -8,6 +8,7 @@ use App\Modules\Accounting\Application\Posting\AccountOverrides;
 use App\Modules\Accounting\Application\Posting\DatabaseRuleViolation;
 use App\Modules\Accounting\Application\Posting\EventPayloadValidator;
 use App\Modules\Accounting\Application\Posting\JournalDraftBuilder;
+use App\Modules\Accounting\Application\Posting\TenantDimensionRequirements;
 use App\Modules\Accounting\Application\Posting\JournalWriter;
 use App\Modules\Accounting\Application\Posting\PostingContextLoader;
 use App\Modules\Accounting\Application\Posting\TransientFailureDetector;
@@ -37,6 +38,7 @@ final class PostingEngine
         private readonly JournalWriter $writer,
         private readonly TransientFailureDetector $transientFailures,
         private readonly AccountOverrides $overrides,
+        private readonly TenantDimensionRequirements $tenantDimensions,
     ) {}
 
     /**
@@ -81,6 +83,7 @@ final class PostingEngine
         $event = AccountingEvent::query()->findOrFail($eventId);
         EventPayloadValidator::assertValid($event->event_type, $event->payload);
         $rule = $this->rules->resolve($event->event_type, $event->effective_date, $event->payload, $event->dimensions);
+        $this->tenantDimensions->assertPresent($event->event_type, $event->dimensions); // gap audit GA-47 (D-74)
 
         $batch = JournalBatch::query()->create(['entity_id' => $event->entity_id, 'accounting_event_id' => $event->id, 'created_at' => now()]);
         $journals = [];

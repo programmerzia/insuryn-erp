@@ -99,6 +99,7 @@ final class PartADemoSeeder extends Seeder
                 DB::table('legal_entities')->where('id', $context['entity_id'])->update(['code' => 'PADMA', 'name' => 'Padma General Insurance PLC']);
                 RoleTemplates::seedCurrentTenant();
                 app(\App\Modules\Platform\Documents\Templates\DocumentTemplates::class)->seedCurrentTenant(); // slice R8: default document templates
+                \App\Modules\Accounting\Application\Posting\TenantDimensionRequirements::seedCurrentTenant($context['tenant_id']); // gap audit GA-47 (A-187)
                 $this->entityId = $context['entity_id'];
                 $this->branchId = $context['branch_id'];
                 $this->users = $this->roleUsers($context['tenant_id'], $slug);

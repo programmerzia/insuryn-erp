@@ -44,6 +44,12 @@ final class OutboxRelayJob implements ShouldQueue, ShouldBeUnique
                 $dispatcher->dispatchAfterCommit($tenantId, $payload['event_id']);
             }
             DB::table('outbox')->whereIn('id', $rows->pluck('id'))->update(['relayed_at' => now()]);
+
+            // Gap audit GA-46 (ASSUMPTION A-186): announcements nothing subscribes to in this build are marked relayed (delivered to nobody), so the
+            // unrelayed backlog holds only messages that wait for a consumer.
+            $noSubscriber = DB::table('outbox')->whereNull('relayed_at')->whereIn('message_type', (array) config('erp.outbox.no_subscriber_types', []))
+                ->orderBy('created_at')->limit(self::BATCH_SIZE * 10)->lock('for update skip locked')->pluck('id');
+            DB::table('outbox')->whereIn('id', $noSubscriber)->update(['relayed_at' => now()]);
         });
     }
 }

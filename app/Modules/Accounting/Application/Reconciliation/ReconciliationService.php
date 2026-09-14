@@ -77,6 +77,12 @@ final class ReconciliationService
         ['subledger' => $subledger, 'gl' => $gl, 'variance' => $variance] = $measured;
 
         return DB::transaction(function () use ($reconciler, $period, $asOf, $subledger, $gl, $variance): string {
+            // Gap audit GA-46 (A-186): the close and the nightly job measuring the same clean balances reuse the latest run instead of recording a duplicate.
+            $latest = DB::table('reconciliation_runs')->where('entity_id', $period->entity_id)->where('period_id', $period->id)->where('subledger', $reconciler->subledger())
+                ->orderByDesc('run_at')->orderByDesc('id')->first(['id', 'status', 'subledger_balance_minor', 'gl_balance_minor']);
+            if ($variance === 0 && $latest !== null && $latest->status === 'clean' && (int) $latest->subledger_balance_minor === $subledger && (int) $latest->gl_balance_minor === $gl['total']) {
+                return (string) $latest->id;
+            }
             $runId = (string) Str::uuid7();
             DB::table('reconciliation_runs')->insert(['id' => $runId, 'tenant_id' => TenantContext::id(), 'entity_id' => $period->entity_id,
                 'subledger' => $reconciler->subledger(), 'period_id' => $period->id, 'run_at' => CarbonImmutable::now(), 'subledger_balance_minor' => $subledger,

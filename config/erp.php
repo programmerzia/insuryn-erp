@@ -22,6 +22,11 @@ return [
         // Roles an event may point at a specific account through payload.account_overrides (design §4.2: a receipt's bank account).
         'overridable_roles' => ['bank_main'],
     ],
+    'outbox' => [
+        // ASSUMPTION: A-186 (gap audit GA-46) — outbox messages with no subscriber in this build; the relay marks them relayed. Messages waiting for a
+        // Phase 2 consumer (CommissionPayableToAp, CommissionPayrollEarning, DunningNoticeDue, ProducerLicenceExpiring) are not listed and stay unrelayed.
+        'no_subscriber_types' => ['JournalPosted', 'PeriodLocked', 'PeriodReopened', 'PeriodSoftLocked'],
+    ],
     'commission' => [
         // ASSUMPTION: A-7 — whose commission plan applies when both the product version and the agent name one is not specified.
         'plan_precedence' => ['product_version', 'agent'],
