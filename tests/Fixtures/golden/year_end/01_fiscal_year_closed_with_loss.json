@@ -1,0 +1,17 @@
+{
+  "_comment": "Gap fix GA-15: the year-end closing journal of FY 2026 (July 2026 - June 2027). Events posted through the rules during the year; the closing journal moves every income and expense balance to retained earnings. Lines in account code order, retained earnings last. Loss: 3,857,600 income - 20,500,000 expense = -16,642,400.",
+  "year_end": "2027-06-30",
+  "events": [
+    { "event_type": "PREMIUM_EARNED", "date": "2026-07-31", "payload": {"earned": 857600} },
+    { "event_type": "CLAIM_RESERVED", "date": "2026-11-15", "payload": {"amount": 20000000} },
+    { "event_type": "COMMISSION_EARNED", "date": "2027-02-10", "payload": {"base": 5000000, "rate_bp": 1000, "withholding_bp": 500} },
+    { "event_type": "CLAIM_RECOVERED", "date": "2027-06-30", "payload": {"amount": 3000000} }
+  ],
+  "expected": [
+    ["premium_income", "debit", 857600],
+    ["claims_recovery_income", "debit", 3000000],
+    ["claims_expense", "credit", 20000000],
+    ["commission_expense", "credit", 500000],
+    ["retained_earnings", "debit", 16642400]
+  ]
+}

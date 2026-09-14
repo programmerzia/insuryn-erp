@@ -19,7 +19,7 @@ final class ApprovalInboxQuery
     ) {}
 
     /**
-     * @return list<array{id: string, object_type: string, object_id: string, step: int, permission: string, requested_by: string, requested_at: string,
+     * @return list<array{id: string, object_type: string, object_id: string, step: int, steps_total: int, permission: string, requested_by: string, requested_at: string,
      *     title: string, amount_minor: int|null, currency: string|null, link: string|null}>
      */
     public function decidableBy(string $userId): array
@@ -42,11 +42,29 @@ final class ApprovalInboxQuery
                 continue;
             }
             $rows[] = ['id' => (string) $approval->id, 'object_type' => (string) $approval->object_type, 'object_id' => (string) $approval->object_id,
-                'step' => (int) $approval->current_step, 'permission' => $permission, 'requested_by' => (string) $approval->name, 'requested_at' => (string) $approval->requested_at]
+                'step' => (int) $approval->current_step, 'steps_total' => max(count($steps), (int) $approval->current_step), 'permission' => $permission, 'requested_by' => (string) $approval->name, 'requested_at' => (string) $approval->requested_at]
                 + $this->describe((string) $approval->object_type, (string) $approval->object_id);
         }
 
         return $rows;
+    }
+
+    /**
+     * Gap fix GA-04: what the approver decides on — facts, what the link opens and the journal lines the final approval posts — when the handler
+     * can say (PreviewsApprovalSubject); null otherwise.
+     *
+     * @return array{link_label: string, details: list<array{label: string, value: string, date?: bool}>,
+     *     lines: list<array{account: string, name: string, debit: string|null, credit: string|null}>, posts_on_final_step: bool}|null
+     */
+    public function preview(string $objectType, string $objectId): ?array
+    {
+        try {
+            $handler = $this->handlers->for($objectType);
+        } catch (ApprovalException) {
+            return null;
+        }
+
+        return $handler instanceof PreviewsApprovalSubject ? $handler->preview($objectId) : null;
     }
 
     /** @return array{title: string, amount_minor: int|null, currency: string|null, link: string|null} */

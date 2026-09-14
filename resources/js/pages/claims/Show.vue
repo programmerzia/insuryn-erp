@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import ClaimPolicyPanel, { type ClaimPolicyFacts } from '@/components/claims/ClaimPolicyPanel.vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -50,8 +50,11 @@ const closing = useMoneyForm(() => `${base}/close`, { reason: '', on: '' }, done
 const release = useMoneyForm(() => `/claim-payments/${releasing.value}/release`, { paid_on: '' }, done);
 // G1: the bank account is fixed when the release is requested; the drawer only says which one pays.
 const releasePayFrom = computed(() => props.payments.find((p) => p.id === releasing.value)?.pay_from ?? '');
-const decision = useForm({ reason: '', on: '' });
-const money = computed(() => ({ reserve, payment, recover, close: closing, release })[drawer.value as 'reserve'] ?? null);
+// Gap fix GA-09: rejecting releases the reserve and reopening reserves again, so both show their journal before posting, like the other money actions.
+const rejecting = useMoneyForm(() => `${base}/reject`, { reason: '', on: '' }, done);
+const reopening = useMoneyForm(() => `${base}/reopen`, { reason: '', on: '' }, done);
+const decision = computed(() => (drawer.value === 'reopen' ? reopening : rejecting));
+const money = computed(() => ({ reserve, payment, recover, close: closing, release, reject: rejecting, reopen: reopening })[drawer.value as 'reserve'] ?? null);
 const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 const paid = computed(() => props.payments.filter((p) => p.status === 'paid').length);
 const facts = computed(() => [
@@ -60,7 +63,7 @@ const facts = computed(() => [
     { label: 'Date of loss', value: formatDate(props.claim.loss_date) },
     { label: 'Reported', value: formatDate(props.claim.reported_on) },
 ]);
-const previewTitle = computed(() => ({ reserve: 'Post the new reserve?', payment: 'Approve this payment?', recover: 'Post the recovery?', close: `Close ${props.claim.number}?`, release: 'Pay the claim?' })[drawer.value as 'reserve'] ?? '');
+const previewTitle = computed(() => ({ reserve: 'Post the new reserve?', payment: 'Approve this payment?', recover: 'Post the recovery?', close: `Close ${props.claim.number}?`, release: 'Pay the claim?', reject: `Reject ${props.claim.number}?`, reopen: `Reopen ${props.claim.number}?` })[drawer.value as 'reserve'] ?? '');
 
 // Flow fix X3: each drawer starts from what the claim already knows — the reserve left, the policyholder, today; the release drawer shows the bank the release was requested from.
 const nextDismissed = ref(false);
@@ -85,8 +88,9 @@ function openDrawer(name: 'reserve' | 'recover' | 'reject' | 'reopen'): void {
         recover.form.defaults({ type: 'salvage', amount: '', received_on: props.today, reference: '', bank_account_id: '' });
         recover.form.reset();
     } else {
-        decision.defaults({ reason: '', on: props.today });
-        decision.reset();
+        const form = (name === 'reopen' ? reopening : rejecting).form;
+        form.defaults({ reason: '', on: props.today });
+        form.reset();
     }
     drawer.value = name;
 }
@@ -220,9 +224,9 @@ function openRelease(id: string): void {
             </FormLayout>
         </Drawer>
         <Drawer :open="drawer === 'reject' || drawer === 'reopen'" :title="drawer === 'reject' ? `Reject ${claim.number}` : `Reopen ${claim.number}`" @update:open="(o) => !o && done()">
-            <FormLayout :submit-label="drawer === 'reject' ? 'Reject claim' : 'Reopen claim'" :dirty="decision.isDirty" :processing="decision.processing" :error="(decision.errors as Record<string, string>).form" @submit="decision.post(`${base}/${drawer}`, { preserveScroll: true, onSuccess: done })" @cancel="done">
-                <Field id="decision_reason" label="Reason" :error="decision.errors.reason"><TextInput v-model="decision.reason" /></Field>
-                <Field id="decision_on" label="Date" :error="decision.errors.on"><DateInput v-model="decision.on" /></Field>
+            <FormLayout :submit-label="drawer === 'reject' ? 'Review and reject' : 'Review and reopen'" :dirty="decision.form.isDirty" :processing="decision.form.processing" :error="(decision.form.errors as Record<string, string>).form" @submit="decision.review" @cancel="done">
+                <Field id="decision_reason" label="Reason" :error="decision.form.errors.reason"><TextInput v-model="decision.form.reason" /></Field>
+                <Field id="decision_on" label="Date" :error="decision.form.errors.on"><DateInput v-model="decision.form.on" /></Field>
             </FormLayout>
         </Drawer>
         <JournalPreviewDialog v-if="money" v-model:open="money.previewOpen.value" :result="money.preview.value" :title="previewTitle" confirm-label="Confirm and post" :currency="claim.currency" :processing="money.form.processing" @confirm="money.post" />

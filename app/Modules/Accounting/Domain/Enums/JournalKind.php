@@ -11,4 +11,6 @@ enum JournalKind: string
     case Reversal = 'reversal';
     case Adjustment = 'adjustment';
     case Opening = 'opening';
+    /** Gap fix GA-15 (D-81): the year-end close of income and expense into retained earnings. */
+    case Closing = 'closing';
 }

@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Close\CloseRunQuery;
+use App\Modules\Accounting\Application\Close\CloseTaskCatalogue;
 use App\Modules\Accounting\Application\Close\PendingDocumentsQuery;
 use App\Modules\Accounting\Application\Close\PeriodCloseService;
 use App\Modules\Accounting\Application\Contracts\PendingCloseDocument;
@@ -13,6 +14,7 @@ use App\Modules\Accounting\Application\ManualJournals\ManualJournalService;
 use App\Modules\Accounting\Application\Periods\FiscalPeriodService;
 use App\Modules\Accounting\Application\Queries\FiscalPeriodQuery;
 use App\Modules\Accounting\Application\Queries\FiscalPeriodView;
+use App\Modules\Accounting\Application\Setup\FiscalYearSetup;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
@@ -29,6 +31,10 @@ use Inertia\Response;
 final class ClosePageController
 {
     public const AREA = ['periods.soft_lock', 'periods.lock', 'periods.reopen', 'reports.financial'];
+
+    /** Gap fix GA-43 / GA-15: task names the code does not spell out. */
+    private const TASK_NAMES = ['upr_reconciliation' => 'Unearned premium reconciliation', 'vat_reconciliation' => 'VAT payable reconciliation',
+        'stamp_duty_reconciliation' => 'Stamp duty payable reconciliation', 'year_end_close' => 'Year-end close to retained earnings'];
 
     public function __construct(
         private readonly PermissionChecker $permissions,
@@ -60,7 +66,19 @@ final class ClosePageController
             'can' => ['start' => $this->permissions->has($actor, 'periods.soft_lock'), 'reopen' => $this->permissions->has($actor, 'periods.reopen')],
             // Gap fix GA-05: when each nightly job last ran, with "Run now" for finance.
             'nightly' => app(\App\Http\Close\NightlyJobs::class)->panel($actor),
+            // Gap fix GA-15: the fiscal year after the latest one, for the owner of the fiscal calendar.
+            'nextYear' => $this->nextYear($entity['id'], $today, $actor),
         ]);
+    }
+
+    /** Gap fix GA-15: opens the fiscal year after the latest one (FiscalYearSetup::openNext). */
+    public function openNextYear(Request $request, FiscalYearSetup $years): RedirectResponse
+    {
+        $entity = PageSupport::entity();
+        $opened = $years->openNext($entity['id'], $this->clock->today($entity['id']), PageSupport::actor($request));
+
+        return redirect('/close')->with('status', 'Fiscal year opened: 12 months from '.CarbonImmutable::parse($opened['starts'])->format('j M Y').' to '
+            .CarbonImmutable::parse($opened['ends'])->format('j M Y').'.');
     }
 
     public function start(Request $request, string $period, PeriodCloseService $close): RedirectResponse
@@ -86,9 +104,10 @@ final class ClosePageController
         $detail = $runs->find($run) ?? abort(404);
         $period = DB::table('fiscal_periods')->where('id', $detail['period_id'])->first(['year', 'period', 'status', 'starts', 'ends', 'entity_id']) ?? abort(404);
 
-        $label = fn (string $code): string => ucfirst(str_replace('_', ' ', $code));
+        $label = fn (string $code): string => self::TASK_NAMES[$code] ?? ucfirst(str_replace('_', ' ', $code));
         $statusByCode = array_column($detail['tasks'], 'status', 'code');
-        $settled = fn (string $code): bool => in_array($statusByCode[$code] ?? '', ['done', 'skipped'], true);
+        // A dependency not in this run (the year-end close outside the year's last month) does not hold a task back.
+        $settled = fn (string $code): bool => ! isset($statusByCode[$code]) || in_array($statusByCode[$code], ['done', 'skipped'], true);
         $open = count(array_filter($detail['tasks'], fn (array $t): bool => $t['code'] !== 'period_lock' && ! $settled($t['code'])));
         $variance = DB::table('reconciliation_runs')->where('period_id', $detail['period_id'])->where('status', 'variance')->pluck('subledger')->map(fn ($s): string => (string) $s)->all();
         $pending = $period->status === 'locked' ? [] : $this->pending($detail['period_id'], $actor);
@@ -106,6 +125,8 @@ final class ClosePageController
             'tasks' => array_map(fn (array $t): array => ['id' => $t['id'], 'code' => $t['code'], 'order_no' => $t['order_no'], 'owner_role' => $t['owner_role'], 'status' => $t['status'],
                 'depends_on' => $t['depends_on'], 'summary' => is_array($t['result']) ? (string) ($t['result']['summary'] ?? ($t['result']['skip_reason'] ?? '')) : null,
                 'done_at' => $t['done_at'],
+                // Gap fix GA-09: tasks that post show their journal before running.
+                'posts' => in_array($t['code'], CloseTaskCatalogue::POSTING_TASKS, true),
                 'blocked_by' => array_values(array_map($label, array_filter($t['depends_on'], fn (string $code): bool => ! $settled($code))))], $detail['tasks']),
             'pending' => $pending,
             // UX brief §6.5: the lock button stays disabled with the reason until the close is clean (the lock itself re-checks everything, design §5.7).
@@ -150,6 +171,20 @@ final class ClosePageController
         $moved = $journals->moveToNextPeriod($journal, PageSupport::actor($request), $data['reason'] ?? null);
 
         return back()->with('status', 'Journal moved to '.$moved->transaction_date->format('j M Y').'; it waits for approval there.');
+    }
+
+    /** @return array{starts: string, ends: string, can_open: bool, opens_from: string}|null null without any fiscal year */
+    private function nextYear(string $entityId, string $today, string $actor): ?array
+    {
+        $latest = DB::table('fiscal_periods')->where('entity_id', $entityId)->orderByDesc('ends')->first(['year', 'ends']);
+        if ($latest === null) {
+            return null;
+        }
+        $starts = CarbonImmutable::parse((string) $latest->ends)->addDay()->startOfMonth();
+        $opensFrom = (string) DB::table('fiscal_periods')->where('entity_id', $entityId)->where('year', (int) $latest->year)->min('starts');
+
+        return ['starts' => $starts->toDateString(), 'ends' => $starts->addMonths(11)->endOfMonth()->toDateString(), 'opens_from' => $opensFrom,
+            'can_open' => $today >= $opensFrom && $this->permissions->has($actor, FiscalYearSetup::PERMISSION)];
     }
 
     public static function pendingReason(int $count): string

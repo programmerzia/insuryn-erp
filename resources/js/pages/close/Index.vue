@@ -16,7 +16,22 @@ import { nightlyHeadline, type NightlyJobsPanel } from '@/lib/nightlyJobs';
 import { useOnboarding } from '@/lib/onboarding';
 
 interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null; pending?: PendingDocument[]; last_day_reached?: boolean; ended?: boolean; lock_from?: string }
-const props = defineProps<{ periods: Period[]; can: { start: boolean; reopen: boolean }; nightly?: NightlyJobsPanel }>();
+const props = defineProps<{
+    periods: Period[];
+    can: { start: boolean; reopen: boolean };
+    nightly?: NightlyJobsPanel;
+    /** Gap fix GA-15: the fiscal year after the latest one. */
+    nextYear?: { starts: string; ends: string; can_open: boolean; opens_from: string } | null;
+}>();
+async function openNextYear(): Promise<void> {
+    if (!props.nextYear) return;
+    const ok = await confirmAction({
+        title: `Open the fiscal year ${formatDate(props.nextYear.starts)} to ${formatDate(props.nextYear.ends)}?`,
+        body: 'Twelve monthly periods are opened, so postings dated in that year are accepted. The months already open stay as they are.',
+        confirmLabel: 'Open the fiscal year',
+    });
+    if (ok) router.post('/close/fiscal-years', {}, { preserveScroll: true });
+}
 const onboarding = useOnboarding();
 // Gap fix GA-05: the nightly jobs and when they last ran.
 const nightlyOpen = ref(false);
@@ -65,6 +80,9 @@ async function reopen(p: Period): Promise<void> {
         >
             <template #toolbar>
                 <button v-if="nightly" type="button" class="ml-2 inline-flex h-8 items-center px-2 text-ui text-accent-text hover:underline" @click="nightlyOpen = true">{{ nightlyHeadline(nightly.jobs) }}</button>
+                <button v-if="nextYear?.can_open" type="button" class="ml-2 inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="openNextYear">
+                    Open next fiscal year
+                </button>
             </template>
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Period' }, { label: 'Close' }]">

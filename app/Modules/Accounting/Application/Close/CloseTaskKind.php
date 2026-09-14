@@ -13,6 +13,8 @@ enum CloseTaskKind: string
     case Reconciliation = 'reconciliation';
     /** A person confirms the work was done (note recorded). */
     case Confirmation = 'confirmation';
+    /** Gap fix GA-15: income and expense closed to retained earnings (YearEndClose), in a fiscal year's last month. */
+    case YearEndClose = 'year_end_close';
     case TrialBalance = 'trial_balance';
     case FinancialStatements = 'financial_statements';
     case SignOff = 'sign_off';

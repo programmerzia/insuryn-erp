@@ -35,6 +35,8 @@ arch('journal writer is used only by the kernel posting path')
         'App\Modules\Accounting\Application\PostingEngine',
         'App\Modules\Accounting\Application\ReversalService',
         'App\Modules\Accounting\Application\ManualJournals',
+        // Gap fix GA-15 (D-81): the year-end closing journal, a kernel journal computed from the ledger (one class, not the close namespace).
+        'App\Modules\Accounting\Application\Close\YearEndClose',
     ]);
 
 /** Design §1: business contexts depend on Platform + Accounting\Application contracts only, and not on each other's Domain. */

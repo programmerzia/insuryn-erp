@@ -77,8 +77,8 @@ it('says why the period cannot be locked until the close is clean', function ():
     $runId = asTenant($this->ctx['tenant_id'], fn (): string => app(PeriodCloseService::class)->start($september, $this->world['admin']));
 
     actingAs($this->admin)->get("/close/runs/{$runId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('close/Run')
-        ->where('lock.ready', false)->where('lock.reason', 'Finish or skip 10 open tasks before locking.')
-        ->where('tasks.7.code', 'trial_balance')->where('tasks.7.blocked_by', fn ($names): bool => in_array('Premium earning', (array) json_decode((string) json_encode($names), true), true)));
+        ->where('lock.ready', false)->where('lock.reason', 'Finish or skip 14 open tasks before locking.')
+        ->where('tasks.11.code', 'trial_balance')->where('tasks.11.blocked_by', fn ($names): bool => in_array('Premium earning', (array) json_decode((string) json_encode($names), true), true)));
 });
 
 it('compares the trial balance with the previous month end', function (): void {

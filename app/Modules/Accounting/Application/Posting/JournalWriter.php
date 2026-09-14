@@ -61,6 +61,7 @@ final class JournalWriter
             'posted_at' => now(),
         ] + ($approvedBy === null ? [] : ['approved_by' => $approvedBy]))->save();
         $this->auditPosted($journal);
+        event(new JournalWritten($journal->id)); // gap fix GA-04: the preview shows journals written directly too
 
         return $journal;
     }

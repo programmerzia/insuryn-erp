@@ -37,7 +37,10 @@ final class InsuranceServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->tag([PremiumReconciler::class, SuspenseReconciler::class, CommissionReconciler::class, ClaimsReconciler::class], SubledgerReconciler::class);
+        $this->app->tag([PremiumReconciler::class, SuspenseReconciler::class, CommissionReconciler::class, ClaimsReconciler::class,
+            // Gap fix GA-43: the unearned premium register, VAT payable and stamp duty payable against their accounts (D-82).
+            \App\Modules\Insurance\Policy\Application\Reconciliation\UnearnedPremiumReconciler::class, \App\Modules\Insurance\Policy\Application\Reconciliation\PremiumTaxReconciler::class,
+            \App\Modules\Insurance\Policy\Application\Reconciliation\StampDutyReconciler::class], SubledgerReconciler::class);
         $this->app->tag([PremiumEarningCloseCheck::class, SuspenseReviewCloseCheck::class], CloseTaskCheck::class);
         // Slice 2.1b (D-55): claim payments and refunds still waiting hold the period's lock.
         $this->app->tag([\App\Modules\Insurance\Claims\Application\ClaimPaymentsPendingAtClose::class, \App\Modules\Insurance\Collections\Application\RefundsPendingAtClose::class],

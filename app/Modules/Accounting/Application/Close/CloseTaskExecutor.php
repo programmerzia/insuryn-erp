@@ -27,6 +27,7 @@ final class CloseTaskExecutor
         private readonly iterable $checks,
         private readonly iterable $reconcilers,
         private readonly PendingDocumentsQuery $pendingDocuments,
+        private readonly YearEndClose $yearEnd,
     ) {}
 
     public function execute(CloseTaskDefinition $task, FiscalPeriodView $period, string $closeRunId, string $actorUserId, ?string $note): CloseCheckResult
@@ -35,6 +36,7 @@ final class CloseTaskExecutor
             CloseTaskKind::Check => $this->check($task, $period, $actorUserId),
             CloseTaskKind::Reconciliation => $this->reconcile($task, $period),
             CloseTaskKind::Confirmation => CloseCheckResult::passed('Confirmed', ['note' => $note]),
+            CloseTaskKind::YearEndClose => $this->yearEnd->close($period, $actorUserId),
             CloseTaskKind::TrialBalance => $this->trialBalance($period, $actorUserId),
             CloseTaskKind::FinancialStatements => $this->financialStatements($period),
             CloseTaskKind::SignOff => $this->signOff($closeRunId, $period, $actorUserId),
@@ -95,8 +97,8 @@ final class CloseTaskExecutor
     }
 
     /**
-     * Task 14: headline figures of the balance sheet and profit and loss as of the period end. Income and expense are cumulative (there is
-     * no year-end close into retained earnings yet), so assets = liabilities + equity + net profit.
+     * Task 14: headline figures of the balance sheet and profit and loss as of the period end. Income and expense are cumulative since the last
+     * year-end close (GA-15), so assets = liabilities + equity + net profit; after the year-end close net profit is zero and equity carries it.
      */
     private function financialStatements(FiscalPeriodView $period): CloseCheckResult
     {
@@ -118,6 +120,10 @@ final class CloseTaskExecutor
             ->whereNotIn('status', ['done', 'skipped'])->orderBy('order_no')->pluck('code')->all();
         if ($open !== []) {
             return CloseCheckResult::blocked('Tasks not done or skipped: '.implode(', ', $open).'.', ['open_tasks' => $open]);
+        }
+        // Gap fix GA-15: income or expense posted in the soft-locked last month after the year-end close is closed to retained earnings too.
+        if (DB::table('period_close_tasks')->where('close_run_id', $closeRunId)->where('code', 'year_end_close')->exists()) {
+            $this->yearEnd->close($period, $actorUserId);
         }
         $trialBalance = $this->trialBalance($period, $actorUserId);
         foreach (['trial_balance' => $trialBalance, 'financial_statements' => $this->financialStatements($period)] as $code => $result) {

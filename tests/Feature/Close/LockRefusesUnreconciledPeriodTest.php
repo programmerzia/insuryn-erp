@@ -46,7 +46,7 @@ it('refuses the close lock task when a variance is posted after the reconciliati
         $close = app(PeriodCloseService::class);
         $runId = $close->start($this->september, $this->world['admin']);
         $task = fn (string $code): string => (string) DB::table('period_close_tasks')->where('close_run_id', $runId)->where('code', $code)->value('id');
-        foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation'] as $code) {
+        foreach (['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation', 'vat_reconciliation', 'stamp_duty_reconciliation'] as $code) { // GA-43: four more reconciliations
             $close->execute($task($code), $this->world['admin']);
         }
         $close->execute($task('accruals'), $this->world['admin'], 'none');

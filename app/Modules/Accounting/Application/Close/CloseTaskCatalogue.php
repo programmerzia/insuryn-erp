@@ -13,10 +13,22 @@ namespace App\Modules\Accounting\Application\Close;
  */
 final class CloseTaskCatalogue
 {
-    /** @return list<CloseTaskDefinition> */
-    public function tasks(): array
+    /** Gap fix GA-09: tasks that post journals (premium earning's events, the year-end closing journal), so the checklist previews them. */
+    public const POSTING_TASKS = ['premium_earning', 'year_end_close'];
+
+    /**
+     * The tasks of a close run. Gap fix GA-15: the year-end close task only in the close of a fiscal year's last month ($yearEnd); the other
+     * months' runs do not list it.
+     *
+     * @return list<CloseTaskDefinition>
+     */
+    public function tasks(bool $yearEnd = false): array
     {
-        $beforeTrialBalance = ['premium_earning', 'suspense_review', 'bank_reconciliation', 'premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'accruals'];
+        // Gap fix GA-43: the unearned premium, suspense, VAT payable and stamp duty payable reconciliations run before the trial balance too.
+        $reconciliations = ['premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation',
+            'vat_reconciliation', 'stamp_duty_reconciliation'];
+        $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals'];
+        $beforeTrialBalance = $yearEnd ? [...$beforeYearEnd, 'year_end_close'] : $beforeYearEnd;
 
         return [
             new CloseTaskDefinition(1, 'premium_earning', CloseTaskKind::Check, [], 'system', 'periods.soft_lock'),
@@ -25,7 +37,15 @@ final class CloseTaskCatalogue
             new CloseTaskDefinition(4, 'premium_reconciliation', CloseTaskKind::Reconciliation, ['premium_earning'], 'accounting', 'periods.soft_lock', subledger: 'premium'),
             new CloseTaskDefinition(5, 'claims_reconciliation', CloseTaskKind::Reconciliation, [], 'claims_accounting', 'periods.soft_lock', subledger: 'claims'),
             new CloseTaskDefinition(6, 'commission_reconciliation', CloseTaskKind::Reconciliation, ['premium_earning'], 'accounting', 'periods.soft_lock', subledger: 'commission'),
+            // Gap fix GA-43 (D-83): §5.7 has no row for these; they take the free numbers after the reconciliations (7, AP/AR, is LATER and not listed) and
+            // around the accruals, so the checklist reads reconciliations → accruals → duties. The number orders the checklist; it is not the design's row number.
+            new CloseTaskDefinition(7, 'upr_reconciliation', CloseTaskKind::Reconciliation, ['premium_earning'], 'accounting', 'periods.soft_lock', subledger: 'unearned_premium'),
             new CloseTaskDefinition(8, 'accruals', CloseTaskKind::Confirmation, [], 'accounting', 'accounting.create_manual_journal', skippable: true),
+            new CloseTaskDefinition(9, 'suspense_reconciliation', CloseTaskKind::Reconciliation, ['suspense_review'], 'accounting', 'periods.soft_lock', subledger: 'suspense'),
+            new CloseTaskDefinition(10, 'vat_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'premium_tax'),
+            new CloseTaskDefinition(11, 'stamp_duty_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'stamp_duty'),
+            // Gap fix GA-15 (D-81): in the fiscal year's last month, once everything that posts to income and expense is done.
+            ...($yearEnd ? [new CloseTaskDefinition(12, 'year_end_close', CloseTaskKind::YearEndClose, $beforeYearEnd, 'finance_manager', 'periods.lock')] : []),
             new CloseTaskDefinition(13, 'trial_balance', CloseTaskKind::TrialBalance, $beforeTrialBalance, 'finance_manager', 'periods.soft_lock'),
             new CloseTaskDefinition(14, 'financial_statements', CloseTaskKind::FinancialStatements, ['trial_balance'], 'system', 'reports.financial'),
             new CloseTaskDefinition(15, 'sign_off', CloseTaskKind::SignOff, ['trial_balance', 'financial_statements'], 'finance_manager', 'periods.lock'),
@@ -35,7 +55,7 @@ final class CloseTaskCatalogue
 
     public function find(string $code): CloseTaskDefinition
     {
-        foreach ($this->tasks() as $task) {
+        foreach ($this->tasks(yearEnd: true) as $task) {
             if ($task->code === $code) {
                 return $task;
             }

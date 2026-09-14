@@ -6,7 +6,7 @@ const LABELS: Record<string, string> = {
     AGENT_CASH_COLLECTED: 'Cash collected by agent', AGENT_DEPOSIT_RECORDED: 'Agent deposit', REFUND_ISSUED: 'Refund paid',
     COMMISSION_EARNED: 'Commission earned', COMMISSION_CLAWBACK: 'Commission clawed back', COMMISSION_PAID: 'Commission paid',
     CLAIM_RESERVED: 'Claim reserve set', CLAIM_RESERVE_ADJUSTED: 'Claim reserve changed', CLAIM_APPROVED: 'Claim payment approved',
-    CLAIM_PAID: 'Claim paid', CLAIM_RECOVERED: 'Recovery received', CLAIM_CLOSED: 'Claim closed', PAYROLL_POSTED: 'Payroll posted', MANUAL_JOURNAL: 'Manual journal', REVERSAL: 'Reversal',
+    CLAIM_PAID: 'Claim paid', CLAIM_RECOVERED: 'Recovery received', CLAIM_CLOSED: 'Claim closed', PAYROLL_POSTED: 'Payroll posted', MANUAL_JOURNAL: 'Manual journal', REVERSAL: 'Reversal', YEAR_END_CLOSE: 'Year-end close',
 };
 
 /** Gap audit GA-34: whether a code is a known event type, so a report cell like the branch code "HO" is not turned into "Ho". */

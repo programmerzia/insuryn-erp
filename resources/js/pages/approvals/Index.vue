@@ -1,15 +1,30 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { formatDateTime, formatMoney } from '@/lib/format';
+import { approvalOutcome, type ApprovalPreview, stepLabel } from '@/lib/approvals';
+import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 
-interface ApprovalRow { id: string; object_type: string; title: string; step: number; requested_by: string; requested_at: string; link: string | null; amount: string | null }
+interface ApprovalRow {
+    id: string;
+    object_type: string;
+    title: string;
+    step: number;
+    steps_total?: number;
+    final_step?: boolean;
+    requested_by: string;
+    requested_at: string;
+    /** Gap fix GA-04: the request time on the company clock, "14 Sep 2026, 13:43". */
+    requested_at_label?: string;
+    link: string | null;
+    amount: string | null;
+    preview?: ApprovalPreview | null;
+}
 const props = defineProps<{ approvals: ApprovalRow[] }>();
 
 const active = ref<string | null>(null);
@@ -21,12 +36,13 @@ const columns: DataColumn<ApprovalRow>[] = [
     { id: 'type', header: 'Kind', value: (a) => words(a.object_type), width: 170 },
     { id: 'amount', header: 'Amount', type: 'money', value: (a) => a.amount, total: true },
     { id: 'requested_by', header: 'Requested by', value: (a) => a.requested_by, width: 160 },
-    { id: 'requested_at', header: 'Requested', type: 'date', value: (a) => a.requested_at },
-    { id: 'step', header: 'Step', type: 'number', value: (a) => a.step, width: 72 },
+    { id: 'requested_at', header: 'Requested', value: (a) => a.requested_at_label ?? a.requested_at, width: 150 },
+    { id: 'step', header: 'Step', value: (a) => stepLabel(a.step, a.steps_total), width: 90 },
 ];
 
 function approve(row: ApprovalRow): void {
-    void confirm.request(`/approvals/${row.id}/decide`, { decision: 'approved' }, `Approve ${row.title}?`, 'Approve');
+    // The server previews what approving does: the journal lines when this decision posts, "nothing is posted yet" when it passes to the next step.
+    void confirm.request(`/approvals/${row.id}/decide`, { decision: 'approved' }, `Approve ${row.title}?`, row.final_step && row.preview?.posts_on_final_step ? 'Approve and post' : 'Approve');
 }
 function reject(row: ApprovalRow): void {
     router.post(`/approvals/${row.id}/decide`, { decision: 'rejected', reason: reason.value }, { preserveScroll: true, onSuccess: () => { reason.value = ''; active.value = null; } });
@@ -47,13 +63,42 @@ void props;
             empty-text="Nothing is waiting for your decision."
             :empty-action="{ label: 'Back to Home', href: '/home' }"
             :inspector-title="(a) => a.title"
-            :inspector-subtitle="(a) => `${words(a.object_type)} · step ${a.step}`"
-            :primary-label="() => 'Approve'"
+            :inspector-subtitle="(a) => `${words(a.object_type)} · ${stepLabel(a.step, a.steps_total).toLowerCase()}`"
+            :primary-label="(a) => (a.final_step && a.preview?.posts_on_final_step ? 'Review and approve' : 'Approve')"
             @primary="approve"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Amount', value: row.amount ? `${formatMoney(row.amount)} BDT` : null, num: true }, { label: 'Requested by', value: row.requested_by }, { label: 'Requested', value: formatDateTime(row.requested_at) }, { label: 'Step', value: row.step }]" />
-                <p class="mt-4 text-ui text-ink-2">You never see your own requests here. Approving may post to the ledger; you see the entries first.</p>
+                <DetailList
+                    :items="[
+                        { label: 'Amount', value: row.amount ? `${formatMoney(row.amount)} BDT` : null, num: true },
+                        { label: 'Requested by', value: row.requested_by },
+                        { label: 'Requested', value: row.requested_at_label ?? formatDateTime(row.requested_at) },
+                        { label: 'Step', value: stepLabel(row.step, row.steps_total) },
+                        ...(row.preview?.details ?? []).map((d) => ({ label: d.label, value: d.date ? formatDate(d.value) : d.value })),
+                    ]"
+                />
+                <Link v-if="row.link" :href="row.link" class="mt-3 inline-block text-ui text-accent-text hover:underline">{{ row.preview?.link_label ?? 'Open it' }}</Link>
+                <section v-if="row.preview?.lines.length" class="mt-4" aria-label="Journal lines">
+                    <h3 class="mb-1 text-ui font-medium">{{ row.final_step ? 'Approving posts these entries' : 'Entries posted at the last approval' }}</h3>
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                        <colgroup><col /><col style="width: 104px" /><col style="width: 104px" /></colgroup>
+                        <thead class="bg-surface-2 text-ink-2">
+                            <tr class="h-7">
+                                <th class="border-y border-line px-2 text-left font-medium">Account</th>
+                                <th class="border-y border-line px-2 text-right font-medium">Debit</th>
+                                <th class="border-y border-line px-2 text-right font-medium">Credit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(line, i) in row.preview.lines" :key="i" class="h-7">
+                                <td class="truncate border-b border-line px-2" :class="line.credit ? 'pl-5' : ''" :title="`${line.account} ${line.name}`"><span class="text-ink-2 tabular-nums">{{ line.account }}</span> {{ line.name }}</td>
+                                <td class="num border-b border-line px-2">{{ formatMoney(line.debit) }}</td>
+                                <td class="num border-b border-line px-2">{{ formatMoney(line.credit) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+                <p class="mt-4 text-ui text-ink-2">{{ approvalOutcome(row.final_step ?? false, row.preview?.posts_on_final_step ?? false) }} You never see your own requests here.</p>
             </template>
             <template #actions="{ row }">
                 <input v-model="reason" class="h-8 w-44 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="Reason to reject" aria-label="Reason to reject" />

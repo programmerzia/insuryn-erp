@@ -67,7 +67,8 @@ it('registers the premium, suspense, commission and claims reconcilers', functio
     $subledgers = array_map(fn (SubledgerReconciler $r): string => $r->subledger(), iterator_to_array(app()->tagged(SubledgerReconciler::class), false));
     sort($subledgers);
 
-    expect($subledgers)->toBe(['claims', 'commission', 'premium', 'suspense']);
+    // Gap fix GA-43: unearned premium, VAT (premium_tax) and stamp duty reconcile to their accounts too.
+    expect($subledgers)->toBe(['claims', 'commission', 'premium', 'premium_tax', 'stamp_duty', 'suspense', 'unearned_premium']);
 });
 
 it('reconciles clean at every month end of real business, as of that date', function (): void {
@@ -84,11 +85,15 @@ it('reconciles clean at every month end of real business, as of that date', func
                 expect([$subledger, $variance, $status])->toBe([$subledger, 0, 'clean'])->and($sub)->toBe($gl);
             }
         }
-        [$claims, $commission, $premium, $suspense] = ($this->runs)(($this->periodFor)('2026-09-30'));
+        [$claims, $commission, $premium, $premiumTax, $stampDuty, $suspense, $unearned] = ($this->runs)(($this->periodFor)('2026-09-30'));
         expect($premium[1])->toBe(24_000_000 - 4_000_000)     // two policies issued, one allocation in September
             ->and($suspense[1])->toBe(1_000_000 + 2_000_000)  // r1 remainder + unallocated r2 (allocated in October)
             ->and($commission[1])->toBe(347_826) // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
             ->and($claims[1])->toBe(0)
+            // Gap fix GA-43: VAT inside the two gross premiums (15% inclusive), no stamp duty on this unrated product, net premium unearned at 30 September.
+            ->and($premiumTax[1])->toBe(2 * 1_565_217) // 120,000.00 gross each, 15% VAT inclusive; the October endorsement is not in yet
+            ->and($stampDuty[1])->toBe(0)
+            ->and($unearned[1])->toBe($unearned[2])->and($unearned[1])->toBeGreaterThan(0)
             ->and(DB::table('reconciliation_exceptions')->count())->toBe(0);
     });
 });
@@ -168,7 +173,7 @@ it('reconciles every started, unlocked period of every tenant nightly', function
 
     asTenant($this->ctx['tenant_id'], function (): void {
         expect(DB::table('reconciliation_runs')->distinct()->count('period_id'))->toBe(4) // July, August, September, October (to date)
-            ->and(DB::table('reconciliation_runs')->count())->toBe(16) // × 4 subledgers
+            ->and(DB::table('reconciliation_runs')->count())->toBe(28) // × 7 subledgers (GA-43: unearned premium, VAT and stamp duty added)
             ->and(DB::table('reconciliation_runs')->where('status', '<>', 'clean')->count())->toBe(0);
     });
 });

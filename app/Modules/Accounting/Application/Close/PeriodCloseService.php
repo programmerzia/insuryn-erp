@@ -52,11 +52,14 @@ final class PeriodCloseService
                 throw new BusinessRuleViolation('CLOSE_ALREADY_RUNNING', "Period {$periodId} already has a close run in progress.");
             }
             $runId = (string) Str::uuid7();
+            // Gap fix GA-15: the close of a fiscal year's last month also closes the year into retained earnings.
+            $view = $this->periodQuery->find($periodId);
+            $yearEnd = $view !== null && YearEndClose::isLastPeriodOfYear($view);
             DB::table('period_close_runs')->insert(['id' => $runId, 'tenant_id' => TenantContext::id(), 'entity_id' => $period->entity_id, 'period_id' => $periodId,
                 'status' => 'running', 'started_by' => $actorUserId, 'started_at' => CarbonImmutable::now()]);
             DB::table('period_close_tasks')->insert(array_map(fn (CloseTaskDefinition $task): array => ['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(),
                 'close_run_id' => $runId, 'code' => $task->code, 'order_no' => $task->orderNo, 'depends_on' => json_encode($task->dependsOn, JSON_THROW_ON_ERROR),
-                'owner_role' => $task->ownerRole, 'status' => 'pending'], $this->catalogue->tasks()));
+                'owner_role' => $task->ownerRole, 'status' => 'pending'], $this->catalogue->tasks($yearEnd)));
             $this->audit->record('close.started', AuditSubject::of('period_close_run', $runId), null, ['period_id' => $periodId], null, 'periods.soft_lock', Actor::user($actorUserId));
 
             return $runId;

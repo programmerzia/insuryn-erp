@@ -1,0 +1,18 @@
+{
+  "_comment": "Gap fix GA-15: a profitable FY 2026: premium earned 12,500,000 and a recovery 400,000 against claims 3,000,000 and payroll 4,400,000 (salaries and the employer's provident fund). Profit 5,500,000 credited to retained earnings.",
+  "year_end": "2027-06-30",
+  "events": [
+    { "event_type": "PREMIUM_EARNED", "date": "2026-09-30", "payload": {"earned": 12500000} },
+    { "event_type": "CLAIM_RESERVED", "date": "2026-12-01", "payload": {"amount": 3000000} },
+    { "event_type": "PAYROLL_POSTED", "date": "2027-03-31", "payload": {"gross": 4000000, "employer_pf": 400000, "net": 3300000, "employee_tax": 300000, "employee_pf": 400000} },
+    { "event_type": "CLAIM_RECOVERED", "date": "2027-05-20", "payload": {"amount": 400000} }
+  ],
+  "expected": [
+    ["premium_income", "debit", 12500000],
+    ["claims_recovery_income", "debit", 400000],
+    ["claims_expense", "credit", 3000000],
+    ["salary_expense", "credit", 4000000],
+    ["employer_pf_expense", "credit", 400000],
+    ["retained_earnings", "credit", 5500000]
+  ]
+}

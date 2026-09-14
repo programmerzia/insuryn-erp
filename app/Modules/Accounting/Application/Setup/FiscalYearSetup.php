@@ -66,4 +66,54 @@ final class FiscalYearSetup
             return 12;
         });
     }
+
+    /**
+     * Gap fix GA-15: opens the fiscal year after the entity's latest one — twelve open monthly periods from the day after its last period ends, in
+     * every book that has the latest year — from the close screen, by the owner of the fiscal calendar (periods.lock, A-27). Audited
+     * `fiscal_year.opened`.
+     *
+     * ASSUMPTION A-202: a year is opened at most one year ahead — only once the latest open year has started on the business clock — so a
+     * mistaken click cannot open years nobody asked for; and it never overlaps a period that exists.
+     *
+     * @return array{year: int, starts: string, ends: string, periods: int}
+     *
+     * @throws BusinessRuleViolation FISCAL_YEAR_MISSING | FISCAL_YEAR_TOO_EARLY | FISCAL_YEAR_OVERLAP
+     */
+    public function openNext(string $entityId, CarbonImmutable $today, string $actorUserId): array
+    {
+        $this->permissions->authorize($actorUserId, self::PERMISSION, \App\Modules\Platform\Authorization\AuthorizationScope::entity($entityId));
+
+        return DB::transaction(function () use ($entityId, $today, $actorUserId): array {
+            DB::table('legal_entities')->where('id', $entityId)->lockForUpdate()->value('id');
+            $latest = DB::table('fiscal_periods')->where('entity_id', $entityId)->orderByDesc('ends')->first(['year', 'ends']);
+            if ($latest === null) {
+                throw new BusinessRuleViolation('FISCAL_YEAR_MISSING', 'There is no fiscal year to follow yet. Open the first one in the setup wizard.');
+            }
+            $latestYear = (int) $latest->year;
+            $latestStarts = CarbonImmutable::parse((string) DB::table('fiscal_periods')->where('entity_id', $entityId)->where('year', $latestYear)->min('starts'));
+            if ($today->lessThan($latestStarts)) {
+                throw new BusinessRuleViolation('FISCAL_YEAR_TOO_EARLY', 'Fiscal year '.$latestYear.' has not started yet (it starts on '.$latestStarts->format('j M Y')
+                    .'). The year after it can be opened once it has.');
+            }
+            $starts = CarbonImmutable::parse((string) $latest->ends)->addDay()->startOfMonth();
+            $ends = $starts->addMonths(11)->endOfMonth();
+            $overlap = DB::table('fiscal_periods')->where('entity_id', $entityId)->where('starts', '<=', $ends->toDateString())->where('ends', '>=', $starts->toDateString())->exists()
+                || DB::table('fiscal_periods')->where('entity_id', $entityId)->where('year', $latestYear + 1)->exists();
+            if ($overlap) {
+                throw new BusinessRuleViolation('FISCAL_YEAR_OVERLAP', 'Periods from '.$starts->format('j M Y').' to '.$ends->format('j M Y').' already exist.');
+            }
+            $bookIds = DB::table('fiscal_periods')->where('entity_id', $entityId)->where('year', $latestYear)->distinct()->pluck('book_id')->map(fn (mixed $id): string => (string) $id)->all();
+            foreach ($bookIds as $bookId) {
+                for ($period = 1; $period <= 12; $period++) {
+                    $month = $starts->addMonths($period - 1);
+                    DB::table('fiscal_periods')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(), 'entity_id' => $entityId, 'book_id' => $bookId,
+                        'year' => $latestYear + 1, 'period' => $period, 'starts' => $month->toDateString(), 'ends' => $month->endOfMonth()->toDateString(), 'status' => 'open']);
+                }
+            }
+            $opened = ['year' => $latestYear + 1, 'starts' => $starts->toDateString(), 'ends' => $ends->toDateString(), 'periods' => 12];
+            $this->audit->record('fiscal_year.opened', AuditSubject::of('legal_entity', $entityId), null, $opened + ['books' => count($bookIds)], null, self::PERMISSION, Actor::user($actorUserId));
+
+            return $opened;
+        });
+    }
 }

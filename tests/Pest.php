@@ -219,23 +219,7 @@ function seedDocumentTemplates(string $tenantId): void
 function fakePdfRenderer(): ArrayObject
 {
     $pages = new ArrayObject();
-    app()->instance(App\Modules\Platform\Documents\Rendering\PdfRenderer::class, new class($pages) implements App\Modules\Platform\Documents\Rendering\PdfRenderer {
-        /** @var ArrayObject<int, string> */
-        private readonly ArrayObject $pages;
-
-        /** @param ArrayObject<int, string> $pages */
-        public function __construct(ArrayObject $pages)
-        {
-            $this->pages = $pages;
-        }
-
-        public function render(string $html): string
-        {
-            $this->pages->append($html);
-
-            return "%PDF-1.7\n% fake render ".count($this->pages).' '.hash('sha256', $html)."\n%%EOF\n";
-        }
-    });
+    app()->instance(App\Modules\Platform\Documents\Rendering\PdfRenderer::class, new Tests\Support\FakePdfRenderer($pages));
 
     return $pages;
 }

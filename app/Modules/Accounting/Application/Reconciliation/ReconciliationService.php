@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application\Reconciliation;
 
+use App\Modules\Accounting\Application\Contracts\AccountBalanceReconciler;
 use App\Modules\Accounting\Application\Contracts\SubledgerReconciler;
 use App\Modules\Accounting\Application\LedgerQuery;
 use App\Modules\Accounting\Domain\Models\FiscalPeriod;
@@ -102,12 +103,19 @@ final class ReconciliationService
     /** @return array{subledger: int, gl: array{total: int, by_dimension: array<string, int>, unattributed_by_journal: array<string, int>}, variance: int}|null null without control accounts */
     private function measure(SubledgerReconciler $reconciler, FiscalPeriod $period, CarbonImmutable $asOf): ?array
     {
-        $accountIds = $this->controlAccounts($period, $reconciler->subledger(), $asOf);
+        $accountIds = $reconciler instanceof AccountBalanceReconciler
+            ? $this->roleAccounts($period, $reconciler->accountRoles(), $asOf)
+            : $this->controlAccounts($period, $reconciler->subledger(), $asOf);
         if ($accountIds === []) {
             return null;
         }
         $subledger = $reconciler->balanceAt($period->entity_id, $asOf)->getMinorAmount()->toInt();
         $gl = $this->ledger->normalBalanceByDimension($accountIds, $period->book_id, $asOf, $reconciler->itemDimension());
+        if ($reconciler instanceof AccountBalanceReconciler && $reconciler->excludesUnattributedLines()) {
+            // Gap fix GA-43 (A-204): lines without the item dimension (a payment to the government by manual journal) are not in the register.
+            $gl['total'] -= array_sum($gl['unattributed_by_journal']);
+            $gl['unattributed_by_journal'] = [];
+        }
 
         return ['subledger' => $subledger, 'gl' => $gl, 'variance' => $subledger - $gl['total']];
     }
@@ -145,8 +153,17 @@ final class ReconciliationService
     private function controlAccounts(FiscalPeriod $period, string $subledger, CarbonImmutable $asOf): array
     {
         $roles = DB::table('subledger_controls')->where('entity_id', $period->entity_id)->where('book_id', $period->book_id)
-            ->where('subledger', $subledger)->pluck('control_account_role')->all();
+            ->where('subledger', $subledger)->pluck('control_account_role')->map(fn (mixed $role): string => (string) $role)->values()->all();
 
+        return $this->roleAccounts($period, $roles, $asOf);
+    }
+
+    /**
+     * @param array<int, string> $roles
+     * @return list<string>
+     */
+    private function roleAccounts(FiscalPeriod $period, array $roles, CarbonImmutable $asOf): array
+    {
         return array_values(DB::table('account_role_mappings')->where('entity_id', $period->entity_id)->where('book_id', $period->book_id)
             ->whereIn('role_code', $roles)->where('effective_from', '<=', $asOf->toDateString())
             ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', $asOf->toDateString()))

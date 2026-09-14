@@ -298,6 +298,8 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('close', [ClosePageController::class, 'index']);
     Route::post('close/periods/{period}', [ClosePageController::class, 'start'])->whereUuid('period');
+    // Gap fix GA-15: open the fiscal year after the latest one.
+    Route::post('close/fiscal-years', [ClosePageController::class, 'openNextYear']);
     Route::post('close/periods/{period}/reopen', [ClosePageController::class, 'reopen'])->whereUuid('period');
     Route::get('close/runs/{run}', [ClosePageController::class, 'run'])->whereUuid('run');
     Route::post('close/tasks/{task}/execute', [ClosePageController::class, 'execute'])->whereUuid('task')->middleware('moves-money');

@@ -6,11 +6,14 @@ namespace App\Http\Preview;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
+use App\Modules\Accounting\Application\Posting\JournalWritten;
 use App\Modules\Accounting\Application\PostingEngine;
+use App\Modules\Accounting\Domain\Models\Journal;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -22,6 +25,9 @@ use Symfony\Component\HttpFoundation\Response;
 final class PreviewJournal
 {
     public const HEADER = 'X-Journal-Preview';
+
+    /** Gap fix GA-04: what a journal written without an accounting event is called in the preview (lib/events.ts labels). */
+    private const DIRECT_KINDS = ['manual' => 'MANUAL_JOURNAL', 'adjustment' => 'MANUAL_JOURNAL', 'opening' => 'MANUAL_JOURNAL', 'reversal' => 'REVERSAL', 'closing' => 'YEAR_END_CLOSE'];
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -37,14 +43,30 @@ final class PreviewJournal
         $sessionBefore = $session?->all();
         $recorder = new RecordingPostingDispatcher();
         app()->instance(PostingDispatcher::class, $recorder);
+        // Gap fix GA-04: journals the action writes itself (a manual journal's final approval, an approved reversal, the year-end close) are shown too.
+        /** @var list<string> $written */
+        $written = [];
+        Event::listen(JournalWritten::class, function (JournalWritten $posted) use (&$written): void {
+            $written[] = $posted->journalId;
+        });
 
         DB::beginTransaction();
         try {
-            $response = $next($request);
+            try {
+                $response = $next($request);
+            } finally {
+                Event::forget(JournalWritten::class); // the events posted below are previewed from the recorder, not listened to
+            }
             $refusal = $this->refusal($response, $session?->get('errors'));
             $journals = [];
             $failures = [];
             if ($refusal === null) {
+                foreach ($written as $journalId) {
+                    $journal = Journal::query()->find($journalId);
+                    if ($journal !== null) {
+                        $journals[] = $this->describe($journal, self::DIRECT_KINDS[$journal->kind->value] ?? (string) $journal->description);
+                    }
+                }
                 foreach ($recorder->eventIds as $eventId) {
                     [$journal, $failure] = $this->post($eventId);
                     if ($journal !== null) {
@@ -105,11 +127,17 @@ final class PreviewJournal
         if ($journals === []) {
             return [null, ['event' => (string) ($event->event_type ?? ''), 'reason' => (string) ($event->failure_reason ?? 'Nothing to post.')]];
         }
-        $journal = $journals[0];
+
+        return [$this->describe($journals[0], (string) ($event->event_type ?? '')), null];
+    }
+
+    /** @return array{event: string, date: string, lines: list<array{account: string, name: string, debit: string|null, credit: string|null, role: string|null}>, totals: array{debit: string, credit: string}} */
+    private function describe(Journal $journal, string $event): array
+    {
         $lines = [];
         $debit = 0;
         $credit = 0;
-        $currency = (string) ($event->currency ?? '');
+        $currency = (string) $journal->currency;
         foreach (DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('l.journal_id', $journal->id)->orderBy('l.line_no')->get(['a.code', 'a.name', 'l.side', 'l.amount_minor', 'l.role_code', 'l.account_id']) as $line) {
             $amount = (int) $line->amount_minor;
             $isDebit = $line->side === 'debit';
@@ -119,7 +147,7 @@ final class PreviewJournal
                 'role' => $line->role_code === null ? (PageSupport::accountRoles([(string) $line->account_id])[(string) $line->account_id] ?? null) : (string) $line->role_code];
         }
 
-        return [['event' => (string) ($event->event_type ?? ''), 'date' => $journal->posting_date->toDateString(), 'lines' => $lines,
-            'totals' => ['debit' => PageSupport::money($debit, $currency), 'credit' => PageSupport::money($credit, $currency)]], null];
+        return ['event' => $event, 'date' => $journal->posting_date->toDateString(), 'lines' => $lines,
+            'totals' => ['debit' => PageSupport::money($debit, $currency), 'credit' => PageSupport::money($credit, $currency)]];
     }
 }

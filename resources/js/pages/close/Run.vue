@@ -3,18 +3,20 @@ import { Link, router } from '@inertiajs/vue3';
 import { Check, Lock } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 import PendingDocuments from '@/components/close/PendingDocuments.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate, formatMonth } from '@/lib/format';
+import { useJournalConfirm } from '@/lib/journalConfirm';
 import { usePermissions } from '@/lib/permissions';
 
 /**
  * UX brief §6.5 month-end close: the task checklist in order with owners, what each waits for, results and progress; each task opens the
  * queue where its exceptions are; the lock stays disabled with the reason until the close is clean, and asks before locking.
  */
-interface Task { id: string; code: string; order_no: number; owner_role: string; status: string; depends_on: string[]; summary: string | null; done_at: string | null; blocked_by?: string[] }
+interface Task { id: string; code: string; order_no: number; owner_role: string; status: string; depends_on: string[]; summary: string | null; done_at: string | null; blocked_by?: string[]; posts?: boolean }
 const props = defineProps<{
     run: { id: string; status: string; period: string; period_status: string; started_at: string; completed_at: string | null; starts?: string; ends?: string };
     tasks: Task[];
@@ -29,6 +31,14 @@ const expanded = ref<string | null>(null);
 // Slice 2.1b (D-56): a CFO locking before month end writes the reason; it is kept on the audit trail.
 const earlyReason = ref('');
 const words = (code: string) => code.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+// Gap fix GA-43 / GA-15: task names that the code does not spell out.
+const TASK_NAMES: Record<string, string> = {
+    upr_reconciliation: 'Unearned premium reconciliation',
+    vat_reconciliation: 'VAT payable reconciliation',
+    stamp_duty_reconciliation: 'Stamp duty payable reconciliation',
+    year_end_close: 'Year-end close to retained earnings',
+};
+const taskName = (code: string) => TASK_NAMES[code] ?? words(code);
 const month = computed(() => (props.run.starts ? formatMonth(props.run.starts, 'long') : props.run.period));
 const done = computed(() => props.tasks.filter((t) => t.status === 'done' || t.status === 'skipped').length);
 const lockTask = computed(() => props.tasks.find((t) => t.code === 'period_lock'));
@@ -42,13 +52,25 @@ const queueFor = (code: string): { label: string; href: string } | null =>
         premium_reconciliation: { label: 'Receivable ageing', href: `/reports/receivable-ageing?as_of=${end.value}` },
         claims_reconciliation: { label: 'Outstanding claims', href: `/reports/outstanding-claims?as_of=${end.value}` },
         commission_reconciliation: { label: 'Commission', href: '/commission' },
+        // Gap fix GA-43 / GA-15.
+        upr_reconciliation: { label: 'Unearned premium', href: `/reports/unearned-premium?as_of=${end.value}` },
+        suspense_reconciliation: { label: 'Suspense', href: '/suspense' },
+        vat_reconciliation: { label: 'Premium register', href: `/reports/premium-register?from=${props.run.starts}&to=${end.value}` },
+        stamp_duty_reconciliation: { label: 'Premium register', href: `/reports/premium-register?from=${props.run.starts}&to=${end.value}` },
+        year_end_close: { label: 'Profit and loss', href: `/reports/profit-and-loss?from=${props.run.starts}&to=${end.value}` },
         accruals: { label: 'New manual journal', href: '/accounting/journals/create' },
         trial_balance: { label: 'Trial balance', href: `/accounting/trial-balance?as_of=${end.value}` },
         financial_statements: { label: 'Balance sheet', href: `/reports/balance-sheet?as_of=${end.value}` },
     })[code] ?? null;
 const runnable = (t: Task) => props.run.status === 'running' && (t.status === 'pending' || t.status === 'blocked');
 
+// Gap fix GA-09: a task that posts (premium earning, the year-end close) shows the journal it will post first, like every other money action.
+const confirm = useJournalConfirm();
 function execute(task: Task): void {
+    if (task.posts) {
+        void confirm.request(`/close/tasks/${task.id}/execute`, { note: notes[task.id] ?? '' }, `Run ${taskName(task.code).toLowerCase()}?`, 'Run and post');
+        return;
+    }
     router.post(`/close/tasks/${task.id}/execute`, { note: notes[task.id] ?? '' }, { preserveScroll: true, onSuccess: () => (expanded.value = null) });
 }
 function skip(task: Task): void {
@@ -95,7 +117,7 @@ async function lockPeriod(): Promise<void> {
                             <Check v-if="task.status === 'done'" :size="12" :stroke-width="2" aria-hidden="true" /><template v-else>{{ task.order_no }}</template>
                         </span>
                         <div class="min-w-0">
-                            <p class="font-medium">{{ words(task.code) }}</p>
+                            <p class="font-medium">{{ taskName(task.code) }}</p>
                             <p v-if="task.summary" class="truncate text-dense text-ink-2" :title="task.summary">{{ task.summary }}</p>
                             <p v-else-if="task.blocked_by?.length && runnable(task)" class="truncate text-dense text-warn">Waits for {{ task.blocked_by.join(', ') }}</p>
                         </div>
@@ -107,8 +129,8 @@ async function lockPeriod(): Promise<void> {
                         </div>
                     </div>
                     <div v-if="expanded === task.id" class="flex flex-wrap items-center gap-2 bg-surface-2 px-4 py-2 pl-[3.25rem]">
-                        <input v-model="notes[task.id]" class="h-8 min-w-64 flex-1 rounded-control border border-line-control bg-surface px-2 text-body" :placeholder="`Note, or the reason when skipping ${words(task.code).toLowerCase()}`" :aria-label="`Note for ${words(task.code)}`" />
-                        <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50" :disabled="(task.blocked_by?.length ?? 0) > 0" :title="task.blocked_by?.length ? `Waits for ${task.blocked_by.join(', ')}` : undefined" @click="execute(task)">Run the task</button>
+                        <input v-model="notes[task.id]" class="h-8 min-w-64 flex-1 rounded-control border border-line-control bg-surface px-2 text-body" :placeholder="`Note, or the reason when skipping ${taskName(task.code).toLowerCase()}`" :aria-label="`Note for ${taskName(task.code)}`" />
+                        <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50" :disabled="(task.blocked_by?.length ?? 0) > 0" :title="task.blocked_by?.length ? `Waits for ${task.blocked_by.join(', ')}` : undefined" @click="execute(task)">{{ task.posts ? 'Review and run' : 'Run the task' }}</button>
                         <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="!(notes[task.id] ?? '').trim()" @click="skip(task)">Skip with this reason</button>
                     </div>
                 </li>
@@ -142,5 +164,6 @@ async function lockPeriod(): Promise<void> {
                 </button>
             </section>
         </div>
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>
