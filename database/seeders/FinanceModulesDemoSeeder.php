@@ -22,6 +22,8 @@ use Illuminate\Support\Str;
  * - Fixed assets: five classes on their own GL accounts; 21 assets at Head Office and Chattogram brought in with the opening balances at the 31 July 2026
  *   cut-over (acquired 2024–2026, accumulated depreciation to that day in the opening journal), four bought in August and September on credit, and an
  *   old desktop batch sold in August. August's depreciation is posted by the close; September's is left to preview and post.
+ * - Budgets: operating expense accounts; July–September salaries, rent, utilities, marketing and IT posted per branch (accrued to payables); the FY2026
+ *   operating budget per account × branch × month prepared by the accountant and approved by the finance manager, so September shows its variances.
  */
 final class FinanceModulesDemoSeeder
 {
@@ -77,6 +79,67 @@ final class FinanceModulesDemoSeeder
     {
         $this->branches = ['HO' => $headOfficeId, 'CTG' => $chattogramId];
         $this->fixedAssets($entityId, $bankAccountId, $users);
+        $this->budgets($entityId, $users);
+    }
+
+    /** Operating expense accounts the budget and petty cash use: code => name (5300 Salaries exists in the chart). */
+    private const EXPENSE_ACCOUNTS = ['5400' => 'Office Rent', '5410' => 'Electricity, Gas and Water', '5420' => 'Marketing and Advertisement', '5430' => 'IT and Software Expenses',
+        '5440' => 'Printing and Stationery', '5450' => 'Conveyance and Travel', '5460' => 'Entertainment', '5470' => 'Repairs and Maintenance'];
+
+    /** Monthly budget per branch (BDT): account code => [HO, CTG]. Salaries double in March (Eid-ul-Fitr festival bonus). */
+    private const BUDGET = ['5300' => [1_850_000, 720_000], '5400' => [650_000, 220_000], '5410' => [120_000, 55_000], '5420' => [250_000, 90_000], '5430' => [180_000, 45_000],
+        '5440' => [40_000, 15_000], '5450' => [60_000, 30_000], '5460' => [30_000, 12_000], '5470' => [35_000, 12_000]];
+
+    /** Posted expense by month (BDT), billed on credit: month => branch => account code => amount. September shows the variances. */
+    private const ACTUALS = [
+        '2026-07-28' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5410' => 116_400, '5420' => 238_000, '5430' => 176_500], 'CTG' => ['5300' => 720_000, '5400' => 220_000, '5410' => 53_900, '5420' => 85_000, '5430' => 44_000]],
+        '2026-08-28' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5410' => 124_800, '5420' => 262_500, '5430' => 169_000], 'CTG' => ['5300' => 720_000, '5400' => 220_000, '5410' => 57_200, '5420' => 88_000, '5430' => 47_500]],
+        '2026-09-10' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5410' => 128_500, '5420' => 340_000, '5430' => 150_000], 'CTG' => ['5300' => 735_000, '5400' => 220_000, '5410' => 49_800, '5420' => 60_000, '5430' => 52_500]],
+    ];
+
+    /** @param array<string, string> $users */
+    private function budgets(string $entityId, array $users): void
+    {
+        $accounts = ['5300' => $this->account($entityId, '5300')];
+        foreach (self::EXPENSE_ACCOUNTS as $code => $name) {
+            $accounts[$code] = $this->newAccount($entityId, (string) $code, $name, 'debit', 'expense');
+        }
+        // Actuals: the month's salaries, rent, utilities, marketing and IT bills per branch, accrued against accounts payable (accountant prepares, finance manager approves).
+        $journals = app(ManualJournalService::class);
+        $payable = $this->account($entityId, '2500');
+        foreach (self::ACTUALS as $date => $byBranch) {
+            $lines = [];
+            $total = 0;
+            foreach ($byBranch as $branch => $amounts) {
+                foreach ($amounts as $code => $amount) {
+                    $lines[] = new ManualJournalLine($accounts[$code], Side::Debit, $amount * 100, ['branch' => $this->branches[$branch]], self::EXPENSE_ACCOUNTS[$code] ?? 'Salaries');
+                    $lines[] = new ManualJournalLine($payable, Side::Credit, $amount * 100, ['branch' => $this->branches[$branch]], 'Payable');
+                    $total += $amount;
+                }
+            }
+            $month = CarbonImmutable::parse($date);
+            $journal = $journals->create(new ManualJournalRequest($entityId, $month, 'Monthly operating expenses '.$month->format('F Y'), JournalKind::Manual,
+                'Salaries, office rent, utilities, marketing and IT bills for Head Office and Chattogram', 'BDT', $lines), $users['accountant']);
+            $journals->submit($journal->id, $users['accountant']);
+            $journals->approve($journal->id, $users['finance_manager']);
+        }
+
+        // FY2026 budget: prepared by the accountant (one row per account and branch), approved by the finance manager.
+        $budgets = app(\App\Modules\Finance\Budget\Application\BudgetService::class);
+        $budget = $budgets->create($entityId, 2026, 'MAIN', 'Operating budget', $users['accountant']);
+        foreach (['HO' => 0, 'CTG' => 1] as $branch => $column) {
+            $rows = [];
+            foreach (self::BUDGET as $code => $monthly) {
+                $amounts = array_fill(0, 12, $monthly[$column] * 100);
+                if ((int) $code === 5300) {
+                    $amounts[8] *= 2; // March: Eid-ul-Fitr festival bonus
+                }
+                $rows[] = ['account_id' => $accounts[$code], 'amounts' => $amounts];
+            }
+            $budgets->saveBranchRows($budget, $this->branches[$branch], $rows, $users['accountant']);
+        }
+        $budgets->submit($budget, $users['accountant']);
+        $budgets->approve($budget, $users['finance_manager']);
     }
 
     /** @param array<string, string> $users */
@@ -104,7 +167,7 @@ final class FinanceModulesDemoSeeder
                 $accumulated += DepreciationCalculator::monthly($method, $cost * 100, 0, $method === 'straight_line' ? $lifeOrRate : null, $method === 'reducing_balance' ? $lifeOrRate * 100 : null,
                     $accumulated, CarbonImmutable::parse($acquiredOn), $month);
             }
-            $id = $assets->registerOpening($entityId, ['class_id' => $classes[$class], 'branch_id' => $this->branches[$branch], 'description' => $description, 'location' => $location,
+            $id = $assets->registerOpening($entityId, ['class_id' => $classes[$class] ?? '', 'branch_id' => $this->branches[$branch], 'description' => $description, 'location' => $location,
                 'custodian' => $custodian, 'supplier' => $supplier, 'acquired_on' => $acquiredOn, 'cost_minor' => $cost * 100], $accumulated, $cutOver, $users['accountant']);
             $desktops ??= str_starts_with($description, 'Dell OptiPlex') ? $id : null;
             $key = "{$class}|{$branch}";
@@ -113,14 +176,17 @@ final class FinanceModulesDemoSeeder
         $this->openingJournal($entityId, $opening, $users);
 
         foreach (self::NEW_ASSETS as [$branch, $class, $description, $acquiredOn, $cost, $location, $custodian, $supplier, $invoice]) {
-            $assets->acquire($entityId, ['class_id' => $classes[$class], 'branch_id' => $this->branches[$branch], 'description' => $description, 'location' => $location, 'custodian' => $custodian,
+            $assets->acquire($entityId, ['class_id' => $classes[$class] ?? '', 'branch_id' => $this->branches[$branch], 'description' => $description, 'location' => $location, 'custodian' => $custodian,
                 'supplier' => $supplier, 'invoice_ref' => $invoice, 'acquired_on' => $acquiredOn, 'cost_minor' => $cost * 100, 'paid_via' => 'payable'], $users['accountant']);
         }
         // The desktops replaced by the new laptops, sold to a second-hand dealer in August.
         $assets->dispose((string) $desktops, 'sale', CarbonImmutable::parse('2026-08-20'), 35_000_00, $bankAccountId, 'Replaced by ThinkPad laptops; sold to Elephant Road Computer Market', $users['accountant']);
     }
 
-    /** @param array<string, array{cost: int, accumulated: int}> $opening "class|branch" → totals */
+    /**
+     * @param array<string, array{cost: int, accumulated: int}> $opening "class|branch" → totals
+     * @param array<string, string> $users
+     */
     private function openingJournal(string $entityId, array $opening, array $users): void
     {
         $lines = [];
@@ -142,10 +208,10 @@ final class FinanceModulesDemoSeeder
         $journals->approve($journal->id, $users['finance_manager']);
     }
 
-    private function newAccount(string $entityId, string $code, string $name, string $normalSide): string
+    private function newAccount(string $entityId, string $code, string $name, string $normalSide, string $type = 'asset'): string
     {
         $id = (string) Str::uuid7();
-        DB::table('accounts')->insert(['id' => $id, 'tenant_id' => TenantContext::id(), 'entity_id' => $entityId, 'code' => $code, 'name' => $name, 'type' => 'asset', 'normal_side' => $normalSide,
+        DB::table('accounts')->insert(['id' => $id, 'tenant_id' => TenantContext::id(), 'entity_id' => $entityId, 'code' => $code, 'name' => $name, 'type' => $type, 'normal_side' => $normalSide,
             'is_postable' => true, 'is_control' => false, 'control_subledger' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
 
         return $id;

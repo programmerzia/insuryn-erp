@@ -218,6 +218,11 @@ function populateEveryTenantTable(array $ctx): void
             'to_branch_id' => (string) Str::uuid7(), 'reason' => 'Isolation', 'cost_minor' => 100, 'accumulated_minor' => 0, 'moved_by' => $world['admin']]);
         DB::table('asset_disposals')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'asset_id' => $assetId, 'number' => 'ADS-ISOLATION-'.$t, 'disposal_date' => '2026-10-01', 'kind' => 'write_off',
             'proceeds_minor' => 0, 'cost_minor' => 100, 'accumulated_minor' => 3, 'nbv_minor' => 97, 'gain_loss_minor' => -97, 'reason' => 'Isolation', 'disposed_by' => $world['admin']]);
+        // Design addendum v2 §B.8.1 budgets.
+        DB::table('budgets')->insert(['id' => $budgetId = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'fiscal_year' => 2026, 'code' => 'MAIN', 'name' => 'Budget',
+            'version' => 1, 'status' => 'draft', 'prepared_by' => $world['admin']]);
+        DB::table('budget_lines')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'budget_id' => $budgetId, 'account_id' => $ctx['accounts']['salary_expense'], 'branch_id' => $ctx['branch_id'],
+            'period_no' => 3, 'amount_minor' => 100]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
         // Reinsurance MVP (G4): every reinsurance table.
         $t = $ctx['tenant_id'];

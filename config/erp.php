@@ -343,6 +343,8 @@ return [
         'screens' => [
             ['title' => 'Fixed asset register', 'description' => 'Cost, accumulated depreciation and net book value per asset at a date, by class and branch, reconciled to the ledger.',
                 'href' => '/fixed-assets/register', 'export' => '/fixed-assets/register/export'],
+            ['title' => 'Budget variance', 'description' => 'Actual against the approved budget for a month and the year to date, by account group and branch.',
+                'href' => '/budgets/variance', 'export' => '/budgets/variance/export'],
         ],
     ],
     'fixed_assets' => [

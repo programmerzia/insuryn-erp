@@ -65,6 +65,13 @@ final class ReasonMessages
         'ASSET_PERIOD_NOT_OPEN' => 'That date is in a month that is not open for posting. Choose a date in an open month.',
         'ASSET_NOT_IN_SERVICE' => 'This asset has been disposed of, so nothing more can be done with it. Refresh the page.',
         'ASSET_SAME_BRANCH' => 'The asset is already at that branch. Choose another branch.',
+        // Design addendum v2 §B.8.1 budgets.
+        'BUDGET_YEAR_UNKNOWN' => 'That fiscal year is not set up. Open the fiscal year first, then prepare its budget.',
+        'BUDGET_NOT_DRAFT' => 'This budget version is no longer a draft. Make a new version to change it.',
+        'BUDGET_NOT_SUBMITTED' => 'Only a budget sent for approval can be approved or returned. Refresh the page.',
+        'BUDGET_ACCOUNT_INVALID' => 'Budget lines are for active income and expense accounts. Choose another account.',
+        'BUDGET_EMPTY' => 'The budget has no amounts yet. Enter them before sending it for approval.',
+        'BUDGET_NO_ACTUALS' => 'Last year has no posted income or expense by branch to copy. Enter the budget in the grid or paste it instead.',
         'ASSET_DEPRECIATED_AFTER_DISPOSAL' => 'Depreciation is already posted for the month of this disposal or later. Date the disposal after the last depreciated month.',
         'EVENT_NOT_STUCK' => 'This accounting event has already been posted or is waiting its turn; only failed or long-queued events can be sent again. Refresh the list.',
         'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',

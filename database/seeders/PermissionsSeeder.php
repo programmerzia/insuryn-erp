@@ -49,6 +49,8 @@ final class PermissionsSeeder extends Seeder
         'ap.manage_suppliers','ap.enter_bills','ap.approve_bills','ap.prepare_payments','ap.approve_payments','ap.release_payments',
         // Design addendum v2 §B.7 fixed assets (A-276)
         'fa.manage','fa.post_depreciation',
+        // Design addendum v2 §B.8.1 budgets (A-277)
+        'budget.prepare','budget.approve',
     ];
 
     /**
@@ -72,6 +74,7 @@ final class PermissionsSeeder extends Seeder
         ['ap.prepare_payments', 'ap.approve_payments', 'object'],
         ['ap.approve_payments', 'ap.release_payments', 'object'],
         ['ap.prepare_payments', 'ap.release_payments', 'object'],
+        ['budget.prepare', 'budget.approve', 'object'], // design addendum v2 §B.8.1: whoever prepared a budget version does not approve it
     ];
 
     public function run(): void

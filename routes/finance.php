@@ -24,3 +24,17 @@ Route::middleware('auth')->prefix('fixed-assets')->group(function (): void {
     Route::post('{asset}/documents', [$assets, 'attachDocument'])->whereUuid('asset');
     Route::get('{asset}/documents/{document}', [$assets, 'downloadDocument'])->whereUuid(['asset', 'document']);
 });
+
+// Design addendum v2 §B.8.1 budgets: versions, the account × month grid per branch, approval (SoD prepare ✕ approve), variance report.
+Route::middleware('auth')->prefix('budgets')->group(function (): void {
+    $budgets = \App\Modules\Finance\Budget\Http\Controllers\BudgetsPageController::class;
+    Route::get('/', [$budgets, 'index']);
+    Route::post('/', [$budgets, 'store']);
+    Route::get('variance', [$budgets, 'variance']);
+    Route::get('variance/export', [$budgets, 'exportVariance']);
+    Route::get('{budget}', [$budgets, 'show'])->whereUuid('budget');
+    Route::post('{budget}/lines', [$budgets, 'saveRows'])->whereUuid('budget');
+    Route::post('{budget}/paste', [$budgets, 'paste'])->whereUuid('budget');
+    Route::post('{budget}/copy-actuals', [$budgets, 'copyActuals'])->whereUuid('budget');
+    Route::post('{budget}/{action}', [$budgets, 'transition'])->whereUuid('budget')->whereIn('action', ['submit', 'approve', 'return', 'revise']);
+});

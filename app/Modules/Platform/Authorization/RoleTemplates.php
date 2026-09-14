@@ -63,7 +63,7 @@ final class RoleTemplates
         // ASSUMPTION A-242 (slices 2.3/2.4): the finance manager (and CFO) approve supplier bills and payment runs the accountant prepared, and keep suppliers.
         'ap.manage_suppliers', 'ap.approve_bills', 'ap.approve_payments',
         // ASSUMPTION A-276 (design addendum v2 §B.7): the finance manager (and CFO) post the monthly depreciation the accountant previews.
-        'fa.post_depreciation'];
+        'fa.post_depreciation', 'budget.approve'];
     // ASSUMPTION A-268 (market gap G5): the CFO approves and posts the technical provisions run, never one they prepared (SoD object rule).
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve',
         // ASSUMPTION A-242 (slice 2.4): the CFO releases supplier payment runs the finance manager approved (never one they approved: SoD object rule).
@@ -108,7 +108,9 @@ final class RoleTemplates
                 // manager and CFO built on it never enter the bills they approve).
                 'ap.manage_suppliers', 'ap.enter_bills', 'ap.prepare_payments',
                 // ASSUMPTION A-276 (design addendum v2 §B.7): the accountant keeps the fixed asset register.
-                'fa.manage']],
+                'fa.manage',
+                // ASSUMPTION A-277 (design addendum v2 §B.8.1): the accountant prepares the budget; the finance manager (and CFO) approve it.
+                'budget.prepare']],
             'finance_manager' => ['name' => 'Finance Manager', 'permissions' => $financeManager],
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
             // ASSUMPTION A-287 (People/Payroll MVP): HR keeps the employee records and the payroll rules and calculates the monthly payroll; finance approves it.

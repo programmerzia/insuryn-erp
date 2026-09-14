@@ -19,6 +19,7 @@ final class PermissionCatalogue
         'numbering' => 'Numbering', 'ri' => 'Reinsurance', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
+        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'budget' => 'Budgets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
@@ -96,6 +97,9 @@ final class PermissionCatalogue
         // Design addendum v2 §B.7 fixed assets (A-276)
         'fa.manage' => ['Maintain the fixed asset register', 'Set asset classes, capitalise assets, move them between branches and dispose of them.'],
         'fa.post_depreciation' => ['Post depreciation', 'Post the monthly depreciation of the fixed asset register.'],
+        // Design addendum v2 §B.8.1 budgets (A-277)
+        'budget.prepare' => ['Prepare budgets', 'Enter, paste or copy budget amounts and send a budget version for approval.'],
+        'budget.approve' => ['Approve budgets', 'Approve or return a budget version someone else prepared.'],
     ];
 
     public static function groupLabel(string $code): string

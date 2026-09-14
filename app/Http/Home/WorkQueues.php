@@ -50,8 +50,9 @@ final class WorkQueues
         // GA-08: the finance manager and CFO requeue accounting events that did not post, so they see them too.
         // Slices 2.3/2.4: the finance manager approves supplier bills and payment runs; the CFO releases approved runs.
         // GA-26: they also decide referrals (A-86) and release refunds (receipt.refund_release).
-        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve'],
-        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release'],
+        // Design addendum v2 §B.8.1: the CFO (and finance manager) see this month's expense against the approved budget.
+        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'expense_vs_budget', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve'],
+        'cfo' => ['expense_vs_budget', 'close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_release'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
     ];
 
@@ -115,6 +116,7 @@ final class WorkQueues
             'claim_approvals', 'approvals_over_threshold' => count($this->approvals($userId, $key)),
             'close_progress' => $this->closeRun() === null ? 0 : (int) DB::table('period_close_tasks')->where('close_run_id', $this->closeRun()->id)->whereNotIn('status', ['done', 'skipped'])->count(),
             'cash_position' => 0,
+            'expense_vs_budget' => count(array_filter($this->budgetRows(), fn (array $r): bool => ! $r['favourable'])),
             default => $this->query($key, $userId)->count(),
         };
     }
@@ -155,6 +157,7 @@ final class WorkQueues
             // GA-26: every approval this user may decide (a manual journal needs one whatever its amount), so not "over threshold".
             'approvals_over_threshold' => ['Waiting for my approval', '/approvals', 'Nothing over a limit is waiting for you.', ['Open approvals', '/approvals']],
             'cash_position' => ['Cash position', '/bank', 'No bank account is set up.', ['Add a bank account', '/bank']],
+            'expense_vs_budget' => ['Expense vs budget this month', '/budgets/variance', 'No approved budget or expense for this month yet.', ['Open budgets', '/budgets']],
             'recent_reversals' => ['Recent reversals and adjustments', '/accounting/journals', 'No reversals or adjustments in the last 30 days.', ['Open journals', '/accounting/journals']],
             'period_reopens' => ['Period reopen events', '/close', 'No period has been reopened.', ['Open the close', '/close']],
             'control_manual_postings' => ['Control-account manual postings', '/accounting/journals', 'No manual postings to control accounts.', ['Open journals', '/accounting/journals']],
@@ -169,6 +172,7 @@ final class WorkQueues
             'claim_approvals', 'approvals_over_threshold' => $this->approvalBlock($block, $this->approvals($userId, $key)),
             'close_progress' => $this->closeBlock($block),
             'cash_position' => $this->cashBlock($block, $today),
+            'expense_vs_budget' => $this->budgetBlock($block),
             default => [...$block, ...$this->rows($key, $userId)],
         };
 
@@ -539,5 +543,57 @@ final class WorkQueues
         }
 
         return [...$block, 'count' => $accounts === [] ? 0 : 1, 'cash' => ['balance' => PageSupport::money($balance, $currency), 'currency' => $currency, 'days' => $days]];
+    }
+
+    /**
+     * Design addendum v2 §B.8.1: this month's expense per account (all branches) against the approved budget, over budget first.
+     *
+     * @return list<array{account: string, budget_minor: int, actual_minor: int, favourable: bool}>
+     */
+    private function budgetRows(): array
+    {
+        $entityId = (string) DB::table('legal_entities')->orderBy('code')->value('id');
+        $today = app(BusinessClock::class)->today();
+        $period = DB::table('fiscal_periods')->where('entity_id', $entityId)->where('starts', '<=', $today->toDateString())->where('ends', '>=', $today->toDateString())->first(['year', 'period']);
+        if ($entityId === '' || $period === null) {
+            return [];
+        }
+        $byAccount = [];
+        foreach (app(\App\Modules\Finance\Budget\Application\BudgetVarianceQuery::class)->variance($entityId, (int) $period->year, (int) $period->period)['rows'] as $row) {
+            if ($row['type'] !== 'expense') {
+                continue;
+            }
+            $key = "{$row['code']} {$row['name']}";
+            $byAccount[$key] ??= ['account' => $key, 'budget_minor' => 0, 'actual_minor' => 0, 'favourable' => true];
+            $byAccount[$key]['budget_minor'] += $row['budget_minor'];
+            $byAccount[$key]['actual_minor'] += $row['actual_minor'];
+            $byAccount[$key]['favourable'] = $byAccount[$key]['actual_minor'] <= $byAccount[$key]['budget_minor'];
+        }
+        $rows = array_values($byAccount);
+        usort($rows, fn (array $a, array $b): int => [$a['favourable'], $b['actual_minor'] - $b['budget_minor']] <=> [$b['favourable'], $a['actual_minor'] - $a['budget_minor']]);
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function budgetBlock(array $block): array
+    {
+        $currency = (string) (DB::table('legal_entities')->value('base_currency') ?? 'BDT');
+        $rows = $this->budgetRows();
+        $budget = array_sum(array_column($rows, 'budget_minor'));
+        $actual = array_sum(array_column($rows, 'actual_minor'));
+        $shown = array_map(fn (array $r): array => ['href' => '/budgets/variance', 'cells' => ['account' => $r['account'], 'budget' => PageSupport::money($r['budget_minor'], $currency),
+            'actual' => PageSupport::money($r['actual_minor'], $currency), 'status' => $r['favourable'] ? 'within_budget' : 'over_budget']], array_slice($rows, 0, self::TOP));
+        if ($rows !== []) {
+            $shown[] = ['href' => '/budgets/variance', 'cells' => ['account' => 'All expenses', 'budget' => PageSupport::money($budget, $currency), 'actual' => PageSupport::money($actual, $currency),
+                'status' => $actual <= $budget ? 'within_budget' : 'over_budget']];
+        }
+
+        return [...$block, 'count' => count(array_filter($rows, fn (array $r): bool => ! $r['favourable'])),
+            'columns' => [['id' => 'account', 'label' => 'Expense', 'type' => 'text'], ['id' => 'budget', 'label' => 'Budget', 'type' => 'money'], ['id' => 'actual', 'label' => 'Actual', 'type' => 'money'],
+                ['id' => 'status', 'label' => 'Status', 'type' => 'status']], 'rows' => $shown];
     }
 }
