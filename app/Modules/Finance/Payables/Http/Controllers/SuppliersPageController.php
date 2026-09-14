@@ -32,16 +32,22 @@ final class SuppliersPageController
         $entity = PageSupport::entity();
         $open = DB::table('ap_bills')->whereIn('status', ['posted', 'partially_paid'])->groupBy('supplier_id')
             ->selectRaw('supplier_id, sum(payable_minor - paid_minor) as owed, min(due_date) as next_due');
-        $rows = DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->leftJoinSub($open, 'o', 'o.supplier_id', '=', 's.id')
-            ->where('s.entity_id', $entity['id'])->orderBy('p.display_name')
-            ->get(['s.id', 's.code', 'p.display_name', 's.category', 's.status', 's.payment_terms_days', 's.tin', 's.bin', 's.bank_name', 's.account_no_masked', 'o.owed', 'o.next_due'])
-            ->map(fn (object $s): array => ['id' => (string) $s->id, 'code' => (string) $s->code, 'name' => (string) $s->display_name, 'category' => (string) $s->category,
+        // GA-40: the list pages on the server like the other lists.
+        $page = DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->leftJoinSub($open, 'o', 'o.supplier_id', '=', 's.id')
+            ->where('s.entity_id', $entity['id'])->orderBy('p.display_name')->orderBy('s.id')
+            ->select(['s.id', 's.code', 'p.display_name', 's.category', 's.status', 's.payment_terms_days', 's.tin', 's.bin', 's.bank_name', 's.account_no_masked', 'o.owed', 'o.next_due'])
+            ->paginate(PageSupport::listPageSize())->withQueryString();
+        $rows = [];
+        foreach ($page->items() as $s) {
+            /** @var object{id: string, code: string, display_name: string, category: string, status: string, payment_terms_days: int|string, tin: string|null, bin: string|null, bank_name: string|null, account_no_masked: string|null, owed: int|string|null, next_due: string|null} $s */
+            $rows[] = ['id' => (string) $s->id, 'code' => (string) $s->code, 'name' => (string) $s->display_name, 'category' => (string) $s->category,
                 'category_label' => (string) config("erp.payables.categories.{$s->category}.label", $s->category), 'status' => (string) $s->status, 'terms' => (int) $s->payment_terms_days,
                 'tin' => $s->tin, 'bin' => $s->bin, 'bank' => $s->bank_name === null ? null : trim("{$s->bank_name} {$s->account_no_masked}"),
-                'owed' => PageSupport::money((int) ($s->owed ?? 0), $entity['currency']), 'next_due' => $s->next_due])->values()->all();
+                'owed' => PageSupport::money((int) ($s->owed ?? 0), $entity['currency']), 'next_due' => $s->next_due];
+        }
 
-        return Inertia::render('payables/suppliers/Index', ['suppliers' => $rows, 'categories' => PayablesArea::categories(),
-            'canManage' => $this->permissions->has(PageSupport::actor($request), SupplierService::PERMISSION)]);
+        return Inertia::render('payables/suppliers/Index', ['suppliers' => PageSupport::page($page, $rows), 'categories' => PayablesArea::categories(),
+            'canManage' => $this->permissions->has(PageSupport::actor($request), SupplierService::PERMISSION), 'canEnterBills' => $this->permissions->has(PageSupport::actor($request), 'ap.enter_bills')]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -93,7 +99,7 @@ final class SuppliersPageController
                     'balance' => $money($l['balance_minor'])], $statement['lines'])],
             'categories' => PayablesArea::categories(),
             'canManage' => $this->permissions->has($actor, SupplierService::PERMISSION),
-            'canEnterBills' => $this->permissions->has($actor, 'ap.enter_bills'),
+            'canEnterBills' => $this->permissions->has($actor, 'ap.enter_bills') && $model->status !== 'blocked',
             'timeline' => $history->timeline([['supplier', $model->id]]),
             'audit' => Inertia::defer(fn (): array => $history->audit([['supplier', $model->id], ['party', $model->party_id]]), 'history'),
         ]);

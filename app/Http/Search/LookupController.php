@@ -67,6 +67,9 @@ final class LookupController
             'payee' => $this->guarded($actor, [self::PAYEE_DUTY], fn (): array => $this->payees($like)),
             // Gap fix GA-21: whoever receipts a claim recovery picks its payer (a salvage buyer, a third party's insurer) from every active party.
             'payer' => $this->guarded($actor, \App\Modules\Insurance\Claims\Application\ClaimRecoveryReceipts::PERMISSIONS, fn (): array => $this->payees($like)),
+            // UI consistency pass: the supplier bill's supplier and claim pickers, and the payment run's supplier filter.
+            'supplier' => $this->guarded($actor, \App\Modules\Finance\Payables\Http\Controllers\PayablesArea::AREA, fn (): array => $this->suppliers($like)),
+            'claim' => $this->guarded($actor, ['ap.enter_bills', 'claim.register', 'claim.reserve', 'claim.approve', 'reports.claims'], fn (AreaReach $reach): array => $this->claims($like, $reach)),
             default => abort(404),
         };
 
@@ -159,8 +162,8 @@ final class LookupController
 
     /**
      * @param list<string> $area
-     * @param callable(AreaReach): list<array<string, string>> $query
-     * @return list<array<string, string>>
+     * @param callable(AreaReach): list<array<string, mixed>> $query
+     * @return list<array<string, mixed>>
      */
     private function guarded(string $actor, array $area, callable $query): array
     {
@@ -254,6 +257,31 @@ final class LookupController
         $results = [];
         foreach ($rows as $row) {
             $results[] = ['id' => (string) $row->id, 'label' => (string) $row->number, 'detail' => "{$row->display_name} · ".ucfirst((string) $row->status).' · cover '.self::day((string) $row->inception).' to '.self::day((string) $row->expiry)];
+        }
+
+        return $results;
+    }
+
+    /** @return list<array<string, mixed>> suppliers (not blocked) by name or code, with their terms, withholding rates and default expense account */
+    private function suppliers(string $like): array
+    {
+        $rows = DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->where('s.entity_id', PageSupport::entity()['id'])->where('s.status', '<>', 'blocked')
+            ->where(fn ($q) => $q->where('p.display_name', 'ilike', $like)->orWhere('s.code', 'ilike', $like))->orderBy('p.display_name')->limit(self::LIMIT)
+            ->get(['s.id', 's.code', 'p.display_name', 's.category', 's.payment_terms_days', 's.default_account_id']);
+
+        return array_values(array_map(fn (object $s): array => \App\Modules\Finance\Payables\Http\Controllers\PayablesArea::supplierOption($s), $rows->all()));
+    }
+
+    /** @return list<array<string, string>> claims within reach by number or policyholder, newest first, with their policy */
+    private function claims(string $like, AreaReach $reach): array
+    {
+        $rows = $reach->constrain(DB::table('claims as c'), 'c.entity_id', 'c.branch_id')->join('policies as p', 'p.id', '=', 'c.policy_id')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')
+            ->where(fn ($q) => $q->where('c.number', 'ilike', $like)->orWhere('p.number', 'ilike', $like)->orWhere('h.display_name', 'ilike', $like))->orderByDesc('c.reported_on')->limit(self::LIMIT)
+            ->get(['c.id', 'c.number', 'c.status', 'c.policy_id', 'p.number as policy_number', 'h.display_name']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['id' => (string) $row->id, 'label' => (string) $row->number, 'detail' => "{$row->policy_number} · {$row->display_name} · ".ucfirst(str_replace('_', ' ', (string) $row->status)),
+                'policy_id' => (string) $row->policy_id];
         }
 
         return $results;

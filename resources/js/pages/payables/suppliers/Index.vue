@@ -13,10 +13,11 @@ import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+import { type Paginated, serverPage } from '@/lib/paging';
 
 /** Payables → Suppliers (addendum v2 §B.4): who we pay, on what terms, with which taxes deducted at source and into which bank account. */
 interface SupplierRow { id: string; code: string; name: string; category: string; category_label: string; status: string; terms: number; tin: string | null; bin: string | null; bank: string | null; owed: string; next_due: string | null }
-defineProps<{ suppliers: SupplierRow[]; categories: { value: string; label: string }[]; canManage: boolean }>();
+defineProps<{ suppliers: Paginated<SupplierRow>; categories: { value: string; label: string }[]; canManage: boolean; canEnterBills: boolean }>();
 
 const active = ref<string | null>(null);
 const adding = ref(false);
@@ -29,7 +30,7 @@ const columns: DataColumn<SupplierRow>[] = [
     { id: 'bank', header: 'Paid into', value: (s) => s.bank ?? 'No bank account', width: 200, muted: true },
     { id: 'owed', header: 'Owed', type: 'money', value: (s) => s.owed, total: true },
     { id: 'next_due', header: 'Next due', type: 'date', value: (s) => s.next_due },
-    { id: 'status', header: 'Status', type: 'status', value: (s) => s.status },
+    { id: 'status', header: 'Status', type: 'status', value: (s) => s.status, filterOptions: ['active', 'on_hold', 'blocked'] },
 ];
 function submit(): void {
     form.post('/payables/suppliers', { onSuccess: () => (adding.value = false) });
@@ -37,16 +38,18 @@ function submit(): void {
 </script>
 
 <template>
-    <AppLayout help="bank" title="Suppliers" fill>
+    <AppLayout help="payables" title="Suppliers" fill>
         <QueueView
             id="suppliers"
             v-model:active="active"
             title="Suppliers"
             :columns="columns"
-            :rows="suppliers"
+            :rows="suppliers.data"
+            :page="serverPage(suppliers)"
             :row-key="(s) => s.id"
             currency="BDT"
             empty-text="No suppliers yet: add the landlord, utilities and garages you pay."
+            :empty-action="canManage ? { label: 'Add a supplier' } : null"
             :action="canManage ? { label: 'Add a supplier' } : null"
             :inspector-title="(s) => s.name"
             :inspector-subtitle="(s) => `${s.code} · ${s.category_label}`"
@@ -58,7 +61,7 @@ function submit(): void {
                 </DetailList>
                 <div class="mt-4 flex gap-2">
                     <Link :href="`/payables/suppliers/${row.id}`" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Open the supplier</Link>
-                    <Link :href="`/payables/bills/create?supplier=${row.id}`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Enter a bill</Link>
+                    <Link v-if="canEnterBills && row.status !== 'blocked'" :href="`/payables/bills/create?supplier=${row.id}`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Enter a bill</Link>
                 </div>
             </template>
         </QueueView>

@@ -7,10 +7,11 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+import { type Paginated, serverPage } from '@/lib/paging';
 
 /** Payables → Supplier bills (addendum v2 §B.4): every bill, with the views finance works from — awaiting approval, due this week, overdue. */
 interface BillRow { id: string; number: string; supplier: string; reference: string; bill_date: string; due_date: string; branch: string; gross: string; payable: string; outstanding: string; status: string; description: string | null }
-const props = defineProps<{ bills: BillRow[]; view: string; statuses: string[]; canEnter: boolean }>();
+const props = defineProps<{ bills: Paginated<BillRow>; view: string; statuses: string[]; canEnter: boolean }>();
 
 const active = ref<string | null>(null);
 const views = [
@@ -26,6 +27,7 @@ const columns: DataColumn<BillRow>[] = [
     { id: 'reference', header: 'Invoice', value: (b) => b.reference, width: 130, muted: true },
     { id: 'bill_date', header: 'Bill date', type: 'date', value: (b) => b.bill_date },
     { id: 'due_date', header: 'Due', type: 'date', value: (b) => b.due_date },
+    { id: 'branch', header: 'Branch', value: (b) => b.branch, width: 80, muted: true },
     { id: 'gross', header: 'Gross', type: 'money', value: (b) => b.gross, total: true },
     { id: 'payable', header: 'Payable', type: 'money', value: (b) => b.payable, total: true },
     { id: 'outstanding', header: 'Outstanding', type: 'money', value: (b) => b.outstanding, total: true },
@@ -37,17 +39,19 @@ function show(view: string): void {
 </script>
 
 <template>
-    <AppLayout help="bank" title="Supplier bills" fill>
+    <AppLayout help="payables" title="Supplier bills" fill>
         <QueueView
             id="supplier-bills"
             v-model:active="active"
             title="Supplier bills"
             :columns="columns"
-            :rows="bills"
+            :rows="bills.data"
+            :page="serverPage(bills)"
             :row-key="(b) => b.id"
             currency="BDT"
             :url-sync="false"
             empty-text="No supplier bills in this view."
+            :empty-action="canEnter && view === 'all' ? { label: 'Enter a bill', href: '/payables/bills/create' } : null"
             :action="canEnter ? { label: 'Enter a bill', href: '/payables/bills/create' } : null"
             :inspector-title="(b) => b.number"
             :inspector-subtitle="(b) => `${b.supplier} · ${b.reference}`"

@@ -34,6 +34,20 @@ final class PayablesArea
             ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => ['id' => (string) $b->id, 'label' => "{$b->bank_name} {$b->account_no_masked}"])->all());
     }
 
+    /**
+     * A supplier as the bill form's lookup offers it: label, terms, the category's withholding rates and the default expense account.
+     *
+     * @return array{id: string, label: string, detail: string, terms: int, vat_bp: int, vds_bp: int, tds_bp: int, category: string, default_account: array{id: string, label: string}|null}
+     */
+    public static function supplierOption(\stdClass $s): array
+    {
+        $rates = \App\Modules\Finance\Payables\Application\SupplierService::rates((string) $s->category);
+        $account = $s->default_account_id === null ? null : ['id' => (string) $s->default_account_id, 'label' => (string) self::accountLabel((string) $s->default_account_id)];
+
+        return ['id' => (string) $s->id, 'label' => (string) $s->display_name, 'detail' => "{$s->code} · {$rates['label']} · terms {$s->payment_terms_days} days", 'terms' => (int) $s->payment_terms_days,
+            'vat_bp' => $rates['vat_bp'], 'vds_bp' => $rates['vds_bp'], 'tds_bp' => $rates['tds_bp'], 'category' => $rates['label'], 'default_account' => $account];
+    }
+
     public static function accountLabel(?string $accountId): ?string
     {
         if ($accountId === null) {

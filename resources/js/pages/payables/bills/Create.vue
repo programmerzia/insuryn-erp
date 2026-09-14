@@ -18,24 +18,30 @@ import { formatMinor, parseMoney } from '@/lib/money';
  * hospital bills — the claim. VAT, VAT deducted at source and tax deducted at source follow the supplier's category (placeholder rates, verify); the VAT
  * on a line can be typed from the invoice. The payable is what the supplier receives after the deductions.
  */
-interface SupplierOption { id: string; label: string; terms: number; vat_bp: number; vds_bp: number; tds_bp: number; category: string; default_account: LookupResult | null }
-const props = defineProps<{ today: string; suppliers: SupplierOption[]; branches: { value: string; label: string }[]; claims: { value: string; label: string; policy_id: string }[]; inputVatRecoverable: boolean; supplierId: string | null }>();
+interface SupplierOption extends LookupResult { terms: number; vat_bp: number; vds_bp: number; tds_bp: number; category: string; default_account: LookupResult | null }
+const props = defineProps<{ today: string; supplier: SupplierOption | null; branches: { value: string; label: string }[]; defaultBranchId: string; inputVatRecoverable: boolean }>();
 
 interface Line { description: string; account_id: string; net: string; vat: string; claim_id: string; policy_id: string }
 const blankLine = (): Line => ({ description: '', account_id: '', net: '', vat: '', claim_id: '', policy_id: '' });
-const form = useForm({ supplier_id: props.supplierId ?? '', branch_id: props.branches[0]?.value ?? '', supplier_reference: '', bill_date: props.today, due_date: '', description: '', send_for_approval: true, lines: [blankLine()] as Line[] });
+const form = useForm({ supplier_id: props.supplier?.id ?? '', branch_id: props.defaultBranchId, supplier_reference: '', bill_date: props.today, due_date: '', description: '', send_for_approval: true, lines: [blankLine()] as Line[] });
 const lineAccounts = ref<(LookupResult | null)[]>([null]);
 const lineKeys = ref<number[]>([0]);
 let nextKey = 1;
-const supplier = computed(() => props.suppliers.find((s) => s.id === form.supplier_id) ?? null);
+// The supplier picked in the lookup (its terms, rates and default account come with it).
+const supplier = ref<SupplierOption | null>(props.supplier);
+function pickSupplier(result: LookupResult | null): void {
+    supplier.value = result as SupplierOption | null;
+}
+function pickClaim(line: Line, result: LookupResult | null): void {
+    line.policy_id = (result as (LookupResult & { policy_id?: string }) | null)?.policy_id ?? '';
+}
 
 function addDays(date: string, days: number): string {
     const d = new Date(`${date}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() + days);
     return d.toISOString().slice(0, 10);
 }
-watch(() => [form.supplier_id, form.bill_date] as const, ([id, date]) => {
-    const s = props.suppliers.find((x) => x.id === id);
+watch(() => [supplier.value, form.bill_date] as const, ([s, date]) => {
     if (!s || !date) return;
     form.due_date = addDays(date, s.terms);
     form.lines.forEach((line, index) => {
@@ -82,19 +88,19 @@ const errors = computed(() => form.errors as Record<string, string>);
 
 function save(submit: boolean): void {
     form.send_for_approval = submit;
-    form.transform((data) => ({ ...data, lines: data.lines.map((l) => ({ ...l, policy_id: l.claim_id ? (props.claims.find((c) => c.value === l.claim_id)?.policy_id ?? '') : '' })) }))
+    form.transform((data) => ({ ...data, lines: data.lines.map((l) => ({ ...l, policy_id: l.claim_id ? l.policy_id : '' })) }))
         .post('/payables/bills');
 }
 </script>
 
 <template>
-    <AppLayout help="bank" title="Enter a supplier bill">
+    <AppLayout help="payables" title="Enter a supplier bill">
         <Breadcrumb :base="[{ label: 'Supplier bills', href: '/payables/bills' }]" />
         <PageHeader title="Enter a supplier bill" />
         <FormLayout wide submit-label="Save and send for approval" drafts cancel-href="/payables/bills" :dirty="form.isDirty" :processing="form.processing" :error="errors.form" @submit="save(true)" @save-draft="save(false)">
             <div class="grid gap-4 md:grid-cols-2">
-                <Field id="supplier_id" label="Supplier" :hint="supplier ? `${supplier.category} · terms ${supplier.terms} days` : 'Add a supplier first from Payables → Suppliers.'" :error="form.errors.supplier_id">
-                    <SelectInput id="supplier_id" v-model="form.supplier_id" placeholder="Choose the supplier" :options="suppliers.map((s) => ({ value: s.id, label: s.label }))" />
+                <Field id="supplier_id" label="Supplier" :hint="supplier ? `${supplier.category} · terms ${supplier.terms} days` : 'A new supplier is added on the Suppliers page.'" :error="form.errors.supplier_id">
+                    <LookupInput id="supplier_id" v-model="form.supplier_id" type="supplier" :initial="props.supplier" placeholder="Name or code" @selected="pickSupplier" />
                 </Field>
                 <Field id="supplier_reference" label="Supplier's invoice number" :error="form.errors.supplier_reference"><TextInput v-model="form.supplier_reference" :maxlength="64" /></Field>
                 <Field id="bill_date" label="Bill date" hint="The bill posts on this date." :error="form.errors.bill_date"><DateInput v-model="form.bill_date" /></Field>
@@ -119,7 +125,7 @@ function save(submit: boolean): void {
                             <button v-if="form.lines.length > 1" type="button" class="h-8 rounded-control px-2 text-ui text-ink-2 hover:bg-surface-2" :aria-label="`Remove line ${index + 1}`" @click="removeLine(index)">Remove</button>
                         </div>
                         <Field :id="`line_${index}_claim`" label="Claim" optional hint="For a garage, surveyor or hospital bill on a claim." :error="errors[`lines.${index}.claim_id`]" class="md:col-span-2">
-                            <SelectInput :id="`line_${index}_claim`" v-model="line.claim_id" placeholder="No claim" :options="claims" />
+                            <LookupInput :id="`line_${index}_claim`" :key="`claim-${lineKeys[index]}`" v-model="line.claim_id" type="claim" placeholder="Claim or policy number, or policyholder" @selected="pickClaim(line, $event)" />
                         </Field>
                         <p class="self-end text-dense text-ink-2 md:col-span-3">Deducted at source: VAT {{ formatMinor(taxes[index]?.vds ?? 0n) }} · tax {{ formatMinor(taxes[index]?.tds ?? 0n) }}</p>
                     </div>

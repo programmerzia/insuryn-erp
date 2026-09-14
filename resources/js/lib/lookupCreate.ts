@@ -4,7 +4,7 @@
  * or hospital, or a beneficiary, created while approving a claim payment. GA-17: a new customer also takes a mobile number, email and NID/BRN.
  */
 /** GA-40: `party` is any active party (a producer's person or organisation); `refundable` a policy with money still refundable. GA-21: `payer` of a claim recovery. */
-export type LookupType = 'customer' | 'agent' | 'policy' | 'installment' | 'payee' | 'account' | 'payer' | 'party' | 'refundable';
+export type LookupType = 'customer' | 'agent' | 'policy' | 'installment' | 'payee' | 'account' | 'payer' | 'party' | 'refundable' | 'supplier' | 'claim';
 
 export interface LookupCreateConfig {
     noun: string;

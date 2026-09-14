@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Finance\Payables\Http\Controllers;
 
+use App\Http\Pages\FormDefaults;
 use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\ObjectHistory;
 use App\Http\Pages\PageSupport;
 use App\Modules\Finance\Payables\Application\BillService;
-use App\Modules\Finance\Payables\Application\SupplierService;
 use App\Modules\Finance\Payables\Domain\Enums\BillStatus;
 use App\Modules\Finance\Payables\Domain\Models\ApBill;
 use App\Modules\Finance\Payables\Domain\Models\Supplier;
@@ -38,24 +38,30 @@ final class BillsPageController
 
     public function index(Request $request): Response
     {
-        $this->permissions->authorizeArea(PageSupport::actor($request), PayablesArea::AREA);
+        // A branch-scoped user lists only their branches' bills; the list pages on the server (GA-40).
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), PayablesArea::AREA);
         $entity = PageSupport::entity();
         $today = app(BusinessClock::class)->today();
         $view = in_array($request->query('view'), ['awaiting_approval', 'due_this_week', 'overdue', 'open'], true) ? (string) $request->query('view') : 'all';
-        $rows = DB::table('ap_bills as b')->join('suppliers as s', 's.id', '=', 'b.supplier_id')->join('parties as p', 'p.id', '=', 's.party_id')->join('branches as br', 'br.id', '=', 'b.branch_id')
+        $page = $reach->constrain(DB::table('ap_bills as b'), 'b.entity_id', 'b.branch_id')->join('suppliers as s', 's.id', '=', 'b.supplier_id')->join('parties as p', 'p.id', '=', 's.party_id')->join('branches as br', 'br.id', '=', 'b.branch_id')
             ->where('b.entity_id', $entity['id'])
             ->when($view === 'awaiting_approval', fn ($q) => $q->where('b.status', 'pending_approval'))
             ->when($view === 'open', fn ($q) => $q->whereIn('b.status', BillStatus::open()))
             ->when($view === 'due_this_week', fn ($q) => $q->whereIn('b.status', BillStatus::open())->whereBetween('b.due_date', [$today->toDateString(), $today->addDays(7)->toDateString()]))
             ->when($view === 'overdue', fn ($q) => $q->whereIn('b.status', BillStatus::open())->where('b.due_date', '<', $today->toDateString()))
-            ->orderByDesc('b.bill_date')->orderByDesc('b.created_at')->limit(PageSupport::LIST_PAGE_SIZE)
-            ->get(['b.id', 'b.number', 'p.display_name', 'b.supplier_reference', 'b.bill_date', 'b.due_date', 'br.code as branch', 'b.gross_minor', 'b.payable_minor', 'b.paid_minor', 'b.status', 'b.description'])
-            ->map(fn (object $b): array => ['id' => (string) $b->id, 'number' => $b->number ?? 'Draft', 'supplier' => (string) $b->display_name, 'reference' => (string) $b->supplier_reference,
+            ->orderByDesc('b.bill_date')->orderByDesc('b.created_at')
+            ->select(['b.id', 'b.number', 'p.display_name', 'b.supplier_reference', 'b.bill_date', 'b.due_date', 'br.code as branch', 'b.gross_minor', 'b.payable_minor', 'b.paid_minor', 'b.status', 'b.description'])
+            ->paginate(PageSupport::listPageSize())->withQueryString();
+        $rows = [];
+        foreach ($page->items() as $b) {
+            /** @var object{id: string, number: string|null, display_name: string, supplier_reference: string, bill_date: string, due_date: string, branch: string, gross_minor: int|string, payable_minor: int|string, paid_minor: int|string, status: string, description: string|null} $b */
+            $rows[] = ['id' => (string) $b->id, 'number' => $b->number ?? 'Draft', 'supplier' => (string) $b->display_name, 'reference' => (string) $b->supplier_reference,
                 'bill_date' => (string) $b->bill_date, 'due_date' => (string) $b->due_date, 'branch' => (string) $b->branch, 'gross' => PageSupport::money((int) $b->gross_minor, 'BDT'),
                 'payable' => PageSupport::money((int) $b->payable_minor, 'BDT'), 'outstanding' => PageSupport::money((int) $b->payable_minor - (int) $b->paid_minor, 'BDT'),
-                'status' => (string) $b->status, 'description' => $b->description])->values()->all();
+                'status' => (string) $b->status, 'description' => $b->description];
+        }
 
-        return Inertia::render('payables/bills/Index', ['bills' => $rows, 'view' => $view, 'statuses' => array_column(BillStatus::cases(), 'value'),
+        return Inertia::render('payables/bills/Index', ['bills' => PageSupport::page($page, $rows), 'view' => $view, 'statuses' => array_column(BillStatus::cases(), 'value'),
             'canEnter' => $this->permissions->has(PageSupport::actor($request), BillService::ENTER)]);
     }
 
@@ -65,25 +71,22 @@ final class BillsPageController
         $this->permissions->authorize($actor, BillService::ENTER);
         $entity = PageSupport::entity();
 
+        // The supplier and the claim are picked with lookups; a bill entered from a supplier's page starts with that supplier.
+        $supplierId = $request->query('supplier');
+        $supplier = is_string($supplierId) && preg_match('/^[0-9a-f-]{36}$/', $supplierId) === 1
+            ? DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->where('s.id', $supplierId)->where('s.status', '<>', 'blocked')
+                ->first(['s.id', 's.code', 'p.display_name', 's.category', 's.payment_terms_days', 's.default_account_id'])
+            : null;
+        $branches = $this->permissions->reach($actor, [BillService::ENTER])->constrain(DB::table('branches'), 'entity_id', 'id')->where('entity_id', $entity['id'])->where('status', 'active')
+            ->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => ['value' => (string) $b->id, 'label' => "{$b->code} · {$b->name}"])->values()->all();
+        $defaultBranch = app(FormDefaults::class)->branch($actor, $entity['id']);
+
         return Inertia::render('payables/bills/Create', [
             'today' => app(BusinessClock::class)->today()->toDateString(),
-            'suppliers' => DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->where('s.entity_id', $entity['id'])->where('s.status', '<>', 'blocked')
-                ->orderBy('p.display_name')->get(['s.id', 's.code', 'p.display_name', 's.category', 's.payment_terms_days', 's.default_account_id'])
-                ->map(function (object $s): array {
-                    $rates = SupplierService::rates((string) $s->category);
-
-                    return ['id' => (string) $s->id, 'label' => "{$s->display_name} ({$s->code})", 'terms' => (int) $s->payment_terms_days,
-                        'vat_bp' => $rates['vat_bp'], 'vds_bp' => $rates['vds_bp'], 'tds_bp' => $rates['tds_bp'], 'category' => $rates['label'],
-                        'default_account' => $s->default_account_id === null ? null : ['id' => (string) $s->default_account_id, 'label' => (string) PayablesArea::accountLabel((string) $s->default_account_id)]];
-                })->values()->all(),
-            'branches' => DB::table('branches')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('code')->get(['id', 'code', 'name'])
-                ->map(fn (object $b): array => ['value' => (string) $b->id, 'label' => "{$b->code} · {$b->name}"])->values()->all(),
-            // Optional claim link for garage, surveyor and hospital bills: open and recent claims.
-            'claims' => DB::table('claims as c')->join('policies as p', 'p.id', '=', 'c.policy_id')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')
-                ->where('c.entity_id', $entity['id'])->orderByDesc('c.reported_on')->limit(200)->get(['c.id', 'c.number', 'c.policy_id', 'p.number as policy_number', 'h.display_name'])
-                ->map(fn (object $c): array => ['value' => (string) $c->id, 'label' => "{$c->number} · {$c->policy_number} · {$c->display_name}", 'policy_id' => (string) $c->policy_id])->values()->all(),
+            'supplier' => $supplier === null ? null : PayablesArea::supplierOption($supplier),
+            'branches' => $branches,
+            'defaultBranchId' => in_array($defaultBranch, array_column($branches, 'value'), true) ? $defaultBranch : ($branches[0]['value'] ?? ''),
             'inputVatRecoverable' => (bool) config('erp.payables.input_vat_recoverable', false),
-            'supplierId' => is_string($request->query('supplier')) ? $request->query('supplier') : null,
         ]);
     }
 

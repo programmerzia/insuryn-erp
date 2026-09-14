@@ -6,7 +6,9 @@ export type HelpModule = 'quotes' | 'policies' | 'renewals' | 'receipts' | 'bank
     // Gap fixes W7 (GA-30): the screens that had no help.
     | 'distribution' | 'refunds' | 'cheques' | 'agentcash' | 'tariffs' | 'users' | 'limits' | 'chart' | 'events'
     // UX consistency pass: reinsurance and regulatory screens.
-    | 'reinsurance' | 'regulatory';
+    | 'reinsurance' | 'regulatory'
+    // UI consistency pass: the finance modules.
+    | 'payables' | 'assets' | 'budgets' | 'pettycash';
 export interface HelpText {
     module: HelpModule;
     locale: 'en' | 'bn';

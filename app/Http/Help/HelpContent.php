@@ -18,7 +18,9 @@ final class HelpContent
      * UX consistency pass: reinsurance (treaties, cessions, reinsurer statements) and regulatory (dashboard, returns, technical provisions).
      */
     public const MODULES = ['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports',
-        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events', 'reinsurance', 'regulatory'];
+        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events', 'reinsurance', 'regulatory',
+        // UI consistency pass: payables, fixed assets, budgets and petty cash had borrowed the bank's help or had none.
+        'payables', 'assets', 'budgets', 'pettycash'];
 
     public const LOCALES = ['en', 'bn'];
 

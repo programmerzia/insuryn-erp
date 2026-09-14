@@ -38,14 +38,19 @@ final class PaymentRunsPageController
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeArea($actor, PayablesArea::AREA);
         $entity = PageSupport::entity();
-        $rows = DB::table('payment_runs as r')->join('bank_accounts as b', 'b.id', '=', 'r.bank_account_id')->leftJoin('users as u', 'u.id', '=', 'r.created_by')
+        // GA-40: the list pages on the server.
+        $page = DB::table('payment_runs as r')->join('bank_accounts as b', 'b.id', '=', 'r.bank_account_id')->leftJoin('users as u', 'u.id', '=', 'r.created_by')
             ->where('r.entity_id', $entity['id'])->orderByDesc('r.pay_date')->orderByDesc('r.created_at')
-            ->get(['r.id', 'r.number', 'r.pay_date', 'r.status', 'r.total_minor', 'r.item_count', 'b.bank_name', 'b.account_no_masked', 'u.name'])
-            ->map(fn (object $r): array => ['id' => (string) $r->id, 'number' => (string) $r->number, 'pay_date' => (string) $r->pay_date, 'status' => (string) $r->status,
-                'total' => PageSupport::money((int) $r->total_minor, 'BDT'), 'bills' => (int) $r->item_count, 'bank' => "{$r->bank_name} {$r->account_no_masked}", 'prepared_by' => (string) ($r->name ?? '')])
-            ->values()->all();
+            ->select(['r.id', 'r.number', 'r.pay_date', 'r.status', 'r.total_minor', 'r.item_count', 'b.bank_name', 'b.account_no_masked', 'u.name'])
+            ->paginate(PageSupport::listPageSize())->withQueryString();
+        $rows = [];
+        foreach ($page->items() as $r) {
+            /** @var object{id: string, number: string, pay_date: string, status: string, total_minor: int|string, item_count: int|string, bank_name: string, account_no_masked: string, name: string|null} $r */
+            $rows[] = ['id' => (string) $r->id, 'number' => (string) $r->number, 'pay_date' => (string) $r->pay_date, 'status' => (string) $r->status,
+                'total' => PageSupport::money((int) $r->total_minor, 'BDT'), 'bills' => (int) $r->item_count, 'bank' => "{$r->bank_name} {$r->account_no_masked}", 'prepared_by' => (string) ($r->name ?? '')];
+        }
 
-        return Inertia::render('payables/runs/Index', ['runs' => $rows, 'statuses' => array_column(PaymentRunStatus::cases(), 'value'),
+        return Inertia::render('payables/runs/Index', ['runs' => PageSupport::page($page, $rows), 'statuses' => array_column(PaymentRunStatus::cases(), 'value'),
             'canPrepare' => $this->permissions->has($actor, PaymentRunService::PREPARE)]);
     }
 
@@ -55,14 +60,15 @@ final class PaymentRunsPageController
         $entity = PageSupport::entity();
         $today = app(BusinessClock::class)->today();
         $dueBy = is_string($request->query('due_by')) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $request->query('due_by')) === 1 ? CarbonImmutable::parse($request->query('due_by')) : $today->addDays(7);
-        $supplierId = is_string($request->query('supplier_id')) && $request->query('supplier_id') !== '' ? $request->query('supplier_id') : null;
+        $supplierId = is_string($request->query('supplier_id')) && preg_match('/^[0-9a-f-]{36}$/', $request->query('supplier_id')) === 1 ? $request->query('supplier_id') : null;
 
         return Inertia::render('payables/runs/Create', [
             'filters' => ['due_by' => $dueBy->toDateString(), 'supplier_id' => $supplierId ?? ''],
             'today' => $today->toDateString(),
             'bankAccounts' => PayablesArea::bankAccounts($entity['id']),
-            'suppliers' => DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->where('s.entity_id', $entity['id'])->orderBy('p.display_name')
-                ->get(['s.id', 'p.display_name'])->map(fn (object $s): array => ['value' => (string) $s->id, 'label' => (string) $s->display_name])->values()->all(),
+            // The supplier filter is a lookup; the chosen supplier comes back as its first value.
+            'supplier' => $supplierId === null ? null : (($name = DB::table('suppliers as s')->join('parties as p', 'p.id', '=', 's.party_id')->where('s.id', $supplierId)->value('p.display_name')) === null
+                ? null : ['id' => $supplierId, 'label' => (string) $name]),
             'bills' => array_map(fn (array $b): array => ['id' => $b['id'], 'number' => $b['number'], 'supplier' => $b['supplier'], 'reference' => $b['supplier_reference'],
                 'due_date' => $b['due_date'], 'amount' => PageSupport::money($b['outstanding_minor'], 'BDT'), 'amount_minor' => $b['outstanding_minor']],
                 $this->runs->dueBills($entity['id'], $dueBy, $supplierId)),

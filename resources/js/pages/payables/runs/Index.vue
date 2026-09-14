@@ -7,10 +7,11 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+import { type Paginated, serverPage } from '@/lib/paging';
 
 /** Payables → Payment runs (addendum v2 §B.4): prepared by the accountant, approved by the finance manager, released by the CFO. */
 interface RunRow { id: string; number: string; pay_date: string; status: string; total: string; bills: number; bank: string; prepared_by: string }
-const props = defineProps<{ runs: RunRow[]; statuses: string[]; canPrepare: boolean }>();
+const props = defineProps<{ runs: Paginated<RunRow>; statuses: string[]; canPrepare: boolean }>();
 
 const active = ref<string | null>(null);
 const columns: DataColumn<RunRow>[] = [
@@ -25,13 +26,14 @@ const columns: DataColumn<RunRow>[] = [
 </script>
 
 <template>
-    <AppLayout help="bank" title="Payment runs" fill>
+    <AppLayout help="payables" title="Payment runs" fill>
         <QueueView
             id="payment-runs"
             v-model:active="active"
             title="Payment runs"
             :columns="columns"
-            :rows="runs"
+            :rows="runs.data"
+            :page="serverPage(runs)"
             :row-key="(r) => r.id"
             currency="BDT"
             empty-text="No payment runs yet: pay the bills that fall due."

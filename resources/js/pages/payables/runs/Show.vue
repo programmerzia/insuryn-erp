@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
@@ -7,7 +7,8 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, TimelineEntry } from '@/components/object/types';
-import StatusBadge from '@/components/StatusBadge.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
@@ -45,11 +46,22 @@ const reasonForm = useForm({ reason: '' });
 function sendReason(): void {
     reasonForm.post(`${base}/${drawer.value}`, { onSuccess: () => { reasonForm.reset(); done(); } });
 }
-const cell = 'border-b border-line px-3';
+type ItemRow = (typeof props.items)[number];
+const itemColumns: DataColumn<ItemRow>[] = [
+    { id: 'supplier', header: 'Supplier', value: (i) => i.supplier, width: 180 },
+    { id: 'bill', header: 'Bill', value: (i) => i.bill, href: (i) => `/payables/bills/${i.bill_id}`, width: 170 },
+    { id: 'reference', header: 'Invoice', value: (i) => i.reference, width: 130, muted: true },
+    { id: 'due_date', header: 'Due', type: 'date', value: (i) => i.due_date },
+    { id: 'bank', header: 'Bank', value: (i) => i.bank, width: 160 },
+    { id: 'routing_no', header: 'Routing', value: (i) => i.routing_no ?? '—', width: 100, muted: true },
+    { id: 'account', header: 'Account', value: (i) => i.account ?? '—', width: 110, muted: true },
+    { id: 'amount', header: 'Amount', type: 'money', value: (i) => i.amount, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (i) => i.status },
+];
 </script>
 
 <template>
-    <AppLayout help="bank" :title="run.number">
+    <AppLayout help="payables" :title="run.number">
         <ObjectPage
             :title="run.number"
             :subtitle="[run.prepared_by ? `prepared by ${run.prepared_by}` : '', run.approved_by ? `approved by ${run.approved_by}` : '', run.released_by ? `released by ${run.released_by}` : '', run.cancelled_reason ? `cancelled: ${run.cancelled_reason}` : ''].filter(Boolean).join(' · ')"
@@ -72,22 +84,10 @@ const cell = 'border-b border-line px-3';
             </template>
             <template #overview>
                 <p v-if="waitingFor" class="mb-4 max-w-[1100px] rounded-control border border-line bg-accent-soft px-3 py-2 text-ui" role="status">{{ waitingFor }}</p>
-                <div class="max-w-[1100px] overflow-x-auto border border-line">
-                    <table class="w-full border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2">
-                            <tr class="h-(--row-h)"><th :class="cell" class="text-left font-medium">Supplier</th><th :class="cell" class="text-left font-medium">Bill</th><th :class="cell" class="text-left font-medium">Invoice</th><th :class="cell" class="text-left font-medium">Due</th><th :class="cell" class="text-left font-medium">Bank</th><th :class="cell" class="text-left font-medium">Routing</th><th :class="cell" class="text-left font-medium">Account</th><th :class="cell" class="text-right font-medium">Amount</th><th :class="cell" class="text-left font-medium">Status</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="i in items" :key="i.id" class="h-(--row-h)">
-                                <td :class="cell">{{ i.supplier }}</td>
-                                <td :class="cell"><Link :href="`/payables/bills/${i.bill_id}`" class="text-accent-text hover:underline">{{ i.bill }}</Link></td>
-                                <td :class="cell" class="text-ink-2">{{ i.reference }}</td><td :class="cell">{{ formatDate(i.due_date) }}</td><td :class="cell">{{ i.bank }}</td>
-                                <td :class="cell" class="tabular-nums">{{ i.routing_no ?? '—' }}</td><td :class="cell" class="tabular-nums">{{ i.account ?? '—' }}</td>
-                                <td :class="cell" class="num">{{ formatMoney(i.amount) }}</td><td :class="cell"><StatusBadge :status="i.status" /></td>
-                            </tr>
-                        </tbody>
-                        <tfoot><tr class="h-(--row-h) font-medium"><td :class="cell" colspan="7">Total</td><td :class="cell" class="num">{{ formatMoney(run.total) }}</td><td :class="cell" /></tr></tfoot>
-                    </table>
+                <h2 class="mb-2 text-ui font-medium">Bills paid</h2>
+                <div class="border border-line">
+                    <DataTable id="payment-run-items" label="Bills paid" :columns="itemColumns" :rows="items" :row-key="(i) => i.id" :currency="run.currency" :url-sync="false" compact-toolbar
+                        empty-text="The run has no bills." />
                 </div>
                 <section v-if="run.files.length > 0" class="mt-6 max-w-[700px]">
                     <h2 class="mb-2 text-ui font-medium">Bank files downloaded</h2>

@@ -8,7 +8,8 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
-import StatusBadge from '@/components/StatusBadge.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -54,11 +55,28 @@ function openCancel(): void {
     cancelling.form.reset();
     drawer.value = 'cancel';
 }
-const cell = 'border-b border-line px-3';
+type LineRow = (typeof props.lines)[number];
+type PaymentRow = (typeof props.payments)[number];
+const lineColumns: DataColumn<LineRow>[] = [
+    { id: 'line_no', header: '#', type: 'number', value: (l) => l.line_no, width: 56 },
+    { id: 'description', header: 'What for', value: (l) => l.description, width: 200 },
+    { id: 'account', header: 'Expense account', value: (l) => l.account, width: 200 },
+    { id: 'claim', header: 'Claim', value: (l) => l.claim?.number ?? '—', href: (l) => (l.claim ? `/claims/${l.claim.id}` : null), width: 150 },
+    { id: 'net', header: 'Net', type: 'money', value: (l) => l.net, total: true },
+    { id: 'vat', header: 'VAT', type: 'money', value: (l) => l.vat, total: true },
+    { id: 'vds', header: 'VDS', type: 'money', value: (l) => l.vds, total: true },
+    { id: 'tds', header: 'TDS', type: 'money', value: (l) => l.tds, total: true },
+];
+const paymentColumns: DataColumn<PaymentRow>[] = [
+    { id: 'number', header: 'Payment run', value: (p) => p.number, href: (p) => `/payables/payment-runs/${p.id}`, width: 180 },
+    { id: 'pay_date', header: 'Pay date', type: 'date', value: (p) => p.pay_date },
+    { id: 'amount', header: 'Amount', type: 'money', value: (p) => p.amount, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (p) => p.status },
+];
 </script>
 
 <template>
-    <AppLayout help="bank" :title="bill.number">
+    <AppLayout help="payables" :title="bill.number">
         <ObjectPage
             :title="bill.number"
             :subtitle="`${bill.supplier.name} · invoice ${bill.reference}${bill.description ? ` · ${bill.description}` : ''}${bill.cancelled_reason ? ` · cancelled: ${bill.cancelled_reason}` : ''}`"
@@ -83,19 +101,10 @@ const cell = 'border-b border-line px-3';
                 <p v-if="bill.status === 'pending_approval' && !actions.approve" class="mb-4 max-w-[1100px] rounded-control border border-line bg-accent-soft px-3 py-2 text-ui" role="status">
                     Waiting for approval by someone other than the person who entered it{{ bill.approval_via_inbox ? ' (over an approval limit: decided from Approvals)' : '' }}.
                 </p>
-                <div class="max-w-[1100px] overflow-x-auto border border-line">
-                    <table class="w-full border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2">
-                            <tr class="h-(--row-h)"><th :class="cell" class="w-10 text-left font-medium">#</th><th :class="cell" class="text-left font-medium">What for</th><th :class="cell" class="text-left font-medium">Expense account</th><th :class="cell" class="text-left font-medium">Claim</th><th :class="cell" class="text-right font-medium">Net</th><th :class="cell" class="text-right font-medium">VAT</th><th :class="cell" class="text-right font-medium">VDS</th><th :class="cell" class="text-right font-medium">TDS</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="l in lines" :key="l.line_no" class="h-(--row-h)">
-                                <td :class="cell" class="tabular-nums">{{ l.line_no }}</td><td :class="cell">{{ l.description }}</td><td :class="cell">{{ l.account }}</td>
-                                <td :class="cell"><Link v-if="l.claim" :href="`/claims/${l.claim.id}`" class="text-accent-text hover:underline">{{ l.claim.number }}</Link><span v-else class="text-ink-2">—</span></td>
-                                <td :class="cell" class="num">{{ formatMoney(l.net) }}</td><td :class="cell" class="num">{{ formatMoney(l.vat) }}</td><td :class="cell" class="num">{{ formatMoney(l.vds) }}</td><td :class="cell" class="num">{{ formatMoney(l.tds) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <h2 class="mb-2 text-ui font-medium">Lines</h2>
+                <div class="border border-line">
+                    <DataTable id="supplier-bill-lines" label="Lines" :columns="lineColumns" :rows="lines" :row-key="(l) => String(l.line_no)" :currency="bill.currency" :url-sync="false" :open-on-click="false" compact-toolbar
+                        empty-text="The bill has no lines." />
                 </div>
                 <div class="mt-6 grid max-w-[1100px] gap-6 lg:grid-cols-2">
                     <dl class="grid grid-cols-[1fr_auto] gap-y-1 rounded-control border border-line p-3 text-ui">
@@ -117,14 +126,10 @@ const cell = 'border-b border-line px-3';
                 </div>
             </template>
             <template #transactions>
-                <ul class="max-w-[800px] border border-line">
-                    <li v-for="p in payments" :key="p.id" class="flex items-center gap-3 border-b border-line px-3 py-2 text-ui last:border-b-0">
-                        <Link :href="`/payables/payment-runs/${p.id}`" class="w-44 text-accent-text hover:underline">{{ p.number }}</Link>
-                        <span class="w-32 tabular-nums font-medium">{{ formatMoney(p.amount) }}</span>
-                        <StatusBadge :status="p.status" /><span class="text-ink-2">pay date {{ formatDate(p.pay_date) }}</span>
-                    </li>
-                    <li v-if="payments.length === 0" class="px-3 py-4 text-ui text-ink-2">Not in any payment run yet.</li>
-                </ul>
+                <div class="max-w-[800px] border border-line">
+                    <DataTable id="supplier-bill-payments" label="Payments" :columns="paymentColumns" :rows="payments" :row-key="(p) => p.id" :currency="bill.currency" :url-sync="false" compact-toolbar
+                        empty-text="Not in any payment run yet." />
+                </div>
             </template>
         </ObjectPage>
 

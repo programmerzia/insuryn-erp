@@ -8,7 +8,8 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AuditRow, TimelineEntry } from '@/components/object/types';
-import StatusBadge from '@/components/StatusBadge.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -41,10 +42,20 @@ function reloadStatement(): void {
     router.get(`/payables/suppliers/${props.supplier.id}`, { from: period.value.from, to: period.value.to, tab: 'transactions' }, { preserveScroll: true, preserveState: true, only: ['statement'] });
 }
 const cell = 'border-b border-line px-3';
+type BillRow = (typeof props.bills)[number];
+const billColumns: DataColumn<BillRow>[] = [
+    { id: 'number', header: 'Bill', value: (b) => b.number ?? 'Draft', href: (b) => `/payables/bills/${b.id}`, width: 170 },
+    { id: 'reference', header: 'Invoice', value: (b) => b.reference, width: 140, muted: true },
+    { id: 'bill_date', header: 'Bill date', type: 'date', value: (b) => b.bill_date },
+    { id: 'due_date', header: 'Due', type: 'date', value: (b) => b.due_date },
+    { id: 'payable', header: 'Payable', type: 'money', value: (b) => b.payable, total: true },
+    { id: 'outstanding', header: 'Outstanding', type: 'money', value: (b) => b.outstanding, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (b) => b.status },
+];
 </script>
 
 <template>
-    <AppLayout help="bank" :title="supplier.name">
+    <AppLayout help="payables" :title="supplier.name">
         <ObjectPage
             :title="supplier.name"
             :subtitle="`${supplier.code} · ${supplier.category_label}`"
@@ -85,18 +96,9 @@ const cell = 'border-b border-line px-3';
                     </section>
                     <section class="lg:col-span-2">
                         <h2 class="mb-2 text-ui font-medium">Bills</h2>
-                        <div class="overflow-x-auto border border-line">
-                            <table class="w-full border-separate border-spacing-0 text-dense">
-                                <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th :class="cell" class="text-left font-medium">Bill</th><th :class="cell" class="text-left font-medium">Invoice</th><th :class="cell" class="text-left font-medium">Bill date</th><th :class="cell" class="text-left font-medium">Due</th><th :class="cell" class="text-right font-medium">Payable</th><th :class="cell" class="text-right font-medium">Outstanding</th><th :class="cell" class="text-left font-medium">Status</th></tr></thead>
-                                <tbody>
-                                    <tr v-for="b in bills" :key="b.id" class="h-(--row-h)">
-                                        <td :class="cell"><Link :href="`/payables/bills/${b.id}`" class="text-accent-text hover:underline">{{ b.number ?? 'Draft' }}</Link></td>
-                                        <td :class="cell">{{ b.reference }}</td><td :class="cell">{{ formatDate(b.bill_date) }}</td><td :class="cell">{{ formatDate(b.due_date) }}</td>
-                                        <td :class="cell" class="num">{{ formatMoney(b.payable) }}</td><td :class="cell" class="num">{{ formatMoney(b.outstanding) }}</td><td :class="cell"><StatusBadge :status="b.status" /></td>
-                                    </tr>
-                                    <tr v-if="bills.length === 0"><td colspan="7" class="px-3 py-4 text-ui text-ink-2">No bills from this supplier yet.</td></tr>
-                                </tbody>
-                            </table>
+                        <div class="border border-line">
+                            <DataTable id="supplier-bills-of-supplier" label="Bills" :columns="billColumns" :rows="bills" :row-key="(b) => b.id" currency="BDT" :url-sync="false" compact-toolbar
+                                empty-text="No bills from this supplier yet." />
                         </div>
                     </section>
                 </div>
