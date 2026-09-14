@@ -9,13 +9,14 @@ import type { DataColumn } from '@/components/table/types';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
+import { serverPage, type Paginated } from '@/lib/paging';
 
 /** Addendum §B.10.11 payroll runs queue: one regular run a month, preview → posted → paid. */
 interface RunRow { id: string; number: string | null; period: string; status: string; employees: number; gross: string; tax: string; pf: string; commission: string; net: string; posted_on: string | null; paid_on: string | null }
-const props = defineProps<{ runs: RunRow[]; months: string[]; can: { prepare: boolean } }>();
+const props = defineProps<{ runs: Paginated<RunRow>; taken: string[]; months: string[]; can: { prepare: boolean } }>();
 
 const active = ref<string | null>(null);
-const month = ref(props.months.find((m) => !props.runs.some((r) => r.period === m)) ?? props.months[0] ?? '');
+const month = ref(props.months.find((m) => !props.taken.includes(m)) ?? props.months[0] ?? '');
 const columns: DataColumn<RunRow>[] = [
     { id: 'period', header: 'Month', value: (r) => formatMonth(r.period, 'long'), href: (r) => `/people/payroll/${r.id}`, width: 140 },
     { id: 'number', header: 'Run', value: (r) => r.number ?? 'Preview', width: 150, muted: true },
@@ -39,11 +40,11 @@ function calculate(): void {
             v-model:active="active"
             title="Payroll runs"
             :columns="columns"
-            :rows="runs"
+            :rows="runs.data"
+            :page="serverPage(runs)"
             :row-key="(r) => r.id"
             currency="BDT"
-            :url-sync="false"
-            empty-text="No payroll yet: calculate the first month."
+            empty-text="No payroll runs yet: calculate the first month."
             :empty-action="can.prepare ? { label: 'Calculate payroll' } : null"
             :inspector-title="(r) => `Payroll ${formatMonth(r.period, 'long')}`"
             :inspector-subtitle="(r) => r.number ?? 'Preview'"

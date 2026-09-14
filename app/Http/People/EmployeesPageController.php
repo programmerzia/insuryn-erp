@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\People;
 
+use App\Http\Pages\FormDefaults;
 use App\Http\Pages\ObjectHistory;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Party\Application\PartyService;
@@ -31,21 +32,30 @@ final class EmployeesPageController
 
     public function __construct(private readonly PermissionChecker $permissions) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, FormDefaults $defaults): Response
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, self::AREA);
+        // A branch-scoped HR user lists only the employees working in their branches.
+        $reach = $this->permissions->authorizeArea($actor, self::AREA);
         $today = app(BusinessClock::class)->today()->toDateString();
-        $currency = PageSupport::entity()['currency'];
-        $rows = $this->current($today)->get();
-        $producers = DB::table('producers')->whereNotNull('employee_id')->pluck('code', 'employee_id');
+        $entity = PageSupport::entity();
+        $currency = $entity['currency'];
+        // Home queues link here with ?missing=bank (no salary account: payroll cannot be approved) or ?missing=tin.
+        $missing = in_array($request->query('missing'), ['bank', 'tin'], true) ? (string) $request->query('missing') : '';
+        $page = $reach->constrain($this->current($today), 'e.entity_id', 'm.branch_id')
+            ->when($missing !== '', fn ($q) => $q->where('e.status', 'active')->whereNull($missing === 'bank' ? 'e.account_no_masked' : 'e.tin_masked'))
+            ->paginate(PageSupport::listPageSize())->withQueryString();
+        $items = $page->getCollection();
+        $producers = DB::table('producers')->whereIn('employee_id', $items->pluck('id'))->pluck('code', 'employee_id');
 
         return Inertia::render('people/employees/Index', [
-            'employees' => $rows->map(fn (object $e): array => ['id' => (string) $e->id, 'code' => (string) $e->code, 'name' => (string) $e->full_name, 'designation' => $e->designation,
+            'employees' => PageSupport::page($page, $items->map(fn (object $e): array => ['id' => (string) $e->id, 'code' => (string) $e->code, 'name' => (string) $e->full_name, 'designation' => $e->designation,
                 'department' => $e->department, 'branch' => $e->branch_code, 'grade' => $e->grade_code, 'type' => $e->employment_type, 'joined_on' => (string) $e->joined_on,
                 'basic' => $e->basic_minor === null ? null : PageSupport::money((int) $e->basic_minor, $currency), 'status' => (string) $e->status,
-                'bank' => $e->account_no_masked === null ? null : trim($e->bank_name.' '.$e->account_no_masked), 'producer_code' => $producers[$e->id] ?? null])->values()->all(),
+                'bank' => $e->account_no_masked === null ? null : trim($e->bank_name.' '.$e->account_no_masked), 'tin' => $e->tin_masked, 'producer_code' => $producers[$e->id] ?? null])->values()->all()),
+            'filters' => ['missing' => $missing],
             'options' => $this->options(),
+            'defaultBranchId' => $defaults->branch($actor, $entity['id']),
             'can' => ['manage' => $this->permissions->has($actor, 'hr.manage_employees')],
         ]);
     }

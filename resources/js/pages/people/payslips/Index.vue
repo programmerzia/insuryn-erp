@@ -2,16 +2,17 @@
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
 import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney, formatMonth } from '@/lib/format';
-import { runStatusLabel } from '@/lib/people';
+import { serverPage, type Paginated } from '@/lib/paging';
 
 /** Addendum §B.10.1 payslips per run and employee, each printable as a PDF in English or Bangla. */
 interface PayslipRow { id: string; number: string | null; run_id: string; period: string; status: string; employee_id: string; code: string; name: string; gross: string; tax: string; pf: string; net: string }
-const props = defineProps<{ runId: string | null; runs: { id: string; label: string }[]; payslips: PayslipRow[] }>();
+const props = defineProps<{ runId: string | null; runs: { id: string; label: string }[]; payslips: Paginated<PayslipRow> }>();
 
 const active = ref<string | null>(null);
 const run = ref(props.runId ?? '');
@@ -24,7 +25,7 @@ const columns: DataColumn<PayslipRow>[] = [
     { id: 'pf', header: 'PF', type: 'money', value: (p) => p.pf, total: true },
     { id: 'tax', header: 'Tax', type: 'money', value: (p) => p.tax, total: true },
     { id: 'net', header: 'Net pay', type: 'money', value: (p) => p.net, total: true },
-    { id: 'status', header: 'Run', value: (p) => runStatusLabel(p.status), width: 80, filterOptions: ['Preview', 'Posted', 'Paid'] },
+    { id: 'status', header: 'Run', type: 'status', value: (p) => p.status, filterOptions: ['preview', 'posted', 'paid'] },
 ];
 function choose(value: string): void {
     router.get('/people/payslips', value === '' ? {} : { run: value }, { preserveState: false });
@@ -38,23 +39,27 @@ function choose(value: string): void {
             v-model:active="active"
             title="Payslips"
             :columns="columns"
-            :rows="payslips"
+            :rows="payslips.data"
+            :page="serverPage(payslips)"
             :row-key="(p) => p.id"
             currency="BDT"
             :url-sync="false"
-            empty-text="No payslips yet: they appear when a payroll is calculated."
+            :empty-text="runId ? 'No payslips in this run.' : 'No payslips yet: they appear when a payroll is calculated.'"
+            :empty-action="runId ? { label: 'Show every payslip', href: '/people/payslips' } : { label: 'Open payroll runs', href: '/people/payroll' }"
             :inspector-title="(p) => `${p.code} · ${p.name}`"
             :inspector-subtitle="(p) => `${formatMonth(p.period, 'long')} · ${p.number ?? 'Preview'}`"
         >
             <template #toolbar>
                 <div class="ml-2 flex items-center gap-2">
-                    <label class="sr-only" for="payslip_run">Run</label>
+                    <label class="sr-only" for="payslip_run">Payroll run</label>
                     <SelectInput id="payslip_run" :model-value="run" class="w-64" placeholder="Every run" :options="runs.map((r) => ({ value: r.id, label: r.label }))" @update:model-value="(v) => choose(String(v ?? ''))" />
                 </div>
             </template>
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Gross', value: formatMoney(row.gross), num: true }, { label: 'Provident fund', value: formatMoney(row.pf), num: true },
-                    { label: 'Tax deducted', value: formatMoney(row.tax), num: true }, { label: 'Net pay', value: `${formatMoney(row.net)} BDT`, num: true }, { label: 'Run', value: runStatusLabel(row.status) }]" />
+                    { label: 'Tax deducted', value: formatMoney(row.tax), num: true }, { label: 'Net pay', value: `${formatMoney(row.net)} BDT`, num: true }, { label: 'Run' }]">
+                    <template #Run><StatusBadge :status="row.status" /></template>
+                </DetailList>
                 <div class="mt-4 flex gap-4 text-ui">
                     <a :href="`/people/payslips/${row.id}/pdf`" target="_blank" class="text-accent-text hover:underline">Open PDF</a>
                     <a :href="`/people/payslips/${row.id}/pdf?locale=bn`" target="_blank" class="text-accent-text hover:underline">বাংলা PDF</a>

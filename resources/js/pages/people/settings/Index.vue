@@ -8,10 +8,12 @@ import FormLayout from '@/components/forms/FormLayout.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { employmentTypeLabel, employmentTypes } from '@/lib/people';
 
 /**
@@ -57,17 +59,34 @@ function toggleType(type: string): void {
     settingsForm.pf_employment_types = list.includes(type) ? list.filter((t) => t !== type) : [...list, type];
 }
 const done = { preserveScroll: true, onSuccess: () => (drawer.value = null) };
+type GradeRow = (typeof props.grades)[number];
+type SlabRow = (typeof props.slabs)[number] & { no: number };
+const percentOfBasic = (v: string | undefined) => (v === undefined ? 'No structure: payroll refuses this grade' : `${v}% of basic`);
+const gradeColumns: DataColumn<GradeRow>[] = [
+    { id: 'grade', header: 'Grade', value: (g) => `${g.code} ${g.name}`, width: 200 },
+    { id: 'house_rent', header: 'House rent', value: (g) => percentOfBasic(g.structure?.house_rent), width: 200 },
+    { id: 'medical', header: 'Medical', value: (g) => (g.structure ? percentOfBasic(g.structure.medical) : null), width: 140 },
+    { id: 'medical_cap', header: 'Medical cap', type: 'money', value: (g) => g.structure?.medical_cap || null },
+    { id: 'conveyance', header: 'Conveyance', type: 'money', value: (g) => g.structure?.conveyance ?? null },
+    { id: 'employees', header: 'Employees', type: 'number', value: (g) => g.employees, width: 100 },
+    { id: 'actions', header: '', value: (g) => (g.structure?.verify ? 'verify' : ''), width: 140, hideable: false },
+];
+const slabColumns: DataColumn<SlabRow>[] = [
+    { id: 'band', header: 'Band', value: (s) => (s.no === 0 ? 'First' : s.band ? 'Next' : 'The rest'), width: 120 },
+    { id: 'width', header: 'Taxable income in the band', type: 'money', value: (s) => s.band || null },
+    { id: 'rate', header: 'Rate', value: (s) => `${s.rate}%`, width: 100 },
+];
 </script>
 
 <template>
     <AppLayout title="Payroll settings">
         <div class="px-6 py-4">
-            <h1 class="text-title font-semibold">Salary structures and tax slabs</h1>
+            <h1 class="text-title font-semibold">Payroll settings</h1>
             <p class="mt-1 max-w-[900px] text-ui text-ink-2">The payroll is calculated only from these values. They are placeholders marked <strong>verify</strong> until HR and finance confirm them against the Finance Act and the company's service rules.</p>
             <FormBanner />
 
             <section class="mt-6 max-w-[1100px]">
-                <div class="mb-2 flex items-center justify-between"><h2 class="text-section font-semibold">Payroll settings</h2><Button v-if="can.manage" variant="secondary" size="sm" @click="drawer = 'settings'">Edit</Button></div>
+                <div class="mb-2 flex items-center justify-between"><h2 class="text-section font-semibold">Provident fund, bonuses and tax</h2><Button v-if="can.manage" variant="secondary" size="sm" @click="drawer = 'settings'">Edit</Button></div>
                 <dl v-if="settings" class="grid grid-cols-2 gap-x-8 gap-y-2 border border-line p-4 text-ui md:grid-cols-4">
                     <div><dt class="text-ink-2">Provident fund</dt><dd>{{ settings.pf_employee }}% employee + {{ settings.pf_employer }}% employer, of basic</dd></div>
                     <div><dt class="text-ink-2">PF members</dt><dd>{{ settings.pf_employment_types.map(employmentTypeLabel).join(', ') }}</dd></div>
@@ -76,49 +95,30 @@ const done = { preserveScroll: true, onSuccess: () => (drawer.value = null) };
                     <div><dt class="text-ink-2">Tax exempt</dt><dd>{{ settings.tax_exempt_fraction }}% of income, at most {{ formatMoney(settings.tax_exempt_cap) }}</dd></div>
                     <div><dt class="text-ink-2">Minimum tax</dt><dd>{{ formatMoney(settings.minimum_tax) }} a year</dd></div>
                     <div><dt class="text-ink-2">Commission through payroll</dt><dd>{{ settings.commission_taxable ? 'Taxed in payroll' : 'Not taxed again (withheld when earned)' }}</dd></div>
-                    <div><dt class="text-ink-2">In force from</dt><dd>{{ settings.effective_from }} <span v-if="settings.verify" class="ml-1 text-warn">verify</span></dd></div>
+                    <div><dt class="text-ink-2">In force from</dt><dd>{{ formatDate(settings.effective_from) }} <span v-if="settings.verify" class="ml-1 text-warn">verify</span></dd></div>
                 </dl>
                 <p v-else class="border border-line p-4 text-ui text-ink-2">No payroll settings yet.</p>
             </section>
 
             <section class="mt-8 max-w-[1100px]">
                 <h2 class="mb-2 text-section font-semibold">Salary structure per grade</h2>
-                <div class="overflow-x-auto border border-line">
-                    <table class="w-full text-ui">
-                        <thead class="bg-surface-2 text-left text-ink-2"><tr><th class="px-3 py-2">Grade</th><th class="px-3">House rent</th><th class="px-3">Medical</th><th class="px-3 text-right">Medical cap</th><th class="px-3 text-right">Conveyance</th><th class="px-3 text-right">Employees</th><th class="px-3"></th></tr></thead>
-                        <tbody>
-                            <tr v-for="g in grades" :key="g.id" class="border-t border-line">
-                                <td class="px-3 py-2"><span class="font-medium">{{ g.code }}</span> <span class="text-ink-2">{{ g.name }}</span></td>
-                                <template v-if="g.structure">
-                                    <td class="px-3">{{ g.structure.house_rent }}% of basic</td><td class="px-3">{{ g.structure.medical }}% of basic</td>
-                                    <td class="px-3 text-right tabular-nums">{{ g.structure.medical_cap ? formatMoney(g.structure.medical_cap) : '—' }}</td><td class="px-3 text-right tabular-nums">{{ formatMoney(g.structure.conveyance) }}</td>
-                                </template>
-                                <td v-else colspan="4" class="px-3 text-ink-2">No structure: payroll refuses this grade.</td>
-                                <td class="px-3 text-right tabular-nums">{{ g.employees }}</td>
-                                <td class="px-3 text-right"><span v-if="g.structure?.verify" class="mr-3 text-warn">verify</span><Button v-if="can.manage" variant="secondary" size="sm" @click="editGrade(g.id)">Edit</Button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <DataTable id="people-salary-structures" label="Salary structure per grade" :columns="gradeColumns" :rows="grades" :row-key="(g) => g.id" currency="BDT" :url-sync="false" empty-text="No grades yet." compact-toolbar>
+                    <template #cell-actions="{ row }">
+                        <span class="flex items-center justify-end gap-3"><span v-if="row.structure?.verify" class="text-warn">verify</span><Button v-if="can.manage" variant="secondary" size="sm" @click.stop="editGrade(row.id)">Edit</Button></span>
+                    </template>
+                </DataTable>
             </section>
 
             <section class="mt-8 max-w-[700px]">
                 <div class="mb-2 flex items-center justify-between gap-3">
                     <h2 class="text-section font-semibold">Income tax slabs</h2>
                     <div class="flex items-center gap-2">
+                        <label class="sr-only" for="tax_year">Tax year</label>
                         <SelectInput id="tax_year" :model-value="taxYear" class="w-32" :options="taxYears.map((y) => ({ value: y, label: `FY ${y}` }))" @update:model-value="(v) => router.get('/people/payroll-settings', { tax_year: v })" />
                         <Button v-if="can.manage" variant="secondary" size="sm" @click="drawer = 'slabs'">Edit</Button>
                     </div>
                 </div>
-                <table class="w-full border border-line text-ui">
-                    <thead class="bg-surface-2 text-left text-ink-2"><tr><th class="px-3 py-2">Band</th><th class="px-3 text-right">Taxable income in the band</th><th class="px-3 text-right">Rate</th></tr></thead>
-                    <tbody>
-                        <tr v-for="(s, i) in slabs" :key="i" class="border-t border-line">
-                            <td class="px-3 py-2">{{ i === 0 ? 'First' : s.band ? 'Next' : 'The rest' }}</td><td class="px-3 text-right tabular-nums">{{ s.band ? formatMoney(s.band) : '—' }}</td><td class="px-3 text-right tabular-nums">{{ s.rate }}%</td>
-                        </tr>
-                        <tr v-if="slabs.length === 0"><td colspan="3" class="px-3 py-4 text-ink-2">No slabs for FY {{ taxYear }}: payroll for that year is refused until they are entered.</td></tr>
-                    </tbody>
-                </table>
+                <DataTable id="people-tax-slabs" label="Income tax slabs" :columns="slabColumns" :rows="slabs.map((s, no) => ({ ...s, no }))" :row-key="(s) => String(s.no)" currency="BDT" :url-sync="false" :empty-text="`No slabs for FY ${taxYear}: payroll for that year is refused until they are entered.`" compact-toolbar />
                 <p v-if="slabs.some((s) => s.verify)" class="mt-2 text-dense text-warn">Placeholder slabs: verify against the Finance Act for FY {{ taxYear }}.</p>
             </section>
         </div>

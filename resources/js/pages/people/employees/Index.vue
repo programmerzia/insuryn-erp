@@ -13,33 +13,39 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
+import { serverPage, type Paginated } from '@/lib/paging';
 import { employmentTypeLabel, employmentTypes, type PeopleOptions } from '@/lib/people';
 
 /** Addendum §B.9.7 employees queue: who works where, on which grade and basic, and whether pay can reach their bank. */
 interface EmployeeRow {
     id: string; code: string; name: string; designation: string | null; department: string | null; branch: string | null; grade: string | null; type: string | null;
-    joined_on: string; basic: string | null; status: string; bank: string | null; producer_code: string | null;
+    joined_on: string; basic: string | null; status: string; bank: string | null; tin: string | null; producer_code: string | null;
 }
-const props = defineProps<{ employees: EmployeeRow[]; options: PeopleOptions; can: { manage: boolean } }>();
+const props = defineProps<{ employees: Paginated<EmployeeRow>; filters: { missing: string }; options: PeopleOptions; defaultBranchId: string | null; can: { manage: boolean } }>();
 
 const active = ref<string | null>(null);
 const creating = ref(false);
+// New employees start in the user's branch and today's business date.
 const form = useForm({
-    code: '', full_name: '', joined_on: '', branch_id: props.options.branches[0]?.id ?? '', department_id: '', designation_id: '', grade_id: '', employment_type: 'permanent', basic: '',
+    code: '', full_name: '', joined_on: useBusinessToday(), branch_id: props.defaultBranchId ?? props.options.branches[0]?.id ?? '', department_id: '', designation_id: '', grade_id: '', employment_type: 'permanent', basic: '',
     gender: '', date_of_birth: '', tin: '', nid: '', mobile: '', bank_name: '', bank_branch: '', routing_no: '', account_no: '',
 });
 const choices = (list: { id: string; label: string }[]) => list.map((o) => ({ value: o.id, label: o.label }));
+const filterWords = props.filters.missing === 'bank' ? 'Active, without a salary account' : props.filters.missing === 'tin' ? 'Active, without a TIN' : null;
+const emptyText = props.filters.missing === 'bank' ? 'Every active employee has a salary account.' : props.filters.missing === 'tin' ? 'Every active employee has a TIN.' : 'No employees yet: hire the first one.';
 const columns: DataColumn<EmployeeRow>[] = [
     { id: 'code', header: 'Code', value: (e) => e.code, href: (e) => `/people/employees/${e.id}`, width: 90 },
     { id: 'name', header: 'Name', value: (e) => e.name, width: 170 },
     { id: 'designation', header: 'Designation', value: (e) => e.designation, width: 180 },
     { id: 'department', header: 'Department', value: (e) => e.department, width: 160, muted: true },
-    { id: 'branch', header: 'Branch', value: (e) => e.branch, width: 70, filterOptions: [...new Set(props.employees.map((e) => e.branch ?? ''))].filter(Boolean) },
+    { id: 'branch', header: 'Branch', value: (e) => e.branch, width: 70, filterOptions: props.options.branches.map((b) => b.label.split(' · ')[0] ?? b.label) },
     { id: 'grade', header: 'Grade', value: (e) => e.grade, width: 60 },
     { id: 'type', header: 'Type', value: (e) => (e.type ? employmentTypeLabel(e.type) : null), width: 90, filterOptions: employmentTypes.map(employmentTypeLabel) },
     { id: 'joined', header: 'Joined', type: 'date', value: (e) => e.joined_on },
     { id: 'basic', header: 'Basic salary', type: 'money', value: (e) => e.basic, total: true },
+    { id: 'bank', header: 'Salary account', value: (e) => e.bank ?? 'Missing', width: 150, muted: true },
     { id: 'producer', header: 'Producer', value: (e) => e.producer_code, width: 90, muted: true },
     { id: 'status', header: 'Status', type: 'status', value: (e) => e.status, filterOptions: ['active', 'separated'] },
 ];
@@ -52,15 +58,21 @@ const columns: DataColumn<EmployeeRow>[] = [
             v-model:active="active"
             title="Employees"
             :columns="columns"
-            :rows="employees"
+            :rows="employees.data"
+            :page="serverPage(employees)"
             :row-key="(e) => e.id"
             currency="BDT"
-            empty-text="No employees yet: hire the first one."
+            :empty-text="emptyText"
             :action="can.manage ? { label: 'Hire employee' } : null"
+            :empty-action="filters.missing ? { label: 'Show every employee', href: '/people/employees' } : null"
             :inspector-title="(e) => `${e.code} · ${e.name}`"
-            :inspector-subtitle="(e) => `${e.designation ?? ''} · ${e.branch ?? ''}`"
+            :inspector-subtitle="(e) => [e.designation, e.branch].filter(Boolean).join(' · ')"
             @action="creating = true"
         >
+            <template v-if="filterWords" #toolbar>
+                <span class="ml-2 text-ui text-ink-2">{{ filterWords }}</span>
+                <Link href="/people/employees" class="ml-2 text-ui text-accent-text hover:underline">Show every employee</Link>
+            </template>
             <template #details="{ row }">
                 <DetailList :items="[
                     { label: 'Status' },
@@ -70,6 +82,7 @@ const columns: DataColumn<EmployeeRow>[] = [
                     { label: 'Joined', value: formatDate(row.joined_on) },
                     { label: 'Basic salary', value: row.basic ? `${formatMoney(row.basic)} BDT` : '—', num: true },
                     { label: 'Salary account', value: row.bank ?? 'None: payroll cannot be approved' },
+                    { label: 'TIN', value: row.tin ?? '—' },
                     { label: 'Producer', value: row.producer_code ?? 'Not a producer' },
                 ]">
                     <template #Status><StatusBadge :status="row.status" /></template>
