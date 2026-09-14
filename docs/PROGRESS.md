@@ -2377,3 +2377,81 @@ Scope: review only; only the critical finding was fixed.
   policies are seeded — the Part A and local demo stories sell from Aug 2026 / Jan 2026 on 12-month terms, so nothing reaches the 60-day window before Nov 2026 without back-dating rated
   sales before the demo tariffs start; help files and the tour are the
   lead's.
+
+### Phase 3 (R1–R10) — end state
+- All slices of docs/rating-quotation-documents-design.md §7 MVP are done, one commit each:
+  - R1–R3: rating model and engine;
+  - R4: quotation workbench;
+  - R5: proposal and underwriting;
+  - R6: cover notes;
+  - R7: issue from proposal with frozen rating and endorsement re-rating;
+  - R8 and R8b: documents;
+  - R9: renewals;
+  - R10a: tariff editor;
+  - R10b: help and tour.
+
+  The other §6 screens shipped with their slices:
+  - referral queue (R5);
+  - cover notes queue (R6);
+  - policy Rating tab (R7);
+  - Documents tab and template editor (R8);
+  - expiry register queue (R9).
+- **Decisions and assumptions:** D-18 to D-21 and D-30 to D-42; A-65 to A-69 and A-80 to A-135. They are recorded in the table above and in docs/DECISIONS.md.
+- Worked in parallel git worktrees with separate test databases (`erp_test_a`…`d`) and merged onto main slice by slice.
+- **Flow audit** (`scripts/flow-audit.mjs`, docs/flow-audit.md): Part A steps 1–14 on the rated demo now quote in the workbench, go through proposal and underwriting, issue with stamp duty, print the receipt and run the close: 12 pass, 2 partial. The partials are AP/payroll (G6) and IDRA forms (G5).
+  - The audit found two UI bugs, fixed in 6b0c641:
+    - every confirmation dialog answered "no";
+    - the quote workbench kept its pre-save state.
+- Final gate: 1,306 Pest tests and 325 Vitest tests green, PHPStan 0 errors, vue-tsc and production build green.
+- Help: `renewals` joins the "How this works" modules (expiry register screen), EN and BN.
+- **Screenshots:** `storage/ux-screenshots/p3-quotes/` and `p3-admin/`; earlier `s1-wizard`, `s3-help`, `s4-tour`, `s5-captions`, `s6-empty`.
+- **Operations:** deploy with `php artisan queue:restart`. A worker still running the previous code posts POLICY_ISSUED with the old rule set, without the stamp-duty line, and the event fails as unbalanced; the audit hit exactly that. Existing tenants must map the new account role `stamp_duty_payable` (D-37) before issuing rated policies with stamp duty.
+
+#### Placeholder values to verify (OPEN items and seeded data; none are confirmed IDRA/NBR/company figures)
+| Area | Value today | Where | Ref |
+|---|---|---|---|
+| VAT on premium | 15% of net premium, every class | `duties` rows (`verify`, `source=placeholder_verify`) | OPEN 1, A-68 |
+| Stamp duty | Motor 50.00 per policy; fire 200.00 / 500.00 / 1,000.00 by sum insured (<10m / <50m / above); marine cargo and misc 100.00 per policy; not refunded on cancellation | `duties`; A-118 | OPEN 1 |
+| Motor own-damage rate (‰) | Private 20.00 / 22.50 / 25.00, commercial 27.50 / 30.00 / 32.50, motorcycle 15.00 / 17.50 / 20.00 for ≤1300 / 1301–1800 / >1800 cc | MOTOR-TARIFF plan (verify) | R3 |
+| Motor third-party liability | Private 2,500, commercial 4,000, motorcycle 900 | MOTOR-TARIFF | R3 |
+| Passenger liability | 45.00 per seat | MOTOR-TARIFF | R3 |
+| Motor loadings | Driver under 25: +10%; built 2015 or earlier: +15% | MOTOR-TARIFF | R3 |
+| No-claim bonus | 0 / 10 / 20 / 30%; +1 claim-free year after a period with no claim, reset to 0 after a non-rejected claim | MOTOR-TARIFF; renewals | OPEN 5, A-128 |
+| Minimum premiums | Motor private 5,000 / commercial 7,500 / motorcycle 1,500; fire 1,000; marine cargo 500; misc 500 (higher of plan and product wins) | plans; A-67 | R3 |
+| Fire rate (‰) and loading | Dwelling 0.80, shop 1.50, warehouse 2.00, factory 2.50; construction class 3 +25% | FIRE-TARIFF | R3 |
+| Marine cargo rate (‰) | Import 1.50 / 1.00 / 1.20, export 1.20 / 0.80 / 1.00, inland 1.80 / 1.20 / 2.00 for sea / air / road | MARINE-TARIFF | R3 |
+| Misc rate | 3.00‰ of sum insured | MISC-TARIFF | R3 |
+| Rounding | Nearest 1.00, half-even | plans | R3 |
+| Risk schema bounds and options | Engine 50–10,000 cc, seats 1–60, year 1950–2100, driver age 18–99, claim-free years 0–50; select options (vehicle types, occupancies, construction classes, voyages, conveyances) | demo product versions | R1 |
+| Premium recognition | At policy, not cover note; `recognise_at=cover_note` is refused (gap) | product flag | OPEN 3, A-65, D-33 |
+| Credit issuance | Not allowed unless the product version allows it (demo products allow it); otherwise a premium-received reference is required | product flag | OPEN 4, A-117 |
+| Quotation validity | 15 days, issue day included; issue only within validity | `erp.quotations.valid_days` | A-80, A-116 |
+| Underwriting limits (demo tenants) | Branch officer motor 2,000,000 / fire 5,000,000 / marine 2,000,000 / misc 1,000,000; branch manager 10m / 25m / 10m / 5m; finance manager 50m all; CFO 250m all. A new tenant has none, so everything is referred | `underwriting_limits` (verify) | A-90 |
+| Referral risk flags | Motor vehicle older than 15 years; fire construction class 3 | config | A-89 |
+| Duplicate-risk keys | Motor registration or chassis number; fire address | config | A-88 |
+| KYC document types | NID, passport, birth certificate, trade licence, TIN | config | A-92 |
+| Cover note maximum validity | 30 days for every class | `erp.cover_notes.max_days` | OPEN 2, A-93 |
+| Endorsement premium | Full annual difference (not pro rata) unless configured | config | A-119 |
+| Approval limits (demo / setup defaults) | Claim payment approval ≥ 500,000 → Finance Manager then CFO; claim release ≥ 500,000 → CFO; manual journal and reversal → Finance Manager | approval policies | A-55 |
+| Renewals | Register buckets 60/30/15/7 days; renewal quotation 45 days before expiry, valid until expiry; reminders at 30/15/7 days; notices in English; email and SMS log-only | `erp.renewals.*` | A-125–A-135 |
+| Lapse / non-renewal reasons | Price, service, sold asset, moved to competitor, no response, other (and their Bangla labels) | `erp.renewals.lapse_reasons` | A-133 |
+| Document templates | All default wording (EN) and every Bangla label and sentence; endorsement number `<policy>/E<n>`; Latin digits on Bangla documents; preview demo data | `document_templates` | A-103, A-104, A-107 |
+| Demo data | Risks, registrations, addresses, sums insured; BDO monthly targets 60,000 | demo seeders | R7 |
+
+#### Not done / gaps (for the next phase)
+- **Recognition at cover note:** refused (D-33). It needs its own posting path.
+- **Approval engine:** refunds and commission payouts don't go through it, so they have no limit screen.
+- **Credit issuance and payers:**
+  - credit can't be set by producer or customer type;
+  - the premium-received reference isn't linked to a receipt;
+  - multi-payer shares aren't supported on the proposal path.
+- **Reports:**
+  - the premium register has no stamp duty column;
+  - no IDRA forms (G5).
+- **Renewals:**
+  - manual loadings aren't copied to the renewal quotation;
+  - a claim registered after the offer doesn't re-price it;
+  - customers have no email or phone, so the real SMS/email adapters (LATER) need those first.
+- **Permissions:** no role template holds `policy.endorse` (a Phase 1 gap) or `reports.regulatory` for the finance manager (flow audit).
+- **LATER per the design note:** life rating, fleet/group policies, co-insurance on the schedule, sanctions, tariff import from IDRA circulars, bulk print/email from queues.
+- **Observations from the flow audit to decide on:** UTC versus tenant dates; locking a month early or with pending manual journals.

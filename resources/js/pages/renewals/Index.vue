@@ -66,7 +66,7 @@ const columns: DataColumn<Entry>[] = [
 </script>
 
 <template>
-    <AppLayout help="policies" title="Renewals" fill>
+    <AppLayout help="renewals" title="Renewals" fill>
         <QueueView
             id="renewals"
             v-model:active="active"

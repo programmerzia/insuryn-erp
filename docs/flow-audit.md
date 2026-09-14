@@ -13,7 +13,8 @@ composer worker &                             # posts accounting events; without
 node scripts/flow-audit.mjs                   # --base http://nonlife.localhost:8765
 ```
 
-- Since Phase 3 R7, steps 1–3 quote in the quote workbench, make and submit the proposal, issue the policy from the proposal page and receive its rated gross premium (the Part A products are rated); the latest run below predates that change.
+- Since Phase 3 R7, steps 1–3 quote in the quote workbench, make and submit the proposal, issue the policy from the proposal page, receive its rated gross premium and print the receipt.
+- Restart the worker after deploying new code (`php artisan queue:restart`): a worker still on older code posts with the old rule set.
 - Output goes to `storage/flow-audit/results.json` and one screenshot per step, `storage/flow-audit/step-NN.png`.
 - Rerunning needs a fresh demo, because step 13 locks September.
 - Users: `<role>@nonlife.local` with the admin password.
@@ -22,34 +23,28 @@ node scripts/flow-audit.mjs                   # --base http://nonlife.localhost:
   - **partial**: done, with a named shortfall.
   - **fail**: the step cannot be done.
 
-## Latest run — 14 Sep 2026, after fixes F1–F6
+## Latest run — 14 Sep 2026, Phase 3 complete (R1–R10, F1–F6)
 
 | # | Part A step | Role | Result | What happened |
 |---|---|---|---|---|
-| 1 | New motor policy: product, customer, vehicle, sum insured, premium | Branch officer | partial | Quote created. No vehicle details or sum insured; the premium is typed in, not calculated (G1 — Phase 3 R1–R4). |
-| 2 | Issue; number allocated; accounting behind the scenes | Branch officer | partial | Issued as `POL-HO-2026-000008` (F1). The preview shows Premium receivable 12,000.00, Unearned premium 10,434.78, VAT 1,565.22, each with its plain caption. No stamp duty: only VAT is split (Phase 3 R2 duties). |
-| 3 | Receive 12,000 by bank transfer, allocate, receipt for the customer | Branch manager | partial | Receipt `RCT-2026-000007` posted: Bank 12,000 / Premium receivable 12,000, plus commission. A branch officer cannot allocate (segregation of duties), so the branch manager did. No printable receipt (G2 — Phase 3 R8). |
-| 4 | Commission accrued for an agent on a commission scheme | Finance manager | pass | Commission expense and payable, 10% of 12,000, on the policy's accounting. |
-| 5 | Register the accident with documents; nothing financial | Claims officer | pass | `CLM-2026-000003` registered with no journal. Survey report attached and listed on the Documents tab (F2). |
+| 1 | New motor policy: product, customer, vehicle, sum insured, premium, VAT and stamp duty | Branch officer | pass | Quote workbench: risk form from the product's schema (vehicle type, registration, chassis, cc, seats, year, driver age, sum insured 450,000.00); premium from the tariff as typed — own damage 10,125.00, third party 2,500.00, stamp duty 50.00, VAT 1,893.75, gross 14,568.75. Quotation issued, proposal made, identity verified, submitted and approved automatically. |
+| 2 | Issue; number allocated; accounting behind the scenes | Branch officer | pass | Issued from the proposal as `POL-HO-2026-000008`. Journal preview: Premium receivable 14,568.75 / Unearned premium 12,625.00 / VAT payable 1,893.75 / Stamp duty payable 50.00, each with its plain caption. |
+| 3 | Receive the premium by bank transfer, allocate, receipt for the customer | Branch manager | pass | `RCT-2026-000007`: Bank 14,568.75 / Premium receivable, plus commission. Receipt PDF generated from the Documents tab (headless Chromium). A branch officer cannot allocate (SoD), so the branch manager did. |
+| 4 | Commission accrued for an agent on a commission scheme | Finance manager | pass | Commission expense and payable, 10% of 14,568.75, on the policy's accounting. |
+| 5 | Register the accident with documents; nothing financial | Claims officer | pass | `CLM-2026-000003` registered with no journal; survey report attached and listed. |
 | 6 | Set the reserve at 200,000 | Claims officer | pass | Claims incurred / Outstanding claims 200,000. |
-| 7 | Approve 180,000 within limit, finance releases, close releases the rest | Claims manager, finance manager | pass | Approved within the claims manager's limit; the default limit sends 500,000 and above to Finance Manager then CFO (F3). Released and paid by the finance manager (a different person). Closing released 20,000. |
-| 8 | Home queue for the accountant; allocate money in suspense | Accountant | pass | Home shows unallocated receipts, unmatched bank lines, journals awaiting approval and failed events. The 8,500 in suspense was allocated in the workbench: Suspense / Premium receivable plus commission. |
-| 9 | Import the bank statement, accept suggestions, exceptions left | Accountant | pass | The demo imports the September CSV; the import button is on the bank account page. Suggested matches accepted with Enter. Exactly two exceptions left (bank charges 350.00, unknown transfer 52,000.00), explained with reasons. |
-| 10 | Office expenses, vendor bills (AP), salaries | Accountant | partial | Office rent recorded as a manual journal and submitted for approval. No accounts payable or payroll module (G6, Phase 2). |
-| 11 | Close September: earn, reconcile premium, claims, commission, bank, suspense | Finance manager | pass | Every checklist task done: earning, suspense review, bank, premium, claims, commission, accruals, trial balance, statements, sign-off. |
-| 12 | Trial balance, P&L, balance sheet; click down to policies | Finance manager | pass | Trial balance figure → account activity → journal → the policy. P&L and balance sheet open. |
+| 7 | Approve 180,000 within limit, finance releases, close releases the rest | Claims manager, finance manager | pass | Approved within limit; released and paid by the finance manager; closing released 20,000. |
+| 8 | Home queue for the accountant; allocate money in suspense | Accountant | pass | Queues shown; suspense allocated in the workbench (what the installment still needed, 5,397.50). |
+| 9 | Import the bank statement, accept suggestions, exceptions left | Accountant | pass | Suggestions accepted; exactly two exceptions left and explained. |
+| 10 | Office expenses, vendor bills (AP), salaries | Accountant | partial | Office rent as a manual journal; no AP or payroll module (G6). |
+| 11 | Close September | Finance manager | pass | Every checklist task done, all subledgers reconcile. |
+| 12 | Trial balance, P&L, balance sheet; click down to policies | Finance manager | pass | Trial balance figure → account activity → journal → policy; P&L and balance sheet open. |
 | 13 | Lock the period | Finance manager | pass | September locked. |
-| 14 | Regulatory exports: premium register by class, outstanding claims, UPR, agency register | Finance manager, auditor | partial | Premium register has totals by class and branch (F5). The unearned premium report reconciles to the control with variance 0.00 (F5). Agency register downloads as XLSX from the producers queue (F6). No IDRA return forms (G5). |
+| 14 | Regulatory exports | Finance manager, auditor | partial | Premium register totals by class; unearned premium report variance 0.00; agency register XLSX from the producers queue. No IDRA forms (G5). |
 
-**Summary:** 9 pass, 5 partial, 0 fail. Every partial is a known product gap:
+**Summary:** 12 pass, 2 partial, 0 fail. The partials are AP/payroll (G6, Phase 2) and IDRA forms (G5).
 
-| Gap | Steps | Planned |
-|---|---|---|
-| Rating | 1 | Phase 3 R1–R4 |
-| Stamp duty | 2 | Phase 3 R2 duties |
-| Printed documents | 3 | Phase 3 R8 |
-| AP and payroll | 10 | Phase 2 |
-| IDRA forms | 14 | G5 |
+**Bugs the audit found in Phase 3, fixed in 6b0c641:** every confirmation dialog answered "no" (Reka's AlertDialogAction closed before its click handler), and the quote workbench kept its pre-save state so a new quote could not become a proposal.
 
 ## Observations to confirm (not failures of the audit)
 - **Date shown vs Dhaka date:** the trial balance opened "as of 13 Sep 2026" while it was already 14 Sep in Dhaka. The run was around 21:00 UTC, so the default date may follow the server clock (UTC) rather than the tenant's time zone.
