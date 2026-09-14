@@ -13,6 +13,7 @@ use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -78,7 +79,7 @@ final class BankMatcher
         }
         $window = (int) config('erp.bank.auto_match_date_window_days', 3);
         $journalLines = $this->unmatchedJournalLines($bankAccount->gl_account_id,
-            $statementLines->min('posted_on')?->subDays($window), $statementLines->max('posted_on')?->addDays($window) ?? CarbonImmutable::today());
+            $statementLines->min('posted_on')?->subDays($window), $statementLines->max('posted_on')?->addDays($window) ?? app(BusinessClock::class)->today());
 
         $candidates = [];
         $claims = [];

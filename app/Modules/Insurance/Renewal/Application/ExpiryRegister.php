@@ -14,6 +14,7 @@ use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -129,7 +130,7 @@ final class ExpiryRegister
     /** Listener: the expiring policy was renewed (PolicyLifecycle::issueFromProposal, inside its transaction). */
     public function markRenewed(PolicyRenewed $event): void
     {
-        $this->closeAsRenewed($event->previousPolicyId, $event->renewalPolicyId, CarbonImmutable::today());
+        $this->closeAsRenewed($event->previousPolicyId, $event->renewalPolicyId, app(BusinessClock::class)->today());
     }
 
     /** The open renewal quotation was offered: the row moves to renewal_offered (A-127: the quotation itself stays issued). */

@@ -7,8 +7,8 @@ namespace App\Modules\Insurance\Policy\Infrastructure\Jobs;
 use App\Modules\Accounting\Application\Queries\FiscalPeriodQuery;
 use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Policy\Application\PremiumEarning\PremiumEarningRun;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -29,9 +29,9 @@ final class PremiumEarningJob implements ShouldQueue
 
     public function handle(PolicyLifecycle $policies, FiscalPeriodQuery $periods, PremiumEarningRun $earning): void
     {
-        $today = CarbonImmutable::today();
         foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            TenantContext::run((string) $tenantId, function () use ($policies, $periods, $earning, $today): void {
+            TenantContext::run((string) $tenantId, function () use ($policies, $periods, $earning): void {
+                $today = app(BusinessClock::class)->today(); // slice 2.1b: the company's today (D-54)
                 $policies->activateDue($today);
                 $policies->expireDue($today);
                 foreach ($periods->openEndedBefore($today) as $period) {

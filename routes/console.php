@@ -11,18 +11,21 @@ use App\Modules\Platform\Numbering\ReservationSweeperJob;
 use Illuminate\Support\Facades\Schedule;
 
 // Design §8.5 background jobs. Each job loops over tenants itself (D-07).
+// Slice 2.1b (D-54): the nightly runs start at these times on the business clock's default zone (Asia/Dhaka), just after the business day
+// turns, and each job reads each company's today from the BusinessClock. ASSUMPTION A-152.
+$businessZone = App\Modules\Platform\Tenancy\BusinessClock::defaultTimezone();
 Schedule::job(new OutboxRelayJob(), 'posting')->everySecond()->withoutOverlapping();
 Schedule::job(new ReservationSweeperJob())->everyFifteenMinutes();
-Schedule::job(new PremiumEarningJob(), 'batch')->dailyAt('01:00')->withoutOverlapping();
-Schedule::job(new ReconciliationJob(), 'recon')->dailyAt('02:00')->withoutOverlapping();
-Schedule::job(new DunningJob(), 'batch')->dailyAt('01:30')->withoutOverlapping();
-Schedule::job(new LicenceExpiryAlertJob(), 'batch')->dailyAt('01:45')->withoutOverlapping();
+Schedule::job(new PremiumEarningJob(), 'batch')->dailyAt('01:00')->timezone($businessZone)->withoutOverlapping();
+Schedule::job(new ReconciliationJob(), 'recon')->dailyAt('02:00')->timezone($businessZone)->withoutOverlapping();
+Schedule::job(new DunningJob(), 'batch')->dailyAt('01:30')->timezone($businessZone)->withoutOverlapping();
+Schedule::job(new LicenceExpiryAlertJob(), 'batch')->dailyAt('01:45')->timezone($businessZone)->withoutOverlapping();
 // Phase 3 R4: issued quotations past their validity expire.
-Schedule::job(new App\Modules\Insurance\Quotation\Infrastructure\Jobs\QuotationExpiryJob(), 'batch')->dailyAt('00:15')->withoutOverlapping();
+Schedule::job(new App\Modules\Insurance\Quotation\Infrastructure\Jobs\QuotationExpiryJob(), 'batch')->dailyAt('00:15')->timezone($businessZone)->withoutOverlapping();
 // Phase 3 R6: active cover notes past their last day expire.
-Schedule::job(new App\Modules\Insurance\CoverNote\Infrastructure\Jobs\CoverNoteExpiryJob(), 'batch')->dailyAt('00:20')->withoutOverlapping();
+Schedule::job(new App\Modules\Insurance\CoverNote\Infrastructure\Jobs\CoverNoteExpiryJob(), 'batch')->dailyAt('00:20')->timezone($businessZone)->withoutOverlapping();
 // Phase 3 R9: expiry register, renewal quotations at T-45 and renewal notices (after quotations expire, so an expired renewal quotation gets no reminder).
-Schedule::job(new App\Modules\Insurance\Renewal\Infrastructure\Jobs\RenewalRunJob(), 'batch')->dailyAt('00:30')->withoutOverlapping();
+Schedule::job(new App\Modules\Insurance\Renewal\Infrastructure\Jobs\RenewalRunJob(), 'batch')->dailyAt('00:30')->timezone($businessZone)->withoutOverlapping();
 
 // Slice D9: regenerate the producer portal's OpenAPI document from the routes and their PortalOperation attributes.
 Illuminate\Support\Facades\Artisan::command('portal:openapi', function (App\Http\Portal\OpenApi\PortalOpenApi $openApi): void {

@@ -11,6 +11,7 @@ use App\Modules\Platform\Documents\Generation\DocumentSubject;
 use App\Modules\Platform\Documents\Generation\DocumentValues;
 use App\Modules\Platform\Documents\Templates\DocumentTemplateCode;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -59,7 +60,7 @@ final class RenewalNoticeDocumentData implements DocumentDataProvider
         ];
 
         return [...$bag,
-            'document' => ['title' => $code->title($locale), 'number' => (string) $entry->policy_number, 'date' => DocumentValues::date(CarbonImmutable::today())],
+            'document' => ['title' => $code->title($locale), 'number' => (string) $entry->policy_number, 'date' => DocumentValues::date(app(BusinessClock::class)->today())],
             'details' => $details,
             'total' => ['label' => $l('Renewal premium', 'নবায়ন প্রিমিয়াম'), 'amount' => $bag['total']['amount']],
             'period' => ['from' => DocumentValues::date($inception), 'to' => DocumentValues::date($inception->addMonthsNoOverflow(max(1, $term))->subDay())],

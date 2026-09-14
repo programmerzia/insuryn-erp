@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Distribution\Infrastructure\Jobs;
 
 use App\Modules\Distribution\Application\Licences\LicenceExpiryAlerts;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +23,9 @@ final class LicenceExpiryAlertJob implements ShouldQueue
 
     public function handle(LicenceExpiryAlerts $alerts): void
     {
-        $today = CarbonImmutable::today();
         foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            TenantContext::run((string) $tenantId, fn () => $alerts->run($today));
+            // Slice 2.1b: the company's today, read inside the tenant (D-54).
+            TenantContext::run((string) $tenantId, fn () => $alerts->run(app(BusinessClock::class)->today()));
         }
     }
 }

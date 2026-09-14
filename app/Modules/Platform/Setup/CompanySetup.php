@@ -8,6 +8,8 @@ use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,23 +28,30 @@ final class CompanySetup
         private readonly Audit $audit,
     ) {}
 
-    /** @param list<array{code: string, name: string}> $branches */
-    public function save(string $code, string $name, array $branches, string $actorUserId): string
+    /**
+     * @param list<array{code: string, name: string}> $branches
+     * @param string|null $timezone slice 2.1b (D-54): the zone business dates follow; null keeps the entity's (a new entity: erp.business_clock.default_timezone)
+     */
+    public function save(string $code, string $name, array $branches, string $actorUserId, ?string $timezone = null): string
     {
         $this->permissions->authorize($actorUserId, self::PERMISSION);
+        if ($timezone !== null && ! BusinessClock::valid($timezone)) {
+            throw new BusinessRuleViolation('TIMEZONE_UNKNOWN', "{$timezone} is not a time zone.");
+        }
 
-        return DB::transaction(function () use ($code, $name, $branches, $actorUserId): string {
+        return DB::transaction(function () use ($code, $name, $branches, $actorUserId, $timezone): string {
             $tenantId = TenantContext::id();
-            $entity = DB::table('legal_entities')->orderBy('created_at')->lockForUpdate()->first(['id', 'code', 'name']);
-            $before = $entity === null ? null : ['code' => (string) $entity->code, 'name' => (string) $entity->name];
+            $entity = DB::table('legal_entities')->orderBy('created_at')->lockForUpdate()->first(['id', 'code', 'name', 'timezone']);
+            $before = $entity === null ? null : ['code' => (string) $entity->code, 'name' => (string) $entity->name, 'timezone' => (string) $entity->timezone];
+            $zone = $timezone ?? ($entity === null ? BusinessClock::defaultTimezone() : (string) $entity->timezone);
             if ($entity === null) {
                 $entityId = (string) Str::uuid7();
                 $currency = (string) DB::table('tenants')->where('id', $tenantId)->value('base_currency');
                 DB::table('legal_entities')->insert(['id' => $entityId, 'tenant_id' => $tenantId, 'code' => $code, 'name' => $name, 'base_currency' => $currency,
-                    'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+                    'timezone' => $zone, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
             } else {
                 $entityId = (string) $entity->id;
-                DB::table('legal_entities')->where('id', $entityId)->update(['code' => $code, 'name' => $name, 'updated_at' => now()]);
+                DB::table('legal_entities')->where('id', $entityId)->update(['code' => $code, 'name' => $name, 'timezone' => $zone, 'updated_at' => now()]);
             }
             foreach ($branches as $branch) {
                 $updated = DB::table('branches')->where('entity_id', $entityId)->where('code', $branch['code'])->update(['name' => $branch['name'], 'updated_at' => now()]);
@@ -52,7 +61,7 @@ final class CompanySetup
                 }
             }
             $this->audit->record('setup.company_saved', AuditSubject::of('legal_entity', $entityId), $before,
-                ['code' => $code, 'name' => $name, 'branches' => array_column($branches, 'code')], null, self::PERMISSION, Actor::user($actorUserId));
+                ['code' => $code, 'name' => $name, 'timezone' => $zone, 'branches' => array_column($branches, 'code')], null, self::PERMISSION, Actor::user($actorUserId));
 
             return $entityId;
         });

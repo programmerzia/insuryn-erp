@@ -9,6 +9,7 @@ use App\Modules\Accounting\Application\Imports\ImportMode;
 use App\Modules\Accounting\Application\Imports\ImportOutcome;
 use App\Modules\Accounting\Application\Imports\OpeningBalancesImport;
 use App\Modules\Platform\Authorization\PermissionDenied;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,7 +65,7 @@ final class ImportController
             return match ($type) {
                 ChartOfAccountsImport::TYPE => $this->chartOfAccounts->run($csv, $scope->entityId, $mode, $actorId),
                 OpeningBalancesImport::TYPE => $this->openingBalances->run($csv, $scope->entityId,
-                    CarbonImmutable::createFromFormat('Y-m-d', (string) $validated['opening_date']) ?: CarbonImmutable::today(), $mode, $actorId),
+                    CarbonImmutable::createFromFormat('Y-m-d', (string) $validated['opening_date']) ?: app(BusinessClock::class)->today(), $mode, $actorId),
                 default => throw new NotFoundHttpException("Unknown import type {$type}."),
             };
         } catch (PermissionDenied $e) {

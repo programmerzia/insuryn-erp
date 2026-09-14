@@ -7,8 +7,8 @@ namespace App\Modules\Accounting\Application\ChartOfAccounts;
 use App\Modules\Accounting\Application\Imports\ImportOutcome;
 use App\Modules\Accounting\Domain\Enums\AccountType;
 use App\Modules\Accounting\Domain\Enums\Side;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -112,7 +112,7 @@ final class ChartOfAccountsRules
             ]);
             if ($a['role'] !== null) {
                 DB::table('account_role_mappings')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $tenantId, 'entity_id' => $entityId,
-                    'book_id' => $bookId, 'role_code' => $a['role'], 'account_id' => $ids[$code], 'effective_from' => CarbonImmutable::today()->toDateString()]);
+                    'book_id' => $bookId, 'role_code' => $a['role'], 'account_id' => $ids[$code], 'effective_from' => app(BusinessClock::class)->today($entityId)->toDateString()]);
             }
         }
 

@@ -26,11 +26,12 @@ const props = defineProps<{
     receipt: { id: string; number: string; amount: string; currency: string; value_date: string; reference: string | null; channel: string; status: string; payer: string | null; open: string };
     suspenseItemId: string | null;
     candidates: Candidate[];
+    today: string;
 }>();
 
-const today = new Date();
+// Slice 2.1b (D-54): the allocation date starts at the company's today from the server, not the browser's clock.
 const form = useForm({
-    on: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
+    on: props.today,
     lines: [] as { installment_id: string; amount: string }[],
 });
 const open = computed(() => parseMoney(props.receipt.open) ?? 0n);

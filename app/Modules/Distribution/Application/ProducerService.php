@@ -14,7 +14,7 @@ use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\PermissionChecker;
-use Carbon\CarbonImmutable;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -42,11 +42,11 @@ final class ProducerService
             if (! DB::table('parties')->where('id', $request->partyId)->lockForUpdate()->exists()) {
                 throw new \Illuminate\Database\RecordsNotFoundException("Party {$request->partyId} does not exist.");
             }
-            $joinedOn = $request->joinedOn ?? ($status === ProducerStatus::Active ? CarbonImmutable::today() : null);
+            $joinedOn = $request->joinedOn ?? ($status === ProducerStatus::Active ? app(BusinessClock::class)->today() : null);
             $producer = Producer::query()->create(['party_id' => $request->partyId, 'code' => $request->code, 'type' => $type->value,
                 'channel_id' => $request->channelId ?? $this->channels->standard($type->defaultChannel()), 'branch_id' => $request->branchId,
                 'commission_plan_id' => $request->commissionPlanId, 'employee_id' => $request->employeeId, 'status' => $status->value, 'joined_on' => $joinedOn?->toDateString()]);
-            $this->hierarchy->placeNew($producer->id, $request->parentProducerId, $joinedOn ?? CarbonImmutable::today());
+            $this->hierarchy->placeNew($producer->id, $request->parentProducerId, $joinedOn ?? app(BusinessClock::class)->today());
             $this->audit->record('producer.created', AuditSubject::of('producer', $producer->id), null,
                 ['code' => $request->code, 'type' => $type->value, 'party_id' => $request->partyId, 'branch_id' => $request->branchId, 'parent_producer_id' => $request->parentProducerId],
                 null, 'agent.manage', Actor::user($actorUserId));
@@ -66,7 +66,7 @@ final class ProducerService
         return DB::transaction(function () use ($producerId, $changes, $actorUserId): ProducerSummary {
             $producer = Producer::query()->whereKey($producerId)->lockForUpdate()->firstOrFail();
             if (array_key_exists('parent_agent_id', $changes)) {
-                $today = CarbonImmutable::today();
+                $today = app(BusinessClock::class)->today();
                 $level = $this->hierarchyQuery->positionAt($producer->id, $today)?->level_code;
                 $this->hierarchy->place($producer->id, $changes['parent_agent_id'], $level === null ? null : (string) $level, $today, $actorUserId);
                 unset($changes['parent_agent_id']);
@@ -89,6 +89,6 @@ final class ProducerService
      */
     public function ancestors(string $producerId): array
     {
-        return array_map(fn (HierarchyNode $node): string => $node->producerId, array_slice($this->hierarchyQuery->hierarchyAt($producerId, CarbonImmutable::today()), 1));
+        return array_map(fn (HierarchyNode $node): string => $node->producerId, array_slice($this->hierarchyQuery->hierarchyAt($producerId, app(BusinessClock::class)->today()), 1));
     }
 }

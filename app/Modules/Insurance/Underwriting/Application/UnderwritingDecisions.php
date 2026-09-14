@@ -21,6 +21,7 @@ use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Authorization\SodGuard;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Money\MinorUnits;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -74,7 +75,7 @@ final class UnderwritingDecisions
         $proposal = $this->lockReferred($proposalId);
         $this->authorize($deciderId, $proposal);
         $this->sod->assert($deciderId, self::PERMISSION, AuditSubject::of('proposal', $proposal->id));
-        $limit = $this->limits->limitFor($deciderId, $proposal->class_code, CarbonImmutable::today());
+        $limit = $this->limits->limitFor($deciderId, $proposal->class_code, app(BusinessClock::class)->today());
         if ($limit === null || $limit < $proposal->sum_insured_minor) {
             throw new BusinessRuleViolation('UNDERWRITING_LIMIT_EXCEEDED', 'Sum insured '.MinorUnits::format($proposal->sum_insured_minor, $proposal->currency)
                 .' is above your underwriting limit for '.$proposal->class_code.($limit === null ? ' (you have none)' : ' ('.MinorUnits::format($limit, $proposal->currency).')').'.');

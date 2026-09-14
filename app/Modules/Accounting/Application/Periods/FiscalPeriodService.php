@@ -14,6 +14,7 @@ use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Messaging\Outbox;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -61,7 +62,7 @@ final class FiscalPeriodService
 
         return DB::transaction(function () use ($periodId, $actorUserId, $reason): ?string {
             $this->assertStatusIn($periodId, [PeriodStatus::SoftLocked, PeriodStatus::Locked], PeriodStatus::Open);
-            $approvalId = $this->approvals->request('fiscal_period_reopen', $periodId, new ApprovalFacts(0), $actorUserId, CarbonImmutable::today(), ['reason' => trim($reason)]);
+            $approvalId = $this->approvals->request('fiscal_period_reopen', $periodId, new ApprovalFacts(0), $actorUserId, app(BusinessClock::class)->today(), ['reason' => trim($reason)]);
             if ($approvalId !== null) {
                 $this->audit->record('period.reopen_requested', AuditSubject::of('fiscal_period', $periodId), null, ['approval_id' => $approvalId],
                     trim($reason), 'periods.reopen', Actor::user($actorUserId));

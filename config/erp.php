@@ -11,6 +11,11 @@ return [
         // Tenant used when no header, session or subdomain names one (local browsing, single-install deployments). Empty = none.
         'default_slug' => env('ERP_DEFAULT_TENANT', 'demo'),
     ],
+    'business_clock' => [
+        // Slice 2.1b (D-54, CQ-H2): business dates follow the legal entity's time zone (legal_entities.timezone). This zone is the default for a new
+        // entity and the zone used outside a tenant; the nightly jobs are scheduled on it. ASSUMPTION A-151, A-152.
+        'default_timezone' => env('ERP_BUSINESS_TIMEZONE', 'Asia/Dhaka'),
+    ],
     'posting' => [
         'rules_path' => resource_path('posting-rules'),
         'transient_retry_attempts' => 5,

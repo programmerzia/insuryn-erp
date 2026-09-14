@@ -17,6 +17,7 @@ use App\Modules\Insurance\Reports\Application\ReceivableAgeingQuery;
 use App\Modules\Insurance\Reports\Application\UnearnedPremiumQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exports\XlsxWriter;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -123,9 +124,9 @@ final class ReportsPageController
     {
         $entity = PageSupport::entity();
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
-        $from = self::date($request, 'from', CarbonImmutable::today()->startOfMonth());
-        $to = self::date($request, 'to', CarbonImmutable::today());
-        $asOf = self::date($request, 'as_of', CarbonImmutable::today());
+        $from = self::date($request, 'from', app(BusinessClock::class)->today()->startOfMonth());
+        $to = self::date($request, 'to', app(BusinessClock::class)->today());
+        $asOf = self::date($request, 'as_of', app(BusinessClock::class)->today());
         $by = in_array($request->query('by'), LossRatioQuery::DIMENSIONS, true) ? (string) $request->query('by') : 'product';
         if ($report === 'renewal-conversion' && ! in_array($request->query('by'), RenewalConversionQuery::DIMENSIONS, true)) {
             $by = 'branch'; // slice R9: conversion is read by branch first
@@ -282,7 +283,7 @@ final class ReportsPageController
      */
     private function renewalConversion(string $entityId, CarbonImmutable $from, CarbonImmutable $to, string $by): array
     {
-        $result = app(RenewalConversionQuery::class)->conversion($entityId, $from, $to, $by, CarbonImmutable::today());
+        $result = app(RenewalConversionQuery::class)->conversion($entityId, $from, $to, $by, app(BusinessClock::class)->today());
         $percent = fn (?int $bp): string => $bp === null ? '—' : sprintf('%d.%02d%%', intdiv($bp, 100), $bp % 100);
         $label = ['branch' => 'Branch', 'agent' => 'Producer', 'product' => 'Product'][$by] ?? 'Branch';
 

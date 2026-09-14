@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Modules\Accounting\Application\LedgerQuery;
 use App\Modules\Accounting\Domain\MinorUnits;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +18,7 @@ final class TrialBalanceController
     public function __invoke(Request $request, LedgerQuery $ledger): Response
     {
         $scope = ReportingScope::fromRequest($request);
-        $asOf = $this->asOf($request);
+        $asOf = $this->asOf($request, $scope->entityId);
         $rows = $ledger->trialBalance($scope->entityId, $scope->bookId, $asOf);
         $debit = array_sum(array_column($rows, 'debit'));
         $credit = array_sum(array_column($rows, 'credit'));
@@ -46,13 +47,13 @@ final class TrialBalanceController
         ]);
     }
 
-    private function asOf(Request $request): CarbonImmutable
+    private function asOf(Request $request, string $entityId): CarbonImmutable
     {
         $value = $request->query('as_of');
         if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
-            return CarbonImmutable::createFromFormat('Y-m-d', $value) ?: CarbonImmutable::today();
+            return CarbonImmutable::createFromFormat('Y-m-d', $value) ?: app(BusinessClock::class)->today($entityId);
         }
 
-        return CarbonImmutable::today();
+        return app(BusinessClock::class)->today($entityId);
     }
 }

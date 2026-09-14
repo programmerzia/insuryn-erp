@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Pages;
 
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -147,13 +148,13 @@ final class ObjectHistory
             'claim_payment.approved' => 'Payment of '.$money($after['amount_minor'] ?? 0).' approved'.$by,
             'claim_payment.approval_requested' => 'Payment of '.$money($after['amount_minor'] ?? 0).' sent for approval'.$by,
             'claim_payment.release_requested' => 'Payment release requested'.$by,
-            'claim_payment.released' => 'Paid on '.$date($after['paid_on'] ?? 'today').$by,
+            'claim_payment.released' => 'Paid on '.$date($after['paid_on'] ?? app(BusinessClock::class)->today()->toDateString()).$by,
             'claim_payment.rejected', 'claim_payment.release_rejected' => 'Payment rejected'.$why.$by,
             'claim.recovered' => 'Recovery of '.$money($after['amount_minor'] ?? 0).' ('.($after['type'] ?? 'recovery').') received'.$by,
             'claim.closed' => 'Closed'.$why.$by, 'claim.rejected' => 'Rejected'.$why.$by, 'claim.reopened' => 'Reopened'.$why.$by,
             'receipt.recorded' => 'Recorded '.$money($after['amount_minor'] ?? 0).$by.': '.$money($after['allocated_minor'] ?? 0).' allocated'
                 .((int) ($after['suspense_minor'] ?? 0) > 0 ? ', '.$money($after['suspense_minor']).' held in suspense' : ''),
-            'receipt.bounced' => 'Cheque bounced on '.$date($after['bounced_on'] ?? 'today').$why.$by,
+            'receipt.bounced' => 'Cheque bounced on '.$date($after['bounced_on'] ?? app(BusinessClock::class)->today()->toDateString()).$why.$by,
             'suspense.allocated' => $money($after['amount_minor'] ?? 0).' allocated from suspense'.$by,
             'document.attached' => 'Document '.($after['name'] ?? '').' attached'.$by,
             'document.generated' => (\App\Modules\Platform\Documents\Templates\DocumentTemplateCode::tryFrom((string) ($after['template_code'] ?? ''))?->title() ?? 'Document')

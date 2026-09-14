@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Distribution\Application;
 
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Illuminate\Database\RecordsNotFoundException;
 use Illuminate\Support\Facades\DB;
 
@@ -47,7 +48,7 @@ final class ProducerDirectory
     /** Producers with today's parent from the effective-dated hierarchy (slice D3). */
     private function query(): \Illuminate\Database\Query\Builder
     {
-        $today = now()->toDateString();
+        $today = app(BusinessClock::class)->today()->toDateString();
 
         return DB::table('producers as p')->select(self::COLUMNS)->selectSub(fn ($q) => $q->from('producer_hierarchy as h')->whereColumn('h.producer_id', 'p.id')
             ->where('h.effective_from', '<=', $today)->where(fn ($w) => $w->whereNull('h.effective_to')->orWhere('h.effective_to', '>', $today))

@@ -152,11 +152,12 @@ it('expires issued quotations after their last valid day, in the nightly job and
 
         return [$a, $b];
     });
-    travelTo(CarbonImmutable::parse('2026-09-29 23:00'));
+    // Slice 2.1b (D-54): the last valid day ends at midnight in Dhaka (18:00 UTC), not at midnight UTC.
+    travelTo(CarbonImmutable::parse('2026-09-29 17:59'));
     app(QuotationExpiryJob::class)->handle(app(QuotationService::class));
     expect(($this->in)(fn () => Quotation::query()->whereKey($first->id)->firstOrFail()->status->value))->toBe('issued');
 
-    travelTo(CarbonImmutable::parse('2026-09-30 01:00'));
+    travelTo(CarbonImmutable::parse('2026-09-29 18:00'));
     app(QuotationExpiryJob::class)->handle(app(QuotationService::class));
     ($this->in)(function () use ($first, $second): void {
         expect(Quotation::query()->whereKey($first->id)->firstOrFail()->status->value)->toBe('expired')->and(Quotation::query()->whereKey($second->id)->firstOrFail()->status->value)->toBe('issued')

@@ -13,6 +13,17 @@ function fullYear(text: string | undefined, today: Date): number {
 }
 
 /**
+ * Slice 2.1b (D-54): "today" for keyboard dates is the company's business date the server shares (`businessToday`, ISO), as a local
+ * calendar date; without one (or unreadable) the browser's own date.
+ */
+export function businessDate(isoDate: string | null | undefined, fallback: Date = new Date()): Date {
+    const match = (isoDate ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return fallback;
+    const checked = iso(Number(match[1]), Number(match[2]), Number(match[3]));
+    return checked === null ? fallback : new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+/**
  * Keyboard date entry (brief §4): `t` today, `+3` / `-2` days from today, "12 Sep 2026", "12 sep" (this year), "2026-09-12",
  * "12/09/2026" and "1.1.27" (day first, as written in Bangladesh). Returns an ISO date or null.
  */

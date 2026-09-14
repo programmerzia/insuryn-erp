@@ -6,6 +6,7 @@ namespace App\Modules\Insurance\Underwriting\Http\Controllers;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Underwriting\Application\UnderwritingLimits;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ final class UnderwritingLimitsPageController
     {
         $this->permissions->authorize(PageSupport::actor($request), UnderwritingLimits::PERMISSION);
         $entity = PageSupport::entity();
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
 
         return Inertia::render('admin/underwriting-limits/Index', [
             'currency' => $entity['currency'],

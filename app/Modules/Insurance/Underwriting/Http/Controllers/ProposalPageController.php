@@ -19,6 +19,7 @@ use App\Modules\Insurance\Underwriting\Domain\Enums\ProposalStatus;
 use App\Modules\Insurance\Underwriting\Domain\Models\Proposal;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -84,7 +85,7 @@ final class ProposalPageController
                 'valid_until' => ($until = DB::table('quotations')->where('id', $model->quotation_id)->value('valid_until')) === null ? null : (string) $until,
                 'policy' => $model->policy_id === null ? null : ['id' => $model->policy_id, 'number' => (string) DB::table('policies')->where('id', $model->policy_id)->value('number')],
             ],
-            'today' => \Carbon\CarbonImmutable::today()->toDateString(),
+            'today' => app(BusinessClock::class)->today()->toDateString(),
             'coverNoteMaxDays' => \App\Modules\Insurance\CoverNote\Application\CoverNoteService::maxDays($model->class_code),
             'coverNotes' => DB::table('cover_notes')->where('proposal_id', $model->id)->orderByDesc('issued_at')->get(['id', 'number', 'status', 'valid_from', 'valid_to', 'cancel_reason'])
                 ->map(fn (object $n): array => ['id' => (string) $n->id, 'number' => (string) $n->number, 'status' => (string) $n->status, 'valid_from' => (string) $n->valid_from,

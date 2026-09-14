@@ -18,6 +18,7 @@ use App\Modules\Distribution\Application\Targets\TargetService;
 use App\Modules\Insurance\Policy\Application\PersistencyQuery;
 use App\Modules\Insurance\Policy\Application\ProductionQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,7 +46,7 @@ final class ProducersPageController
     {
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeAny($actor, self::AREA);
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $names = DB::table('parties')->pluck('display_name', 'id');
         $codes = DB::table('producers')->pluck('code', 'id');
         $channels = DB::table('channels')->orderBy('code')->get(['id', 'code', 'name', 'type']);
@@ -107,7 +108,7 @@ final class ProducersPageController
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeAny($actor, self::AREA);
         $model = $this->producers->find($producer) ?? abort(404);
-        $on = CarbonImmutable::parse((string) $request->query('on', 'today'));
+        $on = CarbonImmutable::parse((string) $request->query('on', app(BusinessClock::class)->today()->toDateString()));
         $currency = PageSupport::entity()['currency'];
         $money = fn (int $minor): string => PageSupport::money($minor, $currency);
         $position = $this->hierarchy->positionAt($model->id, $on);

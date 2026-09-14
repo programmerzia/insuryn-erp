@@ -17,6 +17,7 @@ use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,7 +86,7 @@ final class LookupController
         $this->permissions->authorize(PageSupport::actor($request), 'agent.manage');
         $type = in_array($request->query('type'), self::PRODUCER_TYPES, true) ? (string) $request->query('type') : 'agent';
 
-        return response()->json(['code' => self::suggestedCode($type), 'today' => CarbonImmutable::today()->toDateString()]);
+        return response()->json(['code' => self::suggestedCode($type), 'today' => app(BusinessClock::class)->today()->toDateString()]);
     }
 
     /**

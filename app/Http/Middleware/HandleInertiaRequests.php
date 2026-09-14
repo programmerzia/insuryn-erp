@@ -25,6 +25,8 @@ final class HandleInertiaRequests extends Middleware
             'auth' => ['user' => $user instanceof User ? ['id' => $user->id, 'name' => $user->name, 'email' => $user->email] : null,
                 'permissions' => fn (): array => $user instanceof User ? app(\App\Modules\Platform\Authorization\PermissionChecker::class)->permissionsOf($user->id) : []],
             'tenant' => fn (): ?array => self::tenant(),
+            // Slice 2.1b (D-54): the company's today, so `t` and `+3` in date inputs count from the business clock, not the browser's.
+            'businessToday' => fn (): ?string => TenantContext::has() ? app(\App\Modules\Platform\Tenancy\BusinessClock::class)->today()->toDateString() : null,
             'preferences' => fn (): array => $user instanceof User ? app(\App\Modules\Platform\Preferences\UserPreferences::class)->of($user->id) : \App\Modules\Platform\Preferences\UserPreferences::DEFAULTS,
             'shell' => fn (): ?array => $user instanceof User ? self::shell($user->id) : null,
             'status' => fn (): mixed => $request->hasSession() ? $request->session()->get('status') : null,

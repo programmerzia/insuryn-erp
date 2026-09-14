@@ -15,6 +15,7 @@ use App\Modules\Insurance\Collections\Application\AllocationLine;
 use App\Modules\Insurance\Collections\Application\ReceiptService;
 use App\Modules\Insurance\Collections\Application\RecordReceiptRequest;
 use App\Modules\Insurance\Policy\Application\ProductionQuery;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ final class PortalController
     public function me(Request $request, HierarchyQuery $hierarchy): JsonResponse
     {
         $producer = self::producer($request);
-        $position = $hierarchy->positionAt($producer->id, CarbonImmutable::today());
+        $position = $hierarchy->positionAt($producer->id, app(BusinessClock::class)->today());
 
         return response()->json(['data' => ['id' => $producer->id, 'code' => $producer->code, 'name' => (string) DB::table('parties')->where('id', $producer->partyId)->value('display_name'),
             'type' => $producer->type, 'status' => $producer->status, 'channel' => (string) DB::table('channels')->where('id', $producer->channelId)->value('name'),
@@ -44,7 +45,7 @@ final class PortalController
     public function licence(Request $request): JsonResponse
     {
         $producer = self::producer($request);
-        $today = CarbonImmutable::today()->toDateString();
+        $today = app(BusinessClock::class)->today()->toDateString();
         $licences = DB::table('producer_licences')->where('producer_id', $producer->id)->orderByDesc('expires_on')->get(['licence_no', 'authority', 'class', 'issued_on', 'expires_on', 'status']);
         $valid = $licences->first(fn (\stdClass $l): bool => $l->status === 'active' && (string) $l->issued_on <= $today && (string) $l->expires_on >= $today);
 
@@ -88,7 +89,7 @@ final class PortalController
     {
         /** @var array{within_days?: int|string} $data */
         $data = $request->validate(['within_days' => ['sometimes', 'integer', 'min:1', 'max:366']]);
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
 
         return response()->json(['data' => $this->policyQuery(self::producer($request))->whereIn('p.status', ['issued', 'active'])
             ->whereBetween('p.expiry', [$today->toDateString(), $today->addDays((int) ($data['within_days'] ?? 60))->toDateString()])->orderBy('p.expiry')->get()
@@ -148,7 +149,7 @@ final class PortalController
         /** @var array{period_type?: string, period_start?: string} $data */
         $data = $request->validate(['period_type' => ['sometimes', Rule::in(['monthly', 'quarterly', 'annual'])], 'period_start' => ['sometimes', 'date_format:Y-m-d']]);
         $type = $data['period_type'] ?? 'monthly';
-        $start = CarbonImmutable::parse($data['period_start'] ?? CarbonImmutable::today()->startOfMonth()->toDateString());
+        $start = CarbonImmutable::parse($data['period_start'] ?? app(BusinessClock::class)->today()->startOfMonth()->toDateString());
         $end = match ($type) { 'quarterly' => $start->addMonths(2)->endOfMonth(), 'annual' => $start->endOfYear(), default => $start->endOfMonth() };
 
         $rows = [];

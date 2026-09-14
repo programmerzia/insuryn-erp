@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Quotation\Infrastructure\Jobs;
 
 use App\Modules\Insurance\Quotation\Application\QuotationService;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +23,9 @@ final class QuotationExpiryJob implements ShouldQueue
 
     public function handle(QuotationService $quotations): void
     {
-        $today = CarbonImmutable::today();
         foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            TenantContext::run((string) $tenantId, fn (): int => $quotations->expireDue($today));
+            // Slice 2.1b: the company's today, read inside the tenant (D-54).
+            TenantContext::run((string) $tenantId, fn (): int => $quotations->expireDue(app(BusinessClock::class)->today()));
         }
     }
 }

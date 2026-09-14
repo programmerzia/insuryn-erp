@@ -20,6 +20,7 @@ use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Numbering\DocumentNumberer;
 use App\Modules\Platform\Numbering\DocumentNumberScope;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -78,7 +79,7 @@ final class QuotationService
         } catch (RiskInputsInvalid|RatingFailed) {
             // An incomplete draft is saved without a rating; the workbench shows why it cannot be rated yet.
         }
-        $eligibility = ProducerEligibility::check($terms->producerId, $terms->productId, CarbonImmutable::today());
+        $eligibility = ProducerEligibility::check($terms->producerId, $terms->productId, app(BusinessClock::class)->today());
         $currency = (string) DB::table('legal_entities')->where('id', $entityId)->value('base_currency');
 
         return DB::transaction(function () use ($terms, $quotationId, $actorUserId, $entityId, $version, $inputs, $result, $eligibility, $currency): Quotation {

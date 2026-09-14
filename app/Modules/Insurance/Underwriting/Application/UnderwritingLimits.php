@@ -9,6 +9,7 @@ use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -92,7 +93,7 @@ final class UnderwritingLimits
         if ($maxSumInsuredMinor < 0) {
             throw new BusinessRuleViolation('UNDERWRITING_LIMIT_INVALID', 'A limit cannot be below zero.');
         }
-        if ($from->lessThan(CarbonImmutable::today())) {
+        if ($from->lessThan(app(BusinessClock::class)->today())) {
             throw new BusinessRuleViolation('UNDERWRITING_LIMIT_INVALID', 'A limit starts today or later; proposals already decided keep the limits they were decided under.');
         }
         if (! DB::table('roles')->where('code', $roleCode)->exists()) {
@@ -134,7 +135,7 @@ final class UnderwritingLimits
             $limit = DB::table('underwriting_limits')->where('id', $limitId)->lockForUpdate()->first(['id', 'effective_from', 'effective_to'])
                 ?? throw new BusinessRuleViolation('UNDERWRITING_LIMIT_INVALID', 'That limit does not exist.');
             $to = $limit->effective_to === null ? null : (string) $limit->effective_to;
-            if ($effectiveTo->lessThan(CarbonImmutable::today()) || $effectiveTo->toDateString() <= (string) $limit->effective_from || ($to !== null && $effectiveTo->toDateString() > $to)) {
+            if ($effectiveTo->lessThan(app(BusinessClock::class)->today()) || $effectiveTo->toDateString() <= (string) $limit->effective_from || ($to !== null && $effectiveTo->toDateString() > $to)) {
                 throw new BusinessRuleViolation('UNDERWRITING_LIMIT_INVALID', 'Choose an end date from today, after the limit starts and no later than it already ends.');
             }
             DB::table('underwriting_limits')->where('id', $limitId)->update(['effective_to' => $effectiveTo->toDateString(), 'updated_at' => now()]);

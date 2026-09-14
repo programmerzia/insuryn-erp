@@ -12,6 +12,7 @@ use App\Modules\Insurance\Renewal\Domain\RenewalReasons;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Authorization\PermissionDenied;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,7 +42,7 @@ final class RenewalsPageController
         if (! in_array(ExpiryRegister::PERMISSION, $this->permissions->permissionsOf($actor), true)) {
             throw new PermissionDenied($actor, ExpiryRegister::PERMISSION);
         }
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $this->register->build($today);
         $entity = PageSupport::entity();
         $buckets = ExpiryRegister::buckets();

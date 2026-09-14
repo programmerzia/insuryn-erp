@@ -10,6 +10,7 @@ use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Money\MinorUnits;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\RecordsNotFoundException;
@@ -95,7 +96,7 @@ final class ApprovalPolicyService
 
         return DB::transaction(function () use ($request, $actorUserId): string {
             $this->lockTenantPolicies();
-            $this->assertValid($request, CarbonImmutable::today());
+            $this->assertValid($request, app(BusinessClock::class)->today());
             $condition = self::condition($request, null);
             $this->assertNoOverlap($request, $condition, null);
 
@@ -115,7 +116,7 @@ final class ApprovalPolicyService
 
         return DB::transaction(function () use ($policyId, $request, $actorUserId): string {
             $this->lockTenantPolicies();
-            $today = CarbonImmutable::today();
+            $today = app(BusinessClock::class)->today();
             $policy = $this->find($policyId);
             $from = CarbonImmutable::parse((string) $policy->effective_from);
             $to = $policy->effective_to === null ? null : CarbonImmutable::parse((string) $policy->effective_to);
@@ -163,10 +164,10 @@ final class ApprovalPolicyService
             $this->lockTenantPolicies();
             $policy = $this->find($policyId);
             $to = $policy->effective_to === null ? null : CarbonImmutable::parse((string) $policy->effective_to);
-            if ($to !== null && $to->lessThanOrEqualTo(CarbonImmutable::today())) {
+            if ($to !== null && $to->lessThanOrEqualTo(app(BusinessClock::class)->today())) {
                 throw new BusinessRuleViolation('APPROVAL_POLICY_ENDED', 'This policy has already ended.');
             }
-            if ($effectiveTo->lessThan(CarbonImmutable::today()) || $effectiveTo->lessThanOrEqualTo(CarbonImmutable::parse((string) $policy->effective_from))
+            if ($effectiveTo->lessThan(app(BusinessClock::class)->today()) || $effectiveTo->lessThanOrEqualTo(CarbonImmutable::parse((string) $policy->effective_from))
                 || ($to !== null && $effectiveTo->greaterThan($to))) {
                 throw new BusinessRuleViolation('APPROVAL_POLICY_INVALID', 'Choose an end date from today, after the policy starts'.($to === null ? '' : ' and no later than it already ends').'.');
             }

@@ -9,6 +9,7 @@ use App\Modules\Distribution\Application\Licences\LicenceService;
 use App\Modules\Distribution\Application\Licences\RecordLicence;
 use App\Modules\Distribution\Application\ProducerDirectory;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,7 +74,7 @@ final class LicenceController
         $this->permissions->authorize((string) $request->user()?->getAuthIdentifier(), 'reports.regulatory');
         /** @var array{as_of?: string, format?: string} $data */
         $data = $request->validate(['as_of' => ['sometimes', 'date_format:Y-m-d'], 'format' => ['sometimes', Rule::in(['csv', 'xlsx'])]]);
-        $asOf = CarbonImmutable::parse($data['as_of'] ?? 'today');
+        $asOf = CarbonImmutable::parse($data['as_of'] ?? app(BusinessClock::class)->today()->toDateString());
         [$body, $extension, $type] = ($data['format'] ?? 'csv') === 'xlsx'
             ? [$export->xlsx($asOf), 'xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
             : [$export->csv($asOf), 'csv', 'text/csv; charset=UTF-8'];

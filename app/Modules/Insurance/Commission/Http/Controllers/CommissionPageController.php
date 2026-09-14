@@ -9,6 +9,7 @@ use App\Modules\Insurance\Commission\Application\CommissionPayoutService;
 use App\Modules\Insurance\Commission\Application\CommissionPlanService;
 use App\Modules\Insurance\Commission\Application\CommissionStatementQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,8 +79,8 @@ final class CommissionPageController
     {
         $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
-        $from = self::date($request, 'from', CarbonImmutable::today()->startOfMonth());
-        $to = self::date($request, 'to', CarbonImmutable::today());
+        $from = self::date($request, 'from', app(BusinessClock::class)->today()->startOfMonth());
+        $to = self::date($request, 'to', app(BusinessClock::class)->today());
         $result = $statements->statement($agent, $from, $to);
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
 

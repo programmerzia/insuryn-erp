@@ -8,6 +8,7 @@ use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
 use App\Modules\Platform\Approvals\ApprovalInboxQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -89,7 +90,7 @@ final class WorkQueues
     /** @return array<string, mixed> */
     private function block(string $key, string $userId): array
     {
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         // Brief §4 empty state: one sentence and one action (label, href).
         [$title, $href, $empty, $action] = match ($key) {
             'installments_due' => ['Installments due this week', '/receipts/create', 'No installments fall due in the next seven days.', ['Record a receipt', '/receipts/create']],
@@ -139,7 +140,7 @@ final class WorkQueues
 
     private function query(string $key, string $userId): Builder
     {
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $unpaid = 'i.amount_minor - i.paid_minor - i.cancelled_minor';
 
         return match ($key) {

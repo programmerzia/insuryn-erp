@@ -24,7 +24,7 @@ const props = defineProps<{
     steps: Step[];
     current: string;
     finished: boolean;
-    company: { code: string; name: string; branches: { code: string; name: string }[] };
+    company: { code: string; name: string; timezone: string; timezones: string[]; branches: { code: string; name: string }[] };
     fiscalYear: { opened: boolean; first_month: string; base_currency: string; periods: number };
     chartOfAccounts: { template: string; templates: { id: string; name: string; description: string }[]; rows: AccountRow[]; imported: number | null; roles: Record<string, string> };
     product: { linesOfBusiness: Record<string, string>; existing: { code: string; name: string; insurance_class: string }[]; vatInForce: number | null };
@@ -39,7 +39,7 @@ const go = (i: number) => router.get('/setup', { step: props.steps[i]?.id }, { p
 const skip = () => go(Math.min(index.value + 1, props.steps.length - 1));
 const errors = computed(() => page.props.errors as Record<string, string>);
 
-const company = useForm({ code: props.company.code, name: props.company.name, branches: props.company.branches.length ? props.company.branches.map((b) => ({ ...b })) : [{ code: 'HO', name: 'Head Office' }] });
+const company = useForm({ code: props.company.code, name: props.company.name, timezone: props.company.timezone, branches: props.company.branches.length ? props.company.branches.map((b) => ({ ...b })) : [{ code: 'HO', name: 'Head Office' }] });
 const fiscal = useForm({ first_month: props.fiscalYear.first_month, base_currency: props.fiscalYear.base_currency });
 const coa = useForm({ rows: props.chartOfAccounts.rows.map((r) => ({ ...r })) });
 const product = useForm({ code: '', name: '', lob: 'motor', insurance_class: 'non_life', term_months: '12', effective_from: props.fiscalYear.opened ? `${props.fiscalYear.first_month}-01` : '',
@@ -91,6 +91,10 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
                 <p class="-mt-2 text-ui text-ink-2">The legal entity your books are kept for, and the offices that sell policies and take payments.</p>
                 <Field id="company_name" label="Company name" :error="company.errors.name"><TextInput v-model="company.name" /></Field>
                 <Field id="company_code" label="Short code" :error="company.errors.code" hint="Appears on reports, for example ACME."><TextInput v-model="company.code" :maxlength="16" /></Field>
+                <!-- Slice 2.1b (D-54): business dates — today on forms, month end, expiry and the nightly runs — follow this time zone. -->
+                <Field id="company_timezone" label="Time zone" :error="company.errors.timezone" hint="Business dates follow this clock: what counts as today, month end and the nightly runs.">
+                    <SelectInput v-model="company.timezone" :options="props.company.timezones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }))" />
+                </Field>
                 <fieldset class="grid gap-2">
                     <legend class="mb-1 text-ui font-medium">Branches</legend>
                     <div v-for="(branch, i) in company.branches" :key="i" class="grid grid-cols-[96px_minmax(0,1fr)_32px] items-start gap-2">

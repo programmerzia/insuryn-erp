@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Infrastructure\Jobs;
 
 use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,9 +24,9 @@ final class ReconciliationJob implements ShouldQueue
 
     public function handle(ReconciliationService $reconciliation): void
     {
-        $today = CarbonImmutable::today();
         foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            TenantContext::run((string) $tenantId, function () use ($reconciliation, $today): void {
+            TenantContext::run((string) $tenantId, function () use ($reconciliation): void {
+                $today = app(BusinessClock::class)->today(); // slice 2.1b: the company's today (D-54)
                 $periods = DB::table('fiscal_periods')->where('status', '<>', 'locked')->where('starts', '<=', $today->toDateString())
                     ->orderBy('starts')->get(['id', 'ends']);
                 foreach ($periods as $period) {

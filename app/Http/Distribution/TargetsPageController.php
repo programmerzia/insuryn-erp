@@ -8,6 +8,7 @@ use App\Http\Pages\PageSupport;
 use App\Modules\Distribution\Application\Targets\TargetService;
 use App\Modules\Insurance\Policy\Application\ProductionQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +34,7 @@ final class TargetsPageController
         $this->permissions->authorizeAny($actor, self::AREA);
         $periodType = in_array($request->query('period_type'), ['monthly', 'quarterly', 'annual'], true) ? (string) $request->query('period_type') : 'monthly';
         $metric = in_array($request->query('metric'), ['premium', 'policies', 'persistency', 'collections'], true) ? (string) $request->query('metric') : 'premium';
-        $start = self::alignedStart($periodType, CarbonImmutable::parse((string) $request->query('period_start', 'today')));
+        $start = self::alignedStart($periodType, CarbonImmutable::parse((string) $request->query('period_start', app(BusinessClock::class)->today()->toDateString())));
         $end = match ($periodType) { 'quarterly' => $start->addMonths(2)->endOfMonth(), 'annual' => $start->endOfYear(), default => $start->endOfMonth() };
         $currency = PageSupport::entity()['currency'];
 

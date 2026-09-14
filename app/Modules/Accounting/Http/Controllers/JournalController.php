@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Modules\Accounting\Application\Queries\JournalQuery;
 use App\Modules\Accounting\Domain\Enums\JournalStatus;
 use App\Modules\Accounting\Domain\MinorUnits;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -54,7 +55,7 @@ final class JournalController
         $pendingApproval = \Illuminate\Support\Facades\DB::table('approvals')->where('object_type', 'journal')->where('object_id', $j['id'])->where('status', 'pending')->exists();
 
         return Inertia::render('accounting/journals/Show', [
-            'today' => \Carbon\CarbonImmutable::today()->toDateString(), // flow fix X2: "reverse on" starts at today
+            'today' => app(BusinessClock::class)->today()->toDateString(), // flow fix X2: "reverse on" starts at today
             'actions' => [
                 'approve' => $j['status'] === JournalStatus::PendingApproval->value && ! $pendingApproval && ($row->created_by ?? null) !== $actor && $permissions->has($actor, 'accounting.approve_journal', $scope),
                 'requestReversal' => $j['status'] === JournalStatus::Posted->value && ($reversalRequest === null || $reversalRequest->status !== 'pending') && $permissions->has($actor, 'accounting.reverse_journal', $scope),

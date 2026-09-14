@@ -9,6 +9,7 @@ use App\Modules\Insurance\Commission\Application\CommissionPayoutService;
 use App\Modules\Insurance\Commission\Application\CommissionStatementRun;
 use App\Modules\Insurance\Commission\Application\IncentiveRun;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ final class StatementWorkbenchController
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeAny($actor, self::AREA);
         $entity = PageSupport::entity();
-        $periodEnd = CarbonImmutable::parse((string) $request->query('period_end', CarbonImmutable::today()->subMonthNoOverflow()->endOfMonth()->toDateString()))->endOfMonth();
+        $periodEnd = CarbonImmutable::parse((string) $request->query('period_end', app(BusinessClock::class)->today()->subMonthNoOverflow()->endOfMonth()->toDateString()))->endOfMonth();
         $money = fn (mixed $minor): string => PageSupport::money((int) $minor, $entity['currency']);
         $statements = DB::table('commission_statements as s')->join('producers as p', 'p.id', '=', 's.agent_id')->leftJoin('parties as pa', 'pa.id', '=', 'p.party_id')
             ->where('s.entity_id', $entity['id'])->where('s.period_end', $periodEnd->toDateString())->orderBy('p.code')
@@ -37,7 +38,7 @@ final class StatementWorkbenchController
 
         return Inertia::render('distribution/statements/Index', [
             'periodEnd' => $periodEnd->toDateString(),
-            'periods' => array_map(fn (int $i): string => CarbonImmutable::today()->startOfMonth()->subMonths($i)->endOfMonth()->toDateString(), range(0, 12)),
+            'periods' => array_map(fn (int $i): string => app(BusinessClock::class)->today()->startOfMonth()->subMonths($i)->endOfMonth()->toDateString(), range(0, 12)),
             'statements' => $statements->map(fn (object $s): array => ['id' => (string) $s->id, 'number' => $s->number, 'producer_id' => (string) $s->agent_id, 'producer_code' => (string) $s->code,
                 'producer_name' => (string) $s->display_name, 'paid_via' => (string) $s->paid_via, 'earned' => $money($s->earned_minor), 'override' => $money($s->override_minor),
                 'bonus' => $money($s->bonus_minor), 'clawback' => $money($s->clawback_minor), 'withholding' => $money($s->withholding_minor), 'advances' => $money($s->advances_recovered_minor),
@@ -73,7 +74,7 @@ final class StatementWorkbenchController
     {
         /** @var array{on?: string|null} $data */
         $data = $request->validate(['on' => ['nullable', 'date_format:Y-m-d']]);
-        $approved = $run->approve($statement, PageSupport::actor($request), CarbonImmutable::parse(($data['on'] ?? null) ?: 'today'));
+        $approved = $run->approve($statement, PageSupport::actor($request), CarbonImmutable::parse(($data['on'] ?? null) ?: app(BusinessClock::class)->today()->toDateString()));
 
         return back()->with('status', "Statement {$approved->number} approved. Someone else pays it.");
     }
@@ -82,7 +83,7 @@ final class StatementWorkbenchController
     {
         /** @var array{paid_on?: string|null, bank_account_id?: string|null} $data */
         $data = $request->validate(['paid_on' => ['nullable', 'date_format:Y-m-d'], 'bank_account_id' => ['nullable', 'uuid']]);
-        $paid = $payouts->pay($statement, ($data['bank_account_id'] ?? null) ?: null, PageSupport::actor($request), CarbonImmutable::parse(($data['paid_on'] ?? null) ?: 'today'));
+        $paid = $payouts->pay($statement, ($data['bank_account_id'] ?? null) ?: null, PageSupport::actor($request), CarbonImmutable::parse(($data['paid_on'] ?? null) ?: app(BusinessClock::class)->today()->toDateString()));
 
         return back()->with('status', "Statement {$paid->number} paid through ".self::ROUTE_WORDS[$paid->paid_via].'.');
     }

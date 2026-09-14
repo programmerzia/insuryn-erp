@@ -8,6 +8,7 @@ use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\AccountRoles\AccountRoleMappingService;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ final class AccountRolesPageController
         $entityId = self::pick($entities, $request->query('entity'));
         $bookId = self::pick($books, $request->query('book'));
         $this->permissions->authorize(PageSupport::actor($request), AccountRoleMappingService::PERMISSION, AuthorizationScope::entity($entityId));
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
 
         return Inertia::render('accounting/AccountRoles', [
             'entities' => $entities, 'books' => $books, 'entityId' => $entityId, 'bookId' => $bookId, 'today' => $today->toDateString(),

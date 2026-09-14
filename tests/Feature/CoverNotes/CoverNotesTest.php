@@ -160,10 +160,11 @@ it('expires nightly after the last day and cancels with a reason', function (): 
             ->and(thrownBy(fn () => ($this->service)()->cancel($cancelled->id, 'again', $this->manager->id), BusinessRuleViolation::class)->reasonCode)->toBe('COVER_NOTE_NOT_ACTIVE');
     });
 
-    travelTo(CarbonImmutable::parse('2026-09-20 23:00'));
+    // Slice 2.1b (D-54): the last day ends at midnight in Dhaka (18:00 UTC), not at midnight UTC.
+    travelTo(CarbonImmutable::parse('2026-09-20 17:59'));
     app(CoverNoteExpiryJob::class)->handle(app(CoverNoteService::class));
     expect(($this->in)(fn (): string => CoverNote::query()->whereKey($ending->id)->firstOrFail()->status->value))->toBe('active');
-    travelTo(CarbonImmutable::parse('2026-09-21 00:30'));
+    travelTo(CarbonImmutable::parse('2026-09-20 18:00'));
     app(CoverNoteExpiryJob::class)->handle(app(CoverNoteService::class));
     ($this->in)(function () use ($ending, $cancelled): void {
         expect(CoverNote::query()->whereKey($ending->id)->firstOrFail()->status->value)->toBe('expired')

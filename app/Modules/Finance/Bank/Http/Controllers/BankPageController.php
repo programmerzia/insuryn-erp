@@ -11,6 +11,7 @@ use App\Modules\Finance\Bank\Application\BankReconciliationQuery;
 use App\Modules\Finance\Bank\Application\StatementImport;
 use App\Modules\Finance\Bank\Domain\Models\BankAccount;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -57,7 +58,7 @@ final class BankPageController
         $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
         $account = BankAccount::query()->findOrFail($bankAccount);
         $asOfValue = $request->query('as_of');
-        $asOf = is_string($asOfValue) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $asOfValue) === 1 ? CarbonImmutable::parse($asOfValue) : CarbonImmutable::today();
+        $asOf = is_string($asOfValue) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $asOfValue) === 1 ? CarbonImmutable::parse($asOfValue) : app(BusinessClock::class)->today();
         $queue = $reconciliation->unmatched($account->id, $asOf);
         $money = fn (int $minor): string => PageSupport::money($minor, $account->currency);
 

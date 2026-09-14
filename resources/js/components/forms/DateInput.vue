@@ -5,7 +5,7 @@ import { PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigg
 import { computed, nextTick, ref, useAttrs, watch } from 'vue';
 import DateCalendar from '@/components/forms/DateCalendar.vue';
 import { calendarLocale, clamp, fromIso, todayIso, weekStartFrom } from '@/lib/calendar';
-import { parseDateInput } from '@/lib/dates';
+import { businessDate, parseDateInput as parseAt } from '@/lib/dates';
 import { useField } from '@/lib/field';
 import { formatDate } from '@/lib/format';
 import { usePreferences } from '@/lib/preferences';
@@ -27,8 +27,20 @@ const field = useField(props.id);
 const text = ref(formatDate(model.value));
 const rangeError = ref(false);
 const open = ref(false);
-const focused = ref(todayIso());
-const today = ref(todayIso());
+// Slice 2.1b (D-54): `t`, `+3` and the calendar's today count from the company's today (shared by the server), not the browser's clock.
+function sharedToday(): string | null {
+    try {
+        const value = usePage()?.props?.businessToday;
+        return typeof value === 'string' ? value : null;
+    } catch {
+        return null;
+    }
+}
+const businessToday = sharedToday();
+const companyToday = (): string => businessToday ?? todayIso();
+const parseDateInput = (value: string) => parseAt(value, businessDate(businessToday));
+const focused = ref(companyToday());
+const today = ref(companyToday());
 const input = ref<HTMLInputElement | null>(null);
 const calendar = ref<InstanceType<typeof DateCalendar> | null>(null);
 
@@ -91,7 +103,7 @@ function commit(): void {
 
 function onOpenChange(value: boolean): void {
     if (value) {
-        today.value = todayIso();
+        today.value = companyToday();
         const typed = parseDateInput(text.value);
         focused.value = clamp(typed ?? (fromIso(model.value) ? model.value : today.value), props.min, props.max);
     }

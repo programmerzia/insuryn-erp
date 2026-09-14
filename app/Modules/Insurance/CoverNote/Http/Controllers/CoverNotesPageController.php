@@ -9,6 +9,7 @@ use App\Modules\Insurance\CoverNote\Application\CoverNoteService;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Authorization\PermissionDenied;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,11 +37,11 @@ final class CoverNotesPageController
         if (array_intersect(self::AREA, $held) === []) {
             throw new PermissionDenied($actor, implode('|', self::AREA));
         }
-        $this->coverNotes->expireDue(CarbonImmutable::today());
+        $this->coverNotes->expireDue(app(BusinessClock::class)->today());
         $within = $request->query('within');
         $days = is_string($within) && preg_match('/^\d{1,3}$/', $within) === 1 ? (int) $within : null;
         $entity = PageSupport::entity();
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $rows = DB::table('cover_notes as n')->join('proposals as p', 'p.id', '=', 'n.proposal_id')->leftJoin('parties as c', 'c.id', '=', 'p.customer_party_id')
             ->leftJoin('products as pr', 'pr.id', '=', 'p.product_id')->leftJoin('users as u', 'u.id', '=', 'n.issued_by')->where('n.entity_id', $entity['id'])
             ->when($days !== null, fn ($q) => $q->where('n.status', 'active')->where('n.valid_to', '<=', $today->addDays((int) $days)->toDateString()))

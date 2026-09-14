@@ -26,6 +26,7 @@ use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Numbering\DocumentNumberer;
 use App\Modules\Platform\Numbering\DocumentNumberScope;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -64,7 +65,7 @@ final class ProposalService
     {
         $quotation = Quotation::query()->findOrFail($quotationId);
         $this->authorize($actorUserId, QuotationService::PERMISSION, $quotation->entity_id, $quotation->branch_id);
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         if ($quotation->number === null || $quotation->rating_result === null || $quotation->customer_party_id === null || $quotation->class_code === null) {
             throw new BusinessRuleViolation('QUOTATION_NOT_ISSUED', 'Only an issued quotation can become a proposal.');
         }
@@ -128,7 +129,7 @@ final class ProposalService
     {
         $proposal = Proposal::query()->findOrFail($proposalId);
         $this->authorize($actorUserId, QuotationService::PERMISSION, $proposal->entity_id, $proposal->branch_id);
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $missing = self::missingRiskDetails($proposal);
         if ($missing !== []) {
             throw new BusinessRuleViolation('PROPOSAL_RISK_DETAILS_MISSING', 'Enter the '.self::listed(array_map(mb_strtolower(...), $missing)).' before submitting the proposal.');

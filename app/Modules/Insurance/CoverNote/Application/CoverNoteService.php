@@ -18,6 +18,7 @@ use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Numbering\DocumentNumberer;
 use App\Modules\Platform\Numbering\DocumentNumberScope;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -60,7 +61,7 @@ final class CoverNoteService
     {
         $proposal = Proposal::query()->findOrFail($proposalId);
         $this->permissions->authorize($actorUserId, self::ISSUE, AuthorizationScope::branch($proposal->entity_id, $proposal->branch_id));
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $this->assertIssuable($proposal, $validFrom, $validTo, $today);
         $number = $this->numbers->reserve(new DocumentNumberScope($proposal->entity_id, $proposal->branch_id, 'cover_note', 'CVN', $today), $actorUserId);
 

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Renewal\Infrastructure\Jobs;
 
 use App\Modules\Insurance\Renewal\Application\RenewalRun;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +23,9 @@ final class RenewalRunJob implements ShouldQueue
 
     public function handle(RenewalRun $renewals): void
     {
-        $today = CarbonImmutable::today();
         foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            TenantContext::run((string) $tenantId, fn (): array => $renewals->run($today));
+            // Slice 2.1b: the company's today, read inside the tenant (D-54).
+            TenantContext::run((string) $tenantId, fn (): array => $renewals->run(app(BusinessClock::class)->today()));
         }
     }
 }

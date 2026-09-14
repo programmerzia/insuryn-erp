@@ -12,6 +12,7 @@ use App\Modules\Finance\Bank\Domain\Models\BankAccount;
 use App\Modules\Finance\Bank\Domain\Models\BankStatementLine;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,7 +62,7 @@ final class BankController
         $data = $request->validate(['as_of' => ['sometimes', 'date_format:Y-m-d']]);
         $this->authorizeFor($request, 'bank.match', $bankAccount);
 
-        return response()->json(['data' => $this->reconciliation->unmatched($bankAccount, isset($data['as_of']) ? CarbonImmutable::parse($data['as_of']) : CarbonImmutable::today())]);
+        return response()->json(['data' => $this->reconciliation->unmatched($bankAccount, isset($data['as_of']) ? CarbonImmutable::parse($data['as_of']) : app(BusinessClock::class)->today())]);
     }
 
     public function match(Request $request, string $statementLine): JsonResponse

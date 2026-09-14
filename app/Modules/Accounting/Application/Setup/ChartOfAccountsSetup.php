@@ -9,8 +9,8 @@ use App\Modules\Accounting\Application\Imports\ChartOfAccountsImport;
 use App\Modules\Accounting\Application\Imports\ImportMode;
 use App\Modules\Accounting\Application\Imports\ImportOutcome;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -82,7 +82,7 @@ final class ChartOfAccountsSetup
                         'entity_id' => $entityId, 'book_id' => $bookId, 'subledger' => $row['control_subledger'], 'control_account_role' => $row['role']]);
                 }
             }
-            $unmapped = $this->mappings->unmappedRoles($entityId, $bookId, CarbonImmutable::today());
+            $unmapped = $this->mappings->unmappedRoles($entityId, $bookId, app(BusinessClock::class)->today());
             if ($unmapped !== []) {
                 throw new BusinessRuleViolation('SETUP_ROLES_UNMAPPED', 'The posting rules need an account for: '.implode('; ', array_column($unmapped, 'description'))
                     .'. Add an account for each, with that purpose, before creating the chart.');

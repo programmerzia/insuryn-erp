@@ -9,6 +9,7 @@ use App\Modules\Distribution\Application\Hierarchy\HierarchyQuery;
 use App\Modules\Distribution\Application\Hierarchy\HierarchyService;
 use App\Modules\Distribution\Application\ProducerDirectory;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ final class HierarchyPageController
     {
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeAny($actor, self::AREA);
-        $on = CarbonImmutable::parse((string) $request->query('on', 'today'));
+        $on = CarbonImmutable::parse((string) $request->query('on', app(BusinessClock::class)->today()->toDateString()));
         $schemes = DB::table('compensation_schemes')->orderBy('code')->get(['id', 'code', 'name']);
         $schemeId = (string) $request->query('scheme', (string) ($schemes->first()->id ?? ''));
         $names = DB::table('parties')->pluck('display_name', 'id');

@@ -15,6 +15,7 @@ use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\Side;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +34,7 @@ final class ManualJournalPageController
 
         return Inertia::render('accounting/journals/Create', [
             'entity' => $entity,
-            'today' => CarbonImmutable::today()->toDateString(), // flow fix X2: a manual journal is dated today unless changed
+            'today' => app(BusinessClock::class)->today()->toDateString(), // flow fix X2: a manual journal is dated today unless changed
             'kinds' => [JournalKind::Manual->value, JournalKind::Adjustment->value],
             'accounts' => DB::table('accounts')->where('entity_id', $entity['id'])->where('is_postable', true)->where('status', 'active')->orderBy('code')
                 ->get(['id', 'code', 'name', 'is_control'])->map(fn (object $a): array => ['id' => (string) $a->id, 'code' => (string) $a->code, 'name' => (string) $a->name, 'is_control' => (bool) $a->is_control])->values()->all(),

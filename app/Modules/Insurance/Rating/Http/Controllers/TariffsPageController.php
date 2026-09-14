@@ -16,7 +16,7 @@ use App\Modules\Insurance\Rating\Domain\Expressions\RatingExpressions;
 use App\Modules\Insurance\Rating\Domain\Models\RatingPlan;
 use App\Modules\Insurance\Rating\Domain\RatingFailed;
 use App\Modules\Platform\Authorization\PermissionChecker;
-use Carbon\CarbonImmutable;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +51,7 @@ final class TariffsPageController
         return Inertia::render('rating/plans/Index', [
             'plans' => $this->directory->list(),
             'classes' => $this->classes(),
-            'today' => CarbonImmutable::today()->toDateString(),
+            'today' => app(BusinessClock::class)->today()->toDateString(),
             'can' => ['manage' => $this->permissions->has($actor, 'rating.manage_plans')],
         ]);
     }
@@ -76,7 +76,7 @@ final class TariffsPageController
         $canApprove = $this->permissions->has($actor, 'rating.approve_plans');
         $isDraft = $model->status === RatingPlanStatus::Draft;
         $compareWith = $this->directory->comparison($model, is_string($request->query('compare')) ? $request->query('compare') : null);
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $subjects = [['rating_plan', $model->id]];
 
         return Inertia::render('rating/plans/Show', [

@@ -11,6 +11,7 @@ use App\Modules\Platform\Authorization\AdministratorsRemain;
 use App\Modules\Platform\Authorization\HeldPermissionsPolicy;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -111,7 +112,7 @@ final class RoleAdministration
                 throw new BusinessRuleViolation('ROLE_IN_USE', "{$role->name} is held by {$holders} ".Str::plural('user', $holders).'. Remove it from them first.');
             }
             // Fix F3: an approval limit in force or scheduled names this role as an approver, and nobody else could decide that step.
-            $today = now()->toDateString();
+            $today = app(BusinessClock::class)->today()->toDateString();
             $namedByLimit = DB::table('approval_policies')->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', $today))
                 ->whereRaw("exists (select 1 from jsonb_array_elements(steps::jsonb) s where s->>'role' = ?)", [(string) $role->code])->exists();
             if ($namedByLimit) {

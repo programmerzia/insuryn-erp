@@ -26,6 +26,7 @@ use App\Modules\Insurance\Collections\Domain\Models\SuspenseItem;
 use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -73,7 +74,7 @@ final class CollectionsPageController
         return Inertia::render('receipts/Create', [
             // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch, today and their last channel.
             'prefill' => is_string($policy) && Str::isUuid($policy) ? $this->prefill($entity, $policy, $reach) : null,
-            'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => CarbonImmutable::today()->toDateString(),
+            'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => app(BusinessClock::class)->today()->toDateString(),
                 'channel' => self::channel($defaults->remembered($actor, FormDefaults::LAST_RECEIPT_CHANNEL))],
             'entity' => $entity,
             'channels' => self::CHANNELS,
@@ -195,6 +196,7 @@ final class CollectionsPageController
                 'open' => PageSupport::money($item === null ? 0 : (int) $item->amount_minor - (int) $item->allocated_minor, (string) $r->currency)],
             'suspenseItemId' => $item === null ? null : (string) $item->id,
             'candidates' => $candidates,
+            'today' => app(BusinessClock::class)->today($entity['id'])->toDateString(), // slice 2.1b: the company's today, not the browser's
         ]);
     }
 
@@ -298,7 +300,7 @@ final class CollectionsPageController
     {
         $this->authorize($request);
         $entity = PageSupport::entity();
-        $from = self::date($request, 'from', CarbonImmutable::today()->startOfMonth());
+        $from = self::date($request, 'from', app(BusinessClock::class)->today()->startOfMonth());
         $to = self::date($request, 'to');
         $result = $register->register($entity['id'], $from, $to);
 
@@ -312,7 +314,7 @@ final class CollectionsPageController
     {
         $this->authorize($request);
         $entity = PageSupport::entity();
-        $from = self::date($request, 'from', CarbonImmutable::today()->startOfMonth());
+        $from = self::date($request, 'from', app(BusinessClock::class)->today()->startOfMonth());
         $to = self::date($request, 'to');
 
         return Inertia::render('receipts/Dunning', ['from' => $from->toDateString(), 'to' => $to->toDateString(),
@@ -401,6 +403,6 @@ final class CollectionsPageController
     {
         $value = $request->query($key);
 
-        return is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 ? CarbonImmutable::parse($value) : ($default ?? CarbonImmutable::today());
+        return is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 ? CarbonImmutable::parse($value) : ($default ?? app(BusinessClock::class)->today());
     }
 }

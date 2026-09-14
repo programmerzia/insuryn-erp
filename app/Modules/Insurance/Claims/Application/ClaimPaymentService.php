@@ -18,6 +18,7 @@ use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Authorization\SodGuard;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -165,7 +166,7 @@ final class ClaimPaymentService
         if (in_array($claim->status, [ClaimStatus::Reserved, ClaimStatus::Approved], true)) {
             $claim->forceFill(['status' => ClaimStatus::Paid->value])->save();
         }
-        $this->accounting->paid($claim, $payment, $payment->paid_on ?? CarbonImmutable::today());
+        $this->accounting->paid($claim, $payment, $payment->paid_on ?? app(BusinessClock::class)->today());
     }
 
     /** A rejected release returns the payment to approved, so it can be requested again. */

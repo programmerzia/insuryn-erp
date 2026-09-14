@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Policy\Infrastructure\Jobs;
 
 use App\Modules\Insurance\Policy\Application\Dunning\DunningRun;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -23,11 +23,11 @@ final class DunningJob implements ShouldQueue
 
     public function handle(DunningRun $dunning): void
     {
-        $today = CarbonImmutable::today();
         foreach (DB::table('tenants')->orderBy('id')->pluck('id') as $tenantId) {
-            TenantContext::run((string) $tenantId, function () use ($dunning, $today): void {
+            TenantContext::run((string) $tenantId, function () use ($dunning): void {
                 foreach (DB::table('legal_entities')->orderBy('code')->pluck('id') as $entityId) {
-                    $dunning->run((string) $entityId, $today);
+                    // Slice 2.1b: each entity's own today (D-54).
+                    $dunning->run((string) $entityId, app(BusinessClock::class)->today((string) $entityId));
                 }
             });
         }

@@ -12,6 +12,7 @@ use App\Modules\Insurance\Renewal\Domain\ExpiryRegisterStatus;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -71,7 +72,7 @@ final class RenewalQuotations
         }
         $this->permissions->authorize($actorUserId, ExpiryRegister::PERMISSION, AuthorizationScope::branch((string) $entry->entity_id, (string) $entry->branch_id));
 
-        return $this->offer($entryId, CarbonImmutable::today(), $actorUserId);
+        return $this->offer($entryId, app(BusinessClock::class)->today(), $actorUserId);
     }
 
     private function offer(string $entryId, CarbonImmutable $today, ?string $actorUserId): Quotation

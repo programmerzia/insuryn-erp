@@ -13,6 +13,7 @@ use App\Modules\Platform\Documents\Templates\DocumentTemplateCode;
 use App\Modules\Platform\Documents\Templates\DocumentTemplates;
 use App\Modules\Platform\Documents\Templates\DocumentVariables;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -121,11 +122,9 @@ final class DocumentGenerator
             ->map(fn (\stdClass $row): GeneratedDocument => GeneratedDocument::fromRow($row))->all());
     }
 
-    /** The tenant's time zone, for "generated at" on the page (tenants.timezone, Asia/Dhaka by default). */
+    /** The company's time zone, for "generated at" on the page: the business clock's (slice 2.1b, D-54; Asia/Dhaka by default). */
     private static function timezone(): string
     {
-        $timezone = DB::table('tenants')->where('id', TenantContext::id())->value('timezone');
-
-        return is_string($timezone) && in_array($timezone, timezone_identifiers_list(), true) ? $timezone : 'Asia/Dhaka';
+        return app(BusinessClock::class)->timezone();
     }
 }

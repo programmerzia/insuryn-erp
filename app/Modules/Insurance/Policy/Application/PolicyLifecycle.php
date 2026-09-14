@@ -34,6 +34,7 @@ use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Numbering\DocumentNumberer;
 use App\Modules\Platform\Numbering\DocumentNumberScope;
 use App\Modules\Platform\Tax\TaxRates;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -399,7 +400,7 @@ final class PolicyLifecycle
     public function reinstate(string $policyId, string $reason, string $actorUserId): Policy
     {
         $policy = $this->simpleTransition($policyId, [PolicyStatus::Lapsed], PolicyStatus::Active, 'reinstate', 'policy.issue', $reason, $actorUserId);
-        $policy->forceFill(['reinstated_on' => CarbonImmutable::today()->toDateString()])->save();
+        $policy->forceFill(['reinstated_on' => app(BusinessClock::class)->today()->toDateString()])->save();
 
         return $policy;
     }

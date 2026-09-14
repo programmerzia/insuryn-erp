@@ -8,6 +8,7 @@ use App\Http\Pages\PageSupport;
 use App\Modules\Platform\Approvals\ApprovalPolicyRequest;
 use App\Modules\Platform\Approvals\ApprovalPolicyService;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,7 +27,7 @@ final class ApprovalLimitsPageController
     public function index(Request $request): Response
     {
         $this->permissions->authorize(PageSupport::actor($request), ApprovalPolicyService::PERMISSION);
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
 
         return Inertia::render('admin/approval-limits/Index', [
             'policies' => $this->policies->policies($today),

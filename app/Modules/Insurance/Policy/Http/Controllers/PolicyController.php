@@ -10,6 +10,7 @@ use App\Modules\Insurance\Policy\Domain\Models\Installment;
 use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Policy\Domain\Models\PolicyTransaction;
 use App\Modules\Insurance\Policy\Http\Requests\QuotePolicyRequest;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -124,7 +125,7 @@ final class PolicyController
 
     private static function date(?string $value): CarbonImmutable
     {
-        return $value === null ? CarbonImmutable::today() : CarbonImmutable::parse($value);
+        return $value === null ? app(BusinessClock::class)->today() : CarbonImmutable::parse($value);
     }
 
     private static function actor(Request $request): string

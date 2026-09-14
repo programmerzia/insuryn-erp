@@ -17,6 +17,7 @@ use App\Modules\Insurance\Policy\Domain\Models\Installment;
 use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Policy\Domain\Models\PolicyTransaction;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
@@ -132,7 +133,7 @@ final class PolicyPageController
                 'paid' => $money($p['paid_minor']), 'outstanding' => $money($p['outstanding_minor'])], $this->payers->forPolicy($model->id)['payers']),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/policies/{$model->id}/documents" : null,
             'rating' => $this->rating($model),
-            'today' => CarbonImmutable::today()->toDateString(),
+            'today' => app(BusinessClock::class)->today()->toDateString(),
             'actions' => [
                 'issue' => $status === PolicyStatus::Quote && $can('policy.issue'),
                 // Flow fix X1: record the premium receipt, prefilled from this policy, while money is outstanding.

@@ -18,6 +18,7 @@ use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Setup\CompanySetup;
 use App\Modules\Platform\Setup\SetupProgress;
 use App\Modules\Platform\Tax\TaxRateSetup;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +41,7 @@ final class SetupPageController
     public function __construct(
         private readonly SetupWizard $wizard,
         private readonly SetupProgress $progress,
+        private readonly BusinessClock $clock,
     ) {}
 
     public function show(Request $request, ChartOfAccountsSetup $coa, ApprovalPolicyService $approvalPolicies): Response
@@ -52,7 +54,8 @@ final class SetupPageController
         $requested = (string) $request->query('step', '');
         $current = array_key_exists($requested, SetupWizard::STEPS) ? $requested
             : (collect($steps)->first(fn (array $s): bool => ! $s['done'] && $s['allowed'] && $s['id'] !== 'done')['id'] ?? 'done');
-        $entity = DB::table('legal_entities')->orderBy('created_at')->first(['id', 'code', 'name', 'base_currency']);
+        $entity = DB::table('legal_entities')->orderBy('created_at')->first(['id', 'code', 'name', 'base_currency', 'timezone']);
+        $today = $this->clock->today();
         $firstPeriod = DB::table('fiscal_periods')->orderBy('starts')->first(['starts']);
         $template = (string) config('erp.setup.chart_of_accounts_template');
         $imported = DB::table('accounts')->count();
@@ -62,8 +65,9 @@ final class SetupPageController
             'current' => $current,
             'finished' => $this->progress->isFinished(),
             'company' => ['code' => $entity->code ?? '', 'name' => $entity->name ?? (string) DB::table('tenants')->where('id', TenantContext::id())->value('name'),
+                'timezone' => $this->clock->timezone(), 'timezones' => timezone_identifiers_list(),
                 'branches' => DB::table('branches')->orderBy('code')->get(['code', 'name'])->map(fn (object $b): array => ['code' => (string) $b->code, 'name' => (string) $b->name])->values()->all()],
-            'fiscalYear' => ['opened' => $firstPeriod !== null, 'first_month' => $firstPeriod === null ? CarbonImmutable::today()->startOfMonth()->format('Y-m') : substr((string) $firstPeriod->starts, 0, 7),
+            'fiscalYear' => ['opened' => $firstPeriod !== null, 'first_month' => $firstPeriod === null ? $today->startOfMonth()->format('Y-m') : substr((string) $firstPeriod->starts, 0, 7),
                 'base_currency' => $entity->base_currency ?? (string) DB::table('tenants')->where('id', TenantContext::id())->value('base_currency'),
                 'periods' => DB::table('fiscal_periods')->count()],
             'chartOfAccounts' => ['template' => $template, 'templates' => collect(ChartOfAccountsSetup::TEMPLATES)->map(fn (array $t, string $id): array => ['id' => $id, ...$t])->values()->all(),
@@ -92,13 +96,13 @@ final class SetupPageController
 
         return ['defaults' => array_map(fn (ApprovalPolicyRequest $r): array => ['label' => $types[$r->objectType]['label'] ?? $r->objectType,
             'amount' => ApprovalPolicyService::band($r->minAmountMinor, $r->maxAmountMinor, $currency),
-            'approvers' => implode(' → ', array_map(fn (string $code): string => $roleNames[$code] ?? $code, $r->roles))], $policies->defaults(CarbonImmutable::today())),
+            'approvers' => implode(' → ', array_map(fn (string $code): string => $roleNames[$code] ?? $code, $r->roles))], $policies->defaults($this->clock->today())),
             'existing' => DB::table('approval_policies')->count()];
     }
 
     public function approvals(Request $request, ApprovalPolicyService $policies): RedirectResponse
     {
-        $created = $policies->acceptDefaults(CarbonImmutable::today(), PageSupport::actor($request));
+        $created = $policies->acceptDefaults($this->clock->today(),PageSupport::actor($request));
 
         return $this->saved($request, 'approvals', $created === 0 ? 'Approval limits kept as they were: they already cover these cases.'
             : $created.' approval '.($created === 1 ? 'limit' : 'limits').' set. Change them any time in Admin → Approval limits.');
@@ -106,12 +110,14 @@ final class SetupPageController
 
     public function company(Request $request, CompanySetup $company): RedirectResponse
     {
-        /** @var array{code: string, name: string, branches: list<array{code: string, name: string}>} $data */
+        /** @var array{code: string, name: string, timezone?: string|null, branches: list<array{code: string, name: string}>} $data */
         $data = $request->validate(['code' => ['required', 'string', 'max:16', 'regex:/^[A-Za-z0-9_-]+$/'], 'name' => ['required', 'string', 'max:255'],
+            'timezone' => ['nullable', 'string', Rule::in(timezone_identifiers_list())],
             'branches' => ['required', 'array', 'min:1', 'max:50'], 'branches.*.code' => ['required', 'string', 'max:16', 'regex:/^[A-Za-z0-9_-]+$/', 'distinct'],
             'branches.*.name' => ['required', 'string', 'max:255']],
             ['branches.required' => 'Add at least one branch, such as your head office.', 'code.regex' => 'Use letters, digits, - or _.', 'branches.*.code.distinct' => 'Each branch needs its own code.']);
-        $company->save(strtoupper($data['code']), $data['name'], array_map(fn (array $b): array => ['code' => strtoupper($b['code']), 'name' => $b['name']], $data['branches']), PageSupport::actor($request));
+        $company->save(strtoupper($data['code']), $data['name'], array_map(fn (array $b): array => ['code' => strtoupper($b['code']), 'name' => $b['name']], $data['branches']), PageSupport::actor($request),
+            $data['timezone'] ?? null);
 
         return $this->saved($request, 'company', 'Company and branches saved.');
     }
@@ -120,7 +126,7 @@ final class SetupPageController
     {
         /** @var array{first_month: string, base_currency: string} $data */
         $data = $request->validate(['first_month' => ['required', 'date_format:Y-m'], 'base_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/']]);
-        $created = $fiscalYear->open(CarbonImmutable::createFromFormat('!Y-m', $data['first_month']) ?: CarbonImmutable::today(), $data['base_currency'], PageSupport::actor($request));
+        $created = $fiscalYear->open(CarbonImmutable::createFromFormat('!Y-m', $data['first_month']) ?: $this->clock->today(),$data['base_currency'], PageSupport::actor($request));
 
         return $this->saved($request, 'fiscal_year', $created > 0 ? 'Fiscal year opened with 12 monthly periods.' : 'Fiscal year saved.');
     }

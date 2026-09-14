@@ -6,6 +6,7 @@ namespace App\Modules\Insurance\Collections\Http\Controllers;
 
 use App\Modules\Insurance\Collections\Application\RefundService;
 use App\Modules\Insurance\Collections\Domain\Models\Refund;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +27,7 @@ final class RefundController
     {
         /** @var array{paid_on?: string} $data */
         $data = $request->validate(['paid_on' => ['sometimes', 'date_format:Y-m-d']]);
-        $paidOn = isset($data['paid_on']) ? CarbonImmutable::parse($data['paid_on']) : CarbonImmutable::today();
+        $paidOn = isset($data['paid_on']) ? CarbonImmutable::parse($data['paid_on']) : app(BusinessClock::class)->today();
 
         return response()->json(['data' => self::present($this->refunds->release($refund, self::actor($request), $paidOn))]);
     }

@@ -15,6 +15,7 @@ use App\Modules\Insurance\Rating\Domain\RatingFailed;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
+use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -41,7 +42,7 @@ final class QuotationPageController
     public function index(Request $request): Response
     {
         $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
-        $this->quotations->expireDue(CarbonImmutable::today());
+        $this->quotations->expireDue(app(BusinessClock::class)->today());
         $entity = PageSupport::entity();
         // G2: a branch-scoped user lists only their branches' quotations.
         $rows = $reach->constrain(DB::table('quotations as q'), 'q.entity_id', 'q.branch_id')->leftJoin('parties as c', 'c.id', '=', 'q.customer_party_id')->leftJoin('products as p', 'p.id', '=', 'q.product_id')
@@ -77,7 +78,7 @@ final class QuotationPageController
     {
         $actor = PageSupport::actor($request);
         $this->permissions->authorizeArea($actor, self::AREA);
-        $this->quotations->expireDue(CarbonImmutable::today());
+        $this->quotations->expireDue(app(BusinessClock::class)->today());
         $model = Quotation::query()->findOrFail($quotation);
         $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id)); // G2: another branch's quotation is 403
 
@@ -117,7 +118,7 @@ final class QuotationPageController
 
     public function issue(Request $request, string $quotation): RedirectResponse
     {
-        $this->quotations->issue($quotation, CarbonImmutable::today(), PageSupport::actor($request));
+        $this->quotations->issue($quotation, app(BusinessClock::class)->today(), PageSupport::actor($request));
 
         return redirect("/quotations/{$quotation}")->with('status', 'Quotation issued.');
     }
@@ -138,7 +139,7 @@ final class QuotationPageController
             return redirect("/quotations/{$quotation->id}")->with('status', 'Draft saved.');
         }
         try {
-            $this->quotations->issue($quotation->id, CarbonImmutable::today(), PageSupport::actor($request));
+            $this->quotations->issue($quotation->id, app(BusinessClock::class)->today(), PageSupport::actor($request));
         } catch (BusinessRuleViolation $refused) {
             return redirect("/quotations/{$quotation->id}")->withErrors(['form' => \App\Http\Feedback\ReasonMessages::forPeople($refused->reasonCode, $refused->getMessage()), 'reason' => $refused->reasonCode]);
         }
@@ -162,7 +163,7 @@ final class QuotationPageController
     {
         $actor = PageSupport::actor($request);
         $entity = PageSupport::entity();
-        $today = CarbonImmutable::today();
+        $today = app(BusinessClock::class)->today();
         $may = fn (string $permission): bool => $quotation === null
             ? in_array($permission, $this->permissions->permissionsOf($actor), true)
             : $this->permissions->has($actor, $permission, AuthorizationScope::branch($quotation->entity_id, $quotation->branch_id));
@@ -218,7 +219,7 @@ final class QuotationPageController
     private static function products(): array
     {
         $versions = DB::table('product_versions as v')->join('products as p', 'p.id', '=', 'v.product_id')->whereNotNull('v.class_code')
-            ->where(fn ($q) => $q->whereNull('v.effective_to')->orWhere('v.effective_to', '>', CarbonImmutable::today()->toDateString()))
+            ->where(fn ($q) => $q->whereNull('v.effective_to')->orWhere('v.effective_to', '>', app(BusinessClock::class)->today()->toDateString()))
             ->orderBy('p.code')->orderBy('v.effective_from')->get(['v.id', 'v.product_id', 'v.version', 'v.effective_from', 'v.effective_to', 'v.class_code', 'v.risk_schema', 'p.code', 'p.name']);
         $coverages = DB::table('coverages')->whereIn('product_version_id', $versions->pluck('id'))->orderBy('sort_order')->orderBy('code')
             ->get(['product_version_id', 'code', 'name_en', 'name_bn', 'mandatory'])->groupBy('product_version_id');
