@@ -19,6 +19,8 @@ use LogicException;
  */
 final class DocumentNumberer
 {
+    public const DEFAULT_FORMAT = '{prefix}-{branch}-{fy}-{seq}';
+
     public function __construct(private readonly FiscalCalendar $calendar) {}
 
     /**
@@ -128,14 +130,16 @@ final class DocumentNumberer
     }
 
     /**
-     * Fix F1: the number format comes from the numbering settings (config erp.numbering.formats, per document type; default
-     * `{prefix}-{fy}-{seq}`). Tokens: {prefix}, {branch} (the branch code; left out with its separator for an entity-level sequence), {fy},
-     * {seq} (six digits). Only new numbers use it: issued numbers are stored and never rewritten.
+     * Fix F1: the number format comes from the numbering settings (config erp.numbering.formats, per document type). Tokens: {prefix},
+     * {branch} (the branch code; left out with its separator for an entity-level sequence), {fy}, {seq} (six digits). Only new numbers use it:
+     * issued numbers are stored and never rewritten.
+     * Fix G5 (D-53): sequences are per branch but numbers are unique in the tenant, so a type with no configured format is branch-coded —
+     * a second branch can never repeat the first branch's numbers.
      */
     private function format(DocumentNumberScope $scope, string $prefix, int $fiscalYear, int $sequenceNo): string
     {
         $formats = (array) config('erp.numbering.formats', []);
-        $format = is_string($formats[$scope->docType] ?? null) ? $formats[$scope->docType] : '{prefix}-{fy}-{seq}';
+        $format = is_string($formats[$scope->docType] ?? null) ? $formats[$scope->docType] : self::DEFAULT_FORMAT;
         $branch = $scope->branchId === null ? null : DB::table('branches')->where('id', $scope->branchId)->value('code');
         if (! is_string($branch) || $branch === '') {
             $format = (string) preg_replace('/\{branch\}[^{]?|[^}]?\{branch\}/', '', $format, 1);

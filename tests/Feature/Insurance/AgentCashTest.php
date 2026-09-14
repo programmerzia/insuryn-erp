@@ -76,7 +76,7 @@ it('records deposits against the agent\'s undeposited cash and reconciles collec
             ->toBe('DEPOSIT_EXCEEDS_UNDEPOSITED_CASH');
 
         $deposit = $deposits->record($this->world['agent_id'], 4_000_000, $bankAccount->id, 'DEP-1', $this->world['admin'], CarbonImmutable::parse('2026-09-13'));
-        expect($deposit->number)->toStartWith('ADP-2026-')
+        expect($deposit->number)->toBe('ADP-HO-2026-000002') // 000001 was reserved by the refused deposit above (voided when it expires)
             ->and(($this->lines)('AGENT_DEPOSIT_RECORDED'))->toBe([['bank_main', 'debit', 4_000_000, $this->world['agent_id']], ['agent_receivable', 'credit', 4_000_000, $this->world['agent_id']]])
             ->and(DB::table('journal_lines')->where('role_code', 'bank_main')->value('account_id'))->toBe($gl);
 

@@ -52,7 +52,7 @@ function claimLines(string $eventType, int $nth = 0): array
 it('runs a claim through reserve, adjustment, approval, payment and close (§4.6, §4.7)', function (): void {
     asTenant($this->ctx['tenant_id'], function (): void {
         $claim = ($this->claims)()->register($this->policyId, ($this->on)('2026-09-05'), 'Rear-end collision', $this->officer, ($this->on)('2026-09-06'));
-        expect($claim->status->value)->toBe('registered')->and($claim->number)->toStartWith('CLM-2026-');
+        expect($claim->status->value)->toBe('registered')->and($claim->number)->toBe('CLM-HO-2026-000001');
 
         ($this->claims)()->reserve($claim->id, 20_000_000, 'Initial case reserve', $this->officer, ($this->on)('2026-09-06'));
         ($this->claims)()->reserve($claim->id, 25_000_000, 'Surveyor report', $this->officer, ($this->on)('2026-09-10'));

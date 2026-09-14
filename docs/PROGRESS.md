@@ -188,6 +188,7 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-134 | R9 | The renewal reports' definitions are not specified: the expiry register as at a date lists policies issued on or before it, not cancelled by then, expiring within the largest bucket after it (renewal status from the register, `renewed` when a renewal was issued, else `upcoming`); renewal conversion counts policies expiring in the period except cancelled ones — renewed when a renewal policy was issued, not renewed when the register closed it (its reason), it lapsed for non-payment or it expired before today without either (`no_response`), otherwise open; conversion = renewed ÷ expiring in basis points rounded half up, shown as a percentage with two decimals; grouped by branch, agent (producer) or product. | `ExpiryRegisterReportQuery`, `RenewalConversionQuery` (`ASSUMPTION` in the docblocks), `ReportsPageController`. |
 | A-135 | R9 | When the renewal run happens is not specified: nightly at 00:30 (after issued quotations expire at 00:15, so an expired renewal quotation gets no reminder), one tenant at a time; a quotation that cannot be offered (for example no tariff in force on the renewal date) keeps the row `upcoming` with the reason shown on the queue and is tried again the next night. | `routes/console.php`, `RenewalRunJob`, `RenewalQuotations::offerDue`. |
 | A-143 | 2.0d | Design §5.5 says only "closed ─reopen(approval)─▶ reserved": one reopening waits at a time. Asking again while a `claim_reopen` approval is pending is refused (`REOPEN_PENDING`, nothing written) and the claim page hides Reopen meanwhile; after a rejection it can be asked again. Before, a second request left a second approval that could never complete once the first reopened the claim, or that would reopen it again after a later close without anyone asking. | `ClaimService::reopen` (`ASSUMPTION:`), `ClaimPageController::show` `actions.reopen`, `ReasonMessages`; `ClaimsTest`, `ClaimsCommissionApprovalsPagesTest`. |
+| A-150 | G5 | The customer has not chosen the receipt, claim and agent deposit number formats (CQ-E5): they carry the branch code like policies, `{prefix}-{branch}-{fy}-{seq}` (`RCT-HO-2026-000001`, `CLM-HO-…`, `ADP-HO-…`), each set in the numbering settings (env `ERP_RECEIPT_NUMBER_FORMAT`, `ERP_CLAIM_NUMBER_FORMAT`, `ERP_AGENT_DEPOSIT_NUMBER_FORMAT`). Numbers already issued keep their branch-less shape and the running sequences continue; a format chosen later applies to new numbers only. Verify with the customer (regulators check receipt numbering). | `config/erp.php` `numbering.formats` (`ASSUMPTION:`), `DocumentNumberer`; `BranchNumberingTest`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -2550,3 +2551,29 @@ Phase 1 exit checklist: "add a generator-based property test for the claim reser
   - A reopened claim is `reserved` even when it was paid (§5.5). It cannot be closed again until a new payment is approved (close needs approved or paid),
     and recoveries are refused (`CLAIM_NOT_PAID`) until then. The only way to end it without paying more is to reject it.
 - Result: 1,360 Pest tests, 348 Vitest tests green, PHPStan 0 errors, vue-tsc green.
+
+### G5 — Branch-coded receipt, claim and deposit numbers — done
+- **Bug (addendum §A.7.6, CQ-E5), now reproduced by a test:** receipts (`RCT`), claims (`CLM`) and agent deposits (`ADP`) reserve from a sequence per entity + branch + fiscal year, but had no
+  entry in `erp.numbering.formats`, so they used the branch-less `{prefix}-{fy}-{seq}`. The first receipt, claim or deposit of the year in a second branch got the first branch's number
+  (`RCT-2026-000001`) and was refused by the unique constraints (`receipts`, `claims`, `agent_deposits` unique on tenant + number): a second branch could not record any of them.
+- **Fix:** `config/erp.php` `numbering.formats` gains `receipt`, `claim` and `agent_deposit` → `{prefix}-{branch}-{fy}-{seq}` (env `ERP_RECEIPT_NUMBER_FORMAT`, `ERP_CLAIM_NUMBER_FORMAT`,
+  `ERP_AGENT_DEPOSIT_NUMBER_FORMAT`), e.g. `RCT-HO-2026-000001`, `CLM-CTG-2026-000001`, `ADP-HO-2026-000001`. ASSUMPTION A-150 (the CQ-E5 option (a)), decision D-53.
+  - A document type with no configured format is now branch-coded too (`DocumentNumberer::DEFAULT_FORMAT`); `{branch}` still drops out for entity-level sequences, so commission
+    statements read `CST-2026-000001` as before (now listed explicitly, env `ERP_COMMISSION_STATEMENT_NUMBER_FORMAT`). A future branch-scoped type cannot repeat this collision (addendum PD-6).
+  - Branch-coded formats were preferred over one entity-wide sequence: an entity-wide sequence would start again at `000001` and collide with numbers existing tenants already issued.
+    A branch-coded number can never equal a branch-less one, so running sequences simply continue (`RCT-2026-000007` → `RCT-HO-2026-000008`).
+- **Issued numbers untouched:** no migration; `document_numbers` and the business rows keep their numbers (the database refuses renumbering). Only new numbers use the format.
+- Every other `DocumentNumberScope` caller checked: policies, quotations, proposals and cover notes are branch-scoped with branch-coded formats (F1, R4–R6); commission statements
+  (`CommissionStatementRun`, `CommissionPayoutService`) are entity-scoped with no branch. No other mismatch.
+- There is no numbering settings screen or wizard step listing formats (formats are configuration only), so no UI change. Global search already finds branch-coded numbers
+  typed short (`RCT-HO-8`).
+- Sample numbers in document template previews (`DocumentVariables`) now read `RCT-HO-2026-000007` and `CLM-HO-2026-000003`. Addendum §A.7.6 and CQ-E5 note the fix.
+  Earlier PROGRESS sections (1B receipts `RCT-<FY>-nnnnnn`, claims, agent cash) describe the shape at the time and are left as history. `docs/flow-audit.md` and
+  `scripts/flow-audit.mjs` still show example numbers such as `RCT-2026-000007` (not edited; re-measure the flow audit to refresh them).
+- Tests: `BranchNumberingTest` (new, 3: a receipt, a claim and an agent deposit in HO and CTG through `ReceiptService`, `ClaimService` and `AgentDepositService`; all three failed with
+  the unique violation before the fix); `DocumentNumbererTest` +1 (receipt/claim/deposit shapes, an issued branch-less number kept while the sequence continues branch-coded,
+  unconfigured types branch-coded, entity-level without branch).
+- Test changes (requirement changed; all equivalent or stricter): `DocumentNumbererTest` expects `RCT-HO-2026-000001/2` and `RCT-HO-2027-000001` for the branch sequence
+  (the entity-level `RCT-2026-000001` unchanged), the voided list `RCT-HO-2026-000001`, and in the F1 test a HO and a CTG receipt instead of "other documents keep their format";
+  `CollectionsTest`, `ClaimsTest`, `AgentCashTest` assert the exact number (`RCT-HO-2026-000001`, `CLM-HO-2026-000001`, `ADP-HO-2026-000002` — its 000001 is reserved by the
+  refused deposit just before) instead of a `…-2026-` prefix.

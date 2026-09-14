@@ -54,7 +54,7 @@ it('allocates a receipt to an installment and posts PREMIUM_RECEIVED per allocat
         $receipt = app(ReceiptService::class)->record(receiptRequest($this->ctx, 5_000_000, [new AllocationLine($this->installments[0], 5_000_000)]), $this->world['admin']);
 
         expect($receipt->status->value)->toBe('allocated')
-            ->and($receipt->number)->toStartWith('RCT-2026-')
+            ->and($receipt->number)->toBe('RCT-HO-2026-000001')
             ->and((int) DB::table('installments')->where('id', $this->installments[0])->value('paid_minor'))->toBe(5_000_000)
             ->and(DB::table('installments')->where('id', $this->installments[0])->value('status'))->toBe('partially_paid')
             ->and(DB::table('accounting_events')->where('event_type', 'PREMIUM_RECEIVED')->value('idempotency_key'))

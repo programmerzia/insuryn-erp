@@ -133,12 +133,23 @@ return [
     ],
     'numbering' => [
         'reservation_ttl_minutes' => 15,
-        // Fix F1: number format per document type ({prefix}, {branch} code, {fy}, {seq}); others use {prefix}-{fy}-{seq}. New numbers only.
+        // Fix F1: number format per document type ({prefix}, {branch} code, {fy}, {seq}). New numbers only: issued numbers are never rewritten.
+        // Fix G5 (D-53): a type not listed uses {prefix}-{branch}-{fy}-{seq}; {branch} drops out for entity-level sequences (commission statements).
         'formats' => ['policy' => env('ERP_POLICY_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
             // Phase 3 R4–R6: quotations, proposals and cover notes are branch-coded like policies (QUO-HO-2026-000001).
             'quotation' => env('ERP_QUOTATION_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
             'proposal' => env('ERP_PROPOSAL_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
-            'cover_note' => env('ERP_COVER_NOTE_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}')],
+            'cover_note' => env('ERP_COVER_NOTE_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            /*
+             * Fix G5: receipts, claims and agent deposits are numbered per branch and unique in the tenant, so they carry the branch code too
+             * (RCT-HO-2026-000001); without it a second branch repeated the first branch's numbers and was refused.
+             * ASSUMPTION: A-150 — the customer has not chosen the receipt, claim and deposit formats (CQ-E5); branch-coded until they do.
+             */
+            'receipt' => env('ERP_RECEIPT_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            'claim' => env('ERP_CLAIM_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            'agent_deposit' => env('ERP_AGENT_DEPOSIT_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}'),
+            // Entity-level sequence (no branch): the {branch} part is left out, so this reads CST-2026-000001.
+            'commission_statement' => env('ERP_COMMISSION_STATEMENT_NUMBER_FORMAT', '{prefix}-{branch}-{fy}-{seq}')],
     ],
     'close' => ['suspense_max_age_days' => 30],
 

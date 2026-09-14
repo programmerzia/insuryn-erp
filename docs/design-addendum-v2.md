@@ -207,11 +207,11 @@ SoD object rules added: `rating.manage_plans` ✕ `rating.approve_plans` (SOD7),
 |---|---|---|---|
 | Policy | POL | entity + branch | `{prefix}-{branch}-{fy}-{seq}` (F1) |
 | Quotation, proposal, cover note | QUO, PRP, CVN | entity + branch | `{prefix}-{branch}-{fy}-{seq}` |
-| Receipt, claim, agent deposit | RCT, CLM, ADP | entity + branch | `{prefix}-{fy}-{seq}` |
+| Receipt, claim, agent deposit | RCT, CLM, ADP | entity + branch | `{prefix}-{branch}-{fy}-{seq}` (fix G5; was `{prefix}-{fy}-{seq}`) |
 | Commission statement | CST | entity | `{prefix}-{fy}-{seq}` |
 | Endorsement document | — | — | `<policy number>/E<n>` (A-104), not a sequence |
 
-**Finding (not changed; needs a fix slice):** receipts, claims and agent deposits reserve numbers from a per-branch sequence but their format has no `{branch}` token, while `receipts`, `claims` and `agent_deposits` are unique on (tenant, number). The first receipt of a second branch in a fiscal year gets the same number as the first receipt of the first branch and is refused by the unique constraint. Found by reading `DocumentNumberer`, the three services and their migrations while writing this addendum, not reproduced by a test (docs-only slice): the demo tenants have one branch (HO), and the tests that add a second branch record no receipt, claim or deposit there. The fix is a format change (branch-coded) or entity-level sequences; which one is a customer choice because receipt numbers are printed and checked by regulators (CQ-E5).
+**Finding (fixed in G5, D-53 / A-150: branch-coded formats, the CQ-E5 option (a), until the customer answers):** receipts, claims and agent deposits reserve numbers from a per-branch sequence but their format has no `{branch}` token, while `receipts`, `claims` and `agent_deposits` are unique on (tenant, number). The first receipt of a second branch in a fiscal year gets the same number as the first receipt of the first branch and is refused by the unique constraint. Found by reading `DocumentNumberer`, the three services and their migrations while writing this addendum, not reproduced by a test (docs-only slice): the demo tenants have one branch (HO), and the tests that add a second branch record no receipt, claim or deposit there. The fix is a format change (branch-coded) or entity-level sequences; which one is a customer choice because receipt numbers are printed and checked by regulators (CQ-E5).
 
 ### A.7.7 Jobs added
 

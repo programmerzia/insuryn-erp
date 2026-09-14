@@ -144,7 +144,7 @@ final class DocumentVariables
             ]),
             DocumentTemplateCode::DischargeVoucher => array_replace($bag, [
                 'parties' => [['role' => $l('Claimant', 'দাবিদার'), 'name' => $l('Rahima Akter', 'রহিমা আক্তার')]],
-                'details' => [['label' => $l('Claim', 'দাবি'), 'value' => 'CLM-2026-000003'], ['label' => $l('Policy', 'পলিসি'), 'value' => 'POL-HO-2026-000123'], ['label' => $l('Date of loss', 'ক্ষতির তারিখ'), 'value' => '5 Sep 2026']],
+                'details' => [['label' => $l('Claim', 'দাবি'), 'value' => 'CLM-HO-2026-000003'], ['label' => $l('Policy', 'পলিসি'), 'value' => 'POL-HO-2026-000123'], ['label' => $l('Date of loss', 'ক্ষতির তারিখ'), 'value' => '5 Sep 2026']],
                 'money' => [['label' => $l('Assessed loss', 'নিরূপিত ক্ষতি'), 'amount' => '185,000.00'], ['label' => $l('Deductible', 'ডিডাক্টিবল'), 'amount' => '(5,000.00)']],
                 'total' => ['label' => $l('Amount paid in full and final settlement', 'পূর্ণ ও চূড়ান্ত নিষ্পত্তিতে প্রদত্ত অর্থ'), 'amount' => '180,000.00'],
             ]),
@@ -158,8 +158,8 @@ final class DocumentVariables
             DocumentTemplateCode::CoverNote => 'CN-HO-2026-000012',
             DocumentTemplateCode::PolicySchedule, DocumentTemplateCode::RenewalNotice => 'POL-HO-2026-000123',
             DocumentTemplateCode::Endorsement => 'POL-HO-2026-000123/E1',
-            DocumentTemplateCode::Receipt => 'RCT-2026-000007',
-            DocumentTemplateCode::ClaimAck, DocumentTemplateCode::DischargeVoucher => 'CLM-2026-000003',
+            DocumentTemplateCode::Receipt => 'RCT-HO-2026-000007',
+            DocumentTemplateCode::ClaimAck, DocumentTemplateCode::DischargeVoucher => 'CLM-HO-2026-000003',
         };
     }
 

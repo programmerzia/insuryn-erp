@@ -31,10 +31,11 @@ it('allocates consecutive numbers per entity, branch, document type and fiscal y
         $headOffice = new DocumentNumberScope($this->ctx['entity_id'], null, 'receipt', 'RCT', CarbonImmutable::parse('2026-09-15'));
         $nextFiscalYear = new DocumentNumberScope($this->ctx['entity_id'], $this->ctx['branch_id'], 'receipt', 'RCT', CarbonImmutable::parse('2027-07-01'));
 
-        expect(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-2026-000001')
-            ->and(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-2026-000002')
+        // Fix G5: receipt numbers carry the branch code; the entity-level sequence has none.
+        expect(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-HO-2026-000001')
+            ->and(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-HO-2026-000002')
             ->and(numberer()->reserve($headOffice, null)->number)->toBe('RCT-2026-000001')
-            ->and(numberer()->reserve($nextFiscalYear, null)->number)->toBe('RCT-2027-000001');
+            ->and(numberer()->reserve($nextFiscalYear, null)->number)->toBe('RCT-HO-2027-000001');
     });
 });
 
@@ -71,7 +72,7 @@ it('voids a reserved number only with a reason', function (): void {
 
         $row = DB::table('document_numbers')->where('id', $reserved->id)->first();
         expect($row?->status)->toBe('voided')->and($row?->void_reason)->toBe('receipt book page damaged')
-            ->and(numberer()->voidedNumbers($reserved->sequenceId))->toBe(['RCT-2026-000001']);
+            ->and(numberer()->voidedNumbers($reserved->sequenceId))->toBe(['RCT-HO-2026-000001']);
     });
 });
 
@@ -140,8 +141,38 @@ it('numbers policies per entity and branch with the branch code: POL-<BRANCH>-<F
         expect(numberer()->reserve($policy($this->ctx['branch_id']), null)->number)->toBe('POL-HO-2026-000001')
             ->and(numberer()->reserve($policy($this->ctx['branch_id']), null)->number)->toBe('POL-HO-2026-000002')
             ->and(numberer()->reserve($policy($ctg), null)->number)->toBe('POL-CTG-2026-000001')
-            // Other documents keep their format.
-            ->and(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-2026-000001');
+            // Fix G5: receipts are branch-coded the same way.
+            ->and(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-HO-2026-000001')
+            ->and(numberer()->reserve(new DocumentNumberScope($this->ctx['entity_id'], $ctg, 'receipt', 'RCT', CarbonImmutable::parse('2026-09-15')), null)->number)->toBe('RCT-CTG-2026-000001');
+    });
+});
+
+it('branch-codes receipt, claim and deposit numbers and any unconfigured branch-scoped type; issued branch-less numbers stay as they are (fix G5)', function (): void {
+    asTenant($this->ctx['tenant_id'], function (): void {
+        DB::table('branches')->insert(['id' => $ctg = (string) Str::uuid7(), 'tenant_id' => $this->ctx['tenant_id'], 'entity_id' => $this->ctx['entity_id'], 'code' => 'CTG', 'name' => 'Chattogram', 'status' => 'active']);
+        $scope = fn (?string $branchId, string $docType, string $prefix): DocumentNumberScope => new DocumentNumberScope($this->ctx['entity_id'], $branchId, $docType, $prefix, CarbonImmutable::parse('2026-09-15'));
+
+        // A number issued before the fix, in the old branch-less shape.
+        config(['erp.numbering.formats.receipt' => '{prefix}-{fy}-{seq}']);
+        $issued = numberer()->reserve($this->receipts, null);
+        DB::transaction(fn () => numberer()->markUsed($issued->id, 'receipt', (string) Str::uuid7()));
+        config(['erp.numbering.formats.receipt' => '{prefix}-{branch}-{fy}-{seq}']);
+
+        expect($issued->number)->toBe('RCT-2026-000001')
+            // The running sequence continues in the new shape, which can never equal an old number; the issued one is untouched.
+            ->and(numberer()->reserve($this->receipts, null)->number)->toBe('RCT-HO-2026-000002')
+            ->and(DB::table('document_numbers')->where('id', $issued->id)->value('number'))->toBe('RCT-2026-000001')
+            ->and(numberer()->reserve($scope($ctg, 'claim', 'CLM'), null)->number)->toBe('CLM-CTG-2026-000001')
+            ->and(numberer()->reserve($scope($ctg, 'agent_deposit', 'ADP'), null)->number)->toBe('ADP-CTG-2026-000001')
+            // Commission statements are numbered per entity: no branch part.
+            ->and(numberer()->reserve($scope(null, 'commission_statement', 'CST'), null)->number)->toBe('CST-2026-000001');
+
+        // A document type with no configured format is branch-coded too, so a new branch-scoped type cannot collide across branches.
+        config(['erp.numbering.formats' => []]);
+        expect(numberer()->reserve($scope($this->ctx['branch_id'], 'new_document', 'NEW'), null)->number)->toBe('NEW-HO-2026-000001')
+            ->and(numberer()->reserve($scope($ctg, 'new_document', 'NEW'), null)->number)->toBe('NEW-CTG-2026-000001')
+            ->and(numberer()->reserve($scope(null, 'new_document', 'NEW'), null)->number)->toBe('NEW-2026-000001')
+            ->and(numberer()->reserve($scope(null, 'commission_statement', 'CST'), null)->number)->toBe('CST-2026-000002');
     });
 });
 

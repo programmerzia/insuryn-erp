@@ -396,7 +396,7 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 
 ### E5. What number formats must receipts, claims, agent deposits and the new Phase 2 documents use?
 - **Why it matters:** while writing the Phase 2 design we found that receipts, claims and agent deposits are numbered per branch but their numbers carry no branch code (`RCT-2026-000001`), while numbers must be unique across the company. In a company with two branches, the second branch's first receipt of the year would repeat the first branch's number and be refused. Policies, quotations, proposals and cover notes already carry the branch (`POL-HO-2026-000123`).
-- **Default today:** as above; one-branch companies are unaffected.
+- **Default today:** since fix G5, option (a): receipt, claim and deposit numbers carry the branch code (`RCT-HO-2026-000001`), set per document type in the numbering settings; numbers issued before stay as they were (A-150).
 - **Options:** (a) add the branch code to receipt, claim and deposit numbers (`RCT-HO-2026-000001`), as for policies; (b) one company-wide sequence per document type; (c) a format you specify (regulators check receipt numbering).
 - **Also:** formats for supplier bills, payment runs, invoices, credit notes, AR receipts, expense claims, petty cash vouchers, asset tags, payroll runs, payslips and final settlements (proposal in addendum §B.2.4).
 - **Blocked until answered:** 2.1c (build); numbering in 2.3–2.15 follows the answer.
