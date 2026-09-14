@@ -11,11 +11,17 @@ use App\Modules\Accounting\Application\LedgerQuery;
 use App\Modules\Accounting\Application\Periods\FiscalPeriodService;
 use App\Modules\Accounting\Application\Queries\FiscalPeriodView;
 use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
+use App\Modules\Accounting\Domain\MinorUnits;
 use Illuminate\Support\Facades\DB;
 
 /** Performs one close task's work (design §5.7) and reports passed or blocked. The period lock itself is done by PeriodCloseService. */
 final class CloseTaskExecutor
 {
+    /** UX consistency pass: a reconciliation's result names the register it ties to the ledger in the checklist's words, not the subledger code. */
+    private const SUBLEDGER_NAMES = ['premium' => 'the premium receivable register', 'claims' => 'the outstanding claims register', 'commission' => 'commission payable',
+        'unearned_premium' => 'the unearned premium register', 'suspense' => 'suspense', 'premium_tax' => 'VAT payable', 'stamp_duty' => 'stamp duty payable',
+        'ri_payable' => 'the amount due to reinsurers', 'ri_claims' => 'reinsurance claims recoverable', 'ap' => 'accounts payable per supplier bill', 'payroll' => 'salary payable per the payslips'];
+
     /**
      * @param iterable<CloseTaskCheck> $checks
      * @param iterable<SubledgerReconciler> $reconcilers
@@ -64,14 +70,17 @@ final class CloseTaskExecutor
             $runId = $this->reconciliation->run($reconciler, $period->id);
             $run = $runId === null ? null : DB::table('reconciliation_runs')->where('id', $runId)->first(['status', 'variance_minor', 'subledger_balance_minor', 'gl_balance_minor']);
             if ($run === null) {
-                return CloseCheckResult::blocked("Subledger {$task->subledger} has no control account mapped.");
+                return CloseCheckResult::blocked(ucfirst((self::SUBLEDGER_NAMES[$task->subledger] ?? str_replace('_', ' ', (string) $task->subledger)).' has no control account mapped in Account roles.'));
             }
             $details = ['reconciliation_run_id' => $runId, 'subledger_minor' => (int) $run->subledger_balance_minor, 'gl_minor' => (int) $run->gl_balance_minor,
                 'variance_minor' => (int) $run->variance_minor];
 
+            $name = self::SUBLEDGER_NAMES[$task->subledger] ?? str_replace('_', ' ', (string) $task->subledger);
+            $currency = (string) (DB::table('legal_entities')->where('id', $period->entityId)->value('base_currency') ?? 'BDT');
+
             return $run->status === 'clean'
-                ? CloseCheckResult::passed("Subledger {$task->subledger} reconciles to the GL.", $details)
-                : CloseCheckResult::blocked("Subledger {$task->subledger} differs from the GL by {$run->variance_minor}.", $details);
+                ? CloseCheckResult::passed(ucfirst("{$name} reconciles to the ledger."), $details)
+                : CloseCheckResult::blocked(ucfirst("{$name} differs from the ledger by ".MinorUnits::format((int) $run->variance_minor, $currency)." {$currency}."), $details);
         }
 
         return CloseCheckResult::blocked("No reconciler is registered for subledger {$task->subledger}.");

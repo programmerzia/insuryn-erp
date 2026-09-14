@@ -41,6 +41,11 @@ it('lists an export for every report with a table on the index', function (): vo
         ->where('reports', fn (Collection $reports): bool => $reports->whereNull('key')->mapWithKeys(fn (array $r): array => [$r['title'] => $r['exports']['csv'] ?? null])->all() === [
             'Suspense ageing' => '/reports/suspense-ageing/export?format=csv', 'Agent cash' => '/reports/agent-cash/export?format=csv',
             'Commission statements' => '/reports/commission-statements/export?format=csv', 'Trial balance' => '/reports/trial-balance/export?format=csv',
+            // Addendum v2 §B.6–B.8 registers on their own screens, then (UX consistency pass) the regulatory exports for reports.regulatory.
+            'Fixed asset register' => '/fixed-assets/register/export?format=csv', 'Budget variance' => '/budgets/variance/export?format=csv',
+            'Petty cash book' => '/petty-cash/book/export?format=csv', 'Regulatory returns' => null, 'Agency register' => '/distribution/licences/register?format=csv',
+        ])->where('reports', fn (Collection $reports): bool => $reports->firstWhere('title', 'Regulatory returns')['exports'] === [
+            'xlsx' => '/regulatory/returns/export?period=2026-Q3&format=xlsx', 'pdf' => '/regulatory/returns/export?period=2026-Q3&format=pdf',
         ]));
 });
 

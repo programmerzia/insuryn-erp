@@ -32,13 +32,25 @@ final class ClosePageController
 {
     public const AREA = ['periods.soft_lock', 'periods.lock', 'periods.reopen', 'reports.financial'];
 
-    /** Gap fix GA-43 / GA-15: task names the code does not spell out. */
-    private const TASK_NAMES = ['upr_reconciliation' => 'Unearned premium reconciliation', 'vat_reconciliation' => 'VAT payable reconciliation',
-        'stamp_duty_reconciliation' => 'Stamp duty payable reconciliation', 'year_end_close' => 'Year-end close to retained earnings',
+    /**
+     * Gap fix GA-43 / GA-15, UX consistency pass: the name of every close task, shown on the checklist and in "Waits for". One wording: a check is named
+     * for what it does (Premium earning, Payroll posting), a reconciliation for the account or register it ties to the ledger. The page reads `name`.
+     */
+    private const TASK_NAMES = [
+        'premium_earning' => 'Premium earning', 'suspense_review' => 'Suspense review', 'bank_reconciliation' => 'Bank reconciliation',
+        'premium_reconciliation' => 'Premium receivable reconciliation', 'claims_reconciliation' => 'Outstanding claims reconciliation',
+        'commission_reconciliation' => 'Commission payable reconciliation', 'upr_reconciliation' => 'Unearned premium reconciliation', 'accruals' => 'Accruals',
+        'suspense_reconciliation' => 'Suspense reconciliation', 'vat_reconciliation' => 'VAT payable reconciliation', 'stamp_duty_reconciliation' => 'Stamp duty payable reconciliation',
         'technical_provisions' => 'Technical provisions', // market gap G5
         // Reinsurance MVP (G4).
-        'ri_unearned_premium' => 'Reinsurers\' share of unearned premium', 'ri_balances_reconciliation' => 'Reinsurer balances reconciliation', 'ri_claims_reconciliation' => 'Reinsurance claims reconciliation', 'ap_reconciliation' => 'Accounts payable reconciliation',
-        'depreciation' => 'Depreciation', 'fixed_asset_reconciliation' => 'Fixed asset register reconciliation'];
+        'ri_unearned_premium' => 'Reinsurers\' share of unearned premium', 'ri_balances_reconciliation' => 'Reinsurer balances reconciliation',
+        'ri_claims_reconciliation' => 'Reinsurance claims reconciliation',
+        'ap_reconciliation' => 'Accounts payable reconciliation', // slice 2.3
+        'payroll_posted' => 'Payroll posting', 'payroll_reconciliation' => 'Salary payable reconciliation', // People and Payroll MVP
+        'depreciation' => 'Monthly depreciation', 'fixed_asset_reconciliation' => 'Fixed asset register reconciliation', // addendum v2 §B.7
+        'year_end_close' => 'Year-end close to retained earnings', 'trial_balance' => 'Trial balance', 'financial_statements' => 'Financial statements',
+        'sign_off' => 'Sign-off', 'period_lock' => 'Period lock',
+    ];
 
     public function __construct(
         private readonly PermissionChecker $permissions,
@@ -126,7 +138,7 @@ final class ClosePageController
             'run' => ['id' => $detail['id'], 'status' => $detail['status'], 'started_at' => $detail['started_at'], 'completed_at' => $detail['completed_at'],
                 'period' => sprintf('%d-%02d', (int) $period->year, (int) $period->period), 'period_status' => (string) $period->status,
                 'starts' => (string) $period->starts, 'ends' => (string) $period->ends],
-            'tasks' => array_map(fn (array $t): array => ['id' => $t['id'], 'code' => $t['code'], 'order_no' => $t['order_no'], 'owner_role' => $t['owner_role'], 'status' => $t['status'],
+            'tasks' => array_map(fn (array $t): array => ['id' => $t['id'], 'code' => $t['code'], 'name' => $label($t['code']), 'order_no' => $t['order_no'], 'owner_role' => $t['owner_role'], 'status' => $t['status'],
                 'depends_on' => $t['depends_on'], 'summary' => is_array($t['result']) ? (string) ($t['result']['summary'] ?? ($t['result']['skip_reason'] ?? '')) : null,
                 'done_at' => $t['done_at'],
                 // Gap fix GA-09: tasks that post show their journal before running.

@@ -65,8 +65,20 @@ final class ReportsPageController
         $catalogue = $financial ? self::CATALOGUE : array_values(array_filter(self::CATALOGUE, fn (array $r): bool => in_array($r['key'], self::CLAIMS_REPORTS, true)));
 
         $exports = array_map(fn (array $r): array => $r + ['exports' => ['csv' => "/reports/{$r['key']}/export?format=csv", 'xlsx' => "/reports/{$r['key']}/export?format=xlsx"]], $catalogue);
+        // UX consistency pass: the regulatory exports (the quarter's returns set, the IDRA agency register) are listed like every other report, for reports.regulatory.
+        $regulatory = [];
+        if ($this->permissions->has(PageSupport::actor($request), 'reports.regulatory')) {
+            $today = app(BusinessClock::class)->today();
+            $quarter = "{$today->year}-Q{$today->quarter}"; // the Regulatory period key of this quarter
+            $regulatory = [
+                ['key' => null, 'title' => 'Regulatory returns', 'description' => 'The IDRA return forms for this quarter, as a set with a sheet per form.', 'filter' => null, 'href' => '/regulatory/returns',
+                    'exports' => ['xlsx' => "/regulatory/returns/export?period={$quarter}&format=xlsx", 'pdf' => "/regulatory/returns/export?period={$quarter}&format=pdf"]],
+                ['key' => null, 'title' => 'Agency register', 'description' => 'Licensed producers with their IDRA licences and status, as of today.', 'filter' => null, 'href' => '/distribution/producers',
+                    'exports' => ['csv' => '/distribution/licences/register?format=csv', 'xlsx' => '/distribution/licences/register?format=xlsx']],
+            ];
+        }
         if (! $financial) {
-            return Inertia::render('reports/Index', ['reports' => $exports]);
+            return Inertia::render('reports/Index', ['reports' => array_merge($exports, $regulatory)]);
         }
 
         // Gap audit GA-34: the registers on their own screens open there, and export through the same path as the reports above.
@@ -82,7 +94,7 @@ final class ReportsPageController
                 'exports' => ['csv' => "{$screen['export']}?format=csv", 'xlsx' => "{$screen['export']}?format=xlsx"]];
         }
 
-        return Inertia::render('reports/Index', ['reports' => array_merge($exports, $screens)]);
+        return Inertia::render('reports/Index', ['reports' => array_merge($exports, $screens, $regulatory)]);
     }
 
     public function show(Request $request, string $report): Response

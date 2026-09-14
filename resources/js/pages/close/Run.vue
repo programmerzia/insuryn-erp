@@ -10,13 +10,14 @@ import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate, formatMonth } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
+import { activeItem, navigation } from '@/lib/navigation';
 import { usePermissions } from '@/lib/permissions';
 
 /**
  * UX brief §6.5 month-end close: the task checklist in order with owners, what each waits for, results and progress; each task opens the
  * queue where its exceptions are; the lock stays disabled with the reason until the close is clean, and asks before locking.
  */
-interface Task { id: string; code: string; order_no: number; owner_role: string; status: string; depends_on: string[]; summary: string | null; done_at: string | null; blocked_by?: string[]; posts?: boolean }
+interface Task { id: string; code: string; name?: string; order_no: number; owner_role: string; status: string; depends_on: string[]; summary: string | null; done_at: string | null; blocked_by?: string[]; posts?: boolean }
 const props = defineProps<{
     run: { id: string; status: string; period: string; period_status: string; started_at: string; completed_at: string | null; starts?: string; ends?: string };
     tasks: Task[];
@@ -31,35 +32,25 @@ const expanded = ref<string | null>(null);
 // Slice 2.1b (D-56): a CFO locking before month end writes the reason; it is kept on the audit trail.
 const earlyReason = ref('');
 const words = (code: string) => code.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
-// Gap fix GA-43 / GA-15: task names that the code does not spell out.
-const TASK_NAMES: Record<string, string> = {
-    upr_reconciliation: 'Unearned premium reconciliation',
-    vat_reconciliation: 'VAT payable reconciliation',
-    stamp_duty_reconciliation: 'Stamp duty payable reconciliation',
-    ap_reconciliation: 'Accounts payable reconciliation',
-    year_end_close: 'Year-end close to retained earnings',
-    technical_provisions: 'Technical provisions', // market gap G5
-    // Reinsurance MVP (G4).
-    ri_unearned_premium: "Reinsurers' share of unearned premium",
-    ri_balances_reconciliation: 'Reinsurer balances reconciliation',
-    ri_claims_reconciliation: 'Reinsurance claims reconciliation',
-    depreciation: 'Depreciation',
-    fixed_asset_reconciliation: 'Fixed asset register reconciliation',
-};
-const taskName = (code: string) => TASK_NAMES[code] ?? words(code);
+// Gap fix GA-43 / GA-15, UX consistency pass: every task's name comes from the server (ClosePageController::TASK_NAMES), the same words "Waits for" uses.
+const names = computed(() => Object.fromEntries(props.tasks.map((t) => [t.code, t.name ?? words(t.code)])));
+const taskName = (code: string) => names.value[code] ?? words(code);
 const month = computed(() => (props.run.starts ? formatMonth(props.run.starts, 'long') : props.run.period));
 const done = computed(() => props.tasks.filter((t) => t.status === 'done' || t.status === 'skipped').length);
 const lockTask = computed(() => props.tasks.find((t) => t.code === 'period_lock'));
 const checklist = computed(() => props.tasks.filter((t) => t.code !== 'period_lock'));
 const end = computed(() => props.run.ends ?? '');
+// Each task opens the queue or report where its exceptions are; the link reads as the title of the page it opens (the sidebar's or the report's name).
 const queueFor = (code: string): { label: string; href: string } | null =>
     ({
         premium_earning: { label: 'Premium register', href: `/reports/premium-register?from=${props.run.starts}&to=${end.value}` },
         suspense_review: { label: 'Suspense', href: '/suspense' },
-        bank_reconciliation: { label: 'Bank matching', href: '/bank' },
+        bank_reconciliation: { label: 'Bank accounts', href: '/bank' },
         premium_reconciliation: { label: 'Receivable ageing', href: `/reports/receivable-ageing?as_of=${end.value}` },
         claims_reconciliation: { label: 'Outstanding claims', href: `/reports/outstanding-claims?as_of=${end.value}` },
-        commission_reconciliation: { label: 'Commission', href: '/commission' },
+        commission_reconciliation: { label: 'Commission history', href: '/commission' },
+        payroll_posted: { label: 'Payroll runs', href: '/people/payroll' },
+        payroll_reconciliation: { label: 'Payroll runs', href: '/people/payroll' },
         // Gap fix GA-43 / GA-15.
         upr_reconciliation: { label: 'Unearned premium', href: `/reports/unearned-premium?as_of=${end.value}` },
         suspense_reconciliation: { label: 'Suspense', href: '/suspense' },
@@ -77,6 +68,12 @@ const queueFor = (code: string): { label: string; href: string } | null =>
         trial_balance: { label: 'Trial balance', href: `/accounting/trial-balance?as_of=${end.value}` },
         financial_statements: { label: 'Balance sheet', href: `/reports/balance-sheet?as_of=${end.value}` },
     })[code] ?? null;
+// A task's link shows only to people the page opens for (the sidebar item's permissions), so it never leads to a 403.
+const taskLink = (code: string): { label: string; href: string } | null => {
+    const link = queueFor(code);
+    const item = link ? activeItem(navigation, link.href) : undefined;
+    return link && (!item || item.any.length === 0 || can(...item.any)) ? link : null;
+};
 const runnable = (t: Task) => props.run.status === 'running' && (t.status === 'pending' || t.status === 'blocked');
 
 // Gap fix GA-09: a task that posts (premium earning, the year-end close) shows the journal it will post first, like every other money action.
@@ -139,7 +136,7 @@ async function lockPeriod(): Promise<void> {
                         <span class="truncate text-ink-2">{{ words(task.owner_role) }}</span>
                         <StatusBadge :status="task.status" />
                         <div class="flex items-center justify-end gap-2">
-                            <Link v-if="queueFor(task.code)" :href="queueFor(task.code)!.href" class="text-accent-text hover:underline">{{ queueFor(task.code)!.label }}</Link>
+                            <Link v-if="taskLink(task.code)" :href="taskLink(task.code)!.href" class="text-accent-text hover:underline">{{ taskLink(task.code)!.label }}</Link>
                             <button v-if="runnable(task)" type="button" class="h-7 rounded-control border border-line-control px-2 text-ui hover:bg-surface-2" :aria-expanded="expanded === task.id" @click="expanded = expanded === task.id ? null : task.id">Work on it</button>
                         </div>
                     </div>
