@@ -2860,6 +2860,7 @@ From docs/gap-audit.md (the findings table as the spec). Findings grouped per co
 **Found, not changed:**
 - `numbering.void`, `accounting.post_in_soft_locked` and `accounting.manage_posting_rules` are still in no template (GA-01 note; no flow uses them yet).
 - The installment lookup and the suspense workbench still list only issued, active, lapsed and expired policies, so a cancelled policy's owed premium is collected from the "Collect" offer or the policy page.
+
 ### Gap fixes W3 — one quote path, one producer register, customers, terminology, language — done
 Findings of docs/gap-audit.md, in the order given; commits group related findings (`fix(<area>): GA-xx, GA-yy – …`), each after the full gates.
 
