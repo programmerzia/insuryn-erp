@@ -54,7 +54,7 @@ final class WorkQueues
         // GA-26: they also decide referrals (A-86) and release refunds (receipt.refund_release).
         // Design addendum v2 §B.8.1: the CFO (and finance manager) see this month's expense against the approved budget.
         'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'expense_vs_budget', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_approve', 'petty_cash_replenishments'],
-        'cfo' => ['expense_vs_budget', 'close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_release'],
+        'cfo' => ['expense_vs_budget', 'close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release', 'bills_to_approve', 'payment_runs_to_release', 'petty_cash_replenishments'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
         // Consistency pass: HR prepares the monthly payroll and keeps the salary account and TIN every payslip needs.
         'hr_manager' => ['payroll_to_prepare', 'employees_missing_bank', 'employees_missing_tin'],

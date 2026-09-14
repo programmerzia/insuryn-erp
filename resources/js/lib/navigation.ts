@@ -7,7 +7,7 @@ import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartCo
  * server shares in `shell.badges`.
  *
  * Consistency pass: primary items run from the daily desk work (Approvals, quotes, policies, money in, claims, bank, money out) to the monthly work (commission,
- * payroll, ledger, close, reports, regulatory); the Assets & budgets group follows; secondary items run from registers used weekly (collections, suppliers, payslips,
+ * payroll, ledger, close, reports, regulatory); fixed assets, budgets and petty cash follow as secondary items; secondary items run from registers used weekly (collections, suppliers, payslips,
  * distribution, reinsurance, regulatory detail) to setup and administration.
  */
 export interface NavItem {
