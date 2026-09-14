@@ -1,0 +1,139 @@
+<title>Insuryn Demo Script</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root{--ink:#1f2a37;--ink2:#5b6672;--paper:#fbfaf7;--card:#ffffff;--line:#d9d5cc;--accent:#0f6e74;--soft:#e6f1f1;--warn:#8a5a00;--warnbg:#fff4dc}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336;--warn:#f0c674;--warnbg:#3a2f12}}
+:root[data-theme="dark"]{--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336;--warn:#f0c674;--warnbg:#3a2f12}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans","Noto Sans Bengali",system-ui,sans-serif;font-size:16px;line-height:1.6;padding:0 20px;padding-block:32px 64px}
+main{max-width:800px;margin:0 auto}
+h1{font-size:2rem;font-weight:600;line-height:1.15;text-wrap:balance;margin:0 0 .25rem}
+.sub{color:var(--ink2);margin:0 0 1.2rem}
+h2{font-size:1.2rem;font-weight:600;margin:2.2rem 0 .3rem;padding-top:1.1rem;border-top:1px solid var(--line)}
+.meta{color:var(--ink2);font-size:.9rem;margin:0 0 .6rem}
+.toggle{display:flex;gap:.4rem;margin:.6rem 0 1rem;flex-wrap:wrap}
+.toggle button{font:inherit;font-size:.9rem;padding:.35rem .8rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:4px;cursor:pointer}
+.toggle button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+@media (max-width:640px){.pair{grid-template-columns:1fr}}
+.lang{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.8rem .95rem}
+.lang[lang="bn"]{font-family:"Noto Sans Bengali","IBM Plex Sans",sans-serif;font-size:1.02rem;line-height:1.75}
+.lang p{margin:0 0 .6rem}.lang p:last-child{margin:0}
+body.only-en .lang[lang="bn"]{display:none}body.only-bn .lang[lang="en"]{display:none}
+body.only-en .pair,body.only-bn .pair{grid-template-columns:1fr}
+.do{background:var(--soft);border-left:3px solid var(--accent);padding:.5rem .8rem;margin:.5rem 0 .7rem;border-radius:0 4px 4px 0;font-size:.93rem}
+.do b{color:var(--accent)}
+.note{background:var(--warnbg);border-left:3px solid var(--warn);padding:.6rem .8rem;margin:.6rem 0;border-radius:0 4px 4px 0;font-size:.93rem}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--soft);padding:.05em .35em;border-radius:3px}
+table{border-collapse:collapse;width:100%;font-size:.93rem}th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2)}
+</style>
+<main>
+<h1>Insuryn Demo Script</h1>
+<p class="sub">What to click and what to say, in priority order. Read the English or the Bangla; both say the same thing. Password for every login: <code>ChangeMe123!</code>.</p>
+<div class="toggle" role="group" aria-label="Language">
+<button type="button" id="both" aria-pressed="true">Both</button><button type="button" id="en" aria-pressed="false">English</button><button type="button" id="bn" aria-pressed="false">বাংলা</button>
+</div>
+<script>
+for (const id of ['both','en','bn']) document.getElementById(id).addEventListener('click', () => {
+  document.body.className = id === 'both' ? '' : 'only-' + id;
+  for (const b of ['both','en','bn']) document.getElementById(b).setAttribute('aria-pressed', String(b === id));
+});
+</script>
+
+<div class="note"><b>Order matters.</b> Parts 1–5 are the must-show core (12 minutes). Parts 6–9 are the "and it also does this" (10 minutes). Part 10 closes. If time runs short, stop after part 7.</div>
+
+<h2>0. Opening — 1 minute</h2>
+<p class="meta">Nothing on screen yet, or the login page.</p>
+<div class="pair">
+<div class="lang" lang="en"><p>Good morning. What I am going to show you is one system that runs a non-life insurance company end to end: selling a policy, collecting the premium, paying a claim, paying suppliers and staff, and closing the books every month.</p><p>The one idea behind it: <b>every action writes its own accounting</b>. Nobody re-types anything into a ledger. When we reach month end, the books already balance. Let me prove that by living one week in this company.</p></div>
+<div class="lang" lang="bn"><p>শুভ সকাল। আজ আমি আপনাদের এমন একটি সিস্টেম দেখাব যা একটি নন-লাইফ ইন্স্যুরেন্স কোম্পানির পুরো কাজ একসাথে চালায়: পলিসি বিক্রি, প্রিমিয়াম আদায়, ক্লেইম পরিশোধ, সাপ্লায়ার ও কর্মীদের পেমেন্ট, আর প্রতি মাসে হিসাব বন্ধ করা।</p><p>এর মূল ধারণা একটাই: <b>প্রতিটি কাজ নিজের হিসাব নিজেই লেখে</b>। কাউকে খাতায় আলাদা করে কিছু লিখতে হয় না। মাস শেষে হিসাব আগে থেকেই মিলে থাকে। চলুন, এই কোম্পানির এক সপ্তাহ একসাথে দেখি।</p></div>
+</div>
+
+<h2>1. Sell a policy — 4 minutes</h2>
+<p class="meta">Login: <code>branch.officer@nonlife.local</code></p>
+<div class="do"><b>Click:</b> Home → <b>New quote</b> → product Motor → in Customer type a new name, press <b>Ctrl+N</b>, create → Producer AG-001 → vehicle: private car, registration, 1500 cc, 5 seats, 2020, driver 40, sum insured 450000 → <b>Issue quotation</b> → <b>Make proposal</b> → <b>Verify identity</b> (any NID number) → <b>Submit</b> → <b>Issue policy</b> → read the preview → <b>Confirm</b>.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>This is the branch officer's Home. The left side is their to-do list, the right side is what they can start. Let's start a quote.</p><p>Watch the premium panel as I type the vehicle details. The tariff is live: own damage, third party, stamp duty, VAT — 14,568.75 total. The chassis number is not required yet, because a customer asking for a price rarely has it.</p><p>New customer? Ctrl+N, create them right here — no leaving the screen.</p><p>Quotation issued, proposal made, identity verified, submitted — and approved automatically because it is within this branch's underwriting limit. Bigger risks go to an underwriter.</p><p>Now the important click: <b>Issue policy</b>. Before anything happens, the system shows me the accounting it is about to write: premium receivable, unearned premium, VAT payable, stamp duty payable. Each line has a plain-language caption. I confirm — and it is posted. Policy number allocated, with the branch code in it.</p></div>
+<div class="lang" lang="bn"><p>এটা ব্রাঞ্চ অফিসারের হোম পেজ। বাঁ দিকে তার আজকের কাজের তালিকা, ডান দিকে সে কী শুরু করতে পারে। চলুন একটা কোটেশন করি।</p><p>গাড়ির তথ্য টাইপ করার সাথে সাথে ডান দিকে প্রিমিয়াম দেখুন। ট্যারিফ লাইভ: ওন ড্যামেজ, থার্ড পার্টি, স্ট্যাম্প ডিউটি, ভ্যাট — মোট ১৪,৫৬৮.৭৫ টাকা। চেসিস নম্বর এখনই লাগছে না, কারণ যে গ্রাহক শুধু দাম জানতে চায় তার কাছে সেটা সাধারণত থাকে না।</p><p>নতুন গ্রাহক? Ctrl+N চেপে এখানেই তৈরি করা যায় — স্ক্রিন ছাড়তে হয় না।</p><p>কোটেশন ইস্যু, প্রপোজাল তৈরি, পরিচয় যাচাই, সাবমিট — আর ব্রাঞ্চের আন্ডাররাইটিং লিমিটের মধ্যে থাকায় নিজে থেকেই অনুমোদন হয়ে গেল। বড় ঝুঁকি আন্ডাররাইটারের কাছে যায়।</p><p>এখন আসল ক্লিক: <b>পলিসি ইস্যু</b>। কিছু ঘটার আগেই সিস্টেম দেখাচ্ছে কোন হিসাব লেখা হতে যাচ্ছে: প্রিমিয়াম রিসিভেবল, আনআর্নড প্রিমিয়াম, ভ্যাট পেয়েবল, স্ট্যাম্প ডিউটি পেয়েবল। প্রতিটি লাইনের সাথে সহজ ভাষায় ব্যাখ্যা। আমি কনফার্ম করলাম — পোস্ট হয়ে গেল। পলিসি নম্বর এসে গেছে, তাতে ব্রাঞ্চ কোডও আছে।</p></div>
+</div>
+
+<h2>2. Take the money — 2 minutes</h2>
+<p class="meta">Login: <code>branch.manager@nonlife.local</code>, open the policy just issued (Ctrl+K, type the policy number).</p>
+<div class="do"><b>Click:</b> <b>Record receipt</b> → check the prefilled form → <b>Review and post</b> → Confirm → <b>Print receipt</b>.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>The system already offered the next step: record the premium. The receipt form arrives filled in — the amount outstanding, the installment it pays, today's date, the branch. I only add the bank reference.</p><p>Preview again: bank in, receivable out, and — notice — the agent's commission accrued in the same journal. Nobody calculated that; the commission scheme did.</p><p>Print, and the customer has a receipt PDF in English or Bangla.</p></div>
+<div class="lang" lang="bn"><p>সিস্টেম নিজেই পরের ধাপ দেখিয়েছে: প্রিমিয়াম আদায়। রিসিট ফর্ম আগে থেকেই পূরণ করা — বকেয়া টাকা, কোন কিস্তি, আজকের তারিখ, ব্রাঞ্চ। আমি শুধু ব্যাংক রেফারেন্সটা লিখলাম।</p><p>আবার প্রিভিউ: ব্যাংকে টাকা ঢুকল, রিসিভেবল কমল, আর — লক্ষ্য করুন — একই জার্নালে এজেন্টের কমিশন জমা হয়ে গেল। এটা কেউ হিসাব করেনি; কমিশন স্কিম নিজেই করেছে।</p><p>প্রিন্ট দিলে গ্রাহক বাংলা বা ইংরেজিতে রিসিট পিডিএফ পায়।</p></div>
+</div>
+
+<h2>3. A claim, start to finish — 4 minutes</h2>
+<p class="meta">Logins: <code>claims.officer</code> → <code>claims.manager</code> → <code>finance.manager</code> → <code>claims.manager</code></p>
+<div class="do"><b>Click:</b> claims.officer: Home → <b>Register a claim</b> → pick the policy → date of loss → description → Register → <b>Set reserve</b> 200000 → confirm. claims.manager: Home → "Claims to settle" → <b>Approve payment</b> (amount and payee are proposed) → confirm → <b>Request release</b>. finance.manager: Home → "Payments to release" → <b>Pay</b> → confirm. claims.manager: <b>Close claim</b> → confirm.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>An accident. The claims officer registers it; the claim page shows the policy panel — cover, sum insured, whether premium was paid. No premium, no cover: the system warns.</p><p>The surveyor says 200,000. Set the reserve — preview, confirm. Now look at the message: "the claims manager approves the settlement from their Home". The officer cannot approve their own reserve. That is segregation of duties, built in.</p><p>As the claims manager: the claim is waiting on my Home. Approve payment — amount and payee are already proposed. Within my limit, so it posts. Above my limit, it would route up to finance and the CFO automatically.</p><p>Finance releases the money — different person again. Then close: the leftover 20,000 of reserve is released back. Open the Reinsurance tab: the reinsurers' share of this claim followed on its own.</p></div>
+<div class="lang" lang="bn"><p>একটা দুর্ঘটনা। ক্লেইম অফিসার রেজিস্টার করল; ক্লেইম পেজে পলিসির তথ্য দেখা যাচ্ছে — কভার, বিমাকৃত অঙ্ক, প্রিমিয়াম দেওয়া হয়েছে কি না। প্রিমিয়াম না দিলে কভার নেই — সিস্টেম সতর্ক করে।</p><p>সার্ভেয়ার বলল ২,০০,০০০। রিজার্ভ সেট করলাম — প্রিভিউ, কনফার্ম। এখন বার্তাটা দেখুন: "ক্লেইম ম্যানেজার তার হোম থেকে সেটেলমেন্ট অনুমোদন করবেন।" অফিসার নিজের রিজার্ভ নিজে অনুমোদন করতে পারে না। এটাই দায়িত্বের বিভাজন, সিস্টেমে গাঁথা।</p><p>ক্লেইম ম্যানেজার হিসেবে: ক্লেইমটা আমার হোমে অপেক্ষা করছে। পেমেন্ট অনুমোদন — টাকার অঙ্ক আর প্রাপক আগে থেকেই বসানো। আমার লিমিটের মধ্যে, তাই পোস্ট হলো। লিমিটের বেশি হলে নিজে থেকেই ফাইন্যান্স ও সিএফও-র কাছে যেত।</p><p>ফাইন্যান্স টাকা ছাড়ল — আবার অন্য একজন। তারপর ক্লোজ: বাড়তি ২০,০০০ রিজার্ভ ফেরত গেল। রিইন্স্যুরেন্স ট্যাব খুলুন: এই ক্লেইমে রিইন্স্যুরারদের অংশ নিজে থেকেই হিসাব হয়ে গেছে।</p></div>
+</div>
+
+<h2>4. The month closes itself — 3 minutes</h2>
+<p class="meta">Login: <code>finance.manager@nonlife.local</code></p>
+<div class="do"><b>Click:</b> <b>Month-end close</b> → September → Open the checklist → scroll the tasks. Then <b>Trial balance</b> → click the Premium Receivable figure → click a Source link → the policy. Then <b>Reports</b> → Profit and loss → Balance sheet.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>This is the month-end checklist. Earning the premium day by day, bank reconciliation, then a reconciliation for every sub-ledger — premium, claims, commission, unearned premium, VAT, stamp duty, payables, reinsurance, fixed assets, payroll — each one ties to the general ledger before the trial balance is allowed.</p><p>Trial balance: balanced. Click any figure — here is every journal behind it — click the source — and we are on the policy that caused it. Every number in the books can be traced to the document.</p><p>P&amp;L and balance sheet link to each other for the same period. And the lock: nobody can lock September until it is over, and not with documents still pending approval. That is a control, not a limitation.</p></div>
+<div class="lang" lang="bn"><p>এটা মাস শেষের চেকলিস্ট। প্রতিদিনের হিসাবে প্রিমিয়াম আয় ধরা, ব্যাংক রিকনসিলিয়েশন, তারপর প্রতিটি সাব-লেজারের মিলানো — প্রিমিয়াম, ক্লেইম, কমিশন, আনআর্নড প্রিমিয়াম, ভ্যাট, স্ট্যাম্প ডিউটি, পেয়েবলস, রিইন্স্যুরেন্স, স্থায়ী সম্পদ, পেরোল — প্রতিটি জেনারেল লেজারের সাথে মিলতে হবে, তবেই ট্রায়াল ব্যালান্স।</p><p>ট্রায়াল ব্যালান্স: মিলে গেছে। যেকোনো অঙ্কে ক্লিক করুন — এর পেছনের সব জার্নাল — সোর্সে ক্লিক — আর আমরা সেই পলিসিতে, যেখান থেকে অঙ্কটা এসেছে। খাতার প্রতিটি সংখ্যা তার ডকুমেন্ট পর্যন্ত খুঁজে পাওয়া যায়।</p><p>লাভ-ক্ষতি আর ব্যালান্স শিট একই সময়কালের জন্য একে অপরের সাথে যুক্ত। আর লক: মাস শেষ না হলে সেপ্টেম্বর লক করা যায় না, অনুমোদনের অপেক্ষায় থাকা কাগজ থাকলেও না। এটা সীমাবদ্ধতা নয়, নিয়ন্ত্রণ।</p></div>
+</div>
+
+<h2>5. Suppliers and the bank — 2 minutes</h2>
+<p class="meta">Login: <code>accountant@nonlife.local</code>, then <code>cfo@nonlife.local</code></p>
+<div class="do"><b>Click:</b> <b>Payables</b> → Supplier bills → open the office rent bill. Then Payment runs → open PRN-2026-000002 (approved). cfo: Home → "Payment runs to release" → <b>Release</b> → confirm → <b>Download bank file</b>.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>The office rent: 85,000. The system deducted VAT at source and tax at source, so the landlord is paid 80,750 and the government's share sits in its own payable. Rates per supplier category are configuration.</p><p>Bills go into a payment run: the accountant prepares, finance approves, the CFO releases — three different people. Release, and here is the bank transfer file ready for the bank.</p><p>On the Bank screen, statements are imported and matched to the ledger; anything unmatched is a to-do, not a mystery.</p></div>
+<div class="lang" lang="bn"><p>অফিস ভাড়া: ৮৫,০০০। সিস্টেম উৎসে ভ্যাট ও কর কেটে রেখেছে, তাই বাড়িওয়ালা পাবে ৮০,৭৫০, আর সরকারের অংশ আলাদা পেয়েবলে জমা। সাপ্লায়ারের ধরন অনুযায়ী হার কনফিগারেশনে বসানো।</p><p>বিল যায় পেমেন্ট রানে: হিসাবরক্ষক তৈরি করে, ফাইন্যান্স অনুমোদন দেয়, সিএফও ছাড়ে — তিন আলাদা মানুষ। ছাড়ার পর ব্যাংকে দেওয়ার ট্রান্সফার ফাইল তৈরি।</p><p>ব্যাংক স্ক্রিনে স্টেটমেন্ট আমদানি করে লেজারের সাথে মিলানো হয়; যা মিলছে না তা কাজের তালিকায় থাকে, রহস্য হয়ে থাকে না।</p></div>
+</div>
+
+<h2>6. Staff and payroll — 2 minutes</h2>
+<p class="meta">Login: <code>hr.manager@nonlife.local</code></p>
+<div class="do"><b>Click:</b> <b>People</b> → Employees → open Nasima Akter (EMP-017). Payroll runs → September → open one payslip → <b>PDF</b>. Payroll settings.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>Thirty employees across two branches, each with an employment history. September payroll is calculated and waiting for finance to approve: basic, house rent, medical, conveyance, provident fund, income tax by slab. Every rule is data in Payroll settings, not code — when the tax slabs change, you change a table.</p><p>Nasima is a salaried BDO: her sales incentive from the commission run is paid through her payslip, and not taxed twice.</p><p>Approve, post, pay, payslips — the same maker-checker chain as everything else.</p></div>
+<div class="lang" lang="bn"><p>দুই ব্রাঞ্চে ত্রিশজন কর্মী, প্রত্যেকের চাকরির ইতিহাসসহ। সেপ্টেম্বরের পেরোল হিসাব হয়ে ফাইন্যান্সের অনুমোদনের অপেক্ষায়: বেসিক, বাড়িভাড়া, চিকিৎসা, যাতায়াত, প্রভিডেন্ট ফান্ড, স্ল্যাব অনুযায়ী আয়কর। প্রতিটি নিয়ম পেরোল সেটিংসে ডেটা হিসেবে আছে, কোডে নয় — কর স্ল্যাব বদলালে শুধু টেবিল বদলাবেন।</p><p>নাসিমা একজন বেতনভুক্ত বিডিও: কমিশন রান থেকে তার ইনসেনটিভ তার পে-স্লিপের মাধ্যমে দেওয়া হয়, দুবার কর কাটা হয় না।</p><p>অনুমোদন, পোস্ট, পেমেন্ট, পে-স্লিপ — বাকি সবকিছুর মতোই একই মেকার-চেকার শৃঙ্খল।</p></div>
+</div>
+
+<h2>7. Reinsurance — 2 minutes</h2>
+<p class="meta">Login: <code>finance.manager@nonlife.local</code></p>
+<div class="do"><b>Click:</b> <b>Reinsurance</b> → Treaties. Then Ctrl+K → POL-HO-2026-000008 → <b>Reinsurance</b> tab. Then Reinsurer statements → SBC Q3.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>Treaties per class: motor quota share, fire surplus, marine. The SBC compulsory cession is applied first, automatically, to every policy.</p><p>Here is a 150 crore garment factory. SBC takes its share, the surplus treaty takes up to capacity, and the rest was placed facultatively — all visible per policy, all posted to the ledger.</p><p>Quarterly statements per reinsurer and bordereaux are one click, already reconciled.</p></div>
+<div class="lang" lang="bn"><p>শ্রেণি অনুযায়ী ট্রিটি: মোটরে কোটা শেয়ার, ফায়ারে সারপ্লাস, মেরিন। সাধারণ বীমা কর্পোরেশনের বাধ্যতামূলক অংশ প্রতিটি পলিসিতে নিজে থেকেই আগে কাটা হয়।</p><p>এই যে ১৫০ কোটি টাকার একটা গার্মেন্ট কারখানা। এসবিসি তার অংশ নিল, সারপ্লাস ট্রিটি সামর্থ্য পর্যন্ত নিল, বাকিটা ফ্যাকাল্টেটিভে গেল — সব পলিসি অনুযায়ী দেখা যায়, সব লেজারে পোস্ট হয়েছে।</p><p>প্রতি রিইন্স্যুরারের ত্রৈমাসিক স্টেটমেন্ট আর বর্ডেরো এক ক্লিকে, আগে থেকেই মিলানো।</p></div>
+</div>
+
+<h2>8. Regulator — 1 minute</h2>
+<p class="meta">Login: <code>cfo@nonlife.local</code></p>
+<div class="do"><b>Click:</b> <b>Regulatory</b> → Returns → Export XLSX. Technical provisions → the posted Q3 run.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>IDRA returns come straight from the ledger: premium by class, claims, expenses against the limit, the agent register — exported as Excel or PDF and marked filed with the reference. Technical provisions: IBNR by chain ladder where there is history, by percentage where there is not, approved by the CFO and posted.</p></div>
+<div class="lang" lang="bn"><p>আইডিআরএ রিটার্ন সরাসরি লেজার থেকে আসে: শ্রেণি অনুযায়ী প্রিমিয়াম, ক্লেইম, সীমার বিপরীতে ব্যয়, এজেন্ট রেজিস্টার — এক্সেল বা পিডিএফে এক্সপোর্ট, আর দাখিলের রেফারেন্সসহ চিহ্নিত। টেকনিক্যাল প্রভিশন: ইতিহাস থাকলে চেইন ল্যাডারে আইবিএনআর, না থাকলে শতাংশে, সিএফও-র অনুমোদনে পোস্ট।</p></div>
+</div>
+
+<h2>9. Assets, budgets, petty cash, admin — 2 minutes</h2>
+<p class="meta">Login: <code>finance.manager</code>, then <code>admin@nonlife.local</code></p>
+<div class="do"><b>Click:</b> Fixed assets → Monthly depreciation. Budgets → Variance report. Petty cash → HO float. admin: Admin → Roles → open Accountant → tick "Approve journal" → see the warning. Admin → Setup.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>Asset register with monthly depreciation, a budget by account, branch and month with the variance in red and green, and petty cash floats per branch with vouchers and replenishment. Same pattern everywhere: preview, confirm, two people.</p><p>Roles: if I give the accountant the power to approve journals, the system warns me it conflicts with creating them. And the setup wizard takes a brand-new company from nothing to its first policy and its first receipt.</p></div>
+<div class="lang" lang="bn"><p>মাসিক অবচয়সহ সম্পদ রেজিস্টার, হিসাব-ব্রাঞ্চ-মাস অনুযায়ী বাজেট আর লাল-সবুজে পার্থক্য, আর ব্রাঞ্চভিত্তিক পেটি ক্যাশ — ভাউচার ও রিপ্লেনিশমেন্টসহ। সব জায়গায় একই ধরন: প্রিভিউ, কনফার্ম, দুইজন মানুষ।</p><p>রোল: হিসাবরক্ষককে জার্নাল অনুমোদনের ক্ষমতা দিতে গেলে সিস্টেম সতর্ক করে যে এটা জার্নাল তৈরির সাথে সাংঘর্ষিক। আর সেটআপ উইজার্ড একদম নতুন কোম্পানিকে শূন্য থেকে প্রথম পলিসি আর প্রথম রিসিট পর্যন্ত নিয়ে যায়।</p></div>
+</div>
+
+<h2>10. Closing — 1 minute</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>What you saw: one company, one week, every action posting its own accounting, every approval by a second person, every number traceable to its document, and the regulator's returns coming out of the same ledger.</p><p>What is configuration, not code: your chart of accounts, tax rates, tariffs, commission schemes, approval limits, payroll rules, return layouts. What comes next: customer and agent portals, SMS and email, and the treaty types you use that we have not shown today.</p><p>Thank you. Questions?</p></div>
+<div class="lang" lang="bn"><p>আপনারা যা দেখলেন: একটি কোম্পানি, এক সপ্তাহ, প্রতিটি কাজ নিজের হিসাব নিজে লিখছে, প্রতিটি অনুমোদন দ্বিতীয় একজনের হাতে, প্রতিটি সংখ্যা তার ডকুমেন্ট পর্যন্ত খুঁজে পাওয়া যায়, আর নিয়ন্ত্রকের রিটার্ন একই লেজার থেকে আসছে।</p><p>যা কনফিগারেশন, কোড নয়: আপনার হিসাবের চার্ট, করহার, ট্যারিফ, কমিশন স্কিম, অনুমোদনের সীমা, পেরোলের নিয়ম, রিটার্নের ফরম্যাট। এরপর যা আসছে: গ্রাহক ও এজেন্ট পোর্টাল, এসএমএস ও ইমেইল, আর আজ যা দেখাইনি এমন ট্রিটির ধরন।</p><p>ধন্যবাদ। প্রশ্ন?</p></div>
+</div>
+
+<h2>If they ask</h2>
+<table>
+<tr><th>Question</th><th>English</th><th>বাংলা</th></tr>
+<tr><td>Can the accounts an event posts to be changed?</td><td>Yes — posting rules are data, mapped to your chart. No developer needed.</td><td>হ্যাঁ — পোস্টিং রুল ডেটা, আপনার চার্টের সাথে ম্যাপ করা। ডেভেলপার লাগে না।</td></tr>
+<tr><td>Our tax rates / IDRA forms?</td><td>All configuration; today's values are placeholders we replace with yours at setup.</td><td>সবই কনফিগারেশন; আজকের মানগুলো নমুনা, সেটআপে আপনারটা বসবে।</td></tr>
+<tr><td>Why can't September be locked now?</td><td>The lock opens after month end; the CFO can lock early with a written reason. It is a control.</td><td>মাস শেষ হলে লক খোলে; সিএফও কারণ লিখে আগে লক করতে পারেন। এটা নিয়ন্ত্রণ।</td></tr>
+<tr><td>Bangla?</td><td>User menu switches help, tour, captions, labels, payslips; documents print in either.</td><td>ইউজার মেনুতে ভাষা বদলায়: সহায়িকা, ক্যাপশন, লেবেল, পে-স্লিপ; ডকুমেন্ট দুই ভাষায় ছাপা যায়।</td></tr>
+<tr><td>Many branches / many companies?</td><td>Branch-coded numbers, branch-scoped users; many companies in one system, fenced by the database itself.</td><td>ব্রাঞ্চ-কোডেড নম্বর, ব্রাঞ্চভিত্তিক ব্যবহারকারী; এক সিস্টেমে অনেক কোম্পানি, ডেটাবেজ নিজেই আলাদা রাখে।</td></tr>
+</table>
+</main>

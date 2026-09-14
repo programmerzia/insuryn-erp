@@ -1,0 +1,203 @@
+<title>Insuryn ERP Walkthrough</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--ink:#1f2a37;--ink2:#5b6672;--paper:#fbfaf7;--card:#ffffff;--line:#d9d5cc;--accent:#0f6e74;--soft:#e6f1f1;--warn:#8a5a00;--warnbg:#fff4dc}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336;--warn:#f0c674;--warnbg:#3a2f12}}
+:root[data-theme="dark"]{--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336;--warn:#f0c674;--warnbg:#3a2f12}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:16px;line-height:1.55;padding:0 20px;padding-block:32px 64px}
+main{max-width:760px;margin:0 auto}
+h1{font-size:2rem;font-weight:600;line-height:1.15;text-wrap:balance;margin:0 0 .25rem}
+.sub{color:var(--ink2);margin:0 0 2rem}
+h2{font-size:1.25rem;font-weight:600;margin:2.4rem 0 .6rem;padding-top:1.2rem;border-top:1px solid var(--line);text-wrap:balance}
+h3{font-size:1rem;font-weight:600;margin:1.4rem 0 .4rem}
+p,li{max-width:66ch}
+ul,ol{padding-left:1.3rem}li{margin:.2rem 0}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9em;background:var(--soft);padding:.05em .35em;border-radius:3px}
+table{border-collapse:collapse;width:100%;font-size:.95rem;margin:.6rem 0}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-weight:600;color:var(--ink2);font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+.wrap{overflow-x:auto}
+.say{background:var(--soft);border-left:3px solid var(--accent);padding:.7rem .9rem;margin:.8rem 0;border-radius:0 4px 4px 0}
+.say b{color:var(--accent)}
+.note{background:var(--warnbg);border-left:3px solid var(--warn);padding:.7rem .9rem;margin:.8rem 0;border-radius:0 4px 4px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin:.8rem 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.8rem .9rem}
+.card h4{margin:0 0 .3rem;font-size:.95rem;font-weight:600}
+.card p{margin:0;font-size:.92rem;color:var(--ink2)}
+.num{font-variant-numeric:tabular-nums}
+pre.mermaid{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.6rem;overflow-x:auto}
+.toc{columns:2;column-gap:2rem;font-size:.95rem}
+@media (max-width:520px){.toc{columns:1}}
+</style>
+<main>
+<h1>Insuryn ERP Walkthrough</h1>
+<p class="sub">Insurance accounting, claims, payables, payroll and regulatory returns in one system, for a Bangladeshi non-life insurer. Demo company: Padma General Insurance.</p>
+
+<ol class="toc">
+<li><a href="#what">What it is, in one breath</a></li>
+<li><a href="#how">How it is built</a></li>
+<li><a href="#money">How money becomes accounting</a></li>
+<li><a href="#db">The database, simply</a></li>
+<li><a href="#menu">The menu, section by section</a></li>
+<li><a href="#roles">Who does what</a></li>
+<li><a href="#story">The demo story (25 minutes)</a></li>
+<li><a href="#operate">How to operate it</a></li>
+<li><a href="#rules">Things to say when asked</a></li>
+</ol>
+
+<h2 id="what">1. What it is, in one breath</h2>
+<div class="say"><b>Say:</b> "Everything an insurer does — selling a policy, taking the money, paying a claim, paying suppliers and staff — writes its own accounting automatically. Finance never re-types anything. At month end the books already balance."</div>
+<p>Three ideas explain the whole product:</p>
+<ol>
+<li><b>Every business action posts its own journal.</b> Issue a policy → the ledger gets the premium, VAT and stamp duty lines. Pay a claim → the ledger gets it. No manual journals for daily work.</li>
+<li><b>You always see the accounting before it happens.</b> Every button that moves money shows a preview of the debits and credits first. Confirm, and it posts.</li>
+<li><b>Two people for anything important.</b> The person who prepares can never be the person who approves (segregation of duties). Approval limits route big amounts up the chain.</li>
+</ol>
+
+<h2 id="how">2. How it is built</h2>
+<pre class="mermaid">
+flowchart LR
+  B["Browser<br/>Vue screens"] --> S["Laravel app<br/>PHP"]
+  S --> DB[("PostgreSQL<br/>one database, many tenants")]
+  S --> Q["Queue worker<br/>posts accounting"]
+  S --> N["Scheduler<br/>nightly jobs"]
+  Q --> DB
+  N --> DB
+</pre>
+<div class="grid">
+<div class="card"><h4>Screens</h4><p>Vue 3 pages inside Laravel (Inertia). Same components everywhere: lists, record pages, drawers, journal previews.</p></div>
+<div class="card"><h4>Application</h4><p>Laravel 13, PHP 8.4. Code is split into modules: Insurance, Finance, People, Accounting, Platform, Distribution.</p></div>
+<div class="card"><h4>Database</h4><p>PostgreSQL 17, 146 tables. Multi-tenant: every row carries a tenant id and the database itself blocks cross-tenant reads (row-level security).</p></div>
+<div class="card"><h4>Background</h4><p>A queue worker posts accounting events; a scheduler runs nightly jobs (policy activation, reminders, renewals, earning).</p></div>
+</div>
+<div class="say"><b>Say:</b> "One database, one app, any number of insurance companies as tenants — each one's data is fenced off by the database itself, not just by the app."</div>
+
+<h2 id="money">3. How money becomes accounting</h2>
+<pre class="mermaid">
+flowchart LR
+  A["Business action<br/>issue policy, pay claim, post payroll…"] --> E["Accounting event<br/>POLICY_ISSUED, CLAIM_PAID…"]
+  E --> R["Posting rule<br/>which accounts, which side"]
+  R --> J["Journal<br/>balanced debits = credits"]
+  J --> L["Ledger → trial balance, P&amp;L, balance sheet"]
+</pre>
+<p>57 posting rules cover every event. A rule is data (JSON), not code, so an accountant can change which account an event hits without a developer. Example, a motor policy issued for 14,568.75:</p>
+<div class="wrap"><table>
+<tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th>Plain caption</th></tr>
+<tr><td>1100 Premium receivable</td><td class="num">14,568.75</td><td></td><td>Customer owes us the premium</td></tr>
+<tr><td>2100 Unearned premium</td><td></td><td class="num">12,625.00</td><td>Cover not yet provided</td></tr>
+<tr><td>2150 VAT payable</td><td></td><td class="num">1,893.75</td><td>VAT we collect for the government</td></tr>
+<tr><td>2155 Stamp duty payable</td><td></td><td class="num">50.00</td><td>Stamp duty for the government</td></tr>
+</table></div>
+<p>Each night, premium is earned 1/365 per day (unearned → income). At month end, sub-ledgers (premium, claims, commission, payables, reinsurance, assets, payroll) are reconciled to the general ledger before the period can lock.</p>
+
+<h2 id="db">4. The database, simply</h2>
+<p>146 tables, but they fall into a handful of families:</p>
+<pre class="mermaid">
+flowchart TB
+  T["Tenant · company · branches · users · roles"]
+  T --> P["Parties<br/>customers, producers, suppliers, reinsurers, employees"]
+  P --> POL["Policies<br/>quotations → proposals → policies → installments"]
+  POL --> REC["Receipts &amp; allocations<br/>suspense, cheques, refunds"]
+  POL --> CLM["Claims<br/>reserves, payments, recoveries"]
+  POL --> RI["Reinsurance<br/>treaties, cessions"]
+  T --> FIN["Finance<br/>supplier bills, payment runs, assets, budgets, petty cash"]
+  T --> HR["People<br/>employees, payroll runs, payslips"]
+  REC --> ACC[("Accounting kernel<br/>accounting_events → journals → journal_lines<br/>accounts · fiscal periods · close runs")]
+  CLM --> ACC
+  RI --> ACC
+  FIN --> ACC
+  HR --> ACC
+</pre>
+<ul>
+<li><b>Business tables</b> hold what happened (a policy, a bill). <b>Accounting tables</b> hold what it cost. The link is the accounting event, so every journal line can be traced back to its source document — and every screen lets you click through.</li>
+<li><b>Nothing is deleted.</b> Corrections are reversals. Every change is audited (who, when, what).</li>
+<li><b>Document numbers</b> are branch-coded: <code>POL-HO-2026-000008</code>, <code>RCT-CTG-2026-000001</code>.</li>
+</ul>
+
+<h2 id="menu">5. The menu, section by section</h2>
+<p>The sidebar is grouped by area. Users only see the sections their role allows.</p>
+<div class="wrap"><table>
+<tr><th>Section</th><th>Pages</th><th>What you do there</th></tr>
+<tr><td>Home</td><td>Home, Approvals</td><td>Your work queues (what needs you today) and start actions. Approvals = everything waiting for your sign-off, with the journal shown.</td></tr>
+<tr><td>Sales</td><td>Quotes, Cover notes, Policies, Renewals, Customers, Producers, Tariffs, Products</td><td>Quote with a live tariff → proposal (KYC, underwriting) → issue. Endorse, cancel, renew. Agents and their commission schemes.</td></tr>
+<tr><td>Collections</td><td>Receipts, Suspense, Bank accounts, Cheque register, Payment reminders, Refunds, Agent cash, Commission statements</td><td>Take premium (cash, cheque, transfer), allocate to installments, import bank statements and match, chase overdue premium, pay agents.</td></tr>
+<tr><td>Claims</td><td>Claims, Claim payments</td><td>Register → reserve → approve → release → pay → close. Recoveries. Reinsurers' share follows automatically.</td></tr>
+<tr><td>Payables</td><td>Suppliers, Supplier bills, Payment runs</td><td>Bills with VAT and tax deducted at source, approval, payment runs, bank transfer file.</td></tr>
+<tr><td>Reinsurance</td><td>Treaties, Cessions, Reinsurer statements</td><td>Quota share and surplus treaties, the SBC compulsory share, facultative cover, quarterly statements and bordereaux.</td></tr>
+<tr><td>People</td><td>Employees, Payroll runs, Payslips, Payroll settings</td><td>Hire, salary structure, provident fund, tax slabs; monthly payroll: calculate → approve → post → pay → payslips.</td></tr>
+<tr><td>Assets &amp; budgets</td><td>Fixed assets, Depreciation, Budgets, Petty cash</td><td>Asset register and monthly depreciation; budget by account × branch × month with variance; branch petty cash floats.</td></tr>
+<tr><td>Accounting</td><td>Journals, Chart of accounts, Trial balance, Month-end close, Reports</td><td>Manual journals (approved by someone else), the chart, close checklist, P&amp;L, balance sheet, registers and exports.</td></tr>
+<tr><td>Regulatory</td><td>Dashboard, Returns, Technical provisions</td><td>IDRA return forms (XLSX/PDF, mark filed), IBNR provisions, solvency snapshot.</td></tr>
+<tr><td>Admin</td><td>Users, Roles, Approval limits, Underwriting limits, Setup</td><td>Who may do what, with conflict warnings; limits; the first-day setup wizard.</td></tr>
+</table></div>
+<p><b>Anywhere:</b> <code>Ctrl+K</code> searches any number (policy, claim, receipt, bill, employee, vehicle registration) and runs actions. <b>How this works</b> (top right) explains the current screen in English or Bangla. Every date has a calendar; every list remembers your columns and filters.</p>
+
+<h2 id="roles">6. Who does what</h2>
+<div class="wrap"><table>
+<tr><th>Role (demo login)</th><th>Does</th><th>Cannot</th></tr>
+<tr><td>Branch officer</td><td>Quotes, proposals, issues policies, records receipts, registers claims</td><td>Allocate receipts, approve anything</td></tr>
+<tr><td>Branch manager</td><td>Allocates receipts, endorses, cancels, requests refunds, petty cash custodian, places facultative cover</td><td>Release money</td></tr>
+<tr><td>Claims officer / manager</td><td>Register and reserve / approve payments within limit</td><td>Approve own reserve; pay</td></tr>
+<tr><td>Accountant</td><td>Bank matching, suspense, journals, supplier bills, payment run prep, asset register, budget prep, salary release</td><td>Approve journals, bills, runs</td></tr>
+<tr><td>Finance manager</td><td>Approves journals, bills, payroll, budgets; releases claim payments and refunds; runs the close; treaties; provisions</td><td>Release payment runs; approve provisions</td></tr>
+<tr><td>CFO</td><td>Releases payment runs, approves provisions, reopens periods, early lock with a reason</td><td>Enter bills</td></tr>
+<tr><td>HR manager</td><td>Employees, calculates payroll</td><td>Approve or pay payroll</td></tr>
+<tr><td>Auditor</td><td>Reads everything, exports</td><td>Change anything</td></tr>
+</table></div>
+<div class="say"><b>Say:</b> "Notice a pattern: the maker never checks, the checker never pays. The system enforces it — a role cannot be given both sides of a conflict without a warning."</div>
+
+<h2 id="story">7. The demo story (25 minutes)</h2>
+<p>Password for every account: <code>ChangeMe123!</code>. Logins are <code>&lt;role&gt;@nonlife.local</code>, e.g. <code>branch.officer@nonlife.local</code>.</p>
+<div class="wrap"><table>
+<tr><th>#</th><th>Login</th><th>Click</th><th>Point out</th></tr>
+<tr><td>1</td><td>branch.officer</td><td>Home → <b>New quote</b>. Product Motor, new customer inline (Ctrl+N), vehicle details, sum insured 450,000.</td><td>Premium, VAT and stamp duty appear as you type. Chassis number not needed to quote.</td></tr>
+<tr><td>2</td><td>branch.officer</td><td><b>Issue quotation → Make proposal → Verify identity → Submit → Issue policy</b>.</td><td>The journal preview before issuing. Then "Record the premium receipt?" is offered.</td></tr>
+<tr><td>3</td><td>branch.manager</td><td>Policy → <b>Record receipt</b> (prefilled) → confirm → <b>Print receipt</b>.</td><td>Amount, allocation and date were already filled. Commission accrued to the agent automatically.</td></tr>
+<tr><td>4</td><td>claims.officer</td><td>Home → <b>Register a claim</b> on that policy → <b>Set reserve</b> 200,000.</td><td>The policy panel shows cover and premium paid. The hand-off message names who approves.</td></tr>
+<tr><td>5</td><td>claims.manager</td><td>Home → Claims to settle → <b>Approve payment</b> 180,000 → Request release.</td><td>Amount and payee were proposed. Reinsurers' share of the claim is on the Reinsurance tab.</td></tr>
+<tr><td>6</td><td>finance.manager</td><td>Home → Payments to release → <b>Pay</b>. Then claims.manager: <b>Close claim</b>.</td><td>Closing releases the remaining 20,000 reserve.</td></tr>
+<tr><td>7</td><td>accountant</td><td><b>Bank</b> → City Bank → Import statement (CSV in <code>storage/app/demo</code>) → accept matches. <b>Payables</b> → bills → open the office rent bill.</td><td>Rent 85,000: VAT and tax deducted at source, landlord gets 80,750. Payment run with bank file.</td></tr>
+<tr><td>8</td><td>hr.manager</td><td><b>People</b> → Payroll runs → September (preview) → open a payslip.</td><td>Basic, house rent, medical, PF, tax slabs — all data, not code. A BDO's commission paid through payroll.</td></tr>
+<tr><td>9</td><td>finance.manager</td><td><b>Reinsurance</b> → Treaties; Policies → POL-HO-2026-000008 → Reinsurance tab.</td><td>150 crore factory: SBC 50%, surplus treaty, facultative for the rest.</td></tr>
+<tr><td>10</td><td>finance.manager</td><td><b>Month-end close</b> → September checklist. <b>Trial balance</b> → click a figure → account activity → the policy.</td><td>Every reconciliation ties out. Drill from a number to the document that caused it.</td></tr>
+<tr><td>11</td><td>cfo</td><td><b>Regulatory</b> → Returns (export XLSX/PDF) → Technical provisions (IBNR).</td><td>Chain-ladder triangle; posted to the ledger after approval.</td></tr>
+<tr><td>12</td><td>admin</td><td><b>Admin</b> → Roles (tick a conflicting permission) → Setup wizard.</td><td>Conflict warning appears. A new company is live in one wizard.</td></tr>
+</table></div>
+
+<h2 id="operate">8. How to operate it</h2>
+<h3>Daily rhythm</h3>
+<ol>
+<li><b>Open Home.</b> The queues are your to-do list: what is waiting for you, oldest first. Start actions are on the right.</li>
+<li><b>Work from the record.</b> Every next step is offered on the page you are on (after issue → receipt, after reserve → approve).</li>
+<li><b>Confirm the preview.</b> Read the journal lines, then confirm. Nothing posts until you do.</li>
+<li><b>Approvals inbox</b> for anything routed to you, with the lines it will post.</li>
+</ol>
+<h3>Monthly rhythm</h3>
+<ol>
+<li>Import bank statements, match, explain exceptions.</li>
+<li>Payroll: calculate (HR) → approve (finance) → pay (accountant).</li>
+<li>Payables: bills → payment run → bank file.</li>
+<li><b>Month-end close</b>: run the checklist top to bottom; each task posts or reconciles. Pending journals are listed; the lock waits for them.</li>
+<li>Soft-lock on the last day, hard-lock after month end. Quarter end: technical provisions and IDRA returns.</li>
+</ol>
+<h3>Starting the system (developer machine)</h3>
+<pre><code>docker compose up -d
+composer db:fresh &amp;&amp; php artisan erp:demo     # fresh demo company
+npm run build
+php artisan serve --port=8765
+php artisan queue:work --queue=posting,batch,recon,default
+php artisan schedule:work</code></pre>
+<p>Open <code>http://nonlife.localhost:8765</code>. A new company starts at <b>Admin → Setup</b>: company, fiscal year, chart of accounts (from a template), first product with tariff, bank account, limits.</p>
+
+<h2 id="rules">9. Things to say when asked</h2>
+<div class="note"><b>September cannot be locked on 14 Sep.</b> The soft lock opens on the month's last day; the hard lock after month end. The CFO can lock early with a written reason. Say: a deliberate control.</div>
+<div class="wrap"><table>
+<tr><th>If they ask</th><th>Answer</th></tr>
+<tr><td>Can we change the accounts an event posts to?</td><td>Yes. Posting rules are data; account roles map to your chart. No code change.</td></tr>
+<tr><td>What about our tax rates / IDRA forms?</td><td>Every rate and form layout is configuration, currently placeholders marked "verify". We load yours during setup.</td></tr>
+<tr><td>Bangla?</td><td>Switch in the user menu: help, tour, captions, risk labels, payslips. Documents print in English or Bangla.</td></tr>
+<tr><td>Multiple branches?</td><td>Yes. Branch-coded numbers, branch-scoped users see only their branch, budgets and petty cash per branch.</td></tr>
+<tr><td>Phone?</td><td>Home, policy, receipt and claim pages work on a phone.</td></tr>
+<tr><td>Not built yet</td><td>Customer/agent portals, real SMS and email (logged today), excess-of-loss treaties, co-insurance, leave and attendance, bulk policy import. Next phase.</td></tr>
+</table></div>
+</main>

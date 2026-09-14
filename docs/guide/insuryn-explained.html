@@ -1,0 +1,288 @@
+<title>Insuryn Explained From Zero</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root{--ink:#1f2a37;--ink2:#5b6672;--paper:#fbfaf7;--card:#ffffff;--line:#d9d5cc;--accent:#0f6e74;--soft:#e6f1f1;--warn:#8a5a00;--warnbg:#fff4dc}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336;--warn:#f0c674;--warnbg:#3a2f12}}
+:root[data-theme="dark"]{--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336;--warn:#f0c674;--warnbg:#3a2f12}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans","Noto Sans Bengali",system-ui,sans-serif;font-size:16px;line-height:1.6;padding:0 20px;padding-block:32px 64px}
+main{max-width:820px;margin:0 auto}
+h1{font-size:2rem;font-weight:600;line-height:1.15;text-wrap:balance;margin:0 0 .25rem}
+.sub{color:var(--ink2);margin:0 0 1rem}
+h2{font-size:1.3rem;font-weight:600;margin:2.4rem 0 .5rem;padding-top:1.2rem;border-top:1px solid var(--line);text-wrap:balance}
+h3{font-size:1.02rem;font-weight:600;margin:1.4rem 0 .3rem}
+.toggle{display:flex;gap:.4rem;margin:.6rem 0 1rem;flex-wrap:wrap;position:sticky;top:0;background:var(--paper);padding:.5rem 0;z-index:2}
+.toggle button{font:inherit;font-size:.9rem;padding:.35rem .8rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:4px;cursor:pointer}
+.toggle button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:.5rem 0 .9rem}
+@media (max-width:640px){.pair{grid-template-columns:1fr}}
+.lang{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.75rem .95rem}
+.lang[lang="bn"]{font-family:"Noto Sans Bengali","IBM Plex Sans",sans-serif;font-size:1.02rem;line-height:1.75}
+.lang p{margin:0 0 .55rem}.lang p:last-child{margin:0}.lang ul{margin:.2rem 0 .5rem 1.1rem;padding:0}.lang li{margin:.15rem 0}
+body.only-en .lang[lang="bn"]{display:none}body.only-bn .lang[lang="en"]{display:none}
+body.only-en .pair,body.only-bn .pair{grid-template-columns:1fr}
+.story{background:var(--soft);border-left:3px solid var(--accent);padding:.6rem .9rem;margin:.6rem 0;border-radius:0 4px 4px 0}
+.story b{color:var(--accent)}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--soft);padding:.05em .35em;border-radius:3px}
+table{border-collapse:collapse;width:100%;font-size:.93rem;margin:.5rem 0}th,td{text-align:left;padding:.4rem .55rem;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wrap{overflow-x:auto}
+pre.mermaid{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.6rem;overflow-x:auto}
+.toc{columns:2;column-gap:2rem;font-size:.95rem}@media (max-width:520px){.toc{columns:1}}
+.toc li{margin:.15rem 0}
+</style>
+<main>
+<h1>Insuryn Explained From Zero</h1>
+<p class="sub">No accounting or insurance knowledge assumed. Every idea gets a small story first, then how the system does it, with real numbers from the demo.</p>
+<div class="toggle" role="group" aria-label="Language">
+<button type="button" id="both" aria-pressed="true">Both</button><button type="button" id="en" aria-pressed="false">English</button><button type="button" id="bn" aria-pressed="false">বাংলা</button>
+</div>
+<script>
+for (const id of ['both','en','bn']) document.getElementById(id).addEventListener('click', () => {
+  document.body.className = id === 'both' ? '' : 'only-' + id;
+  for (const b of ['both','en','bn']) document.getElementById(b).setAttribute('aria-pressed', String(b === id));
+});
+</script>
+
+<ol class="toc">
+<li><a href="#p1">What insurance is</a></li>
+<li><a href="#p2">What accounting is (debit and credit)</a></li>
+<li><a href="#p3">The chart of accounts and "account roles"</a></li>
+<li><a href="#p4">How the system writes a journal by itself</a></li>
+<li><a href="#p5">How a premium is calculated</a></li>
+<li><a href="#p6">Earned and unearned premium</a></li>
+<li><a href="#p7">Taking the money, and commission</a></li>
+<li><a href="#p8">Claims and reserves</a></li>
+<li><a href="#p9">Reinsurance and treaties</a></li>
+<li><a href="#p10">IBNR and the regulator</a></li>
+<li><a href="#p11">Suppliers, assets, budgets, petty cash</a></li>
+<li><a href="#p12">Payroll</a></li>
+<li><a href="#p13">Month-end close</a></li>
+<li><a href="#p14">The menu, page by page</a></li>
+<li><a href="#p15">Who may do what</a></li>
+<li><a href="#p16">How it is built</a></li>
+</ol>
+
+<h2 id="p1">1. What insurance is</h2>
+<div class="story"><b>Story.</b> Rahim owns a car worth 4,50,000 taka. He pays Padma Insurance 14,568.75 taka. In return, if his car is damaged this year, Padma pays for the repair. Rahim's payment is the <b>premium</b>. The promise is the <b>policy</b>. The repair request is a <b>claim</b>.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>An insurer collects small amounts from many people and pays large amounts to the few who have bad luck. Its whole business is: sell policies, collect premium, pay claims, and keep enough money aside for claims that have not come yet.</p><p>"Non-life" means anything except life insurance: motor, fire, marine cargo, and so on. Each of those is a <b>class of business</b>.</p><p>The government takes two cuts on every premium in Bangladesh: <b>VAT</b> (15%) and a <b>stamp duty</b> (a small fixed fee). The insurer collects these and passes them on.</p></div>
+<div class="lang" lang="bn"><p>একটি বীমা কোম্পানি অনেক মানুষের কাছ থেকে অল্প অল্প টাকা নেয় আর যাদের দুর্ভাগ্য হয় তাদের বড় টাকা দেয়। এর পুরো ব্যবসা হলো: পলিসি বিক্রি, প্রিমিয়াম আদায়, ক্লেইম পরিশোধ, আর যে ক্লেইম এখনো আসেনি তার জন্য টাকা সরিয়ে রাখা।</p><p>"নন-লাইফ" মানে জীবন বীমা ছাড়া সবকিছু: মোটর, ফায়ার, মেরিন কার্গো ইত্যাদি। প্রতিটি একেকটি <b>ব্যবসার শ্রেণি</b>।</p><p>বাংলাদেশে প্রতিটি প্রিমিয়ামের ওপর সরকার দুটি অংশ নেয়: <b>ভ্যাট</b> (১৫%) আর <b>স্ট্যাম্প ডিউটি</b> (ছোট একটি নির্দিষ্ট ফি)। বীমা কোম্পানি এগুলো আদায় করে সরকারকে দেয়।</p></div>
+</div>
+
+<h2 id="p2">2. What accounting is (debit and credit)</h2>
+<div class="story"><b>Story.</b> Imagine every taka has to be written in two notebooks at once: <i>where it came from</i> and <i>where it went</i>. When Rahim pays 14,568.75, the bank notebook goes up and the "Rahim owes us" notebook goes down. Both sides always move by the same amount. That is all "double-entry" means.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>Each notebook is an <b>account</b>. Every account belongs to one of five families:</p><ul><li><b>Assets</b>: what we own or are owed (bank, premium receivable, fixed assets).</li><li><b>Liabilities</b>: what we owe (VAT payable, claims payable, unearned premium).</li><li><b>Equity</b>: the owners' money.</li><li><b>Income</b>: what we earned (premium income, commission from reinsurers).</li><li><b>Expenses</b>: what it cost (claims, commission to agents, salaries, rent).</li></ul><p><b>Debit and credit</b> are just the two columns. Rule of thumb: a debit <i>increases</i> assets and expenses; a credit <i>increases</i> liabilities, equity and income. Every entry has debits equal to credits, so the books always balance.</p><p>A <b>journal</b> is one such entry (a small table of lines). The <b>ledger</b> is all journals added up per account. The <b>trial balance</b> is the list of every account's total: total debits must equal total credits.</p></div>
+<div class="lang" lang="bn"><p>প্রতিটি নোটবুক একটি <b>হিসাব (account)</b>। প্রতিটি হিসাব পাঁচটি পরিবারের একটিতে পড়ে:</p><ul><li><b>সম্পদ (Assets)</b>: আমাদের যা আছে বা পাওনা (ব্যাংক, প্রিমিয়াম রিসিভেবল, স্থায়ী সম্পদ)।</li><li><b>দায় (Liabilities)</b>: আমরা যা দিতে বাধ্য (ভ্যাট পেয়েবল, ক্লেইম পেয়েবল, আনআর্নড প্রিমিয়াম)।</li><li><b>মূলধন (Equity)</b>: মালিকদের টাকা।</li><li><b>আয় (Income)</b>: যা উপার্জন হলো (প্রিমিয়াম আয়, রিইন্স্যুরার থেকে কমিশন)।</li><li><b>ব্যয় (Expenses)</b>: যা খরচ হলো (ক্লেইম, এজেন্ট কমিশন, বেতন, ভাড়া)।</li></ul><p><b>ডেবিট আর ক্রেডিট</b> শুধু দুটি কলাম। সহজ নিয়ম: ডেবিট সম্পদ ও ব্যয় <i>বাড়ায়</i>; ক্রেডিট দায়, মূলধন ও আয় <i>বাড়ায়</i>। প্রতিটি এন্ট্রিতে ডেবিট = ক্রেডিট, তাই খাতা সবসময় মেলে।</p><p><b>জার্নাল</b> হলো এমন একটি এন্ট্রি (কয়েক লাইনের ছোট টেবিল)। <b>লেজার</b> হলো হিসাব অনুযায়ী সব জার্নালের যোগফল। <b>ট্রায়াল ব্যালান্স</b> হলো প্রতিটি হিসাবের মোটের তালিকা: মোট ডেবিট = মোট ক্রেডিট হতেই হবে।</p></div>
+</div>
+
+<h2 id="p3">3. The chart of accounts and "account roles"</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>The <b>chart of accounts (COA)</b> is the full list of notebooks a company uses, each with a code: <code>1010 Bank - Main</code>, <code>1100 Premium Receivable</code>, <code>2100 Unearned Premium</code>, <code>4100 Premium Income</code>, <code>5100 Claims Incurred</code>. Every company numbers theirs differently.</p><p>So the system never says "post to account 1100". It says "post to the account that plays the role <b>premium_receivable</b>". A small table, <b>Account roles</b> (Accounting → Account roles), maps each role to one of <i>your</i> accounts. Change the mapping, and every future posting follows. That is how the same software works for any insurer's chart.</p><p>About 60 roles exist: bank_main, premium_receivable, unearned_premium, premium_income, premium_tax_payable (VAT), stamp_duty_payable, commission_expense, commission_payable, outstanding_claims, claims_incurred, claims_payable, accounts_payable, ri_premium_ceded, ibnr_provision, salary_expense, and so on.</p></div>
+<div class="lang" lang="bn"><p><b>চার্ট অব অ্যাকাউন্টস (COA)</b> হলো একটি কোম্পানির সব নোটবুকের পূর্ণ তালিকা, প্রতিটির একটি কোড: <code>1010 Bank - Main</code>, <code>1100 Premium Receivable</code>, <code>2100 Unearned Premium</code>, <code>4100 Premium Income</code>, <code>5100 Claims Incurred</code>। প্রতিটি কোম্পানি নিজের মতো নম্বর দেয়।</p><p>তাই সিস্টেম কখনো বলে না "১১০০ হিসাবে পোস্ট করো"। বলে "যে হিসাবটি <b>premium_receivable</b> ভূমিকা পালন করে সেখানে পোস্ট করো"। একটি ছোট টেবিল, <b>Account roles</b> (Accounting → Account roles), প্রতিটি ভূমিকাকে <i>আপনার</i> একটি হিসাবের সাথে মেলায়। ম্যাপিং বদলালে পরের সব পোস্টিং সেটাই অনুসরণ করে। এভাবেই একই সফটওয়্যার যেকোনো বীমা কোম্পানির চার্টে কাজ করে।</p><p>প্রায় ৬০টি ভূমিকা আছে: bank_main, premium_receivable, unearned_premium, premium_income, premium_tax_payable (ভ্যাট), stamp_duty_payable, commission_expense, commission_payable, outstanding_claims, claims_incurred, claims_payable, accounts_payable, ri_premium_ceded, ibnr_provision, salary_expense ইত্যাদি।</p></div>
+</div>
+
+<h2 id="p4">4. How the system writes a journal by itself</h2>
+<pre class="mermaid">
+flowchart LR
+  A["1. Business action<br/>Issue policy"] --> B["2. Accounting event<br/>POLICY_ISSUED + numbers<br/>(gross 14,568.75, net 12,625, VAT 1,893.75, stamp 50)"]
+  B --> C["3. Posting rule<br/>which ROLE, which SIDE, which number"]
+  C --> D["4. Account roles<br/>role → your account code"]
+  D --> E["5. Journal<br/>lines, balanced"]
+  E --> F["6. Ledger"]
+</pre>
+<div class="pair">
+<div class="lang" lang="en"><p>When the officer clicks <b>Issue policy</b>, the policy module does not touch the ledger. It sends an <b>accounting event</b>: a name (<code>POLICY_ISSUED</code>) plus the numbers. A background worker picks it up and looks for the matching <b>posting rule</b>. A rule is a small JSON file (Accounting → posting rules; 57 of them). This is the real one for a policy:</p></div>
+<div class="lang" lang="bn"><p>অফিসার যখন <b>Issue policy</b> ক্লিক করে, পলিসি মডিউল লেজার ছোঁয় না। সে একটি <b>অ্যাকাউন্টিং ইভেন্ট</b> পাঠায়: একটি নাম (<code>POLICY_ISSUED</code>) আর সংখ্যাগুলো। একটি ব্যাকগ্রাউন্ড ওয়ার্কার সেটি তুলে নিয়ে মিলে যাওয়া <b>পোস্টিং রুল</b> খোঁজে। রুল হলো ছোট একটি JSON ফাইল (৫৭টি আছে)। পলিসির আসল রুলটি এটি:</p></div>
+</div>
+<div class="wrap"><table>
+<tr><th>Role</th><th>Side</th><th>Amount from the event</th><th>Meaning</th></tr>
+<tr><td>premium_receivable</td><td>debit</td><td>gross_premium</td><td>The customer now owes us the full amount</td></tr>
+<tr><td>unearned_premium</td><td>credit</td><td>net_premium</td><td>We owe the customer a year of cover (a liability, not income yet)</td></tr>
+<tr><td>premium_tax_payable</td><td>credit</td><td>tax</td><td>VAT we hold for the government</td></tr>
+<tr><td>stamp_duty_payable</td><td>credit</td><td>stamp_duty</td><td>Stamp duty we hold for the government</td></tr>
+</table></div>
+<div class="wrap"><table>
+<tr><th>Resolved journal for Rahim's policy</th><th class="n">Debit</th><th class="n">Credit</th></tr>
+<tr><td>1100 Premium Receivable</td><td class="n">14,568.75</td><td></td></tr>
+<tr><td>2100 Unearned Premium</td><td></td><td class="n">12,625.00</td></tr>
+<tr><td>2150 VAT Payable</td><td></td><td class="n">1,893.75</td></tr>
+<tr><td>2155 Stamp Duty Payable</td><td></td><td class="n">50.00</td></tr>
+<tr><td><b>Total</b></td><td class="n"><b>14,568.75</b></td><td class="n"><b>14,568.75</b></td></tr>
+</table></div>
+<div class="pair">
+<div class="lang" lang="en"><p>So: the <b>rule</b> decides the role and the side (debit or credit); the <b>account roles table</b> turns the role into your account code; the <b>event</b> supplies the amounts. The engine checks the lines balance, the period is open, and the same event was not posted twice, then writes the journal. If anything is wrong, the event is marked failed and appears on Home (Accounting → Accounting events) to be fixed and re-run. Rules are versioned: a new version applies from a date; old journals never change.</p><p>Every screen that moves money shows this journal <i>before</i> you confirm. That preview is the same engine run without saving.</p></div>
+<div class="lang" lang="bn"><p>অর্থাৎ: <b>রুল</b> ঠিক করে ভূমিকা আর দিক (ডেবিট না ক্রেডিট); <b>অ্যাকাউন্ট রোল টেবিল</b> ভূমিকাকে আপনার হিসাবের কোডে বদলায়; <b>ইভেন্ট</b> সংখ্যা দেয়। ইঞ্জিন দেখে লাইনগুলো মিলছে কি না, মাস খোলা আছে কি না, একই ইভেন্ট দুবার পোস্ট হচ্ছে না তো — তারপর জার্নাল লেখে। কিছু ভুল হলে ইভেন্টটি "failed" চিহ্নিত হয়ে হোমে দেখা যায় (Accounting → Accounting events), ঠিক করে আবার চালানো যায়। রুলের ভার্সন আছে: নতুন ভার্সন একটি তারিখ থেকে কার্যকর; পুরনো জার্নাল কখনো বদলায় না।</p><p>টাকা নড়ে এমন প্রতিটি স্ক্রিন কনফার্মের <i>আগে</i> এই জার্নাল দেখায়। ওই প্রিভিউ একই ইঞ্জিন, শুধু সেভ না করে চালানো।</p></div>
+</div>
+
+<h2 id="p5">5. How a premium is calculated</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>The price comes from a <b>tariff</b> (Sales → Tariffs): a list of steps run in order, with rate tables. Nothing is hard-coded; a finance manager drafts a tariff and another person approves it. Rahim's private car, 1500 cc, 5 seats, sum insured 4,50,000:</p></div>
+<div class="lang" lang="bn"><p>দাম আসে <b>ট্যারিফ</b> থেকে (Sales → Tariffs): ক্রমানুসারে চলা কয়েকটি ধাপ, সাথে রেট টেবিল। কিছুই কোডে গাঁথা নয়; ফাইন্যান্স ম্যানেজার ট্যারিফের খসড়া করে, অন্য একজন অনুমোদন দেয়। রহিমের প্রাইভেট কার, ১৫০০ সিসি, ৫ সিট, বিমাকৃত অঙ্ক ৪,৫০,০০০:</p></div>
+</div>
+<div class="wrap"><table>
+<tr><th>Step</th><th>Rule (from the tariff table)</th><th class="n">Amount</th></tr>
+<tr><td>Own damage</td><td>22.50 per thousand of sum insured (rate depends on vehicle type and cc band)</td><td class="n">10,125.00</td></tr>
+<tr><td>Third-party liability</td><td>flat 2,500 for a private car</td><td class="n">2,500.00</td></tr>
+<tr><td>No-claim bonus</td><td>0 / 10 / 20 / 30% discount by claim-free years (Rahim: 0)</td><td class="n">0.00</td></tr>
+<tr><td><b>Net premium</b></td><td>the insurer's own price</td><td class="n"><b>12,625.00</b></td></tr>
+<tr><td>Stamp duty</td><td>flat 50 per motor policy (fire: by sum-insured band)</td><td class="n">50.00</td></tr>
+<tr><td>VAT</td><td>15% of net premium</td><td class="n">1,893.75</td></tr>
+<tr><td><b>Gross premium</b></td><td>what the customer pays</td><td class="n"><b>14,568.75</b></td></tr>
+</table></div>
+<div class="pair">
+<div class="lang" lang="en"><p>The rates (22.50 per mille, 2,500, 15%, 50) are placeholders in the demo, marked "verify"; the real ones come from the insurer's filed tariff. Big or unusual risks (a 15-year-old car, a tin-roof building) are flagged and <b>referred</b> to an underwriter instead of priced automatically. Each branch and role has an <b>underwriting limit</b>: above it, the proposal goes up the chain.</p></div>
+<div class="lang" lang="bn"><p>হারগুলো (প্রতি হাজারে ২২.৫০, ২,৫০০, ১৫%, ৫০) ডেমোতে নমুনা, "verify" চিহ্নিত; আসলগুলো বীমা কোম্পানির দাখিল করা ট্যারিফ থেকে আসবে। বড় বা অস্বাভাবিক ঝুঁকি (১৫ বছরের পুরনো গাড়ি, টিনের ছাদের ভবন) চিহ্নিত হয়ে স্বয়ংক্রিয়ভাবে দাম না হয়ে <b>আন্ডাররাইটারের কাছে যায়</b>। প্রতিটি ব্রাঞ্চ ও রোলের একটি <b>আন্ডাররাইটিং লিমিট</b> আছে: তার বেশি হলে প্রপোজাল উপরে যায়।</p></div>
+</div>
+
+<h2 id="p6">6. Earned and unearned premium</h2>
+<div class="story"><b>Story.</b> Rahim paid for a whole year of cover on 14 September. On that day Padma has earned nothing yet: it still owes him 365 days of protection. Each day that passes, 1/365 of the premium becomes truly earned. If Padma cancels after a month, it must give the unearned part back.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>That is why issuing a policy credits <b>unearned premium</b> (a liability) and not income. Every night a job called premium earning moves that day's slice: <code>PREMIUM_EARNED</code> posts debit unearned premium, credit premium income, for 12,625 ÷ 365 = 34.59 per day. After the year, unearned is zero and income is 12,625.</p><p>VAT and stamp duty are never earned: they were never Padma's money.</p><p>Cancellation reverses the unearned part back to the customer (a refund), keeps the earned part, and charges any earned premium still unpaid.</p></div>
+<div class="lang" lang="bn"><p>এজন্যই পলিসি ইস্যু করলে <b>আনআর্নড প্রিমিয়াম</b> (একটি দায়) ক্রেডিট হয়, আয় নয়। প্রতি রাতে "প্রিমিয়াম আর্নিং" নামের একটি কাজ ওই দিনের অংশটুকু সরায়: <code>PREMIUM_EARNED</code> পোস্ট করে আনআর্নড প্রিমিয়াম ডেবিট, প্রিমিয়াম আয় ক্রেডিট, ১২,৬২৫ ÷ ৩৬৫ = দিনে ৩৪.৫৯। বছর শেষে আনআর্নড শূন্য, আয় ১২,৬২৫।</p><p>ভ্যাট আর স্ট্যাম্প ডিউটি কখনো আয় হয় না: ওগুলো পদ্মার টাকা ছিলই না।</p><p>বাতিল করলে আনআর্নড অংশ গ্রাহককে ফেরত (রিফান্ড), আর্নড অংশ রেখে দেওয়া হয়, আর বকেয়া থাকা আর্নড প্রিমিয়াম আদায় করা হয়।</p></div>
+</div>
+
+<h2 id="p7">7. Taking the money, and commission</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>A <b>receipt</b> records money arriving (cash, cheque, bank transfer, mobile money). It is <b>allocated</b> to the policy's installments. If the reference is unreadable, the money waits in <b>suspense</b> until someone matches it. Cheques wait in "clearing" until the bank confirms; a bounced cheque flags the policy ("no premium, no cover").</p><p>The agent who sold the policy earns <b>commission</b>: in the demo, 10% of net premium (VAT and stamp duty excluded), accrued at the moment premium is <i>received</i>, not when the policy is sold. It posts debit commission expense, credit commission payable, and a monthly <b>commission statement</b> pays the agent (with 5% tax withheld). If the policy is cancelled, the commission is clawed back.</p><p>Bank statements are imported as CSV and matched line by line to the ledger; leftovers are a to-do list.</p></div>
+<div class="lang" lang="bn"><p><b>রিসিট</b> টাকা আসা লিপিবদ্ধ করে (নগদ, চেক, ব্যাংক ট্রান্সফার, মোবাইল)। সেটি পলিসির কিস্তিতে <b>অ্যালোকেট</b> হয়। রেফারেন্স না বোঝা গেলে টাকা <b>সাসপেন্সে</b> অপেক্ষা করে যতক্ষণ না কেউ মেলায়। চেক ব্যাংকের নিশ্চয়তা পর্যন্ত "ক্লিয়ারিং"-এ থাকে; বাউন্স হলে পলিসিতে সতর্কতা ("প্রিমিয়াম নেই, কভার নেই")।</p><p>যে এজেন্ট পলিসি বিক্রি করেছে সে <b>কমিশন</b> পায়: ডেমোতে নেট প্রিমিয়ামের ১০% (ভ্যাট, স্ট্যাম্প বাদে), প্রিমিয়াম <i>আদায়ের</i> মুহূর্তে জমা হয়, বিক্রির সময় নয়। পোস্ট হয় কমিশন ব্যয় ডেবিট, কমিশন পেয়েবল ক্রেডিট, আর মাসিক <b>কমিশন স্টেটমেন্ট</b> এজেন্টকে দেয় (৫% কর কেটে)। পলিসি বাতিল হলে কমিশন ফেরত নেওয়া হয়।</p><p>ব্যাংক স্টেটমেন্ট CSV হিসেবে আমদানি করে লাইন ধরে লেজারের সাথে মেলানো হয়; যা বাকি থাকে তা কাজের তালিকা।</p></div>
+</div>
+
+<h2 id="p8">8. Claims and reserves</h2>
+<div class="story"><b>Story.</b> Rahim has an accident. A surveyor looks at the car and says: about 2,00,000 to repair. Padma does not know the exact bill yet, but must set money aside now. That set-aside is the <b>reserve</b>. Later the garage bill is 1,80,000; Padma pays it, and the leftover 20,000 of reserve is released.</div>
+<div class="wrap"><table>
+<tr><th>Step</th><th>Event</th><th>Journal</th></tr>
+<tr><td>Register</td><td>—</td><td>Nothing financial yet; documents attached</td></tr>
+<tr><td>Reserve 2,00,000</td><td>CLAIM_RESERVED</td><td>Dr Claims incurred 2,00,000 · Cr Outstanding claims 2,00,000 (expense now, liability now)</td></tr>
+<tr><td>Approve 1,80,000</td><td>CLAIM_APPROVED</td><td>Dr Outstanding claims 1,80,000 · Cr Claims payable 1,80,000 (we now owe a real person)</td></tr>
+<tr><td>Pay</td><td>CLAIM_PAID</td><td>Dr Claims payable 1,80,000 · Cr Bank 1,80,000</td></tr>
+<tr><td>Close</td><td>CLAIM_CLOSED</td><td>Dr Outstanding claims 20,000 · Cr Claims incurred 20,000 (the unused reserve comes back)</td></tr>
+<tr><td>Recovery (salvage sold)</td><td>CLAIM_RECOVERED</td><td>Dr Bank · Cr Recovery income</td></tr>
+</table></div>
+<div class="pair">
+<div class="lang" lang="en"><p>Who may do what: the claims officer registers and reserves; the claims manager approves up to their <b>approval limit</b> (above it, finance and the CFO approve too); finance releases the money. The same person can never reserve and approve the same claim.</p></div>
+<div class="lang" lang="bn"><p>কে কী করতে পারে: ক্লেইম অফিসার রেজিস্টার ও রিজার্ভ করে; ক্লেইম ম্যানেজার তার <b>অনুমোদন সীমা</b> পর্যন্ত অনুমোদন দেয় (বেশি হলে ফাইন্যান্স ও সিএফও-ও দেয়); ফাইন্যান্স টাকা ছাড়ে। একই ব্যক্তি একই ক্লেইমে রিজার্ভ ও অনুমোদন দুটোই করতে পারে না।</p></div>
+</div>
+
+<h2 id="p9">9. Reinsurance and treaties</h2>
+<div class="story"><b>Story.</b> Padma insures a garment factory for 150 crore. If it burns down, Padma cannot pay 150 crore alone. So Padma buys insurance for itself from bigger companies: <b>reinsurers</b>. Padma keeps a small share of the risk and passes the rest on, along with a share of the premium. If the factory burns, the reinsurers pay their shares back to Padma.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>A <b>treaty</b> is a standing agreement per class of business and year: "you take X% of every motor policy". Two kinds are built:</p><ul><li><b>Quota share</b>: a fixed percentage of every policy. Demo motor treaty: 40%.</li><li><b>Surplus</b>: Padma keeps up to a <b>retention</b> (demo fire: 5 crore) and the treaty takes the excess up to a number of <b>lines</b> (9 lines × 5 crore = 45 crore).</li></ul><p>In Bangladesh a share must by law go to the state reinsurer <b>Sadharan Bima Corporation (SBC)</b> first. The demo uses 50% (placeholder). For the 150-crore factory: SBC 75 crore, surplus treaty 45 crore, Padma keeps 5 crore, and the remaining 25 crore is placed <b>facultatively</b> (a one-off deal for this policy).</p><p>Ceding a share (a <b>cession</b>) posts: debit premium ceded (an expense), credit due to reinsurers; and the reinsurer pays Padma a <b>commission</b> for bringing the business (25–30%), credited to income. When a claim is reserved or paid, the reinsurers' share is posted as an asset: <b>claims recoverable from reinsurers</b>. Every quarter, a <b>reinsurer statement</b> nets premium ceded, commission and claims, and a <b>bordereau</b> lists the policies behind it.</p></div>
+<div class="lang" lang="bn"><p><b>ট্রিটি</b> হলো ব্যবসার শ্রেণি ও বছর অনুযায়ী একটি স্থায়ী চুক্তি: "প্রতিটি মোটর পলিসির X% তুমি নেবে"। দুই ধরন তৈরি আছে:</p><ul><li><b>কোটা শেয়ার</b>: প্রতিটি পলিসির একটি নির্দিষ্ট শতাংশ। ডেমো মোটর ট্রিটি: ৪০%।</li><li><b>সারপ্লাস</b>: পদ্মা একটি <b>রিটেনশন</b> পর্যন্ত রাখে (ডেমো ফায়ার: ৫ কোটি), তার বেশি অংশ ট্রিটি নেয় কয়েকটি <b>লাইন</b> পর্যন্ত (৯ লাইন × ৫ কোটি = ৪৫ কোটি)।</li></ul><p>বাংলাদেশে আইন অনুযায়ী একটি অংশ আগে রাষ্ট্রীয় রিইন্স্যুরার <b>সাধারণ বীমা কর্পোরেশন (SBC)</b>-এ যায়। ডেমোতে ৫০% (নমুনা)। ১৫০ কোটির কারখানায়: SBC ৭৫ কোটি, সারপ্লাস ট্রিটি ৪৫ কোটি, পদ্মা রাখে ৫ কোটি, বাকি ২৫ কোটি <b>ফ্যাকাল্টেটিভ</b> (শুধু এই পলিসির জন্য আলাদা চুক্তি)।</p><p>অংশ দেওয়া (<b>সেশন</b>) পোস্ট করে: প্রিমিয়াম সিডেড ডেবিট (একটি ব্যয়), রিইন্স্যুরারের পাওনা ক্রেডিট; আর রিইন্স্যুরার ব্যবসা আনার জন্য পদ্মাকে <b>কমিশন</b> দেয় (২৫–৩০%), যা আয়ে ক্রেডিট হয়। ক্লেইম রিজার্ভ বা পরিশোধ হলে রিইন্স্যুরারদের অংশ সম্পদ হিসেবে পোস্ট হয়: <b>রিইন্স্যুরার থেকে আদায়যোগ্য ক্লেইম</b>। প্রতি ত্রৈমাসিকে <b>রিইন্স্যুরার স্টেটমেন্ট</b> প্রিমিয়াম, কমিশন ও ক্লেইম কাটাকাটি করে, আর <b>বর্ডেরো</b> এর পেছনের পলিসিগুলোর তালিকা দেয়।</p></div>
+</div>
+
+<h2 id="p10">10. IBNR and the regulator</h2>
+<div class="story"><b>Story.</b> On 30 September, some accidents have already happened but nobody has reported them yet. Padma owes those people too, without knowing who they are. Accountants call this <b>IBNR</b>: Incurred But Not Reported. Padma must guess the amount and set it aside.</div>
+<div class="pair">
+<div class="lang" lang="en"><p>Two ways to guess, per class (Regulatory → Technical provisions): a simple <b>percentage of the year's premium</b> (demo: motor 5%, fire 3%, marine 4%), or, when there is claim history, a <b>chain ladder</b>: look at how past quarters' claims grew after each quarter closed, and apply the same growth pattern. Each quarter the finance manager prepares, the CFO approves, and it posts: debit IBNR expense, credit IBNR provision; the previous quarter's provision is reversed first.</p><p><b>Unearned premium</b> (section 6) and <b>IBNR</b> together are the "technical provisions" a regulator watches. The <b>IDRA</b> (Bangladesh's insurance regulator) receives quarterly <b>returns</b>: premium by class, claims, expenses against a limit, the agent register. The system builds these forms from the ledger and exports them (XLSX/PDF). Exact form numbering is configuration, to be matched to IDRA's templates.</p><p><b>Solvency</b> is a quick health check: does the company have enough capital compared to the premium it writes and the claims it pays? Placeholder formula in the demo.</p></div>
+<div class="lang" lang="bn"><p>শ্রেণি অনুযায়ী দুই ভাবে অনুমান করা যায় (Regulatory → Technical provisions): সহজ <b>বছরের প্রিমিয়ামের শতাংশ</b> (ডেমো: মোটর ৫%, ফায়ার ৩%, মেরিন ৪%), অথবা ক্লেইমের ইতিহাস থাকলে <b>চেইন ল্যাডার</b>: আগের ত্রৈমাসিকগুলোর ক্লেইম প্রতি ত্রৈমাসিক শেষে কতটা বেড়েছে তা দেখে একই ধারা প্রয়োগ। প্রতি ত্রৈমাসিকে ফাইন্যান্স ম্যানেজার তৈরি করে, সিএফও অনুমোদন দেয়, পোস্ট হয়: আইবিএনআর ব্যয় ডেবিট, আইবিএনআর প্রভিশন ক্রেডিট; আগের ত্রৈমাসিকেরটা আগে উল্টে দেওয়া হয়।</p><p><b>আনআর্নড প্রিমিয়াম</b> (অংশ ৬) আর <b>আইবিএনআর</b> মিলে "টেকনিক্যাল প্রভিশন", যা নিয়ন্ত্রক নজরে রাখে। <b>IDRA</b> (বাংলাদেশের বীমা নিয়ন্ত্রক) ত্রৈমাসিক <b>রিটার্ন</b> পায়: শ্রেণি অনুযায়ী প্রিমিয়াম, ক্লেইম, সীমার বিপরীতে ব্যয়, এজেন্ট রেজিস্টার। সিস্টেম লেজার থেকে এই ফর্মগুলো বানিয়ে এক্সপোর্ট করে (XLSX/PDF)। ফর্মের সঠিক নম্বর কনফিগারেশন, IDRA-র ছকের সাথে মেলাতে হবে।</p><p><b>সলভেন্সি</b> একটি দ্রুত স্বাস্থ্য পরীক্ষা: যত প্রিমিয়াম লেখা হচ্ছে আর যত ক্লেইম দেওয়া হচ্ছে, তার তুলনায় কোম্পানির যথেষ্ট মূলধন আছে কি? ডেমোতে নমুনা সূত্র।</p></div>
+</div>
+
+<h2 id="p11">11. Suppliers, assets, budgets, petty cash</h2>
+<div class="pair">
+<div class="lang" lang="en"><ul><li><b>Suppliers and bills</b> (Payables): the landlord sends a rent bill of 85,000. Bangladesh law makes Padma deduct VAT at source (VDS) and income tax at source (TDS) before paying, so the landlord gets 80,750 and the government's cut sits in payables. Posting: debit rent expense 85,000; credit supplier 80,750, VDS payable, TDS payable. Bills are approved by someone other than who entered them, then grouped into a <b>payment run</b> (prepare → approve → release, three people) that produces a bank transfer file.</li><li><b>Fixed assets</b>: furniture, computers, vehicles. Their cost is not an expense on day one; it is spread over their life as <b>depreciation</b> (computers: 3 years straight line; vehicles: 20% a year reducing). A monthly batch posts debit depreciation expense, credit accumulated depreciation. Selling or scrapping an asset posts the gain or loss.</li><li><b>Budgets</b>: a plan per account, branch and month, approved by a second person; the variance report shows actual against plan in red and green.</li><li><b>Petty cash</b>: each branch holds a small float (HO 20,000). Vouchers spend it (debit expense, credit petty cash); a replenishment tops it back up from the bank after approval; a cash count catches differences.</li></ul></div>
+<div class="lang" lang="bn"><ul><li><b>সাপ্লায়ার ও বিল</b> (Payables): বাড়িওয়ালা ৮৫,০০০ টাকার ভাড়ার বিল পাঠায়। বাংলাদেশের আইনে পদ্মাকে দেওয়ার আগে উৎসে ভ্যাট (VDS) ও উৎসে আয়কর (TDS) কাটতে হয়, তাই বাড়িওয়ালা পায় ৮০,৭৫০ আর সরকারের অংশ পেয়েবলে থাকে। পোস্টিং: ভাড়া ব্যয় ডেবিট ৮৫,০০০; সাপ্লায়ার ক্রেডিট ৮০,৭৫০, VDS পেয়েবল, TDS পেয়েবল। যে বিল তুলেছে সে ছাড়া অন্য কেউ অনুমোদন দেয়, তারপর <b>পেমেন্ট রানে</b> গুচ্ছ করা হয় (তৈরি → অনুমোদন → ছাড়, তিনজন) যা ব্যাংক ট্রান্সফার ফাইল তৈরি করে।</li><li><b>স্থায়ী সম্পদ</b>: আসবাব, কম্পিউটার, গাড়ি। এর দাম প্রথম দিনেই ব্যয় নয়; আয়ুষ্কালে ছড়িয়ে <b>অবচয়</b> হিসেবে ধরা হয় (কম্পিউটার: ৩ বছর সরলরেখা; গাড়ি: বছরে ২০% ক্রমহ্রাসমান)। মাসিক ব্যাচ পোস্ট করে অবচয় ব্যয় ডেবিট, পুঞ্জীভূত অবচয় ক্রেডিট। বিক্রি বা বাতিলে লাভ-ক্ষতি পোস্ট হয়।</li><li><b>বাজেট</b>: হিসাব, ব্রাঞ্চ ও মাস অনুযায়ী পরিকল্পনা, দ্বিতীয় ব্যক্তির অনুমোদনে; পার্থক্যের রিপোর্ট লাল-সবুজে দেখায়।</li><li><b>পেটি ক্যাশ</b>: প্রতিটি ব্রাঞ্চে ছোট একটি তহবিল (প্রধান কার্যালয় ২০,০০০)। ভাউচারে খরচ (ব্যয় ডেবিট, পেটি ক্যাশ ক্রেডিট); অনুমোদনের পর ব্যাংক থেকে আবার পূরণ; নগদ গণনায় পার্থক্য ধরা পড়ে।</li></ul></div>
+</div>
+
+<h2 id="p12">12. Payroll</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>Each employee has a <b>grade</b>; each grade a <b>salary structure</b>: basic, plus house rent, medical and conveyance as percentages of basic. Deductions: <b>provident fund</b> 10% of basic from the employee, matched by 10% from the company; <b>income tax</b> from a slab table (first 3,75,000 a year at 0%, then 10%, 15%, 20%, 25%, 30%). Two Eid <b>festival bonuses</b> of one basic each. All of this is data in Payroll settings.</p><p>Monthly: HR calculates → finance approves and posts (debit salary and bonus expense, credit net salary payable, PF payable, tax payable) → the accountant releases the bank transfer (debit net salary payable, credit bank) → payslip PDFs. A salaried BDO's sales incentive from the commission run is added to their payslip and not taxed twice.</p></div>
+<div class="lang" lang="bn"><p>প্রতিটি কর্মীর একটি <b>গ্রেড</b>; প্রতিটি গ্রেডের একটি <b>বেতন কাঠামো</b>: বেসিক, সাথে বেসিকের শতাংশে বাড়িভাড়া, চিকিৎসা ও যাতায়াত। কর্তন: <b>প্রভিডেন্ট ফান্ড</b> কর্মীর বেসিকের ১০%, কোম্পানিও ১০% দেয়; <b>আয়কর</b> স্ল্যাব টেবিল থেকে (বছরে প্রথম ৩,৭৫,০০০ শূন্য, তারপর ১০%, ১৫%, ২০%, ২৫%, ৩০%)। দুই ঈদে এক বেসিক করে <b>উৎসব বোনাস</b>। সবই Payroll settings-এ ডেটা।</p><p>মাসিক: HR হিসাব করে → ফাইন্যান্স অনুমোদন ও পোস্ট (বেতন ও বোনাস ব্যয় ডেবিট, নিট বেতন পেয়েবল, PF পেয়েবল, কর পেয়েবল ক্রেডিট) → হিসাবরক্ষক ব্যাংক ট্রান্সফার ছাড়ে (নিট বেতন পেয়েবল ডেবিট, ব্যাংক ক্রেডিট) → পে-স্লিপ PDF। বেতনভুক্ত বিডিও-র কমিশন রানের ইনসেনটিভ তার পে-স্লিপে যোগ হয়, দুবার কর কাটা হয় না।</p></div>
+</div>
+
+<h2 id="p13">13. Month-end close</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>At the end of each month, finance runs a checklist (Accounting → Month-end close). Each task either posts something (premium earning, depreciation, payroll) or <b>reconciles</b>: it checks that a detailed list adds up to the ledger total. Premium receivable per policy = the receivable account; outstanding claims per claim = the claims account; the same for commission, unearned premium, VAT, stamp duty, suppliers, reinsurers, assets, payroll. A difference blocks the close until explained.</p><p>Then trial balance, P&amp;L and balance sheet, and sign-off. <b>Soft lock</b> (from the last day of the month) stops ordinary users posting into it; <b>hard lock</b> (after the month ends, once nothing is pending approval) freezes it for good. The CFO can lock early with a written reason. Once a year, the year-end close moves income and expenses into retained earnings.</p></div>
+<div class="lang" lang="bn"><p>প্রতি মাসের শেষে ফাইন্যান্স একটি চেকলিস্ট চালায় (Accounting → Month-end close)। প্রতিটি কাজ হয় কিছু পোস্ট করে (প্রিমিয়াম আর্নিং, অবচয়, পেরোল) নয়তো <b>রিকনসাইল</b> করে: দেখে বিস্তারিত তালিকার যোগফল লেজারের মোটের সমান কি না। পলিসি অনুযায়ী প্রিমিয়াম রিসিভেবল = রিসিভেবল হিসাব; ক্লেইম অনুযায়ী বকেয়া ক্লেইম = ক্লেইম হিসাব; কমিশন, আনআর্নড প্রিমিয়াম, ভ্যাট, স্ট্যাম্প, সাপ্লায়ার, রিইন্স্যুরার, সম্পদ, পেরোলেও তাই। পার্থক্য থাকলে ব্যাখ্যা না দেওয়া পর্যন্ত ক্লোজ আটকে থাকে।</p><p>তারপর ট্রায়াল ব্যালান্স, লাভ-ক্ষতি, ব্যালান্স শিট, আর সাইন-অফ। <b>সফট লক</b> (মাসের শেষ দিন থেকে) সাধারণ ব্যবহারকারীদের পোস্টিং বন্ধ করে; <b>হার্ড লক</b> (মাস শেষে, অনুমোদনের অপেক্ষায় কিছু না থাকলে) চিরতরে জমিয়ে দেয়। সিএফও কারণ লিখে আগে লক করতে পারেন। বছরে একবার ইয়ার-এন্ড ক্লোজ আয়-ব্যয়কে রিটেইনড আর্নিংসে সরায়।</p></div>
+</div>
+
+<h2 id="p14">14. The menu, page by page</h2>
+<div class="wrap"><table>
+<tr><th>Section</th><th>Page</th><th>What it is for (English)</th><th>কী কাজে লাগে (বাংলা)</th></tr>
+<tr><td rowspan="2">Home</td><td>Home</td><td>Your queues (what needs you, oldest first) and start actions</td><td>আপনার কাজের সারি আর শুরু করার বোতাম</td></tr>
+<tr><td>Approvals</td><td>Everything waiting for your sign-off, with the journal it will post</td><td>আপনার অনুমোদনের অপেক্ষায় থাকা সব, সাথে জার্নাল</td></tr>
+<tr><td rowspan="9">Sales</td><td>Quotes</td><td>Price a risk with the live tariff; becomes a proposal</td><td>ট্যারিফ দিয়ে দাম বের করা; প্রপোজালে পরিণত হয়</td></tr>
+<tr><td>Referrals</td><td>Proposals waiting for an underwriter's decision</td><td>আন্ডাররাইটারের সিদ্ধান্তের অপেক্ষায় প্রপোজাল</td></tr>
+<tr><td>Cover notes</td><td>Temporary proof of cover before the policy is issued</td><td>পলিসি ইস্যুর আগে অস্থায়ী কভারের প্রমাণ</td></tr>
+<tr><td>Policies</td><td>Every policy: issue, endorse (change), cancel, renew, documents, accounting</td><td>সব পলিসি: ইস্যু, পরিবর্তন, বাতিল, নবায়ন, ডকুমেন্ট, হিসাব</td></tr>
+<tr><td>Renewals</td><td>Policies expiring soon, with renewal quotes</td><td>শীঘ্রই মেয়াদ শেষ হওয়া পলিসি ও নবায়ন কোটেশন</td></tr>
+<tr><td>Parties</td><td>Customers and every other person or company we deal with</td><td>গ্রাহক ও আমাদের সাথে সম্পর্কিত সব ব্যক্তি/প্রতিষ্ঠান</td></tr>
+<tr><td>Producers, Hierarchy, Compensation schemes, Targets</td><td>Agents and BDOs, their licences, who reports to whom, how commission is calculated, sales targets</td><td>এজেন্ট ও বিডিও, লাইসেন্স, কে কার অধীনে, কমিশনের হিসাব, বিক্রির লক্ষ্য</td></tr>
+<tr><td>Tariffs</td><td>The pricing rules (draft by one person, approve by another)</td><td>দাম নির্ধারণের নিয়ম (একজন খসড়া, অন্যজন অনুমোদন)</td></tr>
+<tr><td>Products</td><td>What we sell: motor, fire, marine, with their risk forms and earning method</td><td>আমরা কী বিক্রি করি, ঝুঁকির ফর্ম ও আর্নিং পদ্ধতিসহ</td></tr>
+<tr><td rowspan="8">Collections</td><td>Receipts</td><td>Money in, allocated to installments; print receipts</td><td>টাকা আসা, কিস্তিতে বণ্টন; রিসিট প্রিন্ট</td></tr>
+<tr><td>Suspense</td><td>Money whose policy is not yet known</td><td>যে টাকার পলিসি এখনো জানা নেই</td></tr>
+<tr><td>Bank accounts</td><td>Import statements, match to the ledger, explain exceptions</td><td>স্টেটমেন্ট আমদানি, লেজারের সাথে মিলানো, ব্যতিক্রম ব্যাখ্যা</td></tr>
+<tr><td>Cheque register</td><td>Cheques in clearing, cleared, bounced</td><td>ক্লিয়ারিংয়ে, ক্লিয়ার হওয়া, বাউন্স হওয়া চেক</td></tr>
+<tr><td>Payment reminders</td><td>Overdue premium and the reminder letters sent</td><td>বকেয়া প্রিমিয়াম ও পাঠানো তাগাদা</td></tr>
+<tr><td>Refunds</td><td>Money owed back to customers (cancellations), request → release</td><td>গ্রাহককে ফেরত দেওয়ার টাকা, অনুরোধ → ছাড়</td></tr>
+<tr><td>Agent cash</td><td>Cash agents collected and have not deposited yet</td><td>এজেন্টের আদায় করা কিন্তু জমা না দেওয়া নগদ</td></tr>
+<tr><td>Commission statements</td><td>Monthly run that approves and pays agent commission</td><td>মাসিক রান যা এজেন্ট কমিশন অনুমোদন ও পরিশোধ করে</td></tr>
+<tr><td rowspan="2">Claims</td><td>Claims</td><td>Register → reserve → approve → pay → close; recoveries; documents</td><td>রেজিস্টার → রিজার্ভ → অনুমোদন → পরিশোধ → বন্ধ; আদায়; ডকুমেন্ট</td></tr>
+<tr><td>Claim payments</td><td>Approved payments waiting for release</td><td>ছাড়ের অপেক্ষায় অনুমোদিত পেমেন্ট</td></tr>
+<tr><td rowspan="3">Payables</td><td>Suppliers</td><td>Who we buy from, their bank details and tax category</td><td>যাদের কাছ থেকে কিনি, ব্যাংক ও করের ধরন</td></tr>
+<tr><td>Supplier bills</td><td>Bills with VAT/VDS/TDS; approve and post</td><td>ভ্যাট/VDS/TDS সহ বিল; অনুমোদন ও পোস্ট</td></tr>
+<tr><td>Payment runs</td><td>Batch of bills paid together; bank file</td><td>একসাথে দেওয়া বিলের গুচ্ছ; ব্যাংক ফাইল</td></tr>
+<tr><td rowspan="3">Reinsurance</td><td>Treaties</td><td>Standing agreements with reinsurers per class and year</td><td>শ্রেণি ও বছর অনুযায়ী রিইন্স্যুরারের সাথে চুক্তি</td></tr>
+<tr><td>Cessions</td><td>Every share passed on, per policy movement</td><td>পলিসি অনুযায়ী দেওয়া প্রতিটি অংশ</td></tr>
+<tr><td>Reinsurer statements</td><td>Quarterly account per reinsurer; bordereaux</td><td>রিইন্স্যুরার অনুযায়ী ত্রৈমাসিক হিসাব; বর্ডেরো</td></tr>
+<tr><td rowspan="4">People</td><td>Employees</td><td>Staff records and employment history</td><td>কর্মীর তথ্য ও চাকরির ইতিহাস</td></tr>
+<tr><td>Payroll runs</td><td>Calculate → approve → post → pay, per month</td><td>মাস অনুযায়ী হিসাব → অনুমোদন → পোস্ট → পরিশোধ</td></tr>
+<tr><td>Payslips</td><td>Per employee per month, PDF</td><td>কর্মী ও মাস অনুযায়ী, PDF</td></tr>
+<tr><td>Payroll settings</td><td>Grades, salary structure, PF, tax slabs, bonuses</td><td>গ্রেড, বেতন কাঠামো, PF, কর স্ল্যাব, বোনাস</td></tr>
+<tr><td rowspan="4">Assets &amp; budgets</td><td>Fixed assets</td><td>Register, capitalise, dispose, transfer</td><td>রেজিস্টার, যোগ, বাতিল, স্থানান্তর</td></tr>
+<tr><td>Monthly depreciation</td><td>Preview and post the month's depreciation</td><td>মাসের অবচয় প্রিভিউ ও পোস্ট</td></tr>
+<tr><td>Budgets</td><td>Plan by account × branch × month; variance report</td><td>হিসাব × ব্রাঞ্চ × মাস পরিকল্পনা; পার্থক্যের রিপোর্ট</td></tr>
+<tr><td>Petty cash</td><td>Branch floats, vouchers, replenishment, cash count</td><td>ব্রাঞ্চ তহবিল, ভাউচার, পূরণ, নগদ গণনা</td></tr>
+<tr><td rowspan="7">Accounting</td><td>Journals</td><td>Every journal; manual journals (approved by another person)</td><td>সব জার্নাল; ম্যানুয়াল জার্নাল (অন্যজনের অনুমোদনে)</td></tr>
+<tr><td>Chart of accounts</td><td>Your accounts; add, edit, deactivate</td><td>আপনার হিসাব; যোগ, সম্পাদনা, নিষ্ক্রিয়</td></tr>
+<tr><td>Account roles</td><td>Which of your accounts plays which role (section 3)</td><td>কোন হিসাব কোন ভূমিকা পালন করে (অংশ ৩)</td></tr>
+<tr><td>Accounting events</td><td>Failed or stuck postings; re-run</td><td>ব্যর্থ বা আটকে থাকা পোস্টিং; আবার চালানো</td></tr>
+<tr><td>Trial balance</td><td>Every account's total; click down to journals and documents</td><td>প্রতিটি হিসাবের মোট; ক্লিকে জার্নাল ও ডকুমেন্ট</td></tr>
+<tr><td>Month-end close</td><td>The checklist and the locks (section 13)</td><td>চেকলিস্ট ও লক (অংশ ১৩)</td></tr>
+<tr><td>Reports</td><td>P&amp;L, balance sheet, registers, ageing, loss ratio; export</td><td>লাভ-ক্ষতি, ব্যালান্স শিট, রেজিস্টার, এজিং, লস রেশিও; এক্সপোর্ট</td></tr>
+<tr><td rowspan="3">Regulatory</td><td>Regulatory dashboard</td><td>Solvency snapshot, returns and provisions status</td><td>সলভেন্সি, রিটার্ন ও প্রভিশনের অবস্থা</td></tr>
+<tr><td>Regulatory returns</td><td>IDRA forms per quarter; export; mark filed</td><td>ত্রৈমাসিক IDRA ফর্ম; এক্সপোর্ট; দাখিল চিহ্নিত</td></tr>
+<tr><td>Technical provisions</td><td>IBNR run per quarter (section 10)</td><td>ত্রৈমাসিক আইবিএনআর রান (অংশ ১০)</td></tr>
+<tr><td rowspan="3">Admin</td><td>Users, Roles</td><td>Who exists and what each role may do; conflict warnings</td><td>কে আছে, কোন রোল কী পারে; সংঘর্ষের সতর্কতা</td></tr>
+<tr><td>Approval limits, Underwriting limits</td><td>Amounts above which more approvers are needed</td><td>যে অঙ্কের উপরে বেশি অনুমোদন লাগে</td></tr>
+<tr><td>Setup</td><td>First-day wizard: company, fiscal year, chart, product, bank, limits</td><td>প্রথম দিনের উইজার্ড: কোম্পানি, অর্থবছর, চার্ট, পণ্য, ব্যাংক, সীমা</td></tr>
+</table></div>
+<div class="pair">
+<div class="lang" lang="en"><p>Everywhere: <code>Ctrl+K</code> searches any number and runs actions. "How this works" (top right) explains the current screen. Every list remembers your columns and filters; every date has a calendar; every money button shows the journal first.</p></div>
+<div class="lang" lang="bn"><p>সব জায়গায়: <code>Ctrl+K</code> যেকোনো নম্বর খোঁজে ও কাজ চালায়। "How this works" (উপরে ডানে) বর্তমান স্ক্রিন ব্যাখ্যা করে। প্রতিটি তালিকা আপনার কলাম ও ফিল্টার মনে রাখে; প্রতিটি তারিখে ক্যালেন্ডার; টাকার প্রতিটি বোতাম আগে জার্নাল দেখায়।</p></div>
+</div>
+
+<h2 id="p15">15. Who may do what</h2>
+<div class="pair">
+<div class="lang" lang="en"><p>Two rules run through everything:</p><ul><li><b>Maker ≠ checker.</b> The person who prepares something (a reserve, a bill, a journal, a payroll, a budget) can never be the one who approves it. The person who approves can never be the one who pays. Roles cannot be given both sides without a warning.</li><li><b>Limits.</b> Every role has an amount up to which it may approve. Above it, the item routes to the next approver automatically (claims manager → finance manager → CFO).</li></ul><p>Users can be <b>branch-scoped</b>: a Chattogram officer sees only Chattogram's policies, receipts and claims.</p></div>
+<div class="lang" lang="bn"><p>দুটি নিয়ম সবকিছুতে চলে:</p><ul><li><b>যে বানায় সে যাচাই করে না।</b> যে কিছু তৈরি করে (রিজার্ভ, বিল, জার্নাল, পেরোল, বাজেট) সে কখনো অনুমোদন দিতে পারে না। যে অনুমোদন দেয় সে পরিশোধ করতে পারে না। কোনো রোলকে দুই দিক দিলে সতর্কতা আসে।</li><li><b>সীমা।</b> প্রতিটি রোল একটি অঙ্ক পর্যন্ত অনুমোদন দিতে পারে। বেশি হলে নিজে থেকেই পরের অনুমোদকের কাছে যায় (ক্লেইম ম্যানেজার → ফাইন্যান্স ম্যানেজার → সিএফও)।</li></ul><p>ব্যবহারকারী <b>ব্রাঞ্চভিত্তিক</b> হতে পারে: চট্টগ্রামের অফিসার শুধু চট্টগ্রামের পলিসি, রিসিট, ক্লেইম দেখে।</p></div>
+</div>
+<div class="wrap"><table>
+<tr><th>Role</th><th>Prepares</th><th>Approves</th><th>Pays / releases</th></tr>
+<tr><td>Branch officer</td><td>quotes, policies, receipts, claim registration</td><td>—</td><td>—</td></tr>
+<tr><td>Branch manager</td><td>refund and write-off requests, facultative cover, petty cash spending</td><td>receipt allocation, referrals within limit</td><td>—</td></tr>
+<tr><td>Claims officer / manager</td><td>reserves</td><td>claim payments within limit</td><td>—</td></tr>
+<tr><td>Accountant</td><td>journals, bills, payment runs, asset register, budgets, replenishment requests</td><td>—</td><td>salaries, commission</td></tr>
+<tr><td>Finance manager</td><td>treaties, provisions, returns</td><td>journals, bills, payroll, budgets, petty cash, payment runs</td><td>claim payments, refunds</td></tr>
+<tr><td>CFO</td><td>—</td><td>provisions, over-limit items, early lock</td><td>payment runs</td></tr>
+<tr><td>HR manager</td><td>employees, payroll calculation</td><td>—</td><td>—</td></tr>
+<tr><td>Auditor</td><td>reads and exports everything</td><td>—</td><td>—</td></tr>
+</table></div>
+
+<h2 id="p16">16. How it is built</h2>
+<pre class="mermaid">
+flowchart LR
+  B["Browser<br/>Vue 3 screens"] --> S["Laravel 13 app<br/>modules: Insurance, Finance, People, Accounting, Platform, Distribution"]
+  S --> DB[("PostgreSQL 17<br/>146 tables · one database, many companies<br/>row-level security fences each tenant")]
+  S --> W["Queue worker<br/>runs the posting engine"]
+  S --> N["Scheduler<br/>nightly: earning, activation, reminders, renewals"]
+  W --> DB
+  N --> DB
+</pre>
+<div class="pair">
+<div class="lang" lang="en"><ul><li><b>Business tables</b> (policies, claims, bills, employees) record what happened. <b>Accounting tables</b> (accounting_events → journals → journal_lines; accounts; fiscal_periods) record what it cost. The event links the two, so any number can be traced back to its document, and any document forward to its journals.</li><li><b>Nothing is deleted.</b> Corrections are reversal journals. Every change is audited: who, when, what, why.</li><li><b>Money is stored in paisa</b> (whole numbers) so there are no rounding errors.</li><li><b>Document numbers</b> carry the branch: <code>POL-HO-2026-000008</code>, <code>RCT-CTG-2026-000001</code>.</li><li><b>Configuration, not code</b>: chart of accounts, account roles, posting rules, tariffs, commission schemes, tax rates, approval limits, payroll rules, return layouts.</li></ul></div>
+<div class="lang" lang="bn"><ul><li><b>ব্যবসার টেবিল</b> (পলিসি, ক্লেইম, বিল, কর্মী) কী ঘটেছে তা রাখে। <b>হিসাবের টেবিল</b> (accounting_events → journals → journal_lines; accounts; fiscal_periods) তার খরচ রাখে। ইভেন্ট দুটোকে যুক্ত করে, তাই যেকোনো সংখ্যা তার ডকুমেন্টে আর যেকোনো ডকুমেন্ট তার জার্নালে খুঁজে পাওয়া যায়।</li><li><b>কিছুই মোছা হয় না।</b> সংশোধন মানে উল্টো জার্নাল। প্রতিটি পরিবর্তন অডিট হয়: কে, কখন, কী, কেন।</li><li><b>টাকা পয়সায় রাখা হয়</b> (পূর্ণ সংখ্যা), তাই রাউন্ডিংয়ের ভুল নেই।</li><li><b>ডকুমেন্ট নম্বরে ব্রাঞ্চ থাকে</b>: <code>POL-HO-2026-000008</code>, <code>RCT-CTG-2026-000001</code>।</li><li><b>কনফিগারেশন, কোড নয়</b>: চার্ট অব অ্যাকাউন্টস, অ্যাকাউন্ট রোল, পোস্টিং রুল, ট্যারিফ, কমিশন স্কিম, করহার, অনুমোদন সীমা, পেরোল নিয়ম, রিটার্ন ছক।</li></ul></div>
+</div>
+</main>
