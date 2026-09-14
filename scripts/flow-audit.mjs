@@ -1,14 +1,25 @@
 #!/usr/bin/env node
 /**
- * Flow audit (docs/flow-audit.md): walks market cross-check Part A steps 1–14 ("a week in a non-life insurer") in a browser, as the role each step
- * belongs to, on the Part A demo company. Each step is recorded as pass, partial (done, with a shortfall) or fail, with notes and a screenshot.
+ * Flow audit (docs/flow-audit.md): walks market cross-check Part A steps 1–14 ("a week in a non-life insurer") in a browser, as the role each step belongs
+ * to, on the Part A demo company, and MEASURES the work a user does (UX brief §1 throughput): the starting screen, the screens reached, the drawers and
+ * dialogs opened, clicks and keystrokes, fields without a sensible default, required fields that cannot be known yet, next steps not offered on
+ * completion, and every point where the user must leave the flow to create or look up something.
  *
- *   composer db:fresh && php artisan erp:demo      # fresh story: the audit issues, pays, reserves and closes for real
- *   php artisan serve --port=8765 &                 # plus `npm run build`
- *   composer worker &                                # posts accounting events; without it the close finds unposted receipts as variances
+ * Counting rules — the script behaves like a user who knows the app:
+ * - Each step starts on the screen a user would be on (Home, or where the previous step ended) and moves by clicking (sidebar, links, buttons).
+ * - A click is a pointer press on a control; choosing from a select counts 2 (open + choose); a lookup pick counts 1 click after typing.
+ * - Keystrokes are the characters typed plus keys pressed (Enter, Tab, shortcuts). Money is typed as digits without separators.
+ * - A field that already holds the right value is not touched: that is a sensible default, and costs nothing. A field that is empty or wrong costs
+ *   the keystrokes/clicks and is listed as "no default".
+ * - Screens = distinct pages (Inertia page components, e.g. `quotations/Workbench`) visited during the step, including the starting one: a tab or a record saved
+ *   in place is the same screen. Drawers and dialogs are counted when they open.
+ *
+ *   composer db:fresh && php artisan erp:demo      # fresh story; step 13 locks September
+ *   npm run build && php artisan serve --port=8765 &
+ *   composer worker &                                # restart it after code changes (php artisan queue:restart)
  *   node scripts/flow-audit.mjs [--base http://nonlife.localhost:8765]
  *
- * Writes storage/flow-audit/results.json and storage/flow-audit/<step>.png.
+ * Writes storage/flow-audit/results.json, storage/flow-audit/table.md and storage/flow-audit/step-NN.png.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -23,15 +34,71 @@ mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome' });
 const results = [];
 const sessions = new Map();
-const today = new Date().toISOString().slice(0, 10);
-const state = {};
+const state = { stamp: Date.now().toString().slice(-4) };
 
-/** A signed-in page for a demo role user, one browser context per user. */
+const screenOf = (url) => {
+    const u = new URL(url);
+    return u.pathname.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '{id}') + (u.searchParams.get('tab') ? `?tab=${u.searchParams.get('tab')}` : '');
+};
+
+/** The Inertia page component on screen (what the user perceives as one screen). */
+const componentOf = async (page) => page.evaluate(() => {
+    if (window.history.state?.page?.component) return window.history.state.page.component;
+    try {
+        return JSON.parse(document.querySelector('script[data-page]')?.textContent ?? '{}').component ?? location.pathname;
+    } catch {
+        return location.pathname;
+    }
+}).catch(() => screenOf(page.url()));
+
+/** The meter of the step running now. */
+let meter = null;
+
+class Meter {
+    constructor(page) {
+        this.page = page;
+        this.start = screenOf(page.url());
+        this.screens = new Set([this.start]);
+        this.clicks = 0;
+        this.keys = 0;
+        this.dialogs = 0;
+        this.leaves = [];
+        this.noDefaults = [];
+        this.unknowable = [];
+        this.nextSteps = [];
+        this.notes = [];
+    }
+
+    async restart() {
+        this.start = await componentOf(this.page);
+        this.screens = new Set([this.start]);
+    }
+
+    async track() {
+        this.screens.add(await componentOf(this.page));
+    }
+}
+
+/** A signed-in page for a demo role user, one browser context per user; navigation and dialogs feed the current meter. */
 async function as(role) {
     if (sessions.has(role)) return sessions.get(role);
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
     const page = await context.newPage();
-    page.setDefaultTimeout(8000);
+    page.setDefaultTimeout(10000);
+    await page.exposeFunction('__erpAuditDialog', (n) => {
+        if (meter?.page === page) meter.dialogs += n;
+    });
+    await context.addInitScript(() => {
+        const count = (node) => {
+            if (!(node instanceof Element)) return;
+            const matches = [node, ...node.querySelectorAll('[role="dialog"],[role="alertdialog"]')].filter((el) => /^(dialog|alertdialog)$/.test(el.getAttribute('role') ?? ''));
+            if (matches.length) window.__erpAuditDialog?.(matches.length);
+        };
+        new MutationObserver((mutations) => mutations.forEach((m) => m.addedNodes.forEach(count))).observe(document, { childList: true, subtree: true });
+    });
+    page.on('framenavigated', (frame) => {
+        if (frame === page.mainFrame() && meter?.page === page) void meter.track();
+    });
     await page.goto(`${base}/login`);
     await page.fill('input[type=email]', `${role}@nonlife.local`);
     await page.fill('input[type=password]', password);
@@ -42,445 +109,468 @@ async function as(role) {
 
 async function settle(page) {
     await page.waitForLoadState('networkidle').catch(() => undefined);
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(300);
+    if (meter?.page === page) await meter.track();
 }
 
-/** Types into a lookup and picks the first option whose text contains `pick`. */
-async function lookup(page, input, text, pick = text) {
-    await input.click();
-    await input.fill(text);
-    const option = page.getByRole('option').filter({ hasText: pick }).first();
+// ── Measured user actions ─────────────────────────────────────────────────────────────────────────────────
+async function click(locator) {
+    await locator.click();
+    meter.clicks += 1;
+    await settle(meter.page);
+}
+async function press(key) {
+    await meter.page.keyboard.press(key);
+    meter.keys += 1;
+    await settle(meter.page);
+}
+/** Types into a field the user must fill (no default check). */
+async function type(locator, text) {
+    await locator.click();
+    meter.clicks += 1;
+    await locator.fill(text);
+    meter.keys += text.length;
+}
+/** Fills a field only when it does not already hold what the user wants; otherwise it was a sensible default. */
+async function ensure(locator, wanted, label, { select = false, typed = wanted, accept = (v) => v === wanted } = {}) {
+    const current = await locator.inputValue().catch(() => '');
+    if (accept(current)) return;
+    meter.noDefaults.push(`${label}${current ? ` (was “${current}”)` : ''}`);
+    if (select) {
+        await locator.selectOption(wanted);
+        meter.clicks += 2;
+    } else {
+        await type(locator, typed);
+    }
+}
+/** Lookup: click, type the query, pick the option. */
+async function lookup(input, text, pick = text) {
+    await type(input, text);
+    const option = meter.page.getByRole('option').filter({ hasText: pick }).first();
     await option.waitFor();
     await option.dispatchEvent('mousedown');
+    meter.clicks += 1;
 }
-
-/** Confirms the journal preview dialog (the deliberate stop before money moves) and returns its lines as text. */
-async function confirmJournal(page) {
+/** Confirms the journal preview dialog (the deliberate stop before money moves), returns its lines. */
+async function confirmJournal() {
+    const page = meter.page;
     const dialog = page.getByRole('dialog').filter({ hasText: 'Back to the form' });
     await dialog.waitFor();
     const lines = (await dialog.locator('tbody tr').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
     await dialog.getByRole('button').last().click();
+    meter.clicks += 1;
     await dialog.waitFor({ state: 'detached' }).catch(() => undefined);
     await settle(page);
     return lines;
 }
+async function nav(label) {
+    // Sidebar items by address (their names carry badge counts, "Bank ● 5").
+    const hrefs = { Quotes: '/quotations', Receipts: '/receipts', Suspense: '/suspense', Claims: '/claims', Bank: '/bank', Journals: '/accounting/journals', Close: '/close',
+        'Trial balance': '/accounting/trial-balance', Reports: '/reports', Producers: '/distribution/producers', Policies: '/policies' };
+    await click(meter.page.locator(`nav[aria-label="Main"] a[href="${hrefs[label] ?? label}"]`).first());
+}
+/** Records whether the page now offers the natural next step (a button or link matching). */
+async function offers(pattern, what) {
+    const found = (await meter.page.getByRole('button', { name: pattern }).count()) + (await meter.page.getByRole('link', { name: pattern }).count());
+    if (!found) meter.nextSteps.push(what);
+    return found > 0;
+}
+const tab = (page, name) => page.getByRole('tab', { name }).or(page.getByRole('link', { name, exact: true })).or(page.getByRole('button', { name, exact: true })).first();
 
 async function step(no, title, role, run) {
-    const notes = [];
-    let status = 'pass';
     let page;
+    let status = 'done';
     try {
         page = await as(role);
-        const outcome = await run(page, notes);
-        if (outcome === 'partial' || outcome === 'fail') status = outcome;
+        meter = new Meter(page);
+        await meter.restart();
+        await run(page, meter);
     } catch (error) {
-        status = 'fail';
-        notes.push(`Stopped: ${String(error.message ?? error).split('\n')[0]}`);
+        status = 'stopped';
+        meter?.notes.push(`Stopped: ${String(error.message ?? error).split('\n')[0]}`);
     }
     if (page) await page.screenshot({ path: `${out}/step-${String(no).padStart(2, '0')}.png` }).catch(() => undefined);
-    results.push({ step: no, title, role, status, notes });
-    console.log(`${String(no).padStart(2)} ${status.padEnd(7)} ${title}${notes.length ? `\n     - ${notes.join('\n     - ')}` : ''}`);
+    const m = meter;
+    const row = { step: no, title, role, status, start: m.start, screens: [...m.screens], screenCount: m.screens.size, dialogs: m.dialogs, clicks: m.clicks, keys: m.keys,
+        leaves: m.leaves, noDefaults: m.noDefaults, unknowable: m.unknowable, nextSteps: m.nextSteps, notes: m.notes };
+    results.push(row);
+    console.log(`${String(no).padStart(2)} ${status.padEnd(7)} screens ${row.screenCount} dialogs ${row.dialogs} clicks ${row.clicks} keys ${row.keys} — ${title}`);
+    for (const [label, list] of [['leave', m.leaves], ['no default', m.noDefaults], ['unknowable', m.unknowable], ['next step not offered', m.nextSteps], ['note', m.notes]]) {
+        for (const item of list) console.log(`     ${label}: ${item}`);
+    }
+    console.log(`     screens: ${row.screens.join(' → ')}`);
 }
 
-// ── Day 1: branch officer ───────────────────────────────────────────────────────────────────────────────
-await step(1, 'New motor policy: product, customer, vehicle, sum insured, premium, VAT and stamp duty', 'branch.officer', async (page, notes) => {
-    // Phase 3 R7: a rated product is quoted in the quote workbench (risk form, live premium), accepted as a proposal and approved by the underwriting rules.
-    await page.goto(`${base}/quotations/create`);
+// ── Day 1: branch officer ────────────────────────────────────────────────────────────────────────────────
+await step(1, 'New motor policy: product, customer (new), vehicle, sum insured, premium, VAT and stamp duty', 'branch.officer', async (page, m) => {
+    await page.goto(`${base}/home`);
     await settle(page);
-    const product = page.locator('#product_id');
-    await product.selectOption({ label: await product.locator('option', { hasText: 'Motor' }).first().innerText() });
-    await page.locator('#inception input, input#inception').first().fill('t').catch(async () => page.getByLabel('Cover starts').fill('t'));
-    await lookup(page, page.locator('#customer_party_id'), 'Karim');
-    await lookup(page, page.locator('#producer_id'), 'AG-001');
-    await page.locator('#risk_vehicle_type').selectOption('private');
-    const stamp = Date.now().toString().slice(-4);
-    await page.locator('#risk_registration_no').fill(`DHA-METRO-GA-19-${stamp}`);
-    await page.locator('#risk_chassis_no').fill(`AUDIT-${stamp}`);
-    await page.locator('#risk_engine_cc').fill('1500');
-    await page.locator('#risk_seats').fill('5');
-    await page.locator('#risk_year_of_manufacture').fill('2020');
-    await page.locator('#risk_driver_age').fill('40');
-    await page.locator('#risk_sum_insured').fill('450,000.00');
+    await m.restart();
+    await nav('Quotes');
+    await click(page.getByRole('link', { name: /New quote/ }).or(page.getByRole('button', { name: /New quote/ })).first());
+    await ensure(page.locator('#branch_id'), await page.locator('#branch_id option').filter({ hasText: 'Head Office' }).first().getAttribute('value'), 'branch', { select: true });
+    const motor = await page.locator('#product_id option').filter({ hasText: 'Motor' }).first().getAttribute('value');
+    await ensure(page.locator('#product_id'), motor, 'product', { select: true });
+    await ensure(page.locator('#inception input, input#inception').first(), '', 'cover start', { accept: (v) => v !== '', typed: 't' });
+
+    // A new customer: created inline from the lookup (Part A "enters the customer (or creates one)").
+    const name = `Shafiq Rahman ${state.stamp}`;
+    await type(page.locator('#customer_party_id'), name);
+    const create = page.getByRole('button', { name: /New customer/ });
+    if ((await create.count()) === 0) {
+        m.leaves.push('customer: no inline create — Parties → New party, then back');
+    } else {
+        await create.dispatchEvent('mousedown');
+        m.clicks += 1;
+        await page.getByRole('button', { name: 'Create customer' }).waitFor();
+        await click(page.getByRole('button', { name: 'Create customer' }));
+    }
+    // The producer exists here; a producer that does not cannot be created from the quote.
+    await lookup(page.locator('#producer_id'), 'AG-001');
+    m.leaves.push('producer (when new): no inline create — Distribution → Producers and a licence, then back');
+
+    await ensure(page.locator('#risk_vehicle_type'), 'private', 'vehicle type', { select: true });
+    for (const [field, value] of [['registration_no', `DHA-METRO-GA-19-${state.stamp}`], ['chassis_no', `AUDIT-${state.stamp}`], ['engine_cc', '1500'], ['seats', '5'],
+        ['year_of_manufacture', '2020'], ['driver_age', '40'], ['sum_insured', '450000']]) {
+        const input = page.locator(`#risk_${field}`);
+        if ((await input.count()) === 0) continue;
+        if ((await input.inputValue()) === '') await type(input, value);
+    }
+    const chassisLabel = await page.locator('label[for="risk_chassis_no"]').innerText().catch(() => '');
+    if (chassisLabel && !/optional/i.test(chassisLabel)) m.unknowable.push('chassis number required to quote (a customer asking for a price rarely has it)');
     await page.getByText(/Gross premium/).first().waitFor();
-    const rail = (await page.getByRole('complementary', { name: 'Premium' }).innerText()).replace(/\s+/g, ' ');
-    notes.push(`Premium worked out from the tariff: ${rail.slice(0, 240)}`);
-    await Promise.all([page.waitForURL(/\/quotations\/[0-9a-f-]{36}/), page.getByRole('button', { name: 'Issue quotation' }).click()]);
-    await settle(page);
-    await page.getByRole('button', { name: /make proposal/ }).click();
-    await Promise.all([page.waitForURL(/\/proposals\/[0-9a-f-]{36}/), page.getByRole('button', { name: 'Make proposal', exact: true }).click()]);
-    await settle(page);
-    await page.getByRole('button', { name: 'Verify identity' }).click();
-    await page.locator('#id_number').fill('1990123456789');
-    await page.getByRole('button', { name: 'Record verification' }).click();
-    await settle(page);
-    await page.getByRole('button', { name: 'Submit to underwriting' }).click();
-    await page.getByRole('button', { name: 'Submit proposal', exact: true }).click();
-    await settle(page);
+    await click(page.getByRole('button', { name: 'Issue quotation' }));
+    await click(page.getByRole('button', { name: /make proposal/ }));
+    await click(page.getByRole('button', { name: 'Make proposal', exact: true }));
+    await page.waitForURL(/\/proposals\//);
+    await click(page.getByRole('button', { name: 'Verify identity' }));
+    await type(page.locator('#id_number'), '1990123456789');
+    await click(page.getByRole('button', { name: 'Record verification' }));
+    await click(page.getByRole('button', { name: 'Submit to underwriting' }));
+    await click(page.getByRole('button', { name: 'Submit proposal', exact: true }));
     state.proposalUrl = page.url();
-    const approved = await page.getByText('Approved automatically').count();
-    notes.push(`Quotation issued and proposal ${approved ? 'approved automatically' : 'referred'} at ${state.proposalUrl.replace(base, '')}.`);
-    return approved ? 'pass' : 'partial';
+    m.notes.push((await page.getByText('Approved automatically').count()) ? 'Proposal approved automatically.' : 'Proposal referred.');
 });
 
-await step(2, 'Issue: policy number allocated, accounting written behind the scenes', 'branch.officer', async (page, notes) => {
-    let outcome = 'pass';
-    await page.goto(state.proposalUrl);
-    await settle(page);
-    await page.getByRole('button', { name: 'Issue policy' }).click();
-    await page.getByLabel('Issue date').fill('t');
-    await page.getByRole('button', { name: /^Review and issue/ }).click();
-    const lines = await confirmJournal(page);
-    notes.push(`Journal preview: ${lines.join(' | ')}`);
-    await page.waitForURL(/\/policies\/[0-9a-f-]{36}/);
+await step(2, 'Issue: policy number allocated, accounting written behind the scenes', 'branch.officer', async (page, m) => {
+    await click(page.getByRole('button', { name: 'Issue policy' }));
+    await ensure(page.getByLabel('Issue date'), '', 'issue date', { accept: (v) => v !== '', typed: 't' });
+    await click(page.getByRole('button', { name: /^Review and issue/ }));
+    const lines = await confirmJournal();
+    m.notes.push(`Journal: ${lines.join(' | ')}`);
+    await page.waitForURL(/\/policies\//);
     await settle(page);
     state.policyUrl = page.url().split('?')[0];
-    const heading = (await page.locator('h1').first().innerText()).trim();
-    state.policyNumber = heading;
+    state.policyNumber = (await page.locator('h1').first().innerText()).trim();
     state.gross = (await page.locator('dt', { hasText: /Gross premium/ }).locator('xpath=following-sibling::dd').first().innerText()).trim();
-    notes.push(`Issued as ${heading}, gross premium ${state.gross}.`);
-    if (!/^POL-[A-Z0-9]+-\d{4}-\d{6}$/.test(heading)) {
-        notes.push('Number does not follow POL-<BRANCH>-<FY>-<seq>.');
-        outcome = 'partial';
-    }
-    if (!lines.some((l) => /Stamp/i.test(l))) {
-        notes.push('No stamp duty line in the journal.');
-        outcome = 'partial';
-    }
-    return outcome;
+    m.notes.push(`Issued ${state.policyNumber}, gross ${state.gross}.`);
+    await offers(/record (a )?receipt|take (the )?payment/i, 'after issue → “Record receipt?”');
 });
 
-await step(3, 'Receive the premium by bank transfer and allocate to the installment; receipt number for the customer', 'branch.manager', async (page, notes) => {
-    let outcome = 'pass';
-    notes.push('Done as the branch manager: a branch officer may record receipts but not allocate them (segregation of duties).');
-    await page.goto(`${base}/receipts/create`);
-    await settle(page);
-    await page.getByLabel(/Amount received/).fill(state.gross);
-    await page.getByLabel('Value date').fill('t');
-    await page.locator('#channel').selectOption('bank_transfer');
-    await page.getByLabel('Reference').fill('TRF KARIM MOTOR 2');
-    if ((await page.locator('#allocation-0').count()) === 0) await page.getByRole('button', { name: 'Add an installment' }).click();
-    await lookup(page, page.locator('#allocation-0'), state.policyNumber, state.policyNumber);
-    await page.locator('#allocation-amount-0').fill(state.gross);
-    await page.getByRole('button', { name: /^Review and post/ }).click();
-    const lines = await confirmJournal(page);
-    notes.push(`Journal preview: ${lines.join(' | ')}`);
-    state.receiptPreview = lines;
-    await page.waitForURL(/\/receipts\/[0-9a-f-]{36}/);
-    state.receiptUrl = page.url();
-    notes.push(`Receipt ${(await page.locator('h1').first().innerText()).trim()} recorded.`);
-    await page.goto(`${state.receiptUrl.split('?')[0]}?tab=documents`);
-    await settle(page);
-    const generate = page.getByRole('button', { name: 'Generate receipt' });
-    if ((await generate.count()) === 0) {
-        notes.push('No printable receipt for the customer.');
-        outcome = 'partial';
-    } else {
-        await generate.click();
-        const printed = await page.getByText('Nothing printed yet').waitFor({ state: 'detached', timeout: 60000 }).then(() => true).catch(() => false);
-        await settle(page);
-        if (printed) {
-            notes.push('Receipt PDF generated for the customer from the Documents tab (headless Chromium).');
-        } else {
-            notes.push('Generating the receipt did not finish within a minute.');
-            outcome = 'partial';
-        }
-    }
-    return outcome;
-});
-
-await step(4, 'Commission accrued on the receipt for an agent on a commission scheme', 'finance.manager', async (page, notes) => {
+await step(3, 'Receive the premium by bank transfer, allocate to the installment, receipt for the customer', 'branch.manager', async (page, m) => {
+    m.notes.push('Branch manager: a branch officer may record but not allocate receipts (SoD).');
     await page.goto(state.policyUrl);
     await settle(page);
-    await page.getByRole('button', { name: /View accounting/ }).click();
-    await page.waitForTimeout(1200);
-    const text = await page.locator('body').innerText();
-    if (!/Commission Expense/i.test(text)) {
-        notes.push('No commission journal on the policy after the receipt.');
-        return 'fail';
+    await m.restart();
+    const fromPolicy = page.getByRole('link', { name: /record (a )?receipt|take (the )?payment/i }).or(page.getByRole('button', { name: /record (a )?receipt|take (the )?payment/i }));
+    if (await fromPolicy.count()) {
+        await click(fromPolicy.first());
+    } else {
+        m.leaves.push('receipt is started from Receipts → Record a receipt, not from the policy');
+        await nav('Receipts');
+        await click(page.getByRole('link', { name: /Record a receipt/ }).or(page.getByRole('button', { name: /Record a receipt/ })).first());
     }
-    notes.push(`The policy's accounting shows commission expense and commission payable (10% of ${state.gross}) posted with the allocation.`);
-    return 'pass';
+    const plain = state.gross.replace(/,/g, '').replace(/\.00$/, '');
+    const same = (v) => v.replace(/,/g, '') === state.gross.replace(/,/g, '');
+    await ensure(page.locator('#amount'), '', 'amount', { accept: same, typed: plain });
+    await ensure(page.locator('#value_date input, input#value_date').first(), '', 'value date', { accept: (v) => v !== '', typed: 't' });
+    await ensure(page.locator('#channel'), 'bank_transfer', 'channel', { select: true });
+    await type(page.locator('#reference'), `TRF ${state.stamp}`);
+    await ensure(page.locator('#branch_id'), await page.locator('#branch_id option').filter({ hasText: 'Head Office' }).first().getAttribute('value'), 'branch', { select: true });
+    if ((await page.locator('#allocation-0').count()) === 0) await click(page.getByRole('button', { name: 'Add an installment' }));
+    const allocated = await page.locator('#allocation-0').inputValue();
+    if (!allocated.includes(state.policyNumber)) await lookup(page.locator('#allocation-0'), state.policyNumber, state.policyNumber);
+    await ensure(page.locator('#allocation-amount-0'), '', 'allocation amount', { accept: same, typed: plain });
+    await click(page.getByRole('button', { name: /^Review and post/ }));
+    m.notes.push(`Journal: ${(await confirmJournal()).join(' | ')}`);
+    await page.waitForURL(/\/receipts\/[0-9a-f-]{36}/);
+    state.receiptUrl = page.url().split('?')[0];
+    if (!(await offers(/generate receipt|print receipt/i, 'after receipt → “Print receipt” (it is only on the Documents tab)'))) await click(tab(page, 'Documents'));
+    await click(page.getByRole('button', { name: /Generate receipt|Print receipt/ }).first());
+    await page.getByText('Nothing printed yet').waitFor({ state: 'detached', timeout: 60000 }).catch(() => m.notes.push('Receipt PDF did not finish within a minute.'));
+});
+
+await step(4, 'Commission accrued on the receipt for an agent on a commission scheme', 'finance.manager', async (page, m) => {
+    await page.goto(state.policyUrl);
+    await settle(page);
+    await m.restart();
+    await click(page.getByRole('button', { name: /View accounting/ }));
+    await page.waitForTimeout(1000);
+    m.notes.push(/Commission Expense/i.test(await page.locator('body').innerText()) ? 'Commission expense and payable on the policy; no user action (it accrues on allocation).' : 'No commission journal on the policy.');
 });
 
 // ── Day 2: claims ────────────────────────────────────────────────────────────────────────────────────────
-await step(5, 'Register the accident: policy, date of loss, description, documents — nothing financial yet', 'claims.officer', async (page, notes) => {
-    let outcome = 'pass';
-    await page.goto(`${base}/claims/create`);
-    await settle(page);
-    await lookup(page, page.locator('#policy_id'), state.policyNumber, state.policyNumber);
-    await page.getByRole('button', { name: /^Continue/ }).click();
-    await page.getByLabel('Date of loss').fill('t');
-    await page.getByLabel('Reported on').fill('t');
-    await page.getByLabel('What happened').fill('Rear collision at Farmgate signal');
-    await page.getByRole('button', { name: /^Continue/ }).click();
-    await Promise.all([page.waitForURL(/\/claims\/[0-9a-f-]{36}/), page.getByRole('button', { name: /^Register claim/ }).click()]);
-    state.claimUrl = page.url();
-    notes.push(`Claim ${(await page.locator('h1').first().innerText()).trim()} registered; status registered, no journal.`);
-    await page.getByRole('tab', { name: 'Documents' }).click().catch(async () => page.getByRole('button', { name: 'Documents' }).click());
-    await page.waitForTimeout(400);
-    if ((await page.locator('input[type=file]').count()) === 0) {
-        notes.push('Documents cannot be attached to the claim.');
-        outcome = 'partial';
-    } else {
-        await page.locator('input[type=file]').first().setInputFiles({ name: 'survey-report.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n% flow audit\n') });
-        await page.getByLabel('Description').fill('Surveyor report').catch(() => undefined);
-        await page.locator('form button[type=submit]').last().click();
-        await page.waitForTimeout(1500);
-        await settle(page);
-        notes.push((await page.getByText('survey-report.pdf').count()) > 0 ? 'Survey report attached and listed.' : 'Attaching the survey report did not list it.');
-        if ((await page.getByText('survey-report.pdf').count()) === 0) outcome = 'partial';
-    }
-    return outcome;
-});
-
-await step(6, 'Surveyor estimates 200,000: set the reserve (claims expense / outstanding claims)', 'claims.officer', async (page, notes) => {
-    await page.goto(state.claimUrl);
-    await settle(page);
-    await page.getByRole('button', { name: 'Set reserve' }).click();
-    await page.getByLabel(/New total reserve/).fill('200,000.00');
-    await page.getByLabel('Reason', { exact: true }).fill('Surveyor estimate');
-    await page.getByLabel('Date', { exact: true }).fill('t');
-    await page.getByRole('button', { name: /^Review and post/ }).click();
-    notes.push(`Journal preview: ${(await confirmJournal(page)).join(' | ')}`);
-    return 'pass';
-});
-
-await step(7, 'Settle at 180,000: claims manager approves (limit), finance releases (maker/checker), close releases the rest', 'claims.manager', async (page, notes) => {
-    let outcome = 'pass';
-    await page.goto(state.claimUrl);
-    await settle(page);
-    await page.getByRole('button', { name: 'Approve payment' }).click();
-    await page.getByLabel(/^Amount/).fill('180,000.00');
-    const payee = page.locator('#payee_party_id');
-    await payee.selectOption({ index: 1 });
-    await page.getByLabel('Approval date').fill('t');
-    await page.getByRole('button', { name: /^Review and approve/ }).click();
-    notes.push(`Approval preview: ${(await confirmJournal(page)).join(' | ') || 'nothing posted yet (routed for approval)'}`);
-    const body = await page.locator('body').innerText();
-    if (/pending approval/i.test(body)) {
-        notes.push('The payment went to the approval queue (above the claims manager\'s limit).');
-    } else {
-        notes.push('Approved within the claims manager\'s limit.');
-    }
-    if ((await page.getByRole('button', { name: 'Request release' }).count()) === 0) {
-        notes.push('No release to request (approval still pending or not configured).');
-        return 'partial';
-    }
-    await page.getByRole('button', { name: 'Request release' }).click();
-    await settle(page);
-
-    const finance = await as('finance.manager');
-    await finance.goto(state.claimUrl);
-    await settle(finance);
-    await finance.getByRole('button', { name: 'Pay', exact: true }).click();
-    await finance.getByLabel('Paid on').fill('t');
-    await finance.getByRole('button', { name: /^Review and pay/ }).click();
-    notes.push(`Payment preview (finance manager): ${(await confirmJournal(finance)).join(' | ')}`);
-
-    await page.goto(state.claimUrl);
-    await settle(page);
-    await page.getByRole('button', { name: 'Close claim' }).click();
-    await page.getByLabel('Reason', { exact: true }).fill('Settled at 180,000');
-    await page.getByLabel('Date', { exact: true }).fill('t');
-    await page.getByRole('button', { name: /^Review and close/ }).click();
-    const closing = await confirmJournal(page);
-    notes.push(`Close preview: ${closing.join(' | ')}`);
-    if (!closing.some((l) => /20,000\.00/.test(l))) outcome = 'partial';
-    return outcome;
-});
-
-// ── Day 3: accountant ───────────────────────────────────────────────────────────────────────────────────
-await step(8, 'Home queue shows unallocated receipts, unmatched bank lines, journals awaiting approval; allocate money in suspense', 'accountant', async (page, notes) => {
+await step(5, 'Register the accident: policy, date of loss, description, documents', 'claims.officer', async (page, m) => {
     await page.goto(`${base}/home`);
     await settle(page);
-    const queues = await page.locator('section h2').allInnerTexts();
-    notes.push(`Home queues: ${queues.join(', ')}.`);
-    await page.goto(`${base}/suspense`);
-    await settle(page);
-    await page.getByRole('row').filter({ hasText: 'DEP 7781' }).first().click().catch(async () => page.locator('tbody tr').first().click());
-    await page.getByRole('link', { name: 'Open the allocation workbench' }).click();
-    await settle(page);
-    const candidates = page.locator('section[aria-label="Candidate installments"] tbody tr').filter({ hasText: 'Rahima' });
-    await candidates.first().click();
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(300);
-    // Enter fills the line with what the installment still needs, up to what is left in suspense.
-    await page.locator('section[aria-label="Receipt"] input[id^="line-"]').first().waitFor();
-    await page.getByLabel('Allocation date').fill('t');
-    await page.getByRole('button', { name: /^Allocate/ }).click();
-    notes.push(`Allocation preview: ${(await confirmJournal(page)).join(' | ')}`);
-    return 'pass';
+    await m.restart();
+    await nav('Claims');
+    await click(page.getByRole('link', { name: /Register a claim/ }).or(page.getByRole('button', { name: /Register a claim/ })).first());
+    await lookup(page.locator('#policy_id'), state.policyNumber, state.policyNumber);
+    await click(page.getByRole('button', { name: /^Continue/ }));
+    await ensure(page.getByLabel('Date of loss'), '', 'date of loss', { accept: (v) => v !== '', typed: 't' });
+    await ensure(page.getByLabel('Reported on'), '', 'reported on', { accept: (v) => v !== '', typed: 't' });
+    await type(page.getByLabel('What happened'), 'Rear collision at Farmgate signal');
+    await click(page.getByRole('button', { name: /^Continue/ }));
+    await click(page.getByRole('button', { name: /^Register claim/ }));
+    await page.waitForURL(/\/claims\/[0-9a-f-]{36}/);
+    state.claimUrl = page.url().split('?')[0];
+    if ((await page.locator('input[type=file]').count()) === 0) {
+        m.notes.push('Documents are attached after registering, on the claim page Documents tab.');
+        await click(tab(page, 'Documents'));
+    }
+    const file = page.locator('input[type=file]').first();
+    if ((await file.count()) === 0) {
+        m.leaves.push('documents cannot be attached to the claim');
+    } else {
+        await file.setInputFiles({ name: 'survey-report.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n% flow audit\n') });
+        m.clicks += 2; // choose the file in the picker
+        await click(page.locator('form button[type=submit]').last());
+    }
+    await offers(/set reserve/i, 'after registering → “Set reserve”');
 });
 
-await step(9, 'Import the bank statement CSV, accept suggested matches, leave the exceptions', 'accountant', async (page, notes) => {
-    let outcome = 'pass';
-    await page.goto(`${base}/bank`);
-    await settle(page);
-    await page.locator('tbody tr').filter({ hasText: 'City Bank' }).first().click();
-    const open = page.getByRole('link', { name: /Open|statement|matching/i }).first();
-    if (await open.count()) await open.click(); else await page.keyboard.press('Enter');
-    await page.waitForURL(/\/bank\/[0-9a-f-]{36}/);
-    await settle(page);
-    notes.push('The September statement CSV was imported by the demo (storage/app/demo/city-bank-2026-09.csv); the import button is on this page.');
-    const statement = page.locator('section[aria-label="Statement lines"] tbody tr');
-    for (let attempt = 0; attempt < 6; attempt++) {
-        const suggested = statement.filter({ hasText: /Strong match|Possible match/ }).first();
-        if ((await suggested.count()) === 0) break;
-        await suggested.click();
-        await page.keyboard.press('Enter');
+await step(6, 'Surveyor estimates 200,000: set the reserve', 'claims.officer', async (page, m) => {
+    if ((await page.getByRole('button', { name: 'Set reserve' }).count()) === 0) {
+        await page.goto(state.claimUrl);
         await settle(page);
     }
-    const left = await statement.filter({ hasNotText: /No rows|Every statement line|Strong match|Possible match/ }).allInnerTexts();
-    notes.push(`Left to explain: ${left.map((t) => t.replace(/\s+/g, ' ').trim()).join(' | ') || 'none'}.`);
+    await click(page.getByRole('button', { name: 'Set reserve' }));
+    await type(page.getByLabel(/New total reserve/), '200000');
+    await type(page.getByLabel('Reason', { exact: true }), 'Surveyor estimate');
+    await ensure(page.getByLabel('Date', { exact: true }), '', 'reserve date', { accept: (v) => v !== '', typed: 't' });
+    await click(page.getByRole('button', { name: /^Review and post/ }));
+    m.notes.push(`Journal: ${(await confirmJournal()).join(' | ')}`);
+    await offers(/approve payment|send for approval|ask .*to approve/i, 'after reserve → “Approve” (the claims officer cannot approve their own reserve; no hand-off offered)');
+});
+
+await step(7, 'Settle at 180,000: approve within limit, finance releases, close releases the rest', 'claims.manager', async (page, m) => {
+    await page.goto(`${base}/home`);
+    await settle(page);
+    await m.restart();
+    const fromHome = page.locator('main a[href*="/claims/0"], main a[href*="/claims/1"]').filter({ hasNotText: /Register/ }).first();
+    if (await fromHome.count()) await click(fromHome);
+    else {
+        m.leaves.push('the claim waiting for approval is not on the claims manager\'s Home');
+        await nav('Claims');
+        await click(page.locator('tbody a[href*="/claims/"]').first());
+    }
+    if (!page.url().startsWith(state.claimUrl)) {
+        m.notes.push('Home opened a different claim; went to the audit claim.');
+        await page.goto(state.claimUrl);
+        await settle(page);
+    }
+    await click(page.getByRole('button', { name: 'Approve payment' }));
+    const amount = page.getByLabel(/^Amount/);
+    if ((await amount.inputValue()) === '') m.noDefaults.push('approval amount (reserve not proposed)');
+    await type(amount, '180000');
+    const payee = page.locator('#payee_party_id');
+    if (!(await payee.inputValue())) {
+        m.noDefaults.push('payee (policyholder not preselected)');
+        await payee.selectOption({ index: 1 });
+        m.clicks += 2;
+    }
+    m.leaves.push('payee other than a party (e.g. a garage): create in Parties first — no inline create');
+    await ensure(page.getByLabel('Approval date'), '', 'approval date', { accept: (v) => v !== '', typed: 't' });
+    await click(page.getByRole('button', { name: /^Review and approve/ }));
+    m.notes.push(`Approval journal: ${(await confirmJournal()).join(' | ') || 'none (routed)'}`);
+    await offers(/request release/i, 'after approval → “Request release”');
+    await click(page.getByRole('button', { name: 'Request release' }));
+
+    const manager = page;
+    const finance = await as('finance.manager');
+    m.page = finance;
+    m.notes.push('Finance manager releases the payment (a different person).');
+    await finance.goto(`${base}/home`);
+    await settle(finance);
+    await m.track();
+    const release = finance.locator('main a[href*="/claims/0"], main a[href*="/claims/1"]').first();
+    if (await release.count()) await click(release);
+    else m.leaves.push('the payment to release is not on the finance manager\'s Home');
+    if (!finance.url().startsWith(state.claimUrl)) {
+        await finance.goto(state.claimUrl);
+        await settle(finance);
+    }
+    await click(finance.getByRole('button', { name: 'Pay', exact: true }));
+    await ensure(finance.getByLabel('Paid on'), '', 'paid on', { accept: (v) => v !== '', typed: 't' });
+    await click(finance.getByRole('button', { name: /^Review and pay/ }));
+    m.notes.push(`Payment journal: ${(await confirmJournal()).join(' | ')}`);
+
+    m.page = manager;
+    await manager.goto(state.claimUrl);
+    await settle(manager);
+    await click(manager.getByRole('button', { name: 'Close claim' }));
+    await type(manager.getByLabel('Reason', { exact: true }), 'Settled at 180,000');
+    await ensure(manager.getByLabel('Date', { exact: true }), '', 'close date', { accept: (v) => v !== '', typed: 't' });
+    await click(manager.getByRole('button', { name: /^Review and close/ }));
+    m.notes.push(`Close journal: ${(await confirmJournal()).join(' | ')}`);
+});
+
+// ── Day 3: accountant ────────────────────────────────────────────────────────────────────────────────────
+await step(8, 'Home queue; allocate money in suspense to a policy', 'accountant', async (page, m) => {
+    await page.goto(`${base}/home`);
+    await settle(page);
+    await m.restart();
+    m.notes.push(`Home queues: ${(await page.locator('section h2').allInnerTexts()).join(', ')}.`);
+    const item = page.locator('section').filter({ hasText: 'Unallocated receipts' }).locator('tbody a').first();
+    if (await item.count()) await click(item);
+    else {
+        await nav('Suspense');
+        await click(page.locator('tbody tr').first());
+    }
+    if (!/\/allocate/.test(page.url())) {
+        const workbench = page.getByRole('link', { name: /allocation workbench|^Allocate/i }).first();
+        if (await workbench.count()) await click(workbench);
+    }
+    await page.locator('section[aria-label="Candidate installments"] tbody tr').first().waitFor();
+    await click(page.locator('section[aria-label="Candidate installments"] tbody tr').filter({ hasText: 'Rahima' }).first());
+    await press('Enter');
+    await ensure(page.getByLabel('Allocation date'), '', 'allocation date', { accept: (v) => v !== '', typed: 't' });
+    await click(page.getByRole('button', { name: /^Allocate/ }));
+    m.notes.push(`Journal: ${(await confirmJournal()).join(' | ')}`);
+});
+
+await step(9, 'Import the bank statement CSV, accept suggested matches, exceptions left', 'accountant', async (page, m) => {
+    await nav('Bank');
+    await click(page.locator('tbody tr').filter({ hasText: 'City Bank' }).first());
+    const open = page.getByRole('link', { name: /Open|statement|matching/i }).first();
+    if (await open.count()) await click(open);
+    else await press('Enter');
+    await page.waitForURL(/\/bank\/[0-9a-f-]{36}/);
+    const amount = state.gross.replace(/,/g, '');
+    const csv = `date,description,reference,amount\n${new Date().toISOString().slice(0, 10)},Transfer,TRF ${state.stamp},${amount}\n`;
+    await page.locator('input[type=file]').first().setInputFiles({ name: 'city-bank-today.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    m.clicks += 3; // Import statement, choose the file, open
+    await settle(page);
+    const statement = page.locator('section[aria-label="Statement lines"] tbody tr');
+    for (let i = 0; i < 8; i++) {
+        const suggested = statement.filter({ hasText: /Strong match|Possible match/ }).first();
+        if ((await suggested.count()) === 0) break;
+        await click(suggested);
+        await press('Enter');
+    }
+    const left = (await statement.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim()).filter((t) => !/Every statement line|No rows/.test(t));
+    m.notes.push(`Exceptions left: ${left.join(' | ') || 'none'}.`);
     for (const text of ['Bank charges', 'TT 9921']) {
         const row = statement.filter({ hasText: text }).first();
         if ((await row.count()) === 0) continue;
-        await row.click();
-        await page.getByLabel(/Explanation/).fill(text === 'Bank charges' ? 'Bank charges for September' : 'Unknown transfer, under investigation');
-        await page.getByRole('button', { name: 'Explain' }).click();
-        await settle(page);
+        await click(row);
+        await type(page.getByLabel(/Explanation/), text === 'Bank charges' ? 'Bank charges' : 'Unknown transfer, investigating');
+        await click(page.getByRole('button', { name: 'Explain' }));
     }
-    if (left.length !== 2) outcome = 'partial';
-    return outcome;
 });
 
-await step(10, 'Record office expenses, vendor bills (AP) and salaries', 'accountant', async (page, notes) => {
-    await page.goto(`${base}/accounting/journals/create`);
-    await settle(page);
-    await page.getByLabel('Date', { exact: true }).fill('t');
-    await page.getByLabel('Description').fill('Office rent for September');
-    await page.getByLabel('Reason').fill('Rent invoice 9/26');
+await step(10, 'Record office expenses (vendor bills and salaries are not built)', 'accountant', async (page, m) => {
+    await nav('Journals');
+    await click(page.getByRole('link', { name: /New manual journal|New journal/ }).or(page.getByRole('button', { name: /New manual journal|New journal/ })).first());
+    await ensure(page.getByLabel('Date', { exact: true }), '', 'journal date', { accept: (v) => v !== '', typed: 't' });
+    await type(page.getByLabel('Description'), 'Office rent for September');
+    await type(page.getByLabel('Reason'), 'Rent invoice 9/26');
     const accounts = page.getByLabel(/^Account, line/);
-    await accounts.nth(0).selectOption({ label: await accounts.nth(0).locator('option', { hasText: 'Office Rent' }).first().innerText().catch(async () => accounts.nth(0).locator('option', { hasText: 'Salaries' }).first().innerText()) });
+    const expense = accounts.nth(0).locator('option', { hasText: /Office Rent|Rent/ });
+    if ((await expense.count()) === 0) m.leaves.push('no rent/office expense account in this chart: create it first (Accounting → Imports), then come back');
+    await accounts.nth(0).selectOption({ label: await ((await expense.count()) ? expense.first() : accounts.nth(0).locator('option', { hasText: 'Salaries' }).first()).innerText() });
+    m.clicks += 2;
     await accounts.nth(1).selectOption({ label: await accounts.nth(1).locator('option', { hasText: 'Bank - Main' }).first().innerText() });
-    await page.getByLabel('Side, line 2').selectOption('credit');
-    await page.getByLabel('Amount, line 1').fill('85,000.00');
-    await page.getByLabel('Amount, line 2').fill('85,000.00');
-    await Promise.all([page.waitForURL(/\/accounting\/journals\/[0-9a-f-]{36}/), page.getByRole('button', { name: /^Save and submit/ }).click()]);
-    notes.push('Office rent recorded as a manual journal and submitted for approval.');
-    notes.push('No accounts payable (vendor bills) or payroll module: only manual journals (G6 / Phase 2).');
-    return 'partial';
+    m.clicks += 2;
+    await ensure(page.getByLabel('Side, line 2'), 'credit', 'side of line 2', { select: true });
+    await type(page.getByLabel('Amount, line 1'), '85000');
+    if ((await page.getByLabel('Amount, line 2').inputValue()).replace(/,/g, '') !== '85000.00') await type(page.getByLabel('Amount, line 2'), '85000');
+    m.leaves.push('an account that is not in the chart: no inline create — Accounting → Imports (CSV)');
+    m.leaves.push('vendor bill (AP) and salaries: no module, only a manual journal (G6)');
+    await click(page.getByRole('button', { name: /^Save and submit/ }));
 });
 
-// ── Month end: finance manager ─────────────────────────────────────────────────────────────────────────
-await step(11, 'Close September: earn premium, reconcile premium, claims, commission and bank, review suspense', 'finance.manager', async (page, notes) => {
-    await page.goto(`${base}/close`);
+// ── Month end: finance manager ───────────────────────────────────────────────────────────────────────────
+await step(11, 'Close September: run the checklist', 'finance.manager', async (page, m) => {
+    await page.goto(`${base}/home`);
     await settle(page);
-    await page.locator('tbody tr').filter({ hasText: /Sep(tember)? 2026/ }).first().click();
-    const primary = page.getByRole('button', { name: /Start close|Open the checklist/ }).first();
-    await primary.click();
+    await m.restart();
+    await nav('Close');
+    await click(page.locator('tbody tr').filter({ hasText: /Sep(tember)? 2026/ }).first());
+    await click(page.getByRole('button', { name: /Start close|Open the checklist/ }).first());
     await page.waitForURL(/\/close\//);
-    await settle(page);
     for (let i = 0; i < 14; i++) {
         const work = page.getByRole('button', { name: /^Work on/ }).first();
         if ((await work.count()) === 0) break;
-        await work.click();
-        const note = page.getByLabel(/^Note for/).first();
-        await note.fill('Flow audit');
+        await click(work);
         const run = page.locator('li div.bg-surface-2 button').first();
         if (await run.isDisabled()) break;
-        await run.click();
-        await settle(page);
-        if ((await page.getByRole('button', { name: /^Work on/ }).count()) > 0 && (await page.locator('li').filter({ hasText: 'Blocked' }).count()) > 0) break;
+        await click(run);
     }
     const tasks = (await page.locator('ol[aria-label="Close tasks"] > li').allInnerTexts()).map((t) => t.split('\n').filter(Boolean).slice(0, 4).join(' · '));
-    notes.push(`Tasks: ${tasks.join(' | ')}`);
-    return tasks.every((t) => /· Done$|· Skipped$/.test(t)) ? 'pass' : 'partial';
+    m.notes.push(`Tasks not done: ${tasks.filter((t) => !/· Done$/.test(t)).join(' | ') || 'none'}.`);
 });
 
-await step(12, 'Review trial balance, P&L, balance sheet; click a figure down to the policies and claims', 'finance.manager', async (page, notes) => {
-    await page.goto(`${base}/accounting/trial-balance`);
-    await settle(page);
-    notes.push(`Trial balance rows: ${await page.locator('tbody tr').count()}.`);
-    const figure = page.locator('tbody tr').filter({ hasText: 'Premium Receivable' }).locator('a').last();
-    if ((await figure.count()) === 0) {
-        notes.push('Figures in the trial balance are not links.');
-        return 'partial';
-    }
-    await figure.click();
-    await settle(page);
-    notes.push(`Figure → ${page.url().replace(base, '')}.`);
-    const activity = page.url();
-    const journalLinks = await page.locator('main tbody a[href*="/accounting/journals/"]').evaluateAll((links) => links.map((a) => a.getAttribute('href')));
-    let source = page.locator('nothing-yet');
-    for (const href of journalLinks.slice(0, 8)) {
+await step(12, 'Trial balance, P&L, balance sheet; click a figure down to the policy', 'finance.manager', async (page, m) => {
+    await nav('Trial balance');
+    await click(page.locator('tbody tr').filter({ hasText: 'Premium Receivable' }).locator('a').last());
+    const journals = await page.locator('main tbody a[href*="/accounting/journals/"]').evaluateAll((links) => links.map((a) => a.getAttribute('href')));
+    for (const href of journals.slice(0, 8)) {
         await page.goto(`${base}${href}`);
         await settle(page);
-        source = page.locator('main a[href^="/policies/"], main a[href^="/claims/"], main a[href^="/receipts/"]').first();
-        if ((await source.count()) > 0) {
-            notes.push(`→ journal ${href}.`);
+        const source = page.locator('main a[href^="/policies/"], main a[href^="/claims/"], main a[href^="/receipts/"]').first();
+        if (await source.count()) {
+            m.clicks += 1; // the journal row the user opens
+            await click(source);
             break;
         }
     }
-    if (activity === page.url()) notes.push('The account activity lists no journals.');
-    if ((await source.count()) === 0) {
-        notes.push('The journal does not link to its policy, receipt or claim.');
-        return 'partial';
-    }
-    await source.click();
-    await settle(page);
-    notes.push(`Drilled from the trial balance to ${page.url().replace(base, '')}.`);
-    for (const report of ['profit-and-loss', 'balance-sheet']) {
-        const response = await page.goto(`${base}/reports/${report}`);
-        notes.push(`${report}: HTTP ${response?.status()}.`);
-    }
-    return 'pass';
+    await nav('Reports');
+    await click(page.getByRole('link', { name: 'Profit and loss' }).first());
+    await nav('Reports');
+    await click(page.getByRole('link', { name: 'Balance sheet' }).first());
 });
 
-await step(13, 'Lock the period; corrections then go into the next month', 'finance.manager', async (page, notes) => {
-    await page.goto(`${base}/close`);
-    await settle(page);
-    await page.locator('tbody tr').filter({ hasText: /Sep(tember)? 2026/ }).first().click();
-    await page.getByRole('button', { name: /Open the checklist/ }).first().click();
-    await page.waitForURL(/\/close\//);
-    await settle(page);
+await step(13, 'Lock the period', 'finance.manager', async (page, m) => {
+    await nav('Close');
+    await click(page.locator('tbody tr').filter({ hasText: /Sep(tember)? 2026/ }).first());
+    await click(page.getByRole('button', { name: /Open the checklist/ }).first());
     const lock = page.getByRole('button', { name: 'Lock the period' });
-    const reason = (await page.locator('section[aria-label="Lock the period"]').innerText()).replace(/\s+/g, ' ');
     if ((await lock.count()) === 0 || (await lock.isDisabled())) {
-        notes.push(`Lock not available yet: ${reason}`);
-        return 'partial';
+        m.notes.push(`Lock not available: ${(await page.locator('section[aria-label="Lock the period"]').innerText()).replace(/\s+/g, ' ')}`);
+        return;
     }
-    await lock.click();
-    await page.getByRole('dialog').getByRole('button').last().click().catch(() => undefined);
-    await settle(page);
-    notes.push('September locked.');
-    return 'pass';
+    await click(lock);
+    await click(page.getByRole('alertdialog').getByRole('button').last());
+    m.notes.push('September locked.');
 });
 
-// ── Quarter / year end ─────────────────────────────────────────────────────────────────────────────────
-await step(14, 'Regulatory exports: premium register by class, outstanding claims, unearned premium reserve, agency register', 'finance.manager', async (page, notes) => {
-    let outcome = 'pass';
-    await page.goto(`${base}/reports`);
+// ── Quarter / year end ───────────────────────────────────────────────────────────────────────────────────
+await step(14, 'Regulatory exports: premium register by class, outstanding claims, UPR, agency register', 'auditor', async (page, m) => {
+    await page.goto(`${base}/home`);
     await settle(page);
-    const text = await page.locator('main').innerText();
-    for (const [name, pattern] of [['premium register', /Premium register/i], ['outstanding claims', /Outstanding claims/i], ['unearned premium', /Unearned premium/i]]) {
-        if (!pattern.test(text)) {
-            notes.push(`No ${name} report.`);
-            outcome = 'partial';
-        }
+    await m.restart();
+    for (const report of ['Premium register', 'Outstanding claims', 'Unearned premium']) {
+        await nav('Reports');
+        await click(page.getByRole('link', { name: report }).first());
+        const exportButton = page.getByRole('button', { name: /Export/ }).first();
+        if (await exportButton.count()) await click(exportButton);
+        else m.notes.push(`${report}: no export button.`);
     }
-    const register = await page.goto(`${base}/reports/premium-register`);
-    const registerText = await page.locator('main').innerText();
-    const classTotals = /total.{0,20}class|by class/i.test(registerText);
-    notes.push(`Premium register HTTP ${register?.status()}${classTotals ? ', with totals by class' : ', without totals by class'}.`);
-    if (!classTotals) outcome = 'partial';
-    const auditor = await as('auditor');
-    await auditor.goto(`${base}/distribution/producers`);
-    await settle(auditor);
-    if ((await auditor.getByRole('group', { name: /agency register/i }).count()) === 0) {
-        notes.push('No agency register export on the producers queue.');
-        outcome = 'partial';
-    } else {
-        const download = await Promise.all([auditor.waitForEvent('download'), auditor.getByRole('link', { name: 'XLSX' }).click()]).then(([d]) => d.suggestedFilename()).catch(() => null);
-        notes.push(`Agency register export on the producers queue (holders of reports.regulatory, e.g. the auditor)${download ? `: downloaded ${download}` : ''}. The finance manager does not hold reports.regulatory, so does not see it.`);
-    }
-    await page.goto(`${base}/reports/unearned-premium`);
-    const upr = (await page.locator('main').innerText()).replace(/\s+/g, ' ');
-    const variance = upr.match(/Variance\s*([\d,.()-]+)/i)?.[1];
-    notes.push(`Unearned premium report reconciles to the control${variance ? ` (variance ${variance})` : ''}.`);
-    notes.push('IDRA return forms themselves are not built (G5).');
-    return outcome === 'pass' ? 'partial' : outcome;
+    await nav('Producers');
+    const xlsx = page.getByRole('link', { name: 'XLSX' });
+    if (await xlsx.count()) await click(xlsx.first());
+    else m.leaves.push('agency register: no export on the producers queue');
+    m.leaves.push('IDRA return forms: not built (G5)');
+    m.notes.push('Run as the auditor: the finance manager (who files returns in Part A) does not hold reports.regulatory.');
 });
 
+// ── Output ───────────────────────────────────────────────────────────────────────────────────────────────
 writeFileSync(`${out}/results.json`, `${JSON.stringify({ base, ranAt: new Date().toISOString(), results }, null, 2)}\n`);
+const cell = (list) => (list.length ? list.join('; ') : '—');
+const table = ['| # | Part A step | Role | Start | Screens | Drawers/dialogs | Clicks | Keys | Leaves the flow | No default | Required but unknowable | Next step not offered |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    ...results.map((r) => `| ${r.step} | ${r.title} | ${r.role} | \`${r.start}\` | ${r.screenCount} | ${r.dialogs} | ${r.clicks} | ${r.keys} | ${cell(r.leaves)} | ${cell(r.noDefaults)} | ${cell(r.unknowable)} | ${cell(r.nextSteps)} |`)];
+writeFileSync(`${out}/table.md`, `${table.join('\n')}\n`);
 await browser.close();

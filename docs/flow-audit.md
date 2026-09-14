@@ -1,7 +1,14 @@
 # Flow audit — Part A "a week in a non-life insurer"
 
-Walks market cross-check Part A steps 1–14 (docs/market-crosscheck-report.md) in a real browser, as the role each step belongs to, on the Part A demo company.
-It answers one question per step: can a user do this in the UI today, and what is missing?
+Walks market cross-check Part A steps 1–14 (docs/market-crosscheck-report.md) in a real browser, as the role each step belongs to, on the Part A demo company, and **measures the work** (UX brief §1 throughput).
+For each step it records:
+- the starting screen;
+- screens, drawers and dialogs;
+- clicks and keystrokes;
+- every point where the user must leave the flow to create or look up something;
+- fields without a sensible default;
+- required fields that cannot be known at that moment;
+- next steps not offered on completion.
 
 ## How to run
 
@@ -9,55 +16,80 @@ It answers one question per step: can a user do this in the UI today, and what i
 composer db:fresh && php artisan erp:demo     # fresh story; the audit issues, pays, reserves and locks September for real
 npm run build
 php artisan serve --port=8765 &
-composer worker &                             # posts accounting events; without it receipts stay unposted and the close shows variances
+composer worker &                             # posts accounting events; restart it after code changes (php artisan queue:restart)
 node scripts/flow-audit.mjs                   # --base http://nonlife.localhost:8765
 ```
 
-- Since Phase 3 R7, steps 1–3 quote in the quote workbench, make and submit the proposal, issue the policy from the proposal page, receive its rated gross premium and print the receipt.
-- Restart the worker after deploying new code (`php artisan queue:restart`): a worker still on older code posts with the old rule set.
-- Output goes to `storage/flow-audit/results.json` and one screenshot per step, `storage/flow-audit/step-NN.png`.
+- Output:
+  - `storage/flow-audit/results.json`;
+  - `storage/flow-audit/table.md` (the table below);
+  - one screenshot per step, `storage/flow-audit/step-NN.png`.
 - Rerunning needs a fresh demo, because step 13 locks September.
 - Users: `<role>@nonlife.local` with the admin password.
-- Statuses:
-  - **pass**: the step can be done as Part A describes.
-  - **partial**: done, with a named shortfall.
-  - **fail**: the step cannot be done.
 
-## Latest run — 14 Sep 2026, Phase 3 complete (R1–R10, F1–F6)
+## Counting rules
 
-| # | Part A step | Role | Result | What happened |
-|---|---|---|---|---|
-| 1 | New motor policy: product, customer, vehicle, sum insured, premium, VAT and stamp duty | Branch officer | pass | Quote workbench: risk form from the product's schema (vehicle type, registration, chassis, cc, seats, year, driver age, sum insured 450,000.00); premium from the tariff as typed — own damage 10,125.00, third party 2,500.00, stamp duty 50.00, VAT 1,893.75, gross 14,568.75. Quotation issued, proposal made, identity verified, submitted and approved automatically. |
-| 2 | Issue; number allocated; accounting behind the scenes | Branch officer | pass | Issued from the proposal as `POL-HO-2026-000008`. Journal preview: Premium receivable 14,568.75 / Unearned premium 12,625.00 / VAT payable 1,893.75 / Stamp duty payable 50.00, each with its plain caption. |
-| 3 | Receive the premium by bank transfer, allocate, receipt for the customer | Branch manager | pass | `RCT-2026-000007`: Bank 14,568.75 / Premium receivable, plus commission. Receipt PDF generated from the Documents tab (headless Chromium). A branch officer cannot allocate (SoD), so the branch manager did. |
-| 4 | Commission accrued for an agent on a commission scheme | Finance manager | pass | Commission expense and payable, 10% of 14,568.75, on the policy's accounting. |
-| 5 | Register the accident with documents; nothing financial | Claims officer | pass | `CLM-2026-000003` registered with no journal; survey report attached and listed. |
-| 6 | Set the reserve at 200,000 | Claims officer | pass | Claims incurred / Outstanding claims 200,000. |
-| 7 | Approve 180,000 within limit, finance releases, close releases the rest | Claims manager, finance manager | pass | Approved within limit; released and paid by the finance manager; closing released 20,000. |
-| 8 | Home queue for the accountant; allocate money in suspense | Accountant | pass | Queues shown; suspense allocated in the workbench (what the installment still needed, 5,397.50). |
-| 9 | Import the bank statement, accept suggestions, exceptions left | Accountant | pass | Suggestions accepted; exactly two exceptions left and explained. |
-| 10 | Office expenses, vendor bills (AP), salaries | Accountant | partial | Office rent as a manual journal; no AP or payroll module (G6). |
-| 11 | Close September | Finance manager | pass | Every checklist task done, all subledgers reconcile. |
-| 12 | Trial balance, P&L, balance sheet; click down to policies | Finance manager | pass | Trial balance figure → account activity → journal → policy; P&L and balance sheet open. |
-| 13 | Lock the period | Finance manager | pass | September locked. |
-| 14 | Regulatory exports | Finance manager, auditor | partial | Premium register totals by class; unearned premium report variance 0.00; agency register XLSX from the producers queue. No IDRA forms (G5). |
+The script behaves like a user who knows the app.
+- **Start:** each step begins on the screen a user would be on, Home or where the previous step ended. It moves only by clicking: sidebar, links, buttons.
+- **Clicks:** a pointer press on a control. Choosing from a select counts 2 (open + choose). A lookup pick counts 1 after typing.
+- **Keys:** characters typed plus keys pressed. Money is typed as digits without separators.
+- **Defaults:** a field that already holds the right value is not touched and costs nothing. A field that is empty or wrong costs the input and is listed under "No default". Sensible defaults: branch = the user's branch, date = today, product = last used, currency = the entity's base.
+- **Screens:** distinct pages (Inertia page components) visited during the step, including the starting one. A tab, or a record saved in place, stays the same screen.
+- **Drawers/dialogs:** counted each time one opens.
 
-**Summary:** 12 pass, 2 partial, 0 fail. The partials are AP/payroll (G6, Phase 2) and IDRA forms (G5).
+## Baseline — 14 Sep 2026, before the flow fixes
 
-**Bugs the audit found in Phase 3, fixed in 6b0c641:** every confirmation dialog answered "no" (Reka's AlertDialogAction closed before its click handler), and the quote workbench kept its pre-save state so a new quote could not become a proposal.
+| # | Part A step | Role | Start | Screens | Drawers/dialogs | Clicks | Keys | Leaves the flow | No default | Required but unknowable | Next step not offered |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | New motor policy: product, customer (new), vehicle, sum insured, premium, VAT and stamp duty | branch.officer | `home/Index` | 4 | 4 | 26 | 84 | producer (when new): no inline create — Distribution → Producers and a licence, then back | product; vehicle type | chassis number required to quote (a customer asking for a price rarely has it) | — |
+| 2 | Issue: policy number allocated, accounting written behind the scenes | branch.officer | `proposals/Show` | 2 | 2 | 3 | 0 | — | — | — | after issue → "Record receipt?" |
+| 3 | Receive the premium by bank transfer, allocate to the installment, receipt for the customer | branch.manager | `policies/Show` | 4 | 1 | 12 | 35 | receipt is started from Receipts → Record a receipt, not from the policy | amount; value date | — | after receipt → "Print receipt" (only on the Documents tab) |
+| 4 | Commission accrued on the receipt for an agent on a commission scheme | finance.manager | `policies/Show` | 1 | 1 | 1 | 0 | — | — | — | — |
+| 5 | Register the accident: policy, date of loss, description, documents | claims.officer | `home/Index` | 4 | 0 | 14 | 53 | — | date of loss; reported on | — | — |
+| 6 | Surveyor estimates 200,000: set the reserve | claims.officer | `claims/Show` | 1 | 2 | 6 | 24 | — | reserve date | — | after reserve → "Approve" (the claims officer cannot approve their own reserve; no hand-off offered) |
+| 7 | Settle at 180,000: approve within limit, finance releases, close releases the rest | claims.manager | `home/Index` | 3 | 6 | 19 | 27 | the claim waiting for approval is not on the claims manager's Home; payee other than a party (e.g. a garage): create in Parties first — no inline create; the payment to release is not on the finance manager's Home | approval amount (reserve not proposed); payee (policyholder not preselected); approval date; paid on; close date | — | — |
+| 8 | Home queue; allocate money in suspense to a policy | accountant | `home/Index` | 3 | 1 | 5 | 1 | — | — | — | — |
+| 9 | Import the bank statement CSV, accept suggested matches, exceptions left | accountant | `receipts/Allocate` | 3 | 0 | 16 | 47 | — | — | — | — |
+| 10 | Record office expenses (vendor bills and salaries are not built) | accountant | `bank/Show` | 4 | 0 | 12 | 53 | no rent/office expense account in this chart: create it first (Accounting → Imports), then come back; an account that is not in the chart: no inline create; vendor bill (AP) and salaries: no module, only a manual journal (G6) | journal date | — | — |
+| 11 | Close September: run the checklist | finance.manager | `home/Index` | 3 | 0 | 23 | 0 | — | — | — | — |
+| 12 | Trial balance, P&L, balance sheet; click a figure down to the policy | finance.manager | `close/Run` | 6 | 0 | 8 | 0 | — | — | — | — |
+| 13 | Lock the period | finance.manager | `reports/Show` | 3 | 1 | 5 | 0 | — | — | — | — |
+| 14 | Regulatory exports: premium register by class, outstanding claims, UPR, agency register | auditor | `home/Index` | 4 | 0 | 11 | 0 | IDRA return forms: not built (G5) | — | — | — |
+
+**Totals:** 45 screens, 18 drawers/dialogs, 161 clicks, 324 keystrokes.
+Findings:
+- 6 steps need more than 3 screens: 1, 3, 5, 10, 12, 14.
+- 3 dependent objects cannot be created inline: producer, payee, account.
+- 13 fields have no default.
+- 1 required field cannot be known at quote time: the chassis number.
+- 3 next steps are not offered.
+
+All 14 steps complete. The table measures effort, not pass/fail. The Phase 3 pass/partial result (12 pass, 2 partial: AP/payroll G6, IDRA forms G5) is unchanged.
+
+## Fixes, in order of impact
+
+Each fix is its own commit, `fix(flow): Xn – …`.
+
+| Fix | Steps | Change |
+|---|---|---|
+| X1 | 2, 3 | After issue: "Record receipt?". The receipt is prefilled from the policy: amount outstanding, allocation lines, branch, value date today. |
+| X2 | 5, 6, 7, 10 | Today by default on reported on, reserve, approval, paid on, close and journal dates. Date of loss stays empty: only the customer knows it. |
+| X3 | 6, 7 | Claims hand-off: after reserve, "Approve" if the user may and it is within their limit, otherwise say who approves. "Claims to settle" on the claims manager's Home. "Payments to release" on the finance manager's Home. Approval proposes the remaining reserve and the policyholder. |
+| X4 | 1, 5, 10 | Start actions on Home (New quote, Record a receipt, Register a claim, New manual journal): no list screen on the way. |
+| X5 | 3 | Receipt page: "Print receipt" in the header; "Allocate" when money is left unallocated. |
+| X6 | 1 | Product = last used. |
+| X7 | 1 | Chassis number required at proposal, not at quote; vehicle type defaults to private. |
+| X8 | 7 | New payee created inline in the approval drawer. |
+| X9 | 1 | New producer created inline from the quote. |
+| X10 | 10 | New account created inline in the manual journal, for users who may manage the chart. |
+| X11 | 12 | Account activity links the source document; P&L, balance sheet and trial balance link to each other. |
+| X12 | 14 | Export straight from the reports index. |
+
+Out of scope (features, not flow fixes): AP and payroll (G6), IDRA forms (G5).
 
 ## Observations to confirm (not failures of the audit)
 - **Date shown vs Dhaka date:** the trial balance opened "as of 13 Sep 2026" while it was already 14 Sep in Dhaka. The run was around 21:00 UTC, so the default date may follow the server clock (UTC) rather than the tenant's time zone.
-- **Lock with a pending journal:** September locked while the office rent manual journal dated 14 Sep was still waiting for approval. Approving it later cannot post into the locked month. Worth deciding whether the close should block, or warn about, journals pending approval in the period.
-- **Locking early:** a month can be locked before it ends (September was locked on the 14th). Part A assumes month end.
-- **Regulatory permission:** the finance manager does not hold `reports.regulatory`, so the agency register export is visible to the auditor but not to the person who files the returns in Part A.
-- **Worker needed:** without a queue worker, accounting events wait and the close reports variances. That is correct behaviour, but a first-time local user sees "Subledger premium differs from the GL". Home's "Failed accounting events" queue does not list queued-but-unposted events.
-
-## Changes since the previous audit (onboarding end state)
-| Gap in docs/PROGRESS.md | Now |
-|---|---|
-| 2. Policy number without branch code | Fixed by F1: `POL-<BRANCH>-<FY>-<seq>`, format in the numbering settings. |
-| 5. Documents cannot be attached | Fixed by F2: attach, list and download on claims, receipts and policies. |
-| 7. No screen for approval limits | Fixed by F3: Admin → Approval limits, and the setup wizard step. |
-| Role → account mappings only in seeders/imports | Fixed by F4: Accounting → Account roles, unmapped-role banner, wizard validation. |
-| 14. No UPR report, register not by class, agency register API-only | Fixed by F5 (UPR report, register totals by class and branch) and F6 (CSV/XLSX export on the producers queue). IDRA forms remain. |
+- **Lock with a pending journal:** September locked while the office rent manual journal dated 14 Sep was still waiting for approval. Approving it later cannot post into the locked month. Decide whether the close should block or warn about journals pending approval in the period.
+- **Locking early:** a month can be locked before it ends. Part A assumes month end.
+- **Regulatory permission:** the finance manager does not hold `reports.regulatory`, so step 14 runs as the auditor.
+- **Worker needed:** without a queue worker, accounting events wait and the close reports variances. Home's "Failed accounting events" queue does not list queued-but-unposted events.
