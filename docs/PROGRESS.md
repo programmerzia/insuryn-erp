@@ -79,7 +79,7 @@ code and in the register below, configurable.
 | 2.0a | Phase 1 carry-over: user and role administration screens | done | see git log |
 | 2.0b | Phase 1 carry-over: CI pipeline | done | see git log |
 | 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo (pending, after Distribution D1–D9) | |
-| 2.0d | Phase 1 carry-over: claim reserve property test | todo (pending, after Distribution D1–D9) | |
+| 2.0d | Phase 1 carry-over: claim reserve property test | done | see git log |
 | 2.1 | Design addendum v2 and Phase 2 customer questions | done | see git log |
 | D1 | Distribution: agents → producers with channels | done | see git log |
 | D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | done | see git log |
@@ -2504,3 +2504,49 @@ Flow audit only, no new features: docs/flow-audit.md now meters each Part A step
   - **Receipt, claim and agent deposit numbers can collide across branches.** Their sequences are per branch, but the format `{prefix}-{fy}-{seq}` has no branch code, and the tables are unique on (tenant, number). A second branch's first receipt of a year would be refused. No test covers two branches for these documents.
   - **Outbox messages other than `PostAccountingEvent` are never relayed.** This includes `CommissionPayrollEarning` and `CommissionPayableToAp`, so Phase 2 needs consumers (PD-7).
   - **No role template holds `commission.pay`.**
+
+### 2.0d — Claim reserve property test — done
+Phase 1 exit checklist: "add a generator-based property test for the claim reserve lifecycle". Test only, plus one fix the test found.
+
+- `tests/Feature/Claims/ClaimReservePropertyTest.php` drives the real claim services on a fresh claim per run through random operation sequences:
+  - operations: register, reserve (set and adjust), approve payment within and over the approval limit, approve/reject that approval, request release,
+    release within and over the limit, approve/reject the release approval, close, reject, reopen (directly and through approval), approve/reject the
+    reopening, recovery;
+  - actors satisfy SoD: a claims officer reserves; a claims manager approves, requests release, closes, rejects, reopens and records recoveries; a
+    finance user releases; a CFO decides the approvals;
+  - approval policies in the test: payment from 50,000.00, release from 30,000.00, reopen from a reserve of 20,000.00, so both routes occur;
+  - posting is synchronous (`QUEUE_CONNECTION=sync`, as in the other claims tests);
+  - dates are random from July 2026 and move forward 0–3 days per operation, inside the policy's cover and the FY2026 periods;
+  - deliberately invalid operations are drawn as well: zero or negative amounts, approvals over the reserve, reserves below the committed amount or
+    unchanged, payments in the wrong status, blank reasons, an unknown recovery type, wrong claim status.
+- `ClaimLifecycleModel` (reference model, D-46) predicts for every operation "accepted" or the exact reason code. After EVERY operation the test checks:
+  - the services agreed with the model; a refused operation changed nothing (row counts of claims, reserves, payments, recoveries, accounting events,
+    journals, lines, outbox, approvals, decisions, audit events, document numbers; the claim row, its payments and every approval's state);
+  - claim status, reserve and reserve version, and every payment's amount and status, equal the model;
+  - reserve history has contiguous versions, no negative total, and deltas summing to the current reserve;
+  - paid ≤ approved ≤ committed ≤ reserve, so no approval ever exceeded the reserve available when it was made;
+  - GL by claim equals the subledger:
+    - claims_outstanding = reserve − approved (never negative);
+    - claims_payable = approved − paid;
+    - claims_expense = reserve;
+    - bank = recoveries − paid;
+    - claims_recovery_income = recoveries;
+  - a closed or rejected claim has zero outstanding and a reserve equal to what was approved; a reopened claim keeps these balances and passes the same checks;
+  - one posted journal per reserve version, approval, payment and recovery, every one balanced per currency, no accounting event left unposted;
+  - pending approvals are exactly the model's waiting payments, releases and reopening;
+  - `ClaimsReconciler` for the claim equals the GL of claims_outstanding + claims_payable (reserve − paid), and `ReconciliationService::currentVariances`
+    reports no claims variance as of the operation's period.
+- Size and replay: `PROPERTY_RUNS` (default 100), `PROPERTY_STEPS` (default 20), `PROPERTY_SEED` (default 20260914; run i uses seed + i). A failure
+  prints the run, its seed, `PROPERTY_SEED=<seed> PROPERTY_RUNS=1 …` to replay it, and the operations so far. `PROPERTY_VERBOSE=1` prints how often each
+  operation and outcome occurred. With 50 runs or more the test also requires every operation to have been accepted at least once and every refusal
+  reached. The default takes about 45 s. Also run once with seed 777000, 400 runs × 25 operations: green (250 s).
+- Generator: `Tests\Support\Property\SeededGenerator` (PHP `Random\Randomizer` with Xoshiro256**; no new dependency, no shrinking).
+- **Bug found and fixed** (separate commit `fix(claims)`, A-143):
+  - Asking to reopen a closed claim while a reopening waited for approval started a second approval. Once the first reopened the claim, the second could
+    never be approved; after a later close it would reopen the claim with nobody asking.
+  - Now `REOPEN_PENDING` refuses it, and the claim page hides Reopen while one is pending.
+  - Regression tests: `ClaimsTest`, `ClaimsCommissionApprovalsPagesTest`.
+- **Found, not changed** (design questions, not invariant breaks):
+  - A reopened claim is `reserved` even when it was paid (§5.5). It cannot be closed again until a new payment is approved (close needs approved or paid),
+    and recoveries are refused (`CLAIM_NOT_PAID`) until then. The only way to end it without paying more is to reject it.
+- Result: 1,360 Pest tests, 348 Vitest tests green, PHPStan 0 errors, vue-tsc green.
