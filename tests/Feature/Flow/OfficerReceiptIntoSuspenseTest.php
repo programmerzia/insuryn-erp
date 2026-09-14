@@ -78,14 +78,14 @@ it('lets the officer record the premium from the policy into suspense, noted for
         ->where('receipt.for_policy', ['id' => $this->policyId, 'number' => $this->number])->where('actions.allocate', false)->where('suspense.open', '120,000.00'));
 
     actingAs($manager)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('queues.4.key', 'receipts_to_allocate')->where('queues.4.count', 1)->where('queues.4.rows.0.href', "/receipts/{$row->id}/allocate")
-        ->where('queues.4.rows.0.cells.policy', $this->number)->where('queues.4.rows.0.cells.amount', '120,000.00'));
+        ->where('queues.5.key', 'receipts_to_allocate')->where('queues.5.count', 1)->where('queues.5.rows.0.href', "/receipts/{$row->id}/allocate")
+        ->where('queues.5.rows.0.cells.policy', $this->number)->where('queues.5.rows.0.cells.amount', '120,000.00'));
     actingAs($manager)->get("/receipts/{$row->id}/allocate", $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('receipt.for_policy', $this->number)->where('candidates.0.policy_number', $this->number)->where('candidates.0.for_this_policy', true));
 
     $item = ($this->in)(fn (): string => (string) DB::table('suspense_items')->value('id'));
     actingAs($manager)->post("/suspense/{$item}/allocations", ['on' => '2026-09-15', 'lines' => [['installment_id' => $installment, 'amount' => '120,000.00']]], $this->headers)->assertSessionHasNoErrors();
-    actingAs($manager)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('queues.4.count', 0));
+    actingAs($manager)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('queues.5.key', 'receipts_to_allocate')->where('queues.5.count', 0));
 });
 
 it('refuses a receipt noted for a policy that cannot receive premium', function (): void {

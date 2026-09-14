@@ -15,6 +15,12 @@ final class PageSupport
     /** UX brief §7: tables virtualise above 200 rows client-side; the server paginates only above 5,000. */
     public const LIST_PAGE_SIZE = 5000;
 
+    /** GA-40: the server page size of the lists (`erp.ui.list_page_size`, LIST_PAGE_SIZE by default); pages beyond the first are reached with `?page=`. */
+    public static function listPageSize(): int
+    {
+        return max(1, (int) config('erp.ui.list_page_size', self::LIST_PAGE_SIZE));
+    }
+
     public static function actor(Request $request): string
     {
         return (string) $request->user()?->getAuthIdentifier();

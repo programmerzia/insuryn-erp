@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Search;
 
 use App\Http\Pages\PageSupport;
+use App\Http\Distribution\ProducersPageController;
 use App\Modules\Accounting\Http\Controllers\ClosePageController;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
+use App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
+use App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController;
+use App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController;
 use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
@@ -18,6 +22,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Command palette "find" (UX brief §4): records by number, name or cheque reference, and period actions ("lock period Sep 2026"), each limited
  * to areas the user may open (the same area permissions the pages use). App-level composition over module tables, read-only.
+ * Gap audit GA-29: also quotations, proposals and cover notes by number, producers by code or name, and policies, proposals and quotations by the
+ * vehicle's registration or chassis number (typed with or without spaces and dashes).
  */
 final class GlobalSearchQuery
 {
@@ -38,15 +44,20 @@ final class GlobalSearchQuery
         $may = fn (array $area): bool => array_intersect($area, $held) !== [];
         $like = '%'.addcslashes($query, '%_\\').'%';
         $number = self::shortNumber($query);
+        $vehicle = self::vehicleKey($query);
         // Follow-up H1: branch-bound records only within the user's reach for the area (a branch-scoped user finds their branches' records).
         $reach = fn (array $area): AreaReach => $this->permissions->reach($userId, array_values($area));
 
         return [
             ...($may(ClosePageController::AREA) ? $this->periodActions($query, $held) : []),
-            ...($may(PolicyPageController::AREA) ? $this->policies($like, $number, $reach(PolicyPageController::AREA)) : []),
+            ...($may(PolicyPageController::AREA) ? $this->policies($like, $number, $vehicle, $reach(PolicyPageController::AREA)) : []),
+            ...($may(QuotationPageController::AREA) ? $this->quotations($like, $number, $vehicle, $reach(QuotationPageController::AREA)) : []),
+            ...($may(ProposalPageController::AREA) ? $this->proposals($like, $number, $vehicle, $reach(ProposalPageController::AREA)) : []),
+            ...($may(CoverNotesPageController::AREA) ? $this->coverNotes($like, $number, $reach(CoverNotesPageController::AREA)) : []),
             ...($may(ClaimPageController::AREA) ? $this->claims($like, $number, $reach(ClaimPageController::AREA)) : []),
             ...($may(CollectionsPageController::AREA) ? $this->receipts($like, $number, $reach(CollectionsPageController::AREA)) : []),
             ...($may(PartyPageController::AREA) || $may(PolicyPageController::AREA) ? $this->customers($like) : []),
+            ...($may(ProducersPageController::AREA) ? $this->producers($like, $number) : []),
             ...(in_array('accounting.view_journals', $held, true) ? $this->journals($like, $number) : []),
         ];
     }
@@ -55,14 +66,93 @@ final class GlobalSearchQuery
      * @param array{0: string, 1: string}|null $number
      * @return list<array{kind: string, label: string, detail: string, href: string}>
      */
-    private function policies(string $like, ?array $number, AreaReach $reach): array
+    private function policies(string $like, ?array $number, ?string $vehicle, AreaReach $reach): array
     {
         $rows = $reach->constrain(DB::table('policies as p'), 'p.entity_id', 'p.branch_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
-            ->whereNotNull('p.number')->where(fn ($q) => self::numberOr($q->where('h.display_name', 'ilike', $like)->orWhere('p.number', 'ilike', $like), 'p.number', $number))
-            ->orderByDesc('p.created_at')->limit(self::PER_KIND)->get(['p.id', 'p.number', 'p.status', 'h.display_name']);
+            ->whereNotNull('p.number')->where(fn ($q) => self::vehicleOr(self::numberOr($q->where('h.display_name', 'ilike', $like)->orWhere('p.number', 'ilike', $like), 'p.number', $number), 'p', $vehicle))
+            ->orderByDesc('p.created_at')->limit(self::PER_KIND)->get(['p.id', 'p.number', 'p.status', 'h.display_name', DB::raw("p.risk_inputs->>'registration_no' as registration")]);
         $results = [];
         foreach ($rows as $row) {
-            $results[] = ['kind' => 'policy', 'label' => (string) $row->number, 'detail' => $row->display_name.' · '.self::word((string) $row->status), 'href' => "/policies/{$row->id}"];
+            $results[] = ['kind' => 'policy', 'label' => (string) $row->number, 'detail' => $row->display_name.' · '.self::word((string) $row->status).self::registration($row), 'href' => "/policies/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * GA-29: quotations by number, customer or vehicle.
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function quotations(string $like, ?array $number, ?string $vehicle, AreaReach $reach): array
+    {
+        $rows = $reach->constrain(DB::table('quotations as q'), 'q.entity_id', 'q.branch_id')->leftJoin('parties as c', 'c.id', '=', 'q.customer_party_id')->whereNotNull('q.number')
+            ->where(fn ($q) => self::vehicleOr(self::numberOr($q->where('q.number', 'ilike', $like)->orWhere('c.display_name', 'ilike', $like), 'q.number', $number), 'q', $vehicle))
+            ->orderByDesc('q.created_at')->limit(self::PER_KIND)->get(['q.id', 'q.number', 'q.status', 'c.display_name', DB::raw("q.risk_inputs->>'registration_no' as registration")]);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'quotation', 'label' => (string) $row->number, 'detail' => ($row->display_name ?? 'No customer').' · '.self::word((string) $row->status).self::registration($row),
+                'href' => "/quotations/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * GA-29: proposals by number, customer or vehicle.
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function proposals(string $like, ?array $number, ?string $vehicle, AreaReach $reach): array
+    {
+        $rows = $reach->constrain(DB::table('proposals as pr'), 'pr.entity_id', 'pr.branch_id')->leftJoin('parties as c', 'c.id', '=', 'pr.customer_party_id')
+            ->where(fn ($q) => self::vehicleOr(self::numberOr($q->where('pr.number', 'ilike', $like)->orWhere('c.display_name', 'ilike', $like), 'pr.number', $number), 'pr', $vehicle))
+            ->orderByDesc('pr.created_at')->limit(self::PER_KIND)->get(['pr.id', 'pr.number', 'pr.status', 'c.display_name', DB::raw("pr.risk_inputs->>'registration_no' as registration")]);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'proposal', 'label' => (string) $row->number, 'detail' => ($row->display_name ?? '').' · '.self::word((string) $row->status).self::registration($row), 'href' => "/proposals/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * GA-29: cover notes by number; a cover note opens its proposal, where it was issued and is printed.
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function coverNotes(string $like, ?array $number, AreaReach $reach): array
+    {
+        $rows = $reach->constrain(DB::table('cover_notes as n'), 'n.entity_id', 'n.branch_id')->join('proposals as pr', 'pr.id', '=', 'n.proposal_id')->leftJoin('parties as c', 'c.id', '=', 'pr.customer_party_id')
+            ->where(fn ($q) => self::numberOr($q->where('n.number', 'ilike', $like), 'n.number', $number))
+            ->orderByDesc('n.created_at')->limit(self::PER_KIND)->get(['n.id', 'n.number', 'n.status', 'n.valid_to', 'n.proposal_id', 'c.display_name']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'cover_note', 'label' => (string) $row->number,
+                'detail' => ($row->display_name ?? '').' · '.self::word((string) $row->status).' · until '.CarbonImmutable::parse((string) $row->valid_to)->format('j M Y'), 'href' => "/proposals/{$row->proposal_id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * GA-29: producers by code ("AG-001", "ag 1") or name. Producers belong to the whole tenant, like customers (A-160).
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function producers(string $like, ?array $number): array
+    {
+        $rows = DB::table('producers as a')->leftJoin('parties as ap', 'ap.id', '=', 'a.party_id')
+            ->where(fn ($q) => self::numberOr($q->where('a.code', 'ilike', $like)->orWhere('ap.display_name', 'ilike', $like), 'a.code', $number))
+            ->orderBy('a.code')->limit(self::PER_KIND)->get(['a.id', 'a.code', 'a.type', 'a.status', 'ap.display_name']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'producer', 'label' => (string) $row->code, 'detail' => ($row->display_name ?? '').' · '.self::word((string) $row->type).' · '.self::word((string) $row->status),
+                'href' => "/distribution/producers/{$row->id}"];
         }
 
         return $results;
@@ -199,6 +289,41 @@ final class GlobalSearchQuery
         }
 
         return $query->orWhere(fn ($q) => $q->where($column, 'like', $number[0].'-%')->whereRaw("ltrim(regexp_replace({$column}, '^.*[^0-9]', ''), '0') = ?", [ltrim($number[1], '0')]));
+    }
+
+    /** A vehicle registration or chassis number as typed ("DHA GA 11-1234"), reduced to its letters and digits; null when too short to search by. */
+    private static function vehicleKey(string $query): ?string
+    {
+        $key = (string) preg_replace('/[^A-Z0-9]/', '', strtoupper($query));
+
+        return strlen($key) >= 4 && preg_match('/\d/', $key) === 1 ? $key : null;
+    }
+
+    /**
+     * Also matches rows whose risk inputs name the vehicle: the registration and chassis numbers compared on letters and digits only (a space keeps the two
+     * apart, and the key has none, so a match never straddles them).
+     *
+     * @param 'p'|'q'|'pr' $alias the policies, quotations or proposals table
+     */
+    private static function vehicleOr(\Illuminate\Database\Query\Builder $query, string $alias, ?string $vehicle): \Illuminate\Database\Query\Builder
+    {
+        if ($vehicle === null) {
+            return $query;
+        }
+        $sql = match ($alias) {
+            'p' => "regexp_replace(upper(coalesce(p.risk_inputs->>'registration_no', '') || ' ' || coalesce(p.risk_inputs->>'chassis_no', '')), '[^A-Z0-9 ]', '', 'g') like ?",
+            'q' => "regexp_replace(upper(coalesce(q.risk_inputs->>'registration_no', '') || ' ' || coalesce(q.risk_inputs->>'chassis_no', '')), '[^A-Z0-9 ]', '', 'g') like ?",
+            'pr' => "regexp_replace(upper(coalesce(pr.risk_inputs->>'registration_no', '') || ' ' || coalesce(pr.risk_inputs->>'chassis_no', '')), '[^A-Z0-9 ]', '', 'g') like ?",
+        };
+
+        return $query->orWhereRaw($sql, ['%'.$vehicle.'%']);
+    }
+
+    private static function registration(object $row): string
+    {
+        $registration = $row->registration ?? null;
+
+        return is_string($registration) && $registration !== '' ? " · {$registration}" : '';
     }
 
     private static function word(string $status): string

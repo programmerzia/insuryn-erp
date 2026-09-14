@@ -157,6 +157,8 @@ final class PolicyPageController
                 'reinstate' => $status === PolicyStatus::Lapsed && $can('policy.issue'),
                 // Slice R9 (A-130): a rated policy renews through its renewal quotation (Renewals), not by a typed renewal quote.
                 'renew' => $model->rating_result === null && in_array($status, [PolicyStatus::Active, PolicyStatus::Expired], true) && $can('policy.create'),
+                // GA-29: money still refundable on the policy (a cancellation) and the user requests refunds in its branch — the page and the palette offer it.
+                'refund' => $can('receipt.refund_request') && app(\App\Modules\Insurance\Collections\Application\RefundableQuery::class)->availableMinor($model->id) > 0,
             ],
         ]);
     }

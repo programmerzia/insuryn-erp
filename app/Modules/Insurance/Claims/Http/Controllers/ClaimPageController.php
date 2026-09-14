@@ -57,6 +57,31 @@ final class ClaimPageController
         return Inertia::render('claims/Index', ['filters' => ['status' => $status], 'statuses' => array_column(ClaimStatus::cases(), 'value'), 'claims' => PageSupport::page($page, $rows)]);
     }
 
+    /**
+     * GA-26: the claim payments queue (GET /claims/payments) — every payment of the user's branches' claims, the ones still to approve, request or release
+     * first, oldest approval first; each opens its claim, where the payment is released. Home "Payments to release" opens it filtered (`f.status=`).
+     */
+    public function payments(Request $request): Response
+    {
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
+        $entity = PageSupport::entity();
+        $open = [ClaimPaymentStatus::PendingApproval->value, ClaimPaymentStatus::Approved->value, ClaimPaymentStatus::ReleaseRequested->value, ClaimPaymentStatus::ReleasePendingApproval->value];
+        $page = $reach->constrain(DB::table('claim_payments as cp'), 'c.entity_id', 'c.branch_id')->join('claims as c', 'c.id', '=', 'cp.claim_id')->join('policies as p', 'p.id', '=', 'c.policy_id')
+            ->leftJoin('parties as payee', 'payee.id', '=', 'cp.payee_party_id')->where('c.entity_id', $entity['id'])
+            ->orderByRaw('case when cp.status in ('.implode(',', array_fill(0, count($open), '?')).') then 0 else 1 end', $open)->orderBy('cp.approved_on')->orderBy('c.number')
+            ->select(['cp.id', 'cp.status', 'cp.approved_on', 'cp.paid_on', 'cp.amount_minor', 'cp.currency', 'c.id as claim_id', 'c.number as claim_number', 'p.number as policy_number', 'payee.display_name as payee'])
+            ->paginate(PageSupport::listPageSize())->withQueryString();
+        $rows = [];
+        foreach ($page->items() as $payment) {
+            /** @var object{id: string, status: string, approved_on: string, paid_on: string|null, amount_minor: int|string, currency: string, claim_id: string, claim_number: string, policy_number: string|null, payee: string|null} $payment */
+            $rows[] = ['id' => (string) $payment->id, 'status' => (string) $payment->status, 'approved_on' => (string) $payment->approved_on, 'paid_on' => $payment->paid_on,
+                'amount' => PageSupport::money((int) $payment->amount_minor, (string) $payment->currency), 'claim_id' => (string) $payment->claim_id, 'claim_number' => (string) $payment->claim_number,
+                'policy_number' => $payment->policy_number, 'payee' => (string) ($payment->payee ?? '')];
+        }
+
+        return Inertia::render('claims/Payments', ['statuses' => array_column(ClaimPaymentStatus::cases(), 'value'), 'payments' => PageSupport::page($page, $rows)]);
+    }
+
     public function create(Request $request): Response
     {
         $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);

@@ -95,13 +95,18 @@ it('gives every seeded role its own work queues', function (string $role, array 
         ->where('queues', fn ($queues): bool => array_column(json_decode((string) json_encode($queues), true), 'title') === $titles));
 })->with([
     // Gap fix GA-14 added "Policies with bounced premium" at the end for the branch and the accountant.
-    'branch officer' => ['branch_officer', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Policies with bounced premium']],
-    'branch manager' => ['branch_manager', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Receipts to allocate', 'Policies with bounced premium']],
-    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events', 'Policies with bounced premium']],
+    // GA-26: overdue premium, renewals due, cover notes ending, agent cash not deposited, referrals, licences expiring, commission to pay, refunds to release.
+    'branch officer' => ['branch_officer', ['Installments due this week', 'Overdue premium', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Renewals due', 'Cover notes ending',
+        'Agent cash not deposited', 'Policies with bounced premium']],
+    'branch manager' => ['branch_manager', ['Installments due this week', 'Overdue premium', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Receipts to allocate',
+        'Referrals waiting for my decision', 'Renewals due', 'Cover notes ending', 'Agent cash not deposited', 'Producer licences expiring', 'Policies with bounced premium']],
+    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events', 'Commission to pay', 'Policies with bounced premium']],
     'claims officer' => ['claims_officer', ['Claims awaiting reserve', 'Awaiting my approval', 'Payments to release']],
     'claims manager' => ['claims_manager', ['Claims awaiting reserve', 'Claims to settle', 'Awaiting my approval', 'Payments to release']],
-    'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release', 'Failed accounting events']],
-    'cfo' => ['cfo', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release', 'Failed accounting events']],
+    'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Waiting for my approval', 'Cash position', 'Payments to release', 'Failed accounting events',
+        'Referrals waiting for my decision', 'Refunds to release']],
+    'cfo' => ['cfo', ['Close progress', 'Reconciliation variances', 'Waiting for my approval', 'Cash position', 'Payments to release', 'Failed accounting events',
+        'Referrals waiting for my decision', 'Refunds to release']],
     'auditor' => ['auditor', ['Recent reversals and adjustments', 'Period reopen events', 'Control-account manual postings']],
     'tenant admin' => ['tenant_admin', []],
 ]);
@@ -110,9 +115,10 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
     $officer = ($this->asRole)('branch_officer');
     actingAs($officer)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('queues.0.key', 'installments_due')->where('queues.0.count', 1)->where('queues.0.rows.0.cells.due', '2026-09-15')->where('queues.0.href', '/receipts/create')
-        ->where('queues.1.key', 'lapsing_policies')->where('queues.1.count', 1)
-        ->where('queues.2.key', 'receipts_to_record')->where('queues.2.count', 1)->where('queues.2.rows.0.cells.amount', '18,000.00')
-        ->where('queues.3.key', 'quotes')->where('queues.3.count', 1)
+        ->where('queues.1.key', 'overdue_premium')->where('queues.1.count', 2)   // GA-26: the lapsing policy's 1 Aug and 1 Sep installments
+        ->where('queues.2.key', 'lapsing_policies')->where('queues.2.count', 1)
+        ->where('queues.3.key', 'receipts_to_record')->where('queues.3.count', 1)->where('queues.3.rows.0.cells.amount', '18,000.00')
+        ->where('queues.4.key', 'quotes')->where('queues.4.count', 1)
         ->where('shell.badges.policies', 1)->where('shell.badges.bank', 1));
 
     $accountant = ($this->asRole)('accountant');
@@ -137,7 +143,7 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
 
 it('shows each queue once for a user with several roles, and lands everyone on home after sign-in', function (): void {
     actingAs(($this->asRole)('branch_manager', 'branch_officer', 'accountant'))->get('/home', $this->headers)
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 10)); // GA-14: + policies with bounced premium, shown once (was 9)
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 17)); // 11 branch manager queues (the officer's are among them) + 5 accountant ones (GA-26) + policies with bounced premium, shown once (GA-14)
     expect(config('fortify.home'))->toBe('/home');
     actingAs(($this->asRole)('auditor'))->get('/', $this->headers)->assertRedirect('/home');
 });

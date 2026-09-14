@@ -6,11 +6,17 @@ namespace App\Http\Home;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Events\StuckAccountingEvents;
+use App\Http\Distribution\ProducersPageController;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
+use App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController;
+use App\Modules\Insurance\Renewal\Application\ExpiryRegister;
+use App\Modules\Insurance\Renewal\Domain\ExpiryRegisterStatus;
+use App\Modules\Insurance\Underwriting\Application\ProposalService;
+use App\Modules\Insurance\Underwriting\Application\UnderwritingDecisions;
 use App\Modules\Platform\Approvals\ApprovalInboxQuery;
 use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\PermissionChecker;
@@ -28,17 +34,23 @@ final class WorkQueues
     /** Brief §5 blocks per role template, top to bottom. SLA breaches are not listed: claim SLA timers are not built (exit checklist). */
     public const BY_ROLE = [
         // Gap fix GA-14: 'bounced_premium' (policies in force whose premium cheque bounced and is still unpaid) for the branch and the accountant.
-        'branch_officer' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes', 'bounced_premium'],
-        // GA-03 (D-65): the branch manager allocates the premium officers record into suspense for a policy.
-        'branch_manager' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes', 'receipts_to_allocate', 'bounced_premium'],
+        // GA-26: overdue premium, renewals due, cover notes ending and agent cash not deposited are worked at the branch (receipt.create, renewal.manage,
+        // cover_note.issue; an agent's deposit is recorded with receipt.create).
+        'branch_officer' => ['installments_due', 'overdue_premium', 'lapsing_policies', 'receipts_to_record', 'quotes', 'renewals_due', 'cover_notes_expiring', 'agent_cash_undeposited', 'bounced_premium'],
+        // GA-03 (D-65): the branch manager allocates the premium officers record into suspense for a policy. GA-26: and decides referrals (underwriting.decide,
+        // A-86) and keeps producer licences current (agent.manage).
+        'branch_manager' => ['installments_due', 'overdue_premium', 'lapsing_policies', 'receipts_to_record', 'quotes', 'receipts_to_allocate', 'referrals', 'renewals_due',
+            'cover_notes_expiring', 'agent_cash_undeposited', 'licences_expiring', 'bounced_premium'],
         // GA-13: journals_to_approve becomes journals_submitted for someone who cannot approve journals (the accountant template, §7.2) — see keysFor.
-        'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events', 'bounced_premium'],
+        // GA-26: the accountant pays approved commission statements (commission.pay, A-138).
+        'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events', 'commission_to_pay', 'bounced_premium'],
         'claims_officer' => ['claims_awaiting_reserve', 'claim_approvals', 'payments_to_release'],
         // Flow fix X3: the claims manager decides settlements of reserved claims; finance releases requested claim payments.
         'claims_manager' => ['claims_awaiting_reserve', 'claims_to_settle', 'claim_approvals', 'payments_to_release'],
         // GA-08: the finance manager and CFO requeue accounting events that did not post, so they see them too.
-        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events'],
-        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events'],
+        // GA-26: they also decide referrals (A-86) and release refunds (receipt.refund_release).
+        'finance_manager' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release'],
+        'cfo' => ['close_progress', 'reconciliation_variances', 'approvals_over_threshold', 'cash_position', 'payments_to_release', 'failed_events', 'referrals', 'refunds_to_release'],
         'auditor' => ['recent_reversals', 'period_reopens', 'control_manual_postings'],
     ];
 
@@ -50,6 +62,9 @@ final class WorkQueues
 
     /** @var array<string, AreaReach> */
     private array $reaches = [];
+
+    /** @var array<string, list<array<string, mixed>>> */
+    private array $decidable = [];
 
     public function __construct(private readonly PermissionChecker $permissions, private readonly ApprovalInboxQuery $inbox) {}
 
@@ -96,8 +111,7 @@ final class WorkQueues
     private function count(string $key, string $userId): int
     {
         return match ($key) {
-            'claim_approvals' => count($this->approvals($userId, true)),
-            'approvals_over_threshold' => count($this->approvals($userId, false)),
+            'claim_approvals', 'approvals_over_threshold' => count($this->approvals($userId, $key)),
             'close_progress' => $this->closeRun() === null ? 0 : (int) DB::table('period_close_tasks')->where('close_run_id', $this->closeRun()->id)->whereNotIn('status', ['done', 'skipped'])->count(),
             'cash_position' => 0,
             default => $this->query($key, $userId)->count(),
@@ -113,6 +127,15 @@ final class WorkQueues
             'installments_due' => ['Installments due this week', '/receipts/create', 'No installments fall due in the next seven days.', ['Record a receipt', '/receipts/create']],
             'lapsing_policies' => ['Lapsing policies', '/dunning', 'No policy is close to lapsing.', ['See payment reminders', '/dunning']],
             'receipts_to_record' => ['Receipts to record', '/bank', 'Every credit on the bank statements has a receipt.', ['Import a bank statement', '/bank']],
+            // GA-26: installments already past their due date; "due this week" and "lapsing" left them out until they were close to lapsing.
+            'overdue_premium' => ['Overdue premium', '/receipts/create', 'No premium is overdue.', ['Record a receipt', '/receipts/create']],
+            'referrals' => ['Referrals waiting for my decision', '/underwriting/referrals?f.status=submitted', 'No referral is waiting for your decision.', ['Open referrals', '/underwriting/referrals']],
+            'renewals_due' => ['Renewals due', '/renewals', 'No policy is due for renewal in the next '.max(ExpiryRegister::buckets()).' days.', ['Open renewals', '/renewals']],
+            'cover_notes_expiring' => ['Cover notes ending', '/cover-notes?within='.self::coverNoteDays(), 'No cover note ends in the next '.self::coverNoteDays().' days.', ['Open cover notes', '/cover-notes']],
+            'agent_cash_undeposited' => ['Agent cash not deposited', '/agent-cash', 'No agent holds cash that is not deposited.', ['Open agent cash', '/agent-cash']],
+            'licences_expiring' => ['Producer licences expiring', '/distribution/producers?f.attention='.rawurlencode('Licence expiring'), 'No producer licence expires in the next '.self::licenceDays().' days.', ['Open producers', '/distribution/producers']],
+            'refunds_to_release' => ['Refunds to release', '/refunds?f.status=requested', 'No refund is waiting to be released.', ['Open refunds', '/refunds']],
+            'commission_to_pay' => ['Commission to pay', '/distribution/statements?f.status=approved', 'No approved commission statement is waiting to be paid.', ['Open commission statements', '/distribution/statements']],
             'quotes' => ['Quotes to follow up', '/quotations', 'No open quotes.', ['New quote', '/quotations/create']],
             'receipts_to_allocate' => ['Receipts to allocate', '/suspense', 'No receipt taken for a policy is waiting to be allocated.', ['Record a receipt', '/receipts/create']],
             'bounced_premium' => ['Policies with bounced premium', '/cheques', 'No policy in force has an unpaid bounced cheque.', ['Open the cheque register', '/cheques']],
@@ -121,13 +144,15 @@ final class WorkQueues
             'journals_submitted' => ['Journals I submitted', '/accounting/journals?f.status=pending_approval', 'None of your journals is in draft, waiting for approval or recently rejected.', ['New manual journal', '/accounting/journals/create']],
             'journals_to_approve' => ['Journals awaiting my approval', '/accounting/journals?f.status=pending_approval', 'No journals are waiting for you.', ['Open journals', '/accounting/journals']],
             'failed_events' => ['Failed accounting events', '/accounting/events', 'Every accounting event posted.', ['Open journals', '/accounting/journals']],
-            'claims_awaiting_reserve' => ['Claims awaiting reserve', '/claims?status=registered', 'Every open claim has a reserve.', ['Register a claim', '/claims/create']],
-            'claims_to_settle' => ['Claims to settle', '/claims?status=reserved', 'No reserved claim is waiting for a settlement decision.', ['Open claims', '/claims']],
+            'claims_awaiting_reserve' => ['Claims awaiting reserve', '/claims?f.status=registered', 'Every open claim has a reserve.', ['Register a claim', '/claims/create']],
+            'claims_to_settle' => ['Claims to settle', '/claims?f.status=reserved', 'No reserved claim is waiting for a settlement decision.', ['Open claims', '/claims']],
             'claim_approvals' => ['Awaiting my approval', '/approvals', 'No claim approvals are waiting for you.', ['Open claims', '/claims']],
-            'payments_to_release' => ['Payments to release', '/claims', 'No approved payments are waiting to be paid.', ['Open claims', '/claims']],
+            // GA-26: the claim payments queue, filtered to what this user releases.
+            'payments_to_release' => ['Payments to release', $this->paymentsReleasedOnly($userId) ? '/claims/payments?f.status=release_requested' : '/claims/payments', 'No approved payments are waiting to be paid.', ['Open claim payments', '/claims/payments']],
             'close_progress' => ['Close progress', '/close', 'No month-end close is running.', ['Start the close', '/close']],
             'reconciliation_variances' => ['Reconciliation variances', '/close', 'Every subledger reconciles to the ledger.', ['Open the close', '/close']],
-            'approvals_over_threshold' => ['Approvals over threshold', '/approvals', 'Nothing over a limit is waiting for you.', ['Open approvals', '/approvals']],
+            // GA-26: every approval this user may decide (a manual journal needs one whatever its amount), so not "over threshold".
+            'approvals_over_threshold' => ['Waiting for my approval', '/approvals', 'Nothing over a limit is waiting for you.', ['Open approvals', '/approvals']],
             'cash_position' => ['Cash position', '/bank', 'No bank account is set up.', ['Add a bank account', '/bank']],
             'recent_reversals' => ['Recent reversals and adjustments', '/accounting/journals', 'No reversals or adjustments in the last 30 days.', ['Open journals', '/accounting/journals']],
             'period_reopens' => ['Period reopen events', '/close', 'No period has been reopened.', ['Open the close', '/close']],
@@ -137,7 +162,7 @@ final class WorkQueues
         $block = ['key' => $key, 'title' => $title, 'href' => $href, 'empty' => $empty, 'emptyAction' => ['label' => $action[0], 'href' => $action[1]], 'count' => 0, 'columns' => [], 'rows' => []];
 
         $filled = match ($key) {
-            'claim_approvals', 'approvals_over_threshold' => $this->approvalBlock($block, $this->approvals($userId, $key === 'claim_approvals')),
+            'claim_approvals', 'approvals_over_threshold' => $this->approvalBlock($block, $this->approvals($userId, $key)),
             'close_progress' => $this->closeBlock($block),
             'cash_position' => $this->cashBlock($block, $today),
             default => [...$block, ...$this->rows($key, $userId)],
@@ -189,12 +214,47 @@ final class WorkQueues
             'installments_due' => $this->within($userId, PolicyPageController::AREA, DB::table('installments as i'), 'p')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as h', 'h.id', '=', 'i.payer_party_id')
                 ->whereIn('p.status', ['issued', 'active'])->whereRaw("{$unpaid} > 0")->whereBetween('i.due_date', [$today->toDateString(), $today->addDays(7)->toDateString()])
                 ->orderBy('i.due_date')->select(['p.id', 'p.number', 'h.display_name', 'i.due_date', 'p.currency', DB::raw("{$unpaid} as outstanding")]),
+            'overdue_premium' => $this->within($userId, PolicyPageController::AREA, DB::table('installments as i'), 'p')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as h', 'h.id', '=', 'i.payer_party_id')
+                ->whereIn('p.status', ['issued', 'active'])->whereRaw("{$unpaid} > 0")->where('i.due_date', '<', $today->toDateString())
+                ->orderBy('i.due_date')->orderBy('p.number')->select(['p.id', 'p.number', 'h.display_name', 'i.due_date', 'p.currency', DB::raw("{$unpaid} as outstanding")]),
+            // Referred proposals of the user's branches whose current approval step this user may decide (the approvals inbox; never their own).
+            'referrals' => $this->within($userId, [UnderwritingDecisions::PERMISSION], DB::table('proposals as pr'), 'pr')->leftJoin('parties as c', 'c.id', '=', 'pr.customer_party_id')
+                ->where('pr.status', 'submitted')->whereIn('pr.id', array_column(array_filter($this->inbox($userId), fn (array $a): bool => $a['object_type'] === ProposalService::REFERRAL), 'object_id'))
+                ->orderBy('pr.submitted_at')->select(['pr.id', 'pr.number', 'c.display_name', 'pr.submitted_at', 'pr.gross_premium_minor', 'pr.currency']),
+            // Open expiry register entries (upcoming or offered) expiring from today to the register's largest bucket.
+            'renewals_due' => $this->within($userId, [ExpiryRegister::PERMISSION], DB::table('expiry_register as r'), 'r')->leftJoin('parties as c', 'c.id', '=', 'r.policyholder_party_id')
+                ->whereIn('r.status', ExpiryRegisterStatus::open())->whereBetween('r.expiry', [$today->toDateString(), $today->addDays(max(ExpiryRegister::buckets()))->toDateString()])
+                ->orderBy('r.expiry')->orderBy('r.policy_number')->select(['r.policy_id', 'r.policy_number', 'c.display_name', 'r.expiry', 'r.status']),
+            'cover_notes_expiring' => $this->within($userId, CoverNotesPageController::AREA, DB::table('cover_notes as n'), 'n')->join('proposals as pr', 'pr.id', '=', 'n.proposal_id')
+                ->leftJoin('parties as c', 'c.id', '=', 'pr.customer_party_id')->where('n.status', 'active')
+                ->whereBetween('n.valid_to', [$today->toDateString(), $today->addDays(self::coverNoteDays())->toDateString()])
+                ->orderBy('n.valid_to')->orderBy('n.number')->select(['n.id', 'n.number', 'c.display_name', 'n.valid_to', 'pr.id as proposal_id']),
+            // Cash an agent collected and has not deposited (AgentCashPositionQuery::undepositedMinor), per agent of the user's branches (A-159).
+            'agent_cash_undeposited' => $this->withinColumns($userId, CollectionsPageController::AREA, DB::table('producers as a')->join('branches as br', 'br.id', '=', 'a.branch_id'), 'br.entity_id', 'a.branch_id')
+                ->leftJoin('parties as ap', 'ap.id', '=', 'a.party_id')
+                ->joinSub(DB::table('receipts')->whereNotNull('collected_by_agent_id')->where('channel', 'cash')->where('status', '<>', 'bounced')->groupBy('collected_by_agent_id', 'currency')
+                    ->select(['collected_by_agent_id', 'currency', DB::raw('sum(amount_minor) as collected')]), 'col', 'col.collected_by_agent_id', '=', 'a.id')
+                ->leftJoinSub(DB::table('agent_deposits')->groupBy('agent_id')->select(['agent_id', DB::raw('sum(amount_minor) as deposited')]), 'dep', 'dep.agent_id', '=', 'a.id')
+                ->whereRaw('col.collected - coalesce(dep.deposited, 0) > 0')->orderBy('a.code')
+                ->select(['a.id', 'a.code', 'ap.display_name', 'col.currency', DB::raw('col.collected - coalesce(dep.deposited, 0) as undeposited_minor')]),
+            'licences_expiring' => $this->withinColumns($userId, ProducersPageController::AREA, DB::table('producer_licences as l')->join('producers as a', 'a.id', '=', 'l.producer_id')
+                ->join('branches as br', 'br.id', '=', 'a.branch_id'), 'br.entity_id', 'a.branch_id')->leftJoin('parties as ap', 'ap.id', '=', 'a.party_id')
+                ->where('l.status', 'active')->whereBetween('l.expires_on', [$today->toDateString(), $today->addDays(self::licenceDays())->toDateString()])
+                ->orderBy('l.expires_on')->orderBy('a.code')->select(['a.id', 'a.code', 'ap.display_name', 'l.licence_no', 'l.expires_on']),
+            // Requested refunds someone else asked for (maker ≠ checker, non-negotiable #9), in the branches where this user releases refunds.
+            'refunds_to_release' => $this->within($userId, ['receipt.refund_release'], DB::table('refunds as r'), 'r')->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')
+                ->where('r.status', 'requested')->where('r.requested_by', '<>', $userId)
+                ->orderBy('r.requested_at')->select(['r.id', 'p.number', 'r.reason', 'r.requested_at', 'r.amount_minor', 'r.currency']),
+            // Approved statements not paid yet that this user did not approve (commission.approve ✕ commission.pay). Statements carry no branch.
+            'commission_to_pay' => DB::table('commission_statements as s')->join('producers as a', 'a.id', '=', 's.agent_id')->leftJoin('parties as ap', 'ap.id', '=', 'a.party_id')
+                ->where('s.status', 'approved')->where('s.approved_by', '<>', $userId)
+                ->orderBy('s.approved_on')->orderBy('s.number')->select(['s.id', 's.number', 'a.code', 'ap.display_name', 's.period_end', 's.approved_on', 's.net_minor', 's.currency']),
             'lapsing_policies' => $this->within($userId, PolicyPageController::AREA, DB::table('policies as p'), 'p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
                 ->joinSub(DB::table('installments as i')->whereRaw("{$unpaid} > 0")->groupBy('i.policy_id')->select(['i.policy_id', DB::raw('min(i.due_date) as oldest_due')]), 'o', 'o.policy_id', '=', 'p.id')
                 ->whereIn('p.status', ['issued', 'active'])->where('o.oldest_due', '<=', $today->addDays(14)->subDays((int) config('erp.collections.grace_days', 30))->toDateString())
                 ->orderBy('o.oldest_due')->select(['p.id', 'p.number', 'h.display_name', 'o.oldest_due']),
             'receipts_to_record', 'unmatched_bank_lines' => DB::table('bank_statement_lines as l')->join('bank_accounts as b', 'b.id', '=', 'l.bank_account_id')->where('l.match_status', 'unmatched')
-                ->when($key === 'receipts_to_record', fn (Builder $q) => $q->where('l.amount_minor', '>', 0))
+                ->when($key === 'receipts_to_record', fn (Builder $q) => self::withoutReceipt($q->where('l.amount_minor', '>', 0)))
                 ->orderBy('l.posted_on')->orderBy('l.id')->select(['l.id', 'l.bank_account_id', 'l.posted_on', 'l.reference', 'l.description', 'l.amount_minor', 'b.currency', 'b.bank_name']),
             // Issued quotations still valid (Phase 3 quote workbench) and Phase 1 policy quotes, earliest cover start first.
             'quotes' => DB::query()->fromSub($this->within($userId, QuotationPageController::AREA, DB::table('quotations as q'), 'q')->leftJoin('parties as h', 'h.id', '=', 'q.customer_party_id')->where('q.status', 'issued')
@@ -229,7 +289,7 @@ final class WorkQueues
                 ->orderBy('c.reported_on')->orderBy('c.number')->select(['c.id', 'c.number', 'p.number as policy_number', 'c.reserve_minor', 'c.currency', 'c.reported_on']),
             // Someone who releases but does not request releases (finance) only has the requested ones to act on.
             'payments_to_release' => $this->within($userId, ClaimPageController::AREA, DB::table('claim_payments as cp'), 'c')->join('claims as c', 'c.id', '=', 'cp.claim_id')
-                ->whereIn('cp.status', $this->permissions->has($userId, 'claim.pay_release') && ! $this->permissions->has($userId, 'claim.pay_request') ? ['release_requested'] : ['approved', 'release_requested'])
+                ->whereIn('cp.status', $this->paymentsReleasedOnly($userId) ? ['release_requested'] : ['approved', 'release_requested'])
                 ->orderBy('cp.approved_on')->select(['c.id', 'c.number', 'cp.status', 'cp.approved_on', 'cp.amount_minor', 'cp.currency']),
             'reconciliation_variances' => DB::table('reconciliation_runs as r')->join('fiscal_periods as f', 'f.id', '=', 'r.period_id')->where('r.status', 'variance')
                 ->orderByDesc('r.run_at')->select(['r.id', 'r.subledger', 'f.starts', 'r.variance_minor']),
@@ -252,10 +312,55 @@ final class WorkQueues
      */
     private function within(string $userId, array $area, Builder $query, string $alias): Builder
     {
+        return $this->withinColumns($userId, $area, $query, "{$alias}.entity_id", "{$alias}.branch_id");
+    }
+
+    /** @param list<string> $area */
+    private function withinColumns(string $userId, array $area, Builder $query, string $entityColumn, string $branchColumn): Builder
+    {
         $key = $userId.'|'.implode(',', $area);
         $this->reaches[$key] ??= $this->permissions->reach($userId, $area);
 
-        return $this->reaches[$key]->constrain($query, "{$alias}.entity_id", "{$alias}.branch_id");
+        return $this->reaches[$key]->constrain($query, $entityColumn, $branchColumn);
+    }
+
+    /** Someone who releases claim payments but does not request releases (finance) only has the requested ones to act on. */
+    private function paymentsReleasedOnly(string $userId): bool
+    {
+        return $this->permissions->has($userId, 'claim.pay_release') && ! $this->permissions->has($userId, 'claim.pay_request');
+    }
+
+    /**
+     * GA-26: a credit line is no receipt still to record when the bank matching screen already suggests a posted receipt for it — an unmatched debit on the
+     * account's ledger account of the same amount within the auto-match window (BankMatcher::suggestions) — or when a receipt that is not bounced has the same
+     * amount and a reference the line quotes (ASSUMPTION A-221).
+     */
+    private static function withoutReceipt(Builder $lines): Builder
+    {
+        $window = (int) config('erp.bank.auto_match_date_window_days', 3);
+
+        return $lines
+            ->whereNotExists(fn (Builder $q) => $q->from('journal_lines as jl')->join('journals as j', 'j.id', '=', 'jl.journal_id')
+                ->whereColumn('jl.account_id', 'b.gl_account_id')->where('j.status', 'posted')->whereNull('j.reverses_journal_id')
+                ->where('jl.side', 'debit')->whereColumn('jl.amount_minor', 'l.amount_minor')->whereRaw('abs(j.posting_date - l.posted_on) <= ?', [$window])
+                ->whereNotExists(fn (Builder $m) => $m->from('bank_matches as m')->whereColumn('m.journal_line_id', 'jl.id')))
+            ->whereNotExists(fn (Builder $q) => $q->from('receipts as r')->where('r.status', '<>', 'bounced')->whereColumn('r.amount_minor', 'l.amount_minor')
+                ->whereRaw("length(trim(coalesce(r.reference, ''))) >= 3")
+                ->whereRaw("position(upper(trim(r.reference)) in upper(coalesce(l.reference, '') || ' ' || coalesce(l.description, ''))) > 0")
+                ->where(fn (Builder $b) => $b->whereNull('r.bank_account_id')->orWhereColumn('r.bank_account_id', 'l.bank_account_id')));
+    }
+
+    private static function coverNoteDays(): int
+    {
+        return max(1, (int) config('erp.cover_notes.expiring_within_days', 7));
+    }
+
+    /** The earliest licence-expiry alert (distribution design note §3), 60 days by default. */
+    private static function licenceDays(): int
+    {
+        $days = array_map('intval', (array) config('erp.distribution.licence_alert_days', [60]));
+
+        return $days === [] ? 60 : max($days);
     }
 
     /** @return array{0: list<array{id: string, label: string, type: string}>, 1: callable(\stdClass): array{href: string|null, cells: array<string, string|null>}} */
@@ -267,6 +372,23 @@ final class WorkQueues
         return match ($key) {
             'installments_due' => [[$col('policy', 'Policy'), $col('payer', 'Payer'), $col('due', 'Due', 'date'), $col('amount', 'Outstanding', 'money')],
                 fn (\stdClass $r): array => ['href' => "/policies/{$r->id}", 'cells' => ['policy' => $r->number, 'payer' => $r->display_name, 'due' => $r->due_date, 'amount' => $money($r, 'outstanding')]]],
+            'overdue_premium' => [[$col('policy', 'Policy'), $col('payer', 'Payer'), $col('due', 'Was due', 'date'), $col('amount', 'Outstanding', 'money')],
+                fn (\stdClass $r): array => ['href' => "/policies/{$r->id}", 'cells' => ['policy' => $r->number, 'payer' => $r->display_name, 'due' => $r->due_date, 'amount' => $money($r, 'outstanding')]]],
+            'referrals' => [[$col('proposal', 'Proposal'), $col('customer', 'Customer'), $col('submitted', 'Referred', 'date'), $col('premium', 'Gross premium', 'money')],
+                fn (\stdClass $r): array => ['href' => "/proposals/{$r->id}", 'cells' => ['proposal' => $r->number, 'customer' => $r->display_name, 'submitted' => substr((string) $r->submitted_at, 0, 10), 'premium' => $money($r, 'gross_premium_minor')]]],
+            'renewals_due' => [[$col('policy', 'Policy'), $col('holder', 'Policyholder'), $col('expiry', 'Expires', 'date'), $col('status', 'Status', 'status')],
+                fn (\stdClass $r): array => ['href' => "/policies/{$r->policy_id}", 'cells' => ['policy' => $r->policy_number, 'holder' => $r->display_name, 'expiry' => $r->expiry, 'status' => $r->status]]],
+            'cover_notes_expiring' => [[$col('note', 'Cover note'), $col('customer', 'Customer'), $col('until', 'Until', 'date')],
+                fn (\stdClass $r): array => ['href' => "/proposals/{$r->proposal_id}", 'cells' => ['note' => $r->number, 'customer' => $r->display_name, 'until' => $r->valid_to]]],
+            'agent_cash_undeposited' => [[$col('agent', 'Agent'), $col('name', 'Name'), $col('amount', 'Not deposited', 'money')],
+                fn (\stdClass $r): array => ['href' => '/agent-cash', 'cells' => ['agent' => $r->code, 'name' => $r->display_name, 'amount' => $money($r, 'undeposited_minor')]]],
+            'licences_expiring' => [[$col('producer', 'Producer'), $col('name', 'Name'), $col('licence', 'Licence'), $col('expires', 'Expires', 'date')],
+                fn (\stdClass $r): array => ['href' => "/distribution/producers/{$r->id}", 'cells' => ['producer' => $r->code, 'name' => $r->display_name, 'licence' => $r->licence_no, 'expires' => $r->expires_on]]],
+            'refunds_to_release' => [[$col('policy', 'Policy'), $col('reason', 'Reason'), $col('requested', 'Requested', 'date'), $col('amount', 'Amount', 'money')],
+                fn (\stdClass $r): array => ['href' => '/refunds?f.status=requested', 'cells' => ['policy' => $r->number, 'reason' => $r->reason, 'requested' => substr((string) $r->requested_at, 0, 10), 'amount' => $money($r, 'amount_minor')]]],
+            'commission_to_pay' => [[$col('statement', 'Statement'), $col('producer', 'Producer'), $col('approved', 'Approved', 'date'), $col('amount', 'Net', 'money')],
+                fn (\stdClass $r): array => ['href' => '/distribution/statements?'.($r->period_end === null ? '' : 'period_end='.substr((string) $r->period_end, 0, 10).'&').'f.status=approved',
+                    'cells' => ['statement' => $r->number, 'producer' => trim("{$r->code} {$r->display_name}"), 'approved' => $r->approved_on, 'amount' => $money($r, 'net_minor')]]],
             'lapsing_policies' => [[$col('policy', 'Policy'), $col('holder', 'Policyholder'), $col('oldest', 'Oldest unpaid', 'date'), $col('lapses', 'Lapses', 'date')],
                 fn (\stdClass $r): array => ['href' => "/policies/{$r->id}", 'cells' => ['policy' => $r->number, 'holder' => $r->display_name, 'oldest' => $r->oldest_due,
                     'lapses' => CarbonImmutable::parse((string) $r->oldest_due)->addDays((int) config('erp.collections.grace_days', 30))->toDateString()]]],
@@ -308,10 +430,24 @@ final class WorkQueues
         };
     }
 
-    /** @return list<array<string, mixed>> */
-    private function approvals(string $userId, bool $claimsOnly): array
+    /**
+     * The approvals a block lists: claims only for claim_approvals; for "Waiting for my approval" everything, except referrals when the user has their own
+     * Referrals block (GA-26), so nothing is counted twice.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function approvals(string $userId, string $key): array
     {
-        return array_values(array_filter($this->inbox->decidableBy($userId), fn (array $a): bool => ! $claimsOnly || str_starts_with((string) $a['object_type'], 'claim')));
+        $referralsApart = $key === 'approvals_over_threshold' && in_array('referrals', $this->keysFor($userId), true);
+
+        return array_values(array_filter($this->inbox($userId), fn (array $a): bool => $key === 'claim_approvals'
+            ? str_starts_with((string) $a['object_type'], 'claim') : ! ($referralsApart && $a['object_type'] === ProposalService::REFERRAL)));
+    }
+
+    /** @return list<array<string, mixed>> the approvals this user may decide, read once per request */
+    private function inbox(string $userId): array
+    {
+        return $this->decidable[$userId] ??= $this->inbox->decidableBy($userId);
     }
 
     /**

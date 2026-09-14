@@ -283,6 +283,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('bank/lines/{statementLine}/receipt', [\App\Http\Bank\StatementLineReceiptController::class, 'store'])->whereUuid('statementLine')->middleware('moves-money');
 
     Route::get('claims', [ClaimPageController::class, 'index']);
+    Route::get('claims/payments', [ClaimPageController::class, 'payments']); // gap audit GA-26: the claim payments queue
     Route::get('claims/create', [ClaimPageController::class, 'create']);
     Route::post('claims', [ClaimPageController::class, 'store']);
     Route::get('claims/{claim}', [\App\Http\Pages\ObjectPageController::class, 'claim'])->whereUuid('claim');

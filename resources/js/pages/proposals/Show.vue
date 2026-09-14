@@ -17,6 +17,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
+import { proposalPageActions, usePageActions } from '@/lib/pageActions';
 import { usePreferences } from '@/lib/preferences';
 import type { ProposalData } from '@/lib/proposals';
 import { formFields, initialValues, localProblems, type RiskFieldDefinition, riskInputs } from '@/lib/riskForm';
@@ -83,6 +84,10 @@ function issueCoverNote(): void {
 const issueOpen = ref(false);
 const issue = useMoneyForm(() => `${base}/issue-policy`, { on: props.today, installment_count: 1, premium_received: !props.policyIssue.allow_credit, premium_reference: '' }, () => (issueOpen.value = false));
 const words = (v: string) => v.toLowerCase().replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+// GA-29: the actions this page allows, offered in the command palette too.
+usePageActions(() => ({ group: 'This proposal', actions: proposalPageActions(p.value.number, props.can, {
+    submit: () => void submit(), coverNote: () => (coverOpen.value = true), issuePolicy: () => (issueOpen.value = true),
+}) }));
 const facts = computed(() => [
     { label: `Gross premium (${p.value.currency})`, value: formatMoney(p.value.gross_premium), num: true },
     { label: 'Sum insured', value: formatMoney(p.value.sum_insured), num: true },

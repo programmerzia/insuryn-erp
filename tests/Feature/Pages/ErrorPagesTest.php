@@ -104,7 +104,7 @@ it('sends branch roles from "Receipts to record" to the receipt form filled in f
     });
     $officer = ($this->asRole)('branch_officer');
     actingAs($officer)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('queues.2.key', 'receipts_to_record')->where('queues.2.href', '/receipts/create')->where('queues.2.rows.0.href', "/receipts/create?statement_line={$lineId}"));
+        ->where('queues.3.key', 'receipts_to_record')->where('queues.3.href', '/receipts/create')->where('queues.3.rows.0.href', "/receipts/create?statement_line={$lineId}"));
     actingAs($officer)->get("/receipts/create?statement_line={$lineId}", $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('statementLine', ['amount' => '18,000.00', 'value_date' => '2026-09-05', 'reference' => 'TT 1', 'bank_account_id' => $bankId]));
     actingAs($officer)->get('/receipts/create?statement_line='.Str::uuid7(), $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('statementLine', null));

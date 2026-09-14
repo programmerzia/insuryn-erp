@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { Banknote, BookOpen, CornerDownLeft, FileText, History, Search, ShieldAlert, User, Zap } from 'lucide-vue-next';
+import { Banknote, BookOpen, Calculator, ClipboardCheck, CornerDownLeft, FileClock, FileText, History, MousePointerClick, Search, ShieldAlert, User, UsersRound, Zap } from 'lucide-vue-next';
 import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, VisuallyHidden } from 'reka-ui';
-import { type Component, computed, nextTick, ref, watch } from 'vue';
+import { type Component, computed, nextTick, onMounted, ref, watch } from 'vue';
 import Kbd from '@/components/ui/Kbd.vue';
 import { buildCommands, type Command, rankCommands, rememberRecent } from '@/lib/commands';
 import { requestJson } from '@/lib/http';
+import { pageActions, rankPageActions } from '@/lib/pageActions';
 import { paletteOpen } from '@/lib/palette';
 import { savePreference, usePreferences, type Recent } from '@/lib/preferences';
 import { SHORTCUTS, shortcutKeys } from '@/lib/shortcuts';
@@ -42,8 +43,10 @@ const list = ref<HTMLElement | null>(null);
 let controller: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-const kindIcons: Record<string, Component> = { policy: FileText, claim: ShieldAlert, receipt: Banknote, customer: User, journal: BookOpen, action: Zap };
-const kindWords: Record<string, string> = { policy: 'Policy', claim: 'Claim', receipt: 'Receipt', customer: 'Customer', journal: 'Journal', action: 'Action' };
+const kindIcons: Record<string, Component> = { policy: FileText, claim: ShieldAlert, receipt: Banknote, customer: User, journal: BookOpen, action: Zap,
+    quotation: Calculator, proposal: ClipboardCheck, cover_note: FileClock, producer: UsersRound };
+const kindWords: Record<string, string> = { policy: 'Policy', claim: 'Claim', receipt: 'Receipt', customer: 'Customer', journal: 'Journal', action: 'Action',
+    quotation: 'Quotation', proposal: 'Proposal', cover_note: 'Cover note', producer: 'Producer' };
 
 const commands = computed(() => buildCommands(page.props.auth.permissions ?? []));
 
@@ -72,7 +75,11 @@ const entries = computed<Entry[]>(() => {
     const typed = query.value.trim();
     const rankedCommands = rankCommands(commands.value, typed, preferences.recents).slice(0, typed ? 8 : 12);
     const recentRecords = typed === '' ? preferences.recents.filter((r) => r.kind !== 'navigate').slice(0, 5) : [];
+    // GA-29: what the open page allows (endorse, cancel, renew, refund, cover note), first.
+    const onPage = pageActions.value ? rankPageActions(pageActions.value.actions, typed).slice(0, 8) : [];
     return [
+        ...onPage.map((a): Entry => ({ key: `page-${a.id}`, group: pageActions.value?.group ?? 'This page', label: a.label, icon: MousePointerClick,
+            run: () => (a.href ? visit({ kind: 'navigate', label: a.label, href: a.href }) : ((paletteOpen.value = false), a.run?.())) })),
         ...recentRecords.map((r): Entry => ({ key: `recent-${r.href}`, group: 'Recent', label: r.label, detail: kindWords[r.kind], icon: History, run: () => visit(r) })),
         ...results.value.filter((r) => r.kind === 'action').map((r): Entry => ({ key: `action-${r.label}`, group: 'Actions', label: r.label, detail: r.detail, icon: Zap, run: () => visit(r) })),
         ...rankedCommands.map((c): Entry => ({ key: c.id, group: c.group, label: c.label, icon: c.icon, shortcut: c.shortcut ? shortcutKeys(c.shortcut) : undefined, run: () => runCommand(c) })),
@@ -99,7 +106,7 @@ watch(query, (value) => {
     controller?.abort();
     const typed = value.trim();
     // "cheque 88231" searches for the reference itself
-    const term = typed.replace(/^(cheque|chq|receipt|policy|claim|journal)\s+/i, '');
+    const term = typed.replace(/^(cheque|chq|receipt|policy|claim|journal|quotation|quote|proposal|cover note|producer|agent)\s+/i, '');
     if (term.length < 2) {
         results.value = [];
         searching.value = false;
@@ -119,13 +126,18 @@ watch(query, (value) => {
     }, 150);
 });
 
-watch(paletteOpen, (open) => {
-    if (open) {
-        query.value = '';
-        mode.value = 'commands';
-        results.value = [];
-    }
-});
+// GA-29: every opening starts from an empty query, whether the palette was closed with Esc, a click outside or by running a command.
+function reset(): void {
+    clearTimeout(timer);
+    controller?.abort();
+    query.value = '';
+    mode.value = 'commands';
+    results.value = [];
+    searching.value = false;
+    active.value = 0;
+}
+watch(paletteOpen, (open) => open && reset());
+onMounted(reset);
 
 function move(delta: number): void {
     const count = entries.value.length;
@@ -147,7 +159,7 @@ function move(delta: number): void {
                         <input
                             v-model="query"
                             class="h-11 min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-ink-2"
-                            placeholder="Go to, run a command, or find a policy, claim, receipt or customer"
+                            placeholder="Go to, run a command, or find a policy, quote, cover note, claim, receipt, customer or vehicle"
                             role="combobox"
                             aria-expanded="true"
                             aria-controls="palette-results"

@@ -203,13 +203,57 @@ it('counts only the branch\'s work in Home queues and sidebar badges', function 
         ->where('shell.badges.suspense', 2));
     $officer = ($this->scoped)(['branch_officer'], $this->home);
     actingAs($officer)->get('/home', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('queues.3.key', 'quotes')->where('queues.3.rows', fn ($rows): bool => ($this->rows)($rows) !== []
+        ->where('queues.4.key', 'quotes')->where('queues.4.rows', fn ($rows): bool => ($this->rows)($rows) !== [] // GA-26: overdue premium is second
             && ($this->every)($rows, fn (array $row): bool => str_contains((string) $row['cells']['number'], '-HO-'))));
 
     // Tenant-wide: both branches.
     actingAs(($this->scoped)(['claims_officer'], 'tenant'))->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('queues.0.count', 2)->where('shell.badges.claims', 2));
     actingAs(($this->scoped)(['accountant'], 'tenant'))->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('queues.0.count', 4));
+});
+
+it('counts only the branch\'s referrals, renewals, cover notes, agent cash, licences and refunds in the GA-26 queues', function (): void {
+    $keyed = function (User $user): array {
+        $byKey = [];
+        foreach (($this->rows)(($this->in)(fn (): array => app(App\Http\Home\WorkQueues::class)->blocks($user->id))) as $block) {
+            $byKey[(string) $block['key']] = $block;
+        }
+
+        return $byKey;
+    };
+    ($this->in)(function (): void {
+        $maker = userWithPermissions($this->ctx['tenant_id'], ['receipt.refund_request']);
+        foreach ([$this->mine['paid'], $this->theirs['paid']] as $policy) {
+            app(App\Modules\Insurance\Collections\Application\RefundService::class)->request($policy, 100_000, 'Policy cancelled', $maker);
+        }
+        foreach (['HO' => $this->mine['agent'], 'CTG' => $this->theirs['agent']] as $code => $agent) {
+            DB::table('producer_licences')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $this->ctx['tenant_id'], 'producer_id' => $agent, 'authority' => 'IDRA',
+                'licence_no' => "IDRA-{$code}-ENDING", 'class' => 'non_life', 'issued_on' => '2025-10-20', 'expires_on' => '2026-10-20', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        }
+    });
+
+    travelTo(CarbonImmutable::parse('2026-10-05 09:00')); // both cover notes end on 10 Oct: within seven days
+    $manager = $keyed(($this->scoped)(['branch_manager'], $this->home));
+    // Referrals list only what the user may decide now: approval steps are decided with the permission held tenant-wide (ApprovalService), so a
+    // branch-scoped manager has none waiting, as on the referrals page (can_decide).
+    expect($manager['referrals']['count'])->toBe(0)
+        ->and($manager['cover_notes_expiring']['count'])->toBe(1)->and($manager['cover_notes_expiring']['rows'][0]['href'])->toBe("/proposals/".($this->in)(fn () => DB::table('cover_notes')->where('id', $this->mine['cover_note'])->value('proposal_id')))
+        ->and($manager['agent_cash_undeposited']['count'])->toBe(1)->and($manager['agent_cash_undeposited']['rows'][0]['cells'])->toMatchArray(['agent' => 'AG-HO', 'amount' => '6,000.00'])
+        ->and($manager['licences_expiring']['count'])->toBe(1)->and($manager['licences_expiring']['rows'][0]['cells']['licence'])->toBe('IDRA-HO-ENDING');
+    $tenantManager = $keyed(($this->scoped)(['branch_manager'], 'tenant'));
+    expect($tenantManager['referrals']['count'])->toBe(2)->and(array_column($tenantManager['referrals']['rows'], 'href'))->toContain("/proposals/{$this->mine['referred']}", "/proposals/{$this->theirs['referred']}")->and($tenantManager['cover_notes_expiring']['count'])->toBe(2)
+        ->and($tenantManager['agent_cash_undeposited']['count'])->toBe(2)->and($tenantManager['licences_expiring']['count'])->toBe(2);
+
+    $finance = $keyed(($this->scoped)(['finance_manager'], $this->home));
+    expect($finance['refunds_to_release']['count'])->toBe(1)->and($finance['refunds_to_release']['rows'][0]['cells']['policy'])->toStartWith('POL-HO-')
+        ->and($keyed(($this->scoped)(['finance_manager'], 'tenant'))['refunds_to_release']['count'])->toBe(2);
+
+    travelTo(CarbonImmutable::parse('2027-08-05 09:00')); // the policies sold on 1 Sep 2026 expire on 31 Aug 2027
+    ($this->in)(fn () => app(App\Modules\Insurance\Renewal\Application\ExpiryRegister::class)->build(CarbonImmutable::parse('2027-08-05')));
+    $renewals = $keyed(($this->scoped)(['branch_officer'], $this->home))['renewals_due'];
+    expect($renewals['count'])->toBeGreaterThan(0)
+        ->and(array_filter($renewals['rows'], fn (array $row): bool => ! str_starts_with((string) $row['cells']['policy'], 'POL-HO-')))->toBe([])
+        ->and($keyed(($this->scoped)(['branch_officer'], 'tenant'))['renewals_due']['count'])->toBe($renewals['count'] * 2);
 });
 
 it('finds only the branch\'s policies, claims and receipts in search and lookups, and every customer', function (): void {
