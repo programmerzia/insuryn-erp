@@ -11,6 +11,7 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate } from '@/lib/format';
 
 /** Compensation schemes (Distribution design note §0): the pay mode per product, with its compliance profile and rules. */
@@ -20,7 +21,7 @@ defineProps<{ schemes: SchemeRow[]; can: { manage: boolean } }>();
 const active = ref<string | null>(null);
 const creating = ref(false);
 const modeWords: Record<string, string> = { commission: 'Commission', salary_incentive: 'Salary and incentives', hybrid: 'Hybrid', none: 'No pay' };
-const form = useForm({ code: '', name: '', mode: 'commission', effective_from: '' });
+const form = useForm({ code: '', name: '', mode: 'commission', effective_from: useBusinessToday() }); // gap fix GA-19: in force from today unless changed
 const columns: DataColumn<SchemeRow>[] = [
     { id: 'code', header: 'Code', value: (s) => s.code, href: (s) => `/distribution/schemes/${s.id}`, width: 140 },
     { id: 'name', header: 'Name', value: (s) => s.name, width: 240 },

@@ -10,6 +10,7 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate } from '@/lib/format';
 import { useOnboarding } from '@/lib/onboarding';
 import { usePermissions } from '@/lib/permissions';
@@ -23,7 +24,8 @@ const onboarding = useOnboarding();
 const active = ref<string | null>(null);
 const drawer = ref<'product' | 'version' | null>(null);
 const productForm = useForm({ code: '', name: '', lob: '' });
-const versionForm = useForm({ effective_from: '', effective_to: '', term_months: 12, earning_method: props.earningMethods[0] ?? '', tax_type: 'VAT', jurisdiction: 'BD', inclusive: true, refund_tax_on_cancellation: true, commission_plan_id: '' });
+// Gap fix GA-19: a version is in force from today unless changed.
+const versionForm = useForm({ effective_from: useBusinessToday(), effective_to: '', term_months: 12, earning_method: props.earningMethods[0] ?? '', tax_type: 'VAT', jurisdiction: 'BD', inclusive: true, refund_tax_on_cancellation: true, commission_plan_id: '' });
 const current = (p: Product) => p.versions[0];
 const method = (m: string) => ({ daily_365: 'By day (365ths)', monthly: 'By month' })[m] ?? m;
 const selected = computed(() => props.products.find((p) => p.id === active.value) ?? null);

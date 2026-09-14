@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { Lock, Plus, X } from 'lucide-vue-next';
-import { computed, nextTick } from 'vue';
+import { computed, nextTick, watch } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
@@ -12,11 +12,13 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { normalSideFor } from '@/lib/accountCreate';
 import { formatDate, formatMonth } from '@/lib/format';
+import { stepState, suggestCompanyCode } from '@/lib/setup';
 import type { SharedProps } from '@/types/shared';
 
 /**
- * Setup wizard (session S1, market cross-check G9): company and branches → fiscal year and currency → chart of accounts → first product →
- * users and roles → done. Every step saves on its own and can be reopened; a step someone else owns says who.
+ * Setup wizard (session S1, market cross-check G9): company and branches → fiscal year and currency → chart of accounts → bank accounts → first product →
+ * underwriting limits → users and roles → approval limits → done (gap fix GA-18 added bank accounts, underwriting limits and tariff templates).
+ * Every step saves on its own and can be reopened; a step someone else owns says who.
  */
 interface Step { id: string; label: string; done: boolean; allowed: boolean; owner: string | null }
 interface AccountRow { code: string; name: string; type: string; normal_side: string; is_control: boolean; control_subledger: string | null; role: string | null }
@@ -24,13 +26,19 @@ const props = defineProps<{
     steps: Step[];
     current: string;
     finished: boolean;
-    company: { code: string; name: string; timezone: string; timezones: string[]; branches: { code: string; name: string }[] };
+    company: { code: string; suggested?: boolean; name: string; timezone: string; timezones: string[]; branches: { code: string; name: string }[] };
     fiscalYear: { opened: boolean; first_month: string; base_currency: string; periods: number };
     chartOfAccounts: { template: string; templates: { id: string; name: string; description: string }[]; rows: AccountRow[]; imported: number | null; roles: Record<string, string> };
-    product: { linesOfBusiness: Record<string, string>; existing: { code: string; name: string; insurance_class: string }[]; vatInForce: number | null };
+    product: {
+        linesOfBusiness: Record<string, string>; existing: { code: string; name: string; insurance_class: string }[]; vatInForce: number | null;
+        templates: ProductTemplate[]; canUseTemplates: boolean; tariffsToApprove: { id: string; code: string; name: string; version: number; status: string }[];
+    };
+    bankAccounts: { existing: { bank_name: string; account_no_masked: string; currency: string; gl: string }[]; glAccounts: { id: string; code: string; name: string }[]; defaultGlAccountId: string | null; currency: string | null };
+    underwriting: { defaults: { role: string; class: string; amount: string }[]; existing: number };
     users: { roles: { code: string; name: string }[]; existing: { name: string; email: string }[] };
     approvals: { defaults: { label: string; amount: string; approvers: string }[]; existing: number };
 }>();
+interface ProductTemplate { class_code: string; class_name: string; code: string; name: string; lob: string; plan_code: string; product_exists: boolean }
 
 const page = usePage<SharedProps>();
 const index = computed(() => props.steps.findIndex((s) => s.id === props.current));
@@ -42,8 +50,24 @@ const errors = computed(() => page.props.errors as Record<string, string>);
 const company = useForm({ code: props.company.code, name: props.company.name, timezone: props.company.timezone, branches: props.company.branches.length ? props.company.branches.map((b) => ({ ...b })) : [{ code: 'HO', name: 'Head Office' }] });
 const fiscal = useForm({ first_month: props.fiscalYear.first_month, base_currency: props.fiscalYear.base_currency });
 const coa = useForm({ rows: props.chartOfAccounts.rows.map((r) => ({ ...r })) });
-const product = useForm({ code: '', name: '', lob: 'motor', insurance_class: 'non_life', term_months: '12', effective_from: props.fiscalYear.opened ? `${props.fiscalYear.first_month}-01` : '',
+// Gap fix GA-18: the short code follows the company name until someone types their own.
+watch(() => company.name, (name, previous) => {
+    if (props.company.suggested && company.code === suggestCompanyCode(previous ?? '')) company.code = suggestCompanyCode(name);
+});
+// Gap fix GA-18: a tariff template gives a rated product (premium and stamp duty from the tariff); "own product" keeps the typed premium.
+const firstTemplate = props.product.canUseTemplates ? props.product.templates.find((t) => !t.product_exists) : undefined;
+const product = useForm({ template: firstTemplate?.class_code ?? '', code: firstTemplate?.code ?? '', name: firstTemplate?.name ?? '', lob: 'motor', insurance_class: 'non_life', term_months: '12',
+    effective_from: props.fiscalYear.opened ? `${props.fiscalYear.first_month}-01` : '',
     vat_rate_percent: props.product.vatInForce === null ? '15' : String(props.product.vatInForce / 100), vat_inclusive: true });
+const chosenTemplate = computed(() => props.product.templates.find((t) => t.class_code === product.template) ?? null);
+function chooseTemplate(classCode: string): void {
+    const template = props.product.templates.find((t) => t.class_code === classCode);
+    product.template = classCode;
+    product.code = template?.code ?? '';
+    product.name = template?.name ?? '';
+}
+const bank = useForm({ bank_name: '', account_no_masked: '', gl_account_id: props.bankAccounts.defaultGlAccountId ?? '' });
+const bankNeeds = computed(() => props.steps.filter((s) => ['company', 'fiscal_year', 'chart_of_accounts'].includes(s.id) && !s.done));
 const people = useForm({ users: [{ name: '', email: '', role: 'branch_officer' }] });
 
 const types = ['asset', 'liability', 'equity', 'income', 'expense'].map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }));
@@ -90,7 +114,7 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
                 <h2 class="text-section font-semibold">Company and branches</h2>
                 <p class="-mt-2 text-ui text-ink-2">The legal entity your books are kept for, and the offices that sell policies and take payments.</p>
                 <Field id="company_name" label="Company name" :error="company.errors.name"><TextInput v-model="company.name" /></Field>
-                <Field id="company_code" label="Short code" :error="company.errors.code" hint="Appears on reports, for example ACME."><TextInput v-model="company.code" :maxlength="16" /></Field>
+                <Field id="company_code" label="Short code" :error="company.errors.code" :hint="props.company.suggested ? 'Suggested from the company name. Appears on reports; change it if you use another.' : 'Appears on reports, for example ACME.'"><TextInput v-model="company.code" :maxlength="16" /></Field>
                 <!-- Slice 2.1b (D-54): business dates — today on forms, month end, expiry and the nightly runs — follow this time zone. -->
                 <Field id="company_timezone" label="Time zone" :error="company.errors.timezone" hint="Business dates follow this clock: what counts as today, month end and the nightly runs.">
                     <SelectInput v-model="company.timezone" :options="props.company.timezones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }))" />
@@ -113,7 +137,7 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
                 <template v-if="fiscalYear.opened">
                     <p class="text-body">{{ fiscalYear.periods }} periods are open from {{ monthLabel(fiscalYear.first_month) }}. Periods cannot be moved once opened.</p>
                 </template>
-                <Field v-else id="first_month" label="First month of the fiscal year" :error="fiscal.errors.first_month" :hint="`Runs ${monthLabel(fiscal.first_month)} to ${monthLabel(lastMonth)}. Bangladesh insurers usually start in January or July.`">
+                <Field v-else id="first_month" label="First month of the fiscal year" :error="fiscal.errors.first_month" :hint="`Runs ${monthLabel(fiscal.first_month)} to ${monthLabel(lastMonth)}. Bangladesh non-life insurers usually keep calendar-year accounts (January); choose July if your company follows the July–June fiscal year.`">
                     <input id="first_month" v-model="fiscal.first_month" type="month" class="h-8 w-48 rounded-control border border-line-control bg-surface px-2 text-body text-ink" />
                 </Field>
                 <Field id="base_currency" label="Base currency" :error="fiscal.errors.base_currency" hint="The currency your ledger is kept in. It cannot change after the first posting.">
@@ -202,23 +226,94 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
                 <div><Button variant="secondary" size="sm" @click="addAccount"><Plus :size="16" /> Add account</Button></div>
             </FormLayout>
 
-            <FormLayout v-else-if="current === 'product'" submit-label="Create product" :cancel-label="skipLabel" :dirty="product.isDirty" :processing="product.processing" @submit="product.post('/setup/product')" @cancel="skip">
+            <div v-else-if="current === 'bank_accounts'" class="grid max-w-[560px] gap-4">
+                <FormLayout submit-label="Add bank account" :cancel-label="skipLabel" :dirty="bank.isDirty" :processing="bank.processing" @submit="bank.post('/setup/bank-accounts', { onSuccess: () => bank.reset('bank_name', 'account_no_masked') })" @cancel="skip">
+                    <h2 class="text-section font-semibold">Bank accounts</h2>
+                    <p class="-mt-2 text-ui text-ink-2">The accounts premium is paid into and claims and commission are paid from. Each posts to an account in your chart, so the bank statement can be matched to the ledger.</p>
+                    <div v-if="bankNeeds.length" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-warn bg-surface-2 px-3 py-2 text-ui" role="status">
+                        <p class="min-w-0 flex-1">First save {{ bankNeeds.map((s) => `“${s.label}”`).join(' and ') }}: a bank account posts to an account in the chart.</p>
+                        <Button variant="secondary" size="sm" @click="go(steps.findIndex((s) => s.id === bankNeeds[0]!.id))">Go to {{ bankNeeds[0]!.label }}</Button>
+                    </div>
+                    <p v-if="bankAccounts.existing.length" class="text-ui">Already added: {{ bankAccounts.existing.map((b) => `${b.bank_name} ${b.account_no_masked} (${b.gl})`).join(', ') }}.</p>
+                    <Field id="bank_name" label="Bank" :error="bank.errors.bank_name"><TextInput v-model="bank.bank_name" placeholder="City Bank" /></Field>
+                    <Field id="bank_account_no" label="Account number" :error="bank.errors.account_no_masked" hint="The last digits are enough, for example ****4471."><TextInput v-model="bank.account_no_masked" :maxlength="64" /></Field>
+                    <Field id="bank_gl_account" label="Posts to" :error="bank.errors.gl_account_id" :hint="`${bankAccounts.currency ?? fiscalYear.base_currency} account in the chart. The main bank account the accounting uses is chosen first.`">
+                        <SelectInput id="bank_gl_account" v-model="bank.gl_account_id" placeholder="Choose an account" :options="bankAccounts.glAccounts.map((a) => ({ value: a.id, label: `${a.code} ${a.name}` }))" />
+                    </Field>
+                    <p v-if="errors.form" class="text-ui text-danger" role="alert">{{ errors.form }}</p>
+                </FormLayout>
+            </div>
+
+            <div v-else-if="current === 'underwriting_limits'" class="grid max-w-[720px] gap-3">
+                <h2 class="text-section font-semibold">Underwriting limits</h2>
+                <p class="text-ui text-ink-2">The largest sum insured each role accepts without referring the proposal. Without limits every proposal is referred. These are placeholder starting points, marked “verify”: agree the real amounts with underwriting, then change them in Admin → Underwriting limits.</p>
+                <div class="max-h-80 overflow-auto border border-line">
+                    <table class="w-full min-w-[480px] border-separate border-spacing-0 text-dense">
+                        <thead class="sticky top-0 bg-surface-2 text-ink-2">
+                            <tr class="h-8 text-left">
+                                <th class="border-b border-line px-2 font-medium">Role</th>
+                                <th class="border-b border-line px-2 font-medium">Class</th>
+                                <th class="border-b border-line px-2 text-right font-medium">Largest sum insured ({{ fiscalYear.base_currency }})</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(limit, i) in underwriting.defaults" :key="i">
+                                <td class="border-b border-line px-2 py-1.5">{{ limit.role }}</td>
+                                <td class="border-b border-line px-2 py-1.5">{{ limit.class }}</td>
+                                <td class="border-b border-line px-2 py-1.5 text-right tabular-nums">{{ limit.amount }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p v-if="underwriting.existing > 0" class="text-ui">{{ underwriting.existing }} underwriting limits are already set; a role and class that has one keeps it.</p>
+                <p v-if="errors.form" class="text-ui text-danger" role="alert">{{ errors.form }}</p>
+                <div class="flex gap-2">
+                    <Button @click="router.post('/setup/underwriting-limits')">Use these limits</Button>
+                    <Button variant="ghost" @click="skip">{{ skipLabel }}</Button>
+                </div>
+            </div>
+
+            <FormLayout v-else-if="current === 'product'" :submit-label="chosenTemplate ? `Create ${product.name || 'product'} with its tariff` : 'Create product'" :cancel-label="skipLabel" :dirty="product.isDirty" :processing="product.processing" @submit="product.post('/setup/product')" @cancel="skip">
                 <h2 class="text-section font-semibold">First product</h2>
-                <p class="-mt-2 text-ui text-ink-2">What you sell, such as Motor Comprehensive. Policies are issued against a product; its term and tax decide the premium's accounting.</p>
+                <p class="-mt-2 text-ui text-ink-2">What you sell, such as Motor Comprehensive. Policies are issued against a product; its tariff, term and duties decide the premium and its accounting.</p>
                 <p v-if="props.product.existing.length" class="text-ui">Already set up: {{ props.product.existing.map((p: { name: string }) => p.name).join(", ") }}. Add another here or in Products.</p>
+                <div v-if="props.product.tariffsToApprove.length" class="grid gap-1 border-l-2 border-warn bg-surface-2 px-3 py-2 text-ui" role="status">
+                    <p>Waiting for approval by someone other than the person who created them, in Tariffs:</p>
+                    <ul class="grid gap-0.5">
+                        <li v-for="plan in props.product.tariffsToApprove" :key="plan.id"><Link :href="`/rating/plans/${plan.id}`" class="text-accent-text hover:underline">{{ plan.code }} v{{ plan.version }}</Link> — {{ plan.status === 'draft' ? 'approve, then activate' : 'activate' }}</li>
+                    </ul>
+                </div>
+                <fieldset class="grid gap-2">
+                    <legend class="mb-1 text-ui font-medium">Start from</legend>
+                    <label v-for="t in props.product.templates" :key="t.class_code" class="flex gap-2 rounded-panel border p-3 text-ui" :class="product.template === t.class_code ? 'border-accent bg-accent-soft' : 'border-line'">
+                        <input type="radio" name="product_template" :value="t.class_code" :checked="product.template === t.class_code" :disabled="!props.product.canUseTemplates || t.product_exists" class="mt-0.5" @change="chooseTemplate(t.class_code)" />
+                        <span><span class="font-medium">{{ t.name }}</span> <span class="text-ink-2">· {{ t.class_name }} tariff {{ t.plan_code }}</span><br />
+                            <span class="text-ink-2">{{ t.product_exists ? 'Already created.' : 'Rated premium, stamp duty and VAT from a placeholder tariff you review; risk details and coverages included.' }}</span></span>
+                    </label>
+                    <label class="flex gap-2 rounded-panel border p-3 text-ui" :class="product.template === '' ? 'border-accent bg-accent-soft' : 'border-line'">
+                        <input type="radio" name="product_template" value="" :checked="product.template === ''" class="mt-0.5" @change="chooseTemplate('')" />
+                        <span><span class="font-medium">Your own product</span><br /><span class="text-ink-2">No tariff: the premium is typed on each policy and no stamp duty is calculated.</span></span>
+                    </label>
+                    <p v-if="!props.product.canUseTemplates" class="text-dense text-ink-2">Tariff templates need permission to draft tariffs (Finance Manager).</p>
+                </fieldset>
+                <p v-if="chosenTemplate" class="border-l-2 border-accent pl-3 text-ui text-ink-2">The tariff {{ chosenTemplate.plan_code }} is created as a draft. A tariff moves money, so someone other than you (a CFO or another finance manager) approves and activates it in Tariffs; quotes are rated once it is active.</p>
                 <Field id="product_name" label="Product name" :error="product.errors.name"><TextInput v-model="product.name" placeholder="Motor Comprehensive" /></Field>
                 <Field id="product_code" label="Short code" :error="product.errors.code" hint="Used in policy lists, for example MOTOR."><TextInput v-model="product.code" :maxlength="32" /></Field>
-                <div class="grid grid-cols-2 gap-3">
+                <p v-if="product.errors.template" class="text-ui text-danger" role="alert">{{ product.errors.template }}</p>
+                <Field v-if="chosenTemplate" id="product_from" label="Sold from" :error="product.errors.effective_from"><DateInput v-model="product.effective_from" /></Field>
+                <div v-else class="grid grid-cols-2 gap-3">
                     <Field id="product_lob" label="Class of business" :error="product.errors.lob"><SelectInput v-model="product.lob" :options="Object.entries(props.product.linesOfBusiness).map(([value, label]) => ({ value, label }))" /></Field>
                     <Field id="product_class" label="Insurance type" :error="product.errors.insurance_class"><SelectInput v-model="product.insurance_class" :options="[{ value: 'non_life', label: 'Non-life' }, { value: 'life', label: 'Life' }]" /></Field>
                     <Field id="product_term" label="Policy term" :error="product.errors.term_months"><SelectInput v-model="product.term_months" :options="terms" /></Field>
                     <Field id="product_from" label="Sold from" :error="product.errors.effective_from"><DateInput v-model="product.effective_from" /></Field>
                 </div>
-                <Field id="product_vat" label="VAT on premium (%)" :error="product.errors.vat_rate_percent" :hint="props.product.vatInForce !== null ? `A ${props.product.vatInForce / 100}% VAT rate is already in force and is used.` : 'Leave empty if the product carries no VAT.'" optional>
-                    <div class="w-24"><TextInput v-model="product.vat_rate_percent" inputmode="decimal" /></div>
-                </Field>
-                <label class="flex items-center gap-2 text-ui"><input v-model="product.vat_inclusive" type="checkbox" /> The premium you enter already includes VAT</label>
-                <p class="border-l-2 border-warn pl-3 text-ui text-ink-2">Stamp duty is not calculated yet. Record it outside the system for now.</p>
+                <template v-if="!chosenTemplate">
+                    <Field id="product_vat" label="VAT on premium (%)" :error="product.errors.vat_rate_percent" :hint="props.product.vatInForce !== null ? `A ${props.product.vatInForce / 100}% VAT rate is already in force and is used.` : 'Leave empty if the product carries no VAT.'" optional>
+                        <div class="w-24"><TextInput v-model="product.vat_rate_percent" inputmode="decimal" /></div>
+                    </Field>
+                    <label class="flex items-center gap-2 text-ui"><input v-model="product.vat_inclusive" type="checkbox" /> The premium you enter already includes VAT</label>
+                    <p class="border-l-2 border-warn pl-3 text-ui text-ink-2">A product without a tariff calculates no stamp duty. Start from a tariff template to rate the premium with stamp duty.</p>
+                </template>
             </FormLayout>
 
             <FormLayout v-else-if="current === 'users'" submit-label="Send invitations" :cancel-label="skipLabel" :dirty="people.isDirty" :processing="people.processing" @submit="people.post('/setup/users')" @cancel="skip">
@@ -266,10 +361,15 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
             <div v-else class="grid max-w-[560px] gap-4">
                 <h2 class="text-section font-semibold">{{ finished ? 'Setup is finished' : 'Ready to start' }}</h2>
                 <ul class="grid gap-1 text-body">
-                    <li v-for="s in steps.slice(0, -1)" :key="s.id" class="flex items-center gap-2">
-                        <span class="size-2 rounded-full" :class="s.done ? 'bg-ok' : 'bg-warn'" aria-hidden="true" />{{ s.label }}<span class="text-ink-2">— {{ s.done ? 'saved' : s.allowed ? 'not saved yet' : `left for the ${s.owner}` }}</span>
+                    <!-- Gap fix GA-18: each step says its state in words, and a step still to do opens from here. -->
+                    <li v-for="(s, i) in steps.slice(0, -1)" :key="s.id" class="flex items-center gap-2">
+                        <span class="size-2 rounded-full" :class="s.done ? 'bg-ok' : 'bg-warn'" aria-hidden="true" />
+                        <span class="min-w-0 flex-1">{{ s.label }}</span>
+                        <span class="text-ui text-ink-2">{{ stepState(s) }}</span>
+                        <Button v-if="!s.done && s.allowed" variant="ghost" size="sm" :aria-label="`Open ${s.label}`" @click="go(i)">Open</Button>
                     </li>
                 </ul>
+                <p v-if="props.product.tariffsToApprove.length" class="text-ui">Tariffs waiting for a second person: <template v-for="(plan, i) in props.product.tariffsToApprove" :key="plan.id">{{ i ? ', ' : '' }}<Link :href="`/rating/plans/${plan.id}`" class="text-accent-text hover:underline">{{ plan.code }}</Link></template>.</p>
                 <p class="text-body">Next: issue a policy, take the payment and watch the accounting happen. The guided tour on Home walks you through a week in a non-life insurer.</p>
                 <div><Button data-tour="setup-finish" @click="router.post('/setup/finish')">{{ finished ? 'Back to Home' : 'Finish setup' }}</Button></div>
             </div>
@@ -279,6 +379,7 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
                     <div><dt class="text-dense text-ink-2">Company</dt><dd>{{ props.company.name || '—' }}</dd><dd class="text-dense text-ink-2">{{ props.company.branches.map((b) => b.name).join(', ') || 'No branches yet' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Fiscal year</dt><dd>{{ fiscalYear.opened ? `From ${monthLabel(fiscalYear.first_month)}` : 'Not opened yet' }}</dd><dd class="text-dense text-ink-2">{{ fiscalYear.base_currency }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Chart of accounts</dt><dd>{{ chartOfAccounts.imported !== null ? `${chartOfAccounts.imported} accounts` : 'Not created yet' }}</dd><dd v-if="chartOfAccounts.imported !== null"><Link href="/accounting/chart-of-accounts" class="text-dense text-accent-text hover:underline">Open the chart of accounts</Link></dd></div>
+                    <div><dt class="text-dense text-ink-2">Bank accounts</dt><dd>{{ bankAccounts.existing.map((b) => `${b.bank_name} ${b.account_no_masked}`).join(', ') || 'None yet' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Products</dt><dd>{{ props.product.existing.map((p) => p.name).join(', ') || 'None yet' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Users</dt><dd>{{ users.existing.length }}</dd></div>
                     <div v-if="product.effective_from && current === 'product'"><dt class="text-dense text-ink-2">Sold from</dt><dd>{{ formatDate(product.effective_from) }}</dd></div>

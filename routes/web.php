@@ -76,7 +76,9 @@ Route::middleware('auth')->prefix('setup')->group(function (): void {
     Route::post('company', [\App\Http\Setup\SetupPageController::class, 'company']);
     Route::post('fiscal-year', [\App\Http\Setup\SetupPageController::class, 'fiscalYear']);
     Route::post('chart-of-accounts', [\App\Http\Setup\SetupPageController::class, 'chartOfAccounts']);
+    Route::post('bank-accounts', [\App\Http\Setup\SetupPageController::class, 'bankAccounts']); // gap fix GA-18
     Route::post('product', [\App\Http\Setup\SetupPageController::class, 'product']);
+    Route::post('underwriting-limits', [\App\Http\Setup\SetupPageController::class, 'underwritingLimits']); // gap fix GA-18
     Route::post('users', [\App\Http\Setup\SetupPageController::class, 'users']);
     Route::post('approvals', [\App\Http\Setup\SetupPageController::class, 'approvals']);
     Route::post('finish', [\App\Http\Setup\SetupPageController::class, 'finish']);

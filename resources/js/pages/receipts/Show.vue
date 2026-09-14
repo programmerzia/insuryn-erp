@@ -10,6 +10,7 @@ import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 import { usePreferences } from '@/lib/preferences';
@@ -32,7 +33,8 @@ const props = defineProps<{
 }>();
 
 const bouncing = ref(false);
-const bounce = useMoneyForm(() => `/receipts/${props.receipt.id}/bounce`, { bounced_on: '', reason: '' }, () => (bouncing.value = false));
+// Gap fix GA-19: the bank returns the cheque today unless changed.
+const bounce = useMoneyForm(() => `/receipts/${props.receipt.id}/bounce`, { bounced_on: useBusinessToday(), reason: '' }, () => (bouncing.value = false));
 const preferences = usePreferences();
 const printing = useForm({ locale: preferences.locale });
 function print(): void {

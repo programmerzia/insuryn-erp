@@ -125,6 +125,10 @@ return [
         // ASSUMPTION: A-182 (gap audit GA-44, D-71) — the first product's earning method: 1/365 per day on cover (`daily_365`), the common method in
         // Bangladesh non-life; `monthly` (each calendar month's share) stays available here and per product version.
         'earning_method' => env('ERP_SETUP_EARNING_METHOD', 'daily_365'),
+        // Gap fix GA-18. ASSUMPTION: A-211 — the month a new tenant's fiscal year starts in by default is not specified: January (1). Bangladesh non-life
+        // insurers keep calendar-year accounts (IDRA returns and the Insurance Act's annual accounts run January–December); July (7, the government's
+        // fiscal year) is offered in the hint. Verify with the customer.
+        'fiscal_year_first_month' => (int) env('ERP_FISCAL_YEAR_FIRST_MONTH', 1),
     ],
     'ui' => [
         // UX U1 date picker. ASSUMPTION: A-165 — the calendar week starts on Sunday: Bangladesh's working week runs Sunday to Thursday and CLDR

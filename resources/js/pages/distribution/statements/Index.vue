@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { blankZero } from '@/lib/distribution';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 
@@ -32,7 +33,7 @@ const props = defineProps<{
 }>();
 
 const active = ref<string | null>(null);
-const on = ref('');
+const on = ref(useBusinessToday()); // gap fix GA-19: approving and paying happen today unless changed
 const bankAccount = ref('');
 const confirm = useJournalConfirm();
 const routeWords: Record<string, string> = { bank: 'Bank', payroll: 'Payroll', ap: 'Accounts payable' };
@@ -105,7 +106,7 @@ const primaryLabel = (s: Statement): string | undefined =>
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div v-if="primaryLabel(row)" class="mt-4 grid gap-3 border-t border-line pt-4">
-                    <Field id="statement_on" :label="row.status === 'draft' ? 'Approval date' : 'Paid on'" optional hint="Empty: today."><DateInput v-model="on" /></Field>
+                    <Field id="statement_on" :label="row.status === 'draft' ? 'Approval date' : 'Paid on'"><DateInput v-model="on" /></Field>
                     <Field v-if="row.status === 'approved' && row.paid_via === 'bank'" id="statement_bank" label="Pay from" optional>
                         <SelectInput id="statement_bank" v-model="bankAccount" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" />
                     </Field>
@@ -114,7 +115,7 @@ const primaryLabel = (s: Statement): string | undefined =>
                 <h3 class="mt-5 mb-1 text-ui font-medium">Entries</h3>
                 <ul class="border border-line">
                     <li v-for="(e, i) in entries.filter((x) => x.statement_id === row.id)" :key="i" class="flex items-center gap-2 border-b border-line px-2 py-1 text-dense last:border-b-0">
-                        <span class="w-20 text-ink-2">{{ formatDate(e.earned_on) }}</span><span class="w-20">{{ e.kind.charAt(0).toUpperCase() + e.kind.slice(1) }}</span><span class="truncate text-ink-2">{{ e.policy_number }}</span><span class="ml-auto tabular-nums">{{ formatMoney(e.amount) }}</span>
+                        <span class="w-20 text-ink-2">{{ formatDate(e.earned_on) }}</span><span class="w-20">{{ e.kind.charAt(0).toUpperCase() + e.kind.slice(1) }}</span><span class="truncate text-ink-2">{{ e.policy_number }}</span><span class="ml-auto tabular-nums">{{ formatMoney(e.amount) }}</span><span v-if="blankZero(e.withholding)" class="w-24 text-right text-ink-2 tabular-nums" :title="'Tax withheld'">−{{ formatMoney(e.withholding) }}</span>
                     </li>
                 </ul>
                 <Link :href="`/distribution/producers/${row.producer_id}?tab=statements`" class="mt-3 inline-block text-ui text-accent-text hover:underline">Open the producer</Link>

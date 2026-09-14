@@ -151,6 +151,8 @@ final class UnderwritingLimits
      */
     public function acceptDefaults(CarbonImmutable $from, string $actorUserId): int
     {
+        // Gap fix GA-18: refused for anyone else even when every default already exists (nothing would be written), as the setup step expects.
+        $this->permissions->authorize($actorUserId, self::PERMISSION);
         $created = 0;
         foreach (self::DEFAULTS as $role => $classes) {
             if (! DB::table('roles')->where('code', $role)->exists()) {

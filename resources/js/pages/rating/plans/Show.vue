@@ -94,6 +94,7 @@ function saveHeader(): void {
 // Lifecycle
 const drawer = ref<'version' | 'table' | 'step' | 'duty' | 'end-duty' | null>(null);
 const done = () => (drawer.value = null);
+// A new version's empty dates keep this version's dates (hint), so they stay empty. Gap fix GA-19: a new duty and the end of a duty start at today.
 const versionForm = useForm({ effective_from: '', effective_to: '' });
 const overlapRefused = computed(() => page.props.errors?.reason === 'RATING_PLAN_OVERLAP');
 
@@ -158,7 +159,7 @@ async function removeStep(step: Step): Promise<void> {
 
 // Duties
 const dutyForm = useForm({ code: 'vat', basis: 'pct_of_premium', rate: '', amount: '', bands: [{ from: '0', to: '', amount: '' }] as { from: string; to: string; amount: string }[],
-    class_codes: [props.plan.class_code], effective_from: '', effective_to: '', label_en: '', label_bn: '', verify: true });
+    class_codes: [props.plan.class_code], effective_from: props.today, effective_to: '', label_en: '', label_bn: '', verify: true });
 const dutyErrors = ref<Record<string, string>>({});
 function recordDuty(): void {
     const errors: Record<string, string> = {};
@@ -184,7 +185,7 @@ function recordDuty(): void {
     dutyForm.transform(() => payload).post('/rating/duties', { preserveScroll: true, onSuccess: () => { dutyForm.reset(); done(); } });
 }
 const endingDuty = ref<Duty | null>(null);
-const endForm = useForm({ effective_to: '' });
+const endForm = useForm({ effective_to: props.today });
 function dutyValue(duty: Duty): string {
     if (duty.basis === 'pct_of_premium') return `${formatHundredths(duty.rate_bp ?? 0)} %`;
     if (duty.basis === 'flat_per_policy') return `${formatAmount(duty.amount_minor)} ${props.plan.currency}`;

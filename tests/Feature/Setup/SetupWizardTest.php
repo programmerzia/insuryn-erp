@@ -64,8 +64,10 @@ it('sends the first sign-in of a tenant without products to the wizard, and stop
         ->where('current', 'fiscal_year')
         ->where('steps.0.id', 'company')->where('steps.0.done', true)
         ->where('steps.1.id', 'fiscal_year')->where('steps.1.done', false)
-        // Fix F3 inserted the optional approval limits step before Done (was: steps.5.id done).
-        ->where('steps.5.id', 'approvals')->where('steps.6.id', 'done')
+        // Fix F3 inserted the optional approval limits step before Done (was: steps.5.id done); gap fix GA-18 inserted bank accounts after the chart and
+        // underwriting limits after the product (was: steps.5.id approvals, steps.6.id done).
+        ->where('steps.3.id', 'bank_accounts')->where('steps.4.id', 'product')->where('steps.5.id', 'underwriting_limits')->where('steps.6.id', 'users')
+        ->where('steps.7.id', 'approvals')->where('steps.8.id', 'done')
         ->where('company.branches', fn ($branches): bool => count($branches) === 2));
 });
 
@@ -112,7 +114,7 @@ it('offers the insurance chart of accounts for review, imports the edited chart 
     $edited = collect($rows)->map(fn (array $r): array => $r['role'] === 'bank_main' ? [...$r, 'name' => 'Bank - City Bank current account'] : $r)
         ->reject(fn (array $r): bool => $r['role'] === null && $r['code'] === '5500')->values()->all();
     $edited[] = ['code' => '6100', 'name' => 'Office rent', 'type' => 'expense', 'normal_side' => 'debit', 'is_control' => false, 'control_subledger' => null, 'role' => null];
-    actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => $edited], $this->headers)->assertRedirect('/setup?step=product');
+    actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => $edited], $this->headers)->assertRedirect('/setup?step=bank_accounts'); // GA-18: bank accounts follow the chart (was: step=product)
 
     ($this->in)(function () use ($edited): void {
         expect(DB::table('accounts')->count())->toBe(count($edited))
@@ -168,7 +170,7 @@ it('ends the chart of accounts step by checking every role the posting rules use
 
         // With an account for it, the same chart goes through.
         $withDac = [...$rows, ['code' => '1400', 'name' => 'Deferred acquisition cost', 'type' => 'asset', 'normal_side' => 'debit', 'is_control' => false, 'control_subledger' => null, 'role' => 'dac_asset']];
-        actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => $withDac], $this->headers)->assertSessionHasNoErrors()->assertRedirect('/setup?step=product');
+        actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => $withDac], $this->headers)->assertSessionHasNoErrors()->assertRedirect('/setup?step=bank_accounts');
         expect(($this->in)(fn (): int => DB::table('accounts')->count()))->toBe(count($withDac));
     } finally {
         array_map('unlink', glob($dir.'/*.json') ?: []);
@@ -182,7 +184,7 @@ it('creates the first product with its term and VAT through the product catalogu
     actingAs($this->admin)->post('/setup/chart-of-accounts', ['rows' => ($this->templateRows)()], $this->headers);
 
     actingAs($this->admin)->post('/setup/product', ['code' => 'MOTOR', 'name' => 'Motor Comprehensive', 'lob' => 'motor', 'insurance_class' => 'non_life',
-        'term_months' => 12, 'effective_from' => '2026-07-01', 'vat_rate_percent' => '15', 'vat_inclusive' => true], $this->headers)->assertRedirect('/setup?step=users');
+        'term_months' => 12, 'effective_from' => '2026-07-01', 'vat_rate_percent' => '15', 'vat_inclusive' => true], $this->headers)->assertRedirect('/setup?step=underwriting_limits'); // GA-18 (was: step=users)
 
     ($this->in)(function (): void {
         $product = DB::table('products')->sole(['id', 'code', 'insurance_class']);
@@ -217,7 +219,7 @@ it('invites the first users with their roles, and the segregation of duties stil
 it('gates each step by the permission that owns the data', function (): void {
     $tenantAdmin = ($this->person)(['tenant_admin']);
     actingAs($tenantAdmin)->get('/setup', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('steps.0.allowed', true)->where('steps.1.allowed', false)->where('steps.2.allowed', false)->where('steps.3.allowed', false)->where('steps.4.allowed', true)
+        ->where('steps.0.allowed', true)->where('steps.1.allowed', false)->where('steps.2.allowed', false)->where('steps.3.allowed', false)->where('steps.4.allowed', false)->where('steps.5.allowed', true)->where('steps.6.allowed', true) // GA-18: bank accounts, product, underwriting limits, users
         ->where('steps.1.owner', 'Finance Manager'));
     actingAs($tenantAdmin)->post('/setup/company', ['code' => 'ACME', 'name' => 'Acme', 'branches' => [['code' => 'HO', 'name' => 'Head Office']]], $this->headers)->assertSessionHasNoErrors();
     actingAs($tenantAdmin)->post('/setup/fiscal-year', ['first_month' => '2026-07', 'base_currency' => 'BDT'], $this->headers)->assertSessionHasErrors('form');
@@ -231,12 +233,12 @@ it('gates each step by the permission that owns the data', function (): void {
 it('offers the default approval limits to the tenant admin, who accepts them once, and nobody else', function (): void {
     ($this->company)();
     actingAs($this->admin)->get('/setup?step=approvals', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('current', 'approvals')->where('steps.5.label', 'Approval limits')->where('steps.5.allowed', true)->where('steps.5.owner', 'Tenant Admin')
+        ->where('current', 'approvals')->where('steps.7.label', 'Approval limits')->where('steps.7.allowed', true)->where('steps.7.owner', 'Tenant Admin') // GA-18: was steps.5
         ->where('approvals.existing', 0)
         ->where('approvals.defaults.0', ['label' => 'Claim payment approval', 'amount' => '500,000.00 and above', 'approvers' => 'Finance Manager → CFO'])
         ->where('approvals.defaults', fn ($defaults): bool => count($defaults) === 4));
 
-    actingAs(($this->person)(['finance_manager']))->get('/setup', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('steps.5.allowed', false));
+    actingAs(($this->person)(['finance_manager']))->get('/setup', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('steps.7.allowed', false));
     actingAs(($this->person)(['finance_manager']))->post('/setup/approvals', [], $this->headers)->assertSessionHasErrors('form');
     expect(($this->in)(fn () => DB::table('approval_policies')->count()))->toBe(0);
 

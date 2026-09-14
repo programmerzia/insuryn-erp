@@ -315,8 +315,9 @@ final class CollectionsPageController
                 'deposited' => $money($r['deposited_minor']), 'undeposited' => $money($r['undeposited_minor']), 'gl' => $money($r['gl_minor']), 'difference' => $money($r['difference_minor']),
                 'oldest_undeposited_on' => $r['oldest_undeposited_on'], 'days_undeposited' => $r['days_undeposited']], $result['rows']),
                 'totals' => array_map($money, $result['totals'])],
-            'agents' => $reach->constrain(DB::table('producers as a')->join('branches as b', 'b.id', '=', 'a.branch_id'), 'b.entity_id', 'a.branch_id')->where('a.status', 'active')->orderBy('a.code')
-                ->get(['a.id', 'a.code'])->map(fn (object $a): array => (array) $a)->values()->all(),
+            // GA-19: code and name, so the deposit drawer's agent lookup can show the chosen agent as code · name.
+            'agents' => $reach->constrain(DB::table('producers as a')->join('branches as b', 'b.id', '=', 'a.branch_id')->join('parties as p', 'p.id', '=', 'a.party_id'), 'b.entity_id', 'a.branch_id')->where('a.status', 'active')->orderBy('a.code')
+                ->get(['a.id', 'a.code', 'p.display_name as name'])->map(fn (object $a): array => (array) $a)->values()->all(),
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('bank_name')
                 ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
         ]);

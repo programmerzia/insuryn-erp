@@ -25,7 +25,8 @@ const drawer = ref<'plan' | 'version' | null>(null);
 const selected = computed(() => props.plans.find((p) => p.id === active.value) ?? null);
 const className = (code: string) => props.classes.find((c) => c.code === code)?.name ?? code;
 const sourceWords: Record<string, string> = { idra_tariff: 'IDRA tariff', company: 'Company' };
-const planForm = useForm({ code: '', name: '', class_code: props.classes[0]?.code ?? '', effective_from: '', effective_to: '', source: 'company', verify: true, notes: '' });
+// Gap fix GA-19: a new plan is in force from today unless changed; a new version's empty dates keep the copied ones (hint).
+const planForm = useForm({ code: '', name: '', class_code: props.classes[0]?.code ?? '', effective_from: props.today, effective_to: '', source: 'company', verify: true, notes: '' });
 const versionForm = useForm({ effective_from: '', effective_to: '' });
 
 const columns: DataColumn<PlanRow>[] = [

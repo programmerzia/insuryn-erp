@@ -16,7 +16,7 @@ use InvalidArgumentException;
  */
 final class SetupProgress
 {
-    public const STEPS = ['company', 'fiscal_year', 'chart_of_accounts', 'product', 'users', 'approvals', 'done'];
+    public const STEPS = ['company', 'fiscal_year', 'chart_of_accounts', 'bank_accounts', 'product', 'underwriting_limits', 'users', 'approvals', 'done']; // GA-18: bank accounts, underwriting limits
 
     public function complete(string $step, string $actorUserId): void
     {

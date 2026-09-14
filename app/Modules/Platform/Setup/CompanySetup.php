@@ -23,10 +23,31 @@ final class CompanySetup
 {
     public const PERMISSION = 'platform.manage_roles';
 
+    /** Words a company name carries that say nothing about which company it is. */
+    private const LEGAL_WORDS = ['LTD', 'LIMITED', 'PLC', 'CO', 'COMPANY', 'THE', 'AND', 'OF', 'PVT', 'PRIVATE', 'INC'];
+
     public function __construct(
         private readonly PermissionChecker $permissions,
         private readonly Audit $audit,
     ) {}
+
+    /**
+     * Gap fix GA-18: the short code a new company's step suggests from its name — the initials of its words, leaving out legal words (Ltd, PLC,
+     * Company…): "Gap Audit Insurance" → GAI, "Padma General Insurance PLC" → PGI. A one-word name gives its first four letters. Letters and digits only,
+     * at most 16 characters, as the step accepts; '' for a name without letters.
+     */
+    public static function suggestCode(string $name): string
+    {
+        $words = array_values(array_filter(preg_split('/[^A-Z0-9]+/', strtoupper($name)) ?: [], fn (string $w): bool => $w !== ''));
+        $meaningful = array_values(array_filter($words, fn (string $w): bool => ! in_array($w, self::LEGAL_WORDS, true)));
+        $words = $meaningful === [] ? $words : $meaningful;
+        if ($words === []) {
+            return '';
+        }
+        $code = count($words) === 1 ? substr($words[0], 0, 4) : implode('', array_map(fn (string $w): string => $w[0], $words));
+
+        return substr($code, 0, 16);
+    }
 
     /**
      * @param list<array{code: string, name: string}> $branches

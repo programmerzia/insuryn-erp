@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Setup;
 
 use App\Modules\Accounting\Application\Setup\FiscalYearSetup;
+use App\Modules\Insurance\Underwriting\Application\UnderwritingLimits;
 use App\Modules\Platform\Approvals\ApprovalPolicyService;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Setup\CompanySetup;
@@ -23,7 +24,11 @@ final class SetupWizard
         'company' => ['Company and branches', CompanySetup::PERMISSION, 'Tenant Admin'],
         'fiscal_year' => ['Fiscal year and currency', FiscalYearSetup::PERMISSION, 'Finance Manager'],
         'chart_of_accounts' => ['Chart of accounts', 'accounting.manage_coa', 'Finance Manager'],
+        // Gap fix GA-18: receipts and payments need a bank account posting to a GL account before the first premium is taken.
+        'bank_accounts' => ['Bank accounts', 'bank.manage_accounts', 'Finance Manager'],
         'product' => ['First product', 'product.manage', 'Finance Manager'],
+        // Gap fix GA-18: without limits every proposal is referred (A-90); accepts the placeholder defaults or skips.
+        'underwriting_limits' => ['Underwriting limits', UnderwritingLimits::PERMISSION, 'Tenant Admin'],
         'users' => ['Users and roles', 'platform.manage_users', 'Tenant Admin'],
         // Fix F3: optional; accepts the default approval limits (A-55) or skips.
         'approvals' => ['Approval limits', ApprovalPolicyService::PERMISSION, 'Tenant Admin'],

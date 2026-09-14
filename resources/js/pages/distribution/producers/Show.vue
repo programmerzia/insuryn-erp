@@ -19,6 +19,7 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 
@@ -62,9 +63,11 @@ const routeWords: Record<string, string> = { bank: 'Bank', payroll: 'Payroll', a
 const drawer = ref<'licence' | 'advance' | 'move' | 'status' | null>(null);
 const done = () => (drawer.value = null);
 const licence = useForm({ licence_no: '', class: 'life', issued_on: '', expires_on: '', authority: 'IDRA' });
-const move = useForm({ producer_id: props.producer.id, parent_id: '', level_code: '', effective_from: '' });
+// Gap fix GA-19: a move in the tree and an advance take effect today unless changed; licence dates come from the certificate and stay empty.
+const today = useBusinessToday();
+const move = useForm({ producer_id: props.producer.id, parent_id: '', level_code: '', effective_from: today });
 const status = useForm({ status: props.producer.status });
-const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: '', recovery: 'percent_of_net', recovery_percent: '50', bank_account_id: '' }, done);
+const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: today, recovery: 'percent_of_net', recovery_percent: '50', bank_account_id: '' }, done);
 </script>
 
 <template>

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { producerTypeCodes, producerTypeLabel } from '@/lib/distribution';
+import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate } from '@/lib/format';
 
 /**
@@ -47,7 +48,7 @@ const drawer = ref(false);
 const rule = useForm({ product_id: '', producer_type: '', level_code: '', basis: 'premium_received', policy_year_from: 1, policy_year_to: 1, rate_percent: '', override_rate_percent: '',
     cap_percent: '', min_persistency_percent: '', renewal_requires_valid_licence: true, pays_after_termination: false, effective_from: props.scheme.effective_from });
 const ending = ref<Rule | null>(null);
-const endForm = useForm({ effective_to: '' });
+const endForm = useForm({ effective_to: useBusinessToday() }); // gap fix GA-19: a rule ends from today unless changed
 
 const columns: DataColumn<Rule>[] = [
     { id: 'product', header: 'Product', value: (r) => r.product, width: 130 },

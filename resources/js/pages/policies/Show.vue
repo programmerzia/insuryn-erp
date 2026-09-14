@@ -16,6 +16,7 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
+import { dateWithin } from '@/lib/drawerDefaults';
 import { formatDate, formatMoney } from '@/lib/format';
 import { basisSentence, changeRows, type EndorsementRatingData } from '@/lib/endorsement';
 import { useMoneyForm } from '@/lib/moneyForm';
@@ -53,9 +54,9 @@ const issuedOn = (basis: string | null, reference: string | null) => (basis === 
 const close = () => (drawer.value = null);
 const title = computed(() => props.policy.number ?? 'Quote');
 const issue = useMoneyForm(() => `${base}/issue`, { on: props.policy.inception }, close);
-const endorse = useMoneyForm(() => `${base}/endorse`, { effective_date: '', premium_delta: '', reason: '' }, close);
-// GA-24: a cancellation usually takes effect the day it is asked for.
-const cancel = useMoneyForm(() => `${base}/cancel`, { cancel_date: props.today, reason: '' }, close);
+// Gap fix GA-19 (GA-24): an endorsement and a cancellation take effect today (kept inside the cover) unless changed.
+const endorse = useMoneyForm(() => `${base}/endorse`, { effective_date: dateWithin(props.today, props.policy.inception, props.policy.expiry), premium_delta: '', reason: '' }, close);
+const cancel = useMoneyForm(() => `${base}/cancel`, { cancel_date: dateWithin(props.today, props.policy.inception, props.policy.expiry), reason: '' }, close);
 const transition = useForm({ reason: '' });
 const active = computed(() => (drawer.value === 'issue' ? issue : drawer.value === 'endorse' ? endorse : drawer.value === 'cancel' ? cancel : null));
 const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
