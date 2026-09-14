@@ -66,9 +66,62 @@ Findings:
 
 All 14 steps complete. The table measures effort, not pass/fail. The Phase 3 pass/partial result (12 pass, 2 partial: AP/payroll G6, IDRA forms G5) is unchanged.
 
+## After the flow fixes — 14 Sep 2026 (X1–X12)
+
+| # | Part A step | Role | Start | Screens | Drawers/dialogs | Clicks | Keys | Leaves the flow | No default | Required but unknowable | Next step not offered |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | New motor policy: product, customer (new), vehicle, sum insured, premium, VAT and stamp duty | branch.officer | `home/Index` | 3 | 5 | 25 | 84 | producer (when new): a branch officer asks the branch manager, who creates it inline from the quote (agent.manage) | product | — | — |
+| 2 | Issue: policy number allocated, accounting written behind the scenes | branch.officer | `proposals/Show` | 2 | 2 | 3 | 0 | — | — | — | — |
+| 3 | Receive the premium by bank transfer, allocate to the installment, receipt for the customer | branch.manager | `policies/Show` | 3 | 1 | 5 | 8 | — | — | — | — |
+| 4 | Commission accrued on the receipt for an agent on a commission scheme | finance.manager | `policies/Show` | 1 | 1 | 1 | 0 | — | — | — | — |
+| 5 | Register the accident: policy, date of loss, description, documents | claims.officer | `home/Index` | 3 | 0 | 12 | 52 | — | — | — | — |
+| 6 | Surveyor estimates 200,000: set the reserve | claims.officer | `claims/Show` | 1 | 2 | 5 | 23 | — | — | — | — |
+| 7 | Settle at 180,000: approve within limit, finance releases, close releases the rest | claims.manager | `home/Index` | 2 | 6 | 14 | 24 | — | — | — | — |
+| 8 | Home queue; allocate money in suspense to a policy | accountant | `home/Index` | 3 | 1 | 5 | 1 | — | — | — | — |
+| 9 | Import the bank statement CSV, accept suggested matches, exceptions left | accountant | `receipts/Allocate` | 3 | 0 | 16 | 47 | — | — | — | — |
+| 10 | Record office expenses (vendor bills and salaries are not built) | accountant | `bank/Show` | 4 | 0 | 11 | 52 | no rent/office expense account in this chart: the accountant cannot add accounts — ask the Finance Manager, then come back; vendor bill (AP) and salaries: no module, only a manual journal (G6) | — | — | — |
+| 11 | Close September: run the checklist | finance.manager | `home/Index` | 3 | 0 | 23 | 0 | — | — | — | — |
+| 12 | Trial balance, P&L, balance sheet; click a figure down to the policy | finance.manager | `close/Run` | 4 | 0 | 6 | 0 | — | — | — | — |
+| 13 | Lock the period | finance.manager | `reports/Show` | 3 | 1 | 5 | 0 | — | — | — | — |
+| 14 | Regulatory exports: premium register by class, outstanding claims, UPR, agency register | auditor | `home/Index` | 3 | 0 | 6 | 0 | IDRA return forms: not built (G5) | — | — | — |
+
+**Totals:** 38 screens (was 45), 19 drawers/dialogs (was 18), 137 clicks (was 161), 291 keystrokes (was 324).
+
+| Measure | Before | After |
+|---|---|---|
+| Steps over 3 screens | 6 (1, 3, 5, 10, 12, 14) | 1 (10, see below) |
+| Dependent objects not creatable inline | 3 (producer, payee, account) | 0 for the role allowed to create them; 2 permission hand-offs remain (below) |
+| Fields without a sensible default | 13 | 1 (product on the officer's first quote) |
+| Required but unknowable | 1 (chassis number at quote) | 0 |
+| Next step not offered | 3 | 0 |
+
+Per step:
+- **Step 1:** Home → New quote → proposal. The quote workbench screen is reached without the list (X4).
+  - The chassis number is entered on the proposal (X7).
+  - Vehicle type starts as private.
+  - The one extra drawer is the proposal's risk details.
+- **Step 2:** issuing offers "Record the premium receipt?" (X1).
+- **Step 3:** the receipt opens from the policy, already filled in: amount outstanding, allocation line, branch, today and bank transfer. Print receipt is in its header (X1, X5). 12 clicks and 35 keys became 5 and 8.
+- **Step 5:** Home → Register a claim (X4). "Reported on" is today (X2). Date of loss is typed: only the customer knows it.
+- **Step 6:** after the reserve: "Reserve set. The claims manager approves the settlement from their Home." (X3)
+- **Step 7:**
+  - The claim is on the claims manager's Home (Claims to settle) and the payment on the finance manager's Home (Payments to release) (X3).
+  - The approval proposes the remaining reserve and the policyholder.
+  - Every date starts at today (X2).
+  - A payee who is not yet a party is created in the drawer (X8).
+- **Step 12:** account activity links the policy directly, and the three statements link to each other (X11).
+- **Step 14:** the three registers export straight from the reports index (X12).
+
+What remains, and why it is not a flow defect:
+- **Step 10 has 4 screens** because it is measured from where step 9 ended (the bank screen): journals list → new journal → journal. Started from Home, "New manual journal" is 3 screens (X4).
+- **Adding a missing account in step 10:** the accountant cannot add it. The chart of accounts belongs to the Finance Manager (A-28), who creates the account inline from the journal line (X10). The accountant's journal line names who to ask.
+- **Creating a producer in step 1:** a branch officer cannot, because it needs agent.manage. The branch manager creates the producer and its licence inline from the quote (X9). The officer's lookup says "Ask your branch manager to add the producer."
+- **Product in step 1:** it defaults to the product the user last quoted (X6). The fresh demo officer has never quoted, and the company sells several products, so the first quote chooses one.
+- **Out of scope** (features, not flow fixes): AP and payroll (G6), IDRA forms (G5).
+
 ## Fixes, in order of impact
 
-Each fix is its own commit, `fix(flow): Xn – …`.
+Each fix is its own commit, `fix(flow): Xn – …`, merged in this order.
 
 | Fix | Steps | Change |
 |---|---|---|

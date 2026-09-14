@@ -163,6 +163,13 @@ async function confirmJournal() {
     await settle(page);
     return lines;
 }
+/** Starts a task from a Home start action when Home offers it, else through the sidebar list and its "new" button. */
+async function start(label, list, newName) {
+    const fromHome = meter.page.locator('main').getByRole('link', { name: label, exact: true });
+    if (/\/home$/.test(new URL(meter.page.url()).pathname) && (await fromHome.count())) return click(fromHome.first());
+    await nav(list);
+    await click(meter.page.getByRole('link', { name: newName }).or(meter.page.getByRole('button', { name: newName })).first());
+}
 async function nav(label) {
     // Sidebar items by address (their names carry badge counts, "Bank ● 5").
     const hrefs = { Quotes: '/quotations', Receipts: '/receipts', Suspense: '/suspense', Claims: '/claims', Bank: '/bank', Journals: '/accounting/journals', Close: '/close',
@@ -206,8 +213,7 @@ await step(1, 'New motor policy: product, customer (new), vehicle, sum insured, 
     await page.goto(`${base}/home`);
     await settle(page);
     await m.restart();
-    await nav('Quotes');
-    await click(page.getByRole('link', { name: /New quote/ }).or(page.getByRole('button', { name: /New quote/ })).first());
+    await start('New quote', 'Quotes', /New quote/);
     await ensure(page.locator('#branch_id'), await page.locator('#branch_id option').filter({ hasText: 'Head Office' }).first().getAttribute('value'), 'branch', { select: true });
     const motor = await page.locator('#product_id option').filter({ hasText: 'Motor' }).first().getAttribute('value');
     await ensure(page.locator('#product_id'), motor, 'product', { select: true });
@@ -226,14 +232,23 @@ await step(1, 'New motor policy: product, customer (new), vehicle, sum insured, 
         await click(page.getByRole('button', { name: 'Create customer' }));
     }
     // The producer exists here; a producer that does not cannot be created from the quote.
-    await lookup(page.locator('#producer_id'), 'AG-001');
-    m.leaves.push('producer (when new): no inline create — Distribution → Producers and a licence, then back');
+    // What the open lookup offers for a producer that is not there yet (read before picking; the list closes on pick).
+    await type(page.locator('#producer_id'), 'AG-001');
+    await page.getByRole('option').filter({ hasText: 'AG-001' }).first().waitFor();
+    const askForProducer = await page.getByText(/Ask your branch manager to add the producer/).count();
+    const newProducer = await page.getByRole('button', { name: /New producer/ }).count();
+    await page.getByRole('option').filter({ hasText: 'AG-001' }).first().dispatchEvent('mousedown');
+    m.clicks += 1;
+    if (askForProducer) m.leaves.push('producer (when new): a branch officer asks the branch manager, who creates it inline from the quote (agent.manage)');
+    else if (!newProducer) m.leaves.push('producer (when new): no inline create — Distribution → Producers and a licence, then back');
 
     await ensure(page.locator('#risk_vehicle_type'), 'private', 'vehicle type', { select: true });
     for (const [field, value] of [['registration_no', `DHA-METRO-GA-19-${state.stamp}`], ['chassis_no', `AUDIT-${state.stamp}`], ['engine_cc', '1500'], ['seats', '5'],
         ['year_of_manufacture', '2020'], ['driver_age', '40'], ['sum_insured', '450000']]) {
         const input = page.locator(`#risk_${field}`);
         if ((await input.count()) === 0) continue;
+        const label = await page.locator(`label[for="risk_${field}"]`).innerText().catch(() => '');
+        if (field === 'chassis_no' && /optional/i.test(label)) continue; // not needed to price: entered on the proposal
         if ((await input.inputValue()) === '') await type(input, value);
     }
     const chassisLabel = await page.locator('label[for="risk_chassis_no"]').innerText().catch(() => '');
@@ -247,6 +262,13 @@ await step(1, 'New motor policy: product, customer (new), vehicle, sum insured, 
     await type(page.locator('#id_number'), '1990123456789');
     await click(page.getByRole('button', { name: 'Record verification' }));
     await click(page.getByRole('button', { name: 'Submit to underwriting' }));
+    const chassis = page.locator('#detail_chassis_no');
+    if (await chassis.count()) {
+        m.notes.push('Chassis number entered on the proposal (risk details drawer), when the customer brings the registration papers.');
+        await type(chassis, `AUDIT-${state.stamp}`);
+        await click(page.getByRole('button', { name: 'Save details' }));
+        await click(page.getByRole('button', { name: 'Submit to underwriting' }));
+    }
     await click(page.getByRole('button', { name: 'Submit proposal', exact: true }));
     state.proposalUrl = page.url();
     m.notes.push((await page.getByText('Approved automatically').count()) ? 'Proposal approved automatically.' : 'Proposal referred.');
@@ -314,17 +336,17 @@ await step(5, 'Register the accident: policy, date of loss, description, documen
     await page.goto(`${base}/home`);
     await settle(page);
     await m.restart();
-    await nav('Claims');
-    await click(page.getByRole('link', { name: /Register a claim/ }).or(page.getByRole('button', { name: /Register a claim/ })).first());
+    await start('Register a claim', 'Claims', /Register a claim/);
     await lookup(page.locator('#policy_id'), state.policyNumber, state.policyNumber);
     await click(page.getByRole('button', { name: /^Continue/ }));
-    await ensure(page.getByLabel('Date of loss'), '', 'date of loss', { accept: (v) => v !== '', typed: 't' });
+    await type(page.getByLabel('Date of loss'), 't'); // only the customer knows it: an input, not a missing default
     await ensure(page.getByLabel('Reported on'), '', 'reported on', { accept: (v) => v !== '', typed: 't' });
     await type(page.getByLabel('What happened'), 'Rear collision at Farmgate signal');
     await click(page.getByRole('button', { name: /^Continue/ }));
     await click(page.getByRole('button', { name: /^Register claim/ }));
     await page.waitForURL(/\/claims\/[0-9a-f-]{36}/);
     state.claimUrl = page.url().split('?')[0];
+    state.claimNumber = (await page.locator('h1').first().innerText()).trim();
     if ((await page.locator('input[type=file]').count()) === 0) {
         m.notes.push('Documents are attached after registering, on the claim page Documents tab.');
         await click(tab(page, 'Documents'));
@@ -351,14 +373,15 @@ await step(6, 'Surveyor estimates 200,000: set the reserve', 'claims.officer', a
     await ensure(page.getByLabel('Date', { exact: true }), '', 'reserve date', { accept: (v) => v !== '', typed: 't' });
     await click(page.getByRole('button', { name: /^Review and post/ }));
     m.notes.push(`Journal: ${(await confirmJournal()).join(' | ')}`);
-    await offers(/approve payment|send for approval|ask .*to approve/i, 'after reserve → “Approve” (the claims officer cannot approve their own reserve; no hand-off offered)');
+    if (await page.getByText(/approves the settlement/i).count()) m.notes.push(`Hand-off: ${(await page.getByText(/approves the settlement/i).first().innerText()).trim()}`);
+    else await offers(/approve payment|send for approval|ask .*to approve/i, 'after reserve → “Approve” (the claims officer cannot approve their own reserve; no hand-off offered)');
 });
 
 await step(7, 'Settle at 180,000: approve within limit, finance releases, close releases the rest', 'claims.manager', async (page, m) => {
     await page.goto(`${base}/home`);
     await settle(page);
     await m.restart();
-    const fromHome = page.locator('main a[href*="/claims/0"], main a[href*="/claims/1"]').filter({ hasNotText: /Register/ }).first();
+    const fromHome = page.locator(`main a[href="${new URL(state.claimUrl).pathname}"]`).first();
     if (await fromHome.count()) await click(fromHome);
     else {
         m.leaves.push('the claim waiting for approval is not on the claims manager\'s Home');
@@ -375,12 +398,17 @@ await step(7, 'Settle at 180,000: approve within limit, finance releases, close 
     if ((await amount.inputValue()) === '') m.noDefaults.push('approval amount (reserve not proposed)');
     await type(amount, '180000');
     const payee = page.locator('#payee_party_id');
-    if (!(await payee.inputValue())) {
-        m.noDefaults.push('payee (policyholder not preselected)');
-        await payee.selectOption({ index: 1 });
-        m.clicks += 2;
+    if ((await payee.evaluate((el) => el.tagName)) === 'SELECT') {
+        if (!(await payee.inputValue())) {
+            m.noDefaults.push('payee (policyholder not preselected)');
+            await payee.selectOption({ index: 1 });
+            m.clicks += 2;
+        }
+        m.leaves.push('payee other than a party (e.g. a garage): create in Parties first — no inline create');
+    } else {
+        if (!(await payee.inputValue())) m.noDefaults.push('payee (policyholder not preselected)');
+        if (!(await page.getByText(/Ctrl\+N adds|New payee/).count())) m.leaves.push('payee other than a party (e.g. a garage): create in Parties first — no inline create');
     }
-    m.leaves.push('payee other than a party (e.g. a garage): create in Parties first — no inline create');
     await ensure(page.getByLabel('Approval date'), '', 'approval date', { accept: (v) => v !== '', typed: 't' });
     await click(page.getByRole('button', { name: /^Review and approve/ }));
     m.notes.push(`Approval journal: ${(await confirmJournal()).join(' | ') || 'none (routed)'}`);
@@ -394,7 +422,7 @@ await step(7, 'Settle at 180,000: approve within limit, finance releases, close 
     await finance.goto(`${base}/home`);
     await settle(finance);
     await m.track();
-    const release = finance.locator('main a[href*="/claims/0"], main a[href*="/claims/1"]').first();
+    const release = finance.locator(`main a[href="${new URL(state.claimUrl).pathname}"]`).first();
     if (await release.count()) await click(release);
     else m.leaves.push('the payment to release is not on the finance manager\'s Home');
     if (!finance.url().startsWith(state.claimUrl)) {
@@ -478,7 +506,11 @@ await step(10, 'Record office expenses (vendor bills and salaries are not built)
     await type(page.getByLabel('Reason'), 'Rent invoice 9/26');
     const accounts = page.getByLabel(/^Account, line/);
     const expense = accounts.nth(0).locator('option', { hasText: /Office Rent|Rent/ });
-    if ((await expense.count()) === 0) m.leaves.push('no rent/office expense account in this chart: create it first (Accounting → Imports), then come back');
+    if ((await expense.count()) === 0) {
+        m.leaves.push((await page.getByRole('button', { name: 'New account' }).count())
+            ? 'no rent account in this chart: created inline (New account)'
+            : 'no rent/office expense account in this chart: the accountant cannot add accounts — ask the Finance Manager, then come back');
+    }
     await accounts.nth(0).selectOption({ label: await ((await expense.count()) ? expense.first() : accounts.nth(0).locator('option', { hasText: 'Salaries' }).first()).innerText() });
     m.clicks += 2;
     await accounts.nth(1).selectOption({ label: await accounts.nth(1).locator('option', { hasText: 'Bank - Main' }).first().innerText() });
@@ -486,7 +518,9 @@ await step(10, 'Record office expenses (vendor bills and salaries are not built)
     await ensure(page.getByLabel('Side, line 2'), 'credit', 'side of line 2', { select: true });
     await type(page.getByLabel('Amount, line 1'), '85000');
     if ((await page.getByLabel('Amount, line 2').inputValue()).replace(/,/g, '') !== '85000.00') await type(page.getByLabel('Amount, line 2'), '85000');
-    m.leaves.push('an account that is not in the chart: no inline create — Accounting → Imports (CSV)');
+    if (!(await page.getByRole('button', { name: 'New account' }).count()) && !(await page.getByText(/added by the Finance Manager/).count())) {
+        m.leaves.push('an account that is not in the chart: no inline create — Accounting → Imports (CSV)');
+    }
     m.leaves.push('vendor bill (AP) and salaries: no module, only a manual journal (G6)');
     await click(page.getByRole('button', { name: /^Save and submit/ }));
 });
@@ -515,21 +549,32 @@ await step(11, 'Close September: run the checklist', 'finance.manager', async (p
 await step(12, 'Trial balance, P&L, balance sheet; click a figure down to the policy', 'finance.manager', async (page, m) => {
     await nav('Trial balance');
     await click(page.locator('tbody tr').filter({ hasText: 'Premium Receivable' }).locator('a').last());
-    const journals = await page.locator('main tbody a[href*="/accounting/journals/"]').evaluateAll((links) => links.map((a) => a.getAttribute('href')));
-    for (const href of journals.slice(0, 8)) {
-        await page.goto(`${base}${href}`);
-        await settle(page);
-        const source = page.locator('main a[href^="/policies/"], main a[href^="/claims/"], main a[href^="/receipts/"]').first();
-        if (await source.count()) {
-            m.clicks += 1; // the journal row the user opens
-            await click(source);
-            break;
+    const direct = page.locator('main tbody a[href^="/policies/"]').first();
+    if (await direct.count()) {
+        await click(direct);
+    } else {
+        const journals = await page.locator('main tbody a[href*="/accounting/journals/"]').evaluateAll((links) => links.map((a) => a.getAttribute('href')));
+        for (const href of journals.slice(0, 8)) {
+            await page.goto(`${base}${href}`);
+            await settle(page);
+            const source = page.locator('main a[href^="/policies/"], main a[href^="/claims/"], main a[href^="/receipts/"]').first();
+            if (await source.count()) {
+                m.clicks += 1; // the journal row the user opens
+                await click(source);
+                break;
+            }
         }
     }
-    await nav('Reports');
-    await click(page.getByRole('link', { name: 'Profit and loss' }).first());
-    await nav('Reports');
-    await click(page.getByRole('link', { name: 'Balance sheet' }).first());
+    // The statements: linked from each other since X11, else through the reports index each time.
+    const statement = async (name) => {
+        const link = page.locator('main').getByRole('link', { name, exact: true });
+        if (await link.count()) return click(link.first());
+        await nav('Reports');
+        await click(page.getByRole('link', { name }).first());
+    };
+    await nav('Trial balance');
+    await statement('Profit and loss');
+    await statement('Balance sheet');
 });
 
 await step(13, 'Lock the period', 'finance.manager', async (page, m) => {
@@ -551,8 +596,15 @@ await step(14, 'Regulatory exports: premium register by class, outstanding claim
     await page.goto(`${base}/home`);
     await settle(page);
     await m.restart();
+    await nav('Reports');
     for (const report of ['Premium register', 'Outstanding claims', 'Unearned premium']) {
-        await nav('Reports');
+        const fromIndex = page.getByRole('link', { name: new RegExp(`^Export ${report}.* as CSV`, 'i') });
+        if (await fromIndex.count()) {
+            await Promise.all([page.waitForEvent('download').catch(() => undefined), fromIndex.first().click()]);
+            meter.clicks += 1;
+            continue;
+        }
+        if (!(await page.getByRole('link', { name: report }).count())) await nav('Reports');
         await click(page.getByRole('link', { name: report }).first());
         const exportButton = page.getByRole('button', { name: /Export/ }).first();
         if (await exportButton.count()) await click(exportButton);

@@ -2455,3 +2455,34 @@ Scope: review only; only the critical finding was fixed.
 - **Permissions:** no role template holds `policy.endorse` (a Phase 1 gap) or `reports.regulatory` for the finance manager (flow audit).
 - **LATER per the design note:** life rating, fleet/group policies, co-insurance on the schedule, sanctions, tariff import from IDRA circulars, bulk print/email from queues.
 - **Observations from the flow audit to decide on:** UTC versus tenant dates; locking a month early or with pending manual journals.
+
+### Flow fixes X1–X12 — measured Part A flow audit — done
+Flow audit only, no new features: docs/flow-audit.md now meters each Part A step (screens, drawers/dialogs, clicks, keystrokes, leaves, defaults, unknowable fields, next steps). The worst cases were fixed in order of impact, one commit each, and the step was re-measured.
+
+| | Screens | Drawers/dialogs | Clicks | Keys | Steps over 3 screens | Not creatable inline | No default | Unknowable | Next step not offered |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 45 | 18 | 161 | 324 | 6 | 3 | 13 | 1 | 3 |
+| After | 38 | 19 | 137 | 291 | 1 | 0* | 1 | 0 | 0 |
+
+\* A producer and an account are created inline by the roles that hold the permission (agent.manage, accounting.manage_coa). A branch officer or accountant is told whom to ask.
+
+- **X1:** after issue, "Record the premium receipt?". `/receipts/create?policy=` is prefilled with the outstanding amount, allocation lines, branch and today. Receipt forms default to the user's branch and last channel.
+- **X2:** today is the default on "now" dates: claim reported on, reserve, recovery, reject/reopen, approval, paid on, close, and the manual journal and reversal dates. Date of loss stays empty.
+- **X3:** after the reserve, "Approve payment" if the user may (SoD and approval limits checked read-only), otherwise who approves. "Claims to settle" on the claims manager's Home; "Payments to release" for the finance manager and CFO. The approval drawer proposes the uncommitted reserve and the policyholder.
+- **X4:** Home start actions: New quote, Record a receipt, Register a claim, New manual journal.
+- **X5:** the receipt has "Print receipt" in its header and after recording (then Download). Allocate shows only while money is open.
+- **X6:** new quotes and policies start with the product the user last used (`drafts.last-product`).
+- **X7:** risk fields take `required_at` (quote|proposal) and `default`. The motor chassis number is required at proposal and entered in the proposal's "Enter risk details" drawer; that re-rates and saves only if the premium is unchanged. Vehicle type defaults to private.
+- **X8:** payee lookup with inline "New payee" (vendor or beneficiary), `POST /lookup/payee`, checked on `claim.approve`.
+- **X9:** "New producer" from the quote's producer lookup creates the party, producer and licence in one transaction (`POST /lookup/producer`). Code prefixes are in `erp.distribution.producer_code_prefixes`.
+- **X10:** "New account" on a manual journal line, as a one-row chart-of-accounts import (`POST /accounting/accounts`).
+- **X11:** account activity has a Source column. P&L, balance sheet and trial balance link to each other.
+- **X12:** `GET /reports/{report}/export?format=csv|xlsx` and export links on the reports index.
+
+**Remaining** (detail in docs/flow-audit.md):
+- Step 10 is 4 screens, measured from the bank screen; it is 3 from Home.
+- Product has no default on a user's first quote.
+- **Found while fixing, not changed:**
+  - "Pay from" in the claim release drawer is not read by the release endpoint.
+  - Policy, receipt and receipts-create pages need an area permission held tenant-wide, so a user with only a branch-scoped role gets 403.
+  - No Pest case covers an endorsement clearing a proposal-stage field.
