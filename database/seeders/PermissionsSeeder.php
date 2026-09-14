@@ -41,6 +41,8 @@ final class PermissionsSeeder extends Seeder
         'receipt.write_off_request', 'receipt.write_off_approve',
         // Market gap G5 (A-268): mark regulatory returns filed; prepare / approve the quarterly technical provisions run
         'regulatory.file','provisions.run','provisions.approve',
+        // Phase 2 People and Payroll MVP (addendum §B.9, §B.10; A-287): employees, payroll preparation, approval, payment, rules
+        'hr.manage_employees','payroll.prepare','payroll.approve','payroll.pay','payroll.manage_rules',
     ];
 
     /**
@@ -57,6 +59,8 @@ final class PermissionsSeeder extends Seeder
         ['rating.manage_plans', 'rating.approve_plans', 'object'], // slice R2: whoever drafted or edited a rating plan does not approve it
         ['quotation.create', 'underwriting.decide', 'object'], // slice R5: whoever prepared a proposal does not decide its referral
         ['provisions.run', 'provisions.approve', 'object'], // market gap G5: whoever prepared a technical provisions run does not approve and post it
+        ['payroll.prepare', 'payroll.approve', 'object'], // addendum §B.10.10: whoever calculated a payroll run does not approve it
+        ['payroll.approve', 'payroll.pay', 'object'], // addendum §B.10.10: whoever approved a payroll run does not pay it
     ];
 
     public function run(): void

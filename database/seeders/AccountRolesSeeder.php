@@ -43,6 +43,7 @@ final class AccountRolesSeeder extends Seeder
         'salary_payable' => 'Net salary payable',
         'employee_tax_payable' => 'Employee income tax withheld',
         'pf_payable' => 'Provident fund payable',
+        'bonus_expense' => 'Festival bonus and other bonuses paid through payroll (People/Payroll MVP)',
         'retained_earnings' => 'Retained earnings',
         'premium_written_off' => 'Unpaid premium written off as too small to collect', // gap fixes W7 (GA-24, A-234)
     ];

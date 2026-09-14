@@ -1,0 +1,1 @@
+{ "event_type": "PAYROLL_PAID", "payload": {"amount":16550000,"payroll_run_id":"RUN1"}, "dimensions": {"branch":"B1","payroll_run":"RUN1"}, "expected": [["salary_payable","debit",16550000],["bank_main","credit",16550000]] }

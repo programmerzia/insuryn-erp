@@ -61,7 +61,7 @@ final class PeriodCloseService
                 'status' => 'running', 'started_by' => $actorUserId, 'started_at' => CarbonImmutable::now()]);
             DB::table('period_close_tasks')->insert(array_map(fn (CloseTaskDefinition $task): array => ['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(),
                 'close_run_id' => $runId, 'code' => $task->code, 'order_no' => $task->orderNo, 'depends_on' => json_encode($task->dependsOn, JSON_THROW_ON_ERROR),
-                'owner_role' => $task->ownerRole, 'status' => 'pending'], $this->catalogue->tasks($yearEnd, $view === null ? [] : $this->conditionalTasks($view))));
+                'owner_role' => $task->ownerRole, 'status' => 'pending'], $this->catalogue->tasks($yearEnd, $view === null ? [] : $this->conditionalTasks($view), (string) $period->entity_id)));
             $this->audit->record('close.started', AuditSubject::of('period_close_run', $runId), null, ['period_id' => $periodId], null, 'periods.soft_lock', Actor::user($actorUserId));
 
             return $runId;

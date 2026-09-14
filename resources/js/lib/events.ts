@@ -6,7 +6,7 @@ const LABELS: Record<string, string> = {
     AGENT_CASH_COLLECTED: 'Cash collected by agent', AGENT_DEPOSIT_RECORDED: 'Agent deposit', REFUND_ISSUED: 'Refund paid', PREMIUM_WRITTEN_OFF: 'Premium written off',
     COMMISSION_EARNED: 'Commission earned', COMMISSION_CLAWBACK: 'Commission clawed back', COMMISSION_PAID: 'Commission paid',
     CLAIM_RESERVED: 'Claim reserve set', CLAIM_RESERVE_ADJUSTED: 'Claim reserve changed', CLAIM_APPROVED: 'Claim payment approved',
-    CLAIM_PAID: 'Claim paid', CLAIM_RECOVERED: 'Recovery received', CLAIM_CLOSED: 'Claim closed', PAYROLL_POSTED: 'Payroll posted', MANUAL_JOURNAL: 'Manual journal', REVERSAL: 'Reversal', YEAR_END_CLOSE: 'Year-end close',
+    CLAIM_PAID: 'Claim paid', CLAIM_RECOVERED: 'Recovery received', CLAIM_CLOSED: 'Claim closed', PAYROLL_POSTED: 'Payroll posted', PAYROLL_PAID: 'Salaries paid', MANUAL_JOURNAL: 'Manual journal', REVERSAL: 'Reversal', YEAR_END_CLOSE: 'Year-end close',
     // Gap fix GA-14.
     CHEQUE_CLEARED: 'Cheque cleared', CHEQUE_RETURN_CHARGED: 'Bank charge for a returned cheque',
     // Market gap G5: technical provisions.

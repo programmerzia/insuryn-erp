@@ -62,3 +62,8 @@ arch('strict types everywhere')->expect('App')->toUseStrictTypes();
 arch('no floats in accounting')->expect('App\Modules\Accounting')->not->toUse(['floatval', 'round', 'number_format']);
 /** Phase 3 design INVARIANT "no floats" in rating (slice R2): integer minor units and basis points, half-even division in RatingMath. */
 arch('no floats in rating')->expect('App\Modules\Insurance\Rating')->not->toUse(['floatval', 'round', 'number_format', 'fdiv', 'ceil', 'floor']);
+
+/** Addendum §B.1 (People and Payroll MVP): People uses Platform, the accounting application layer and Finance application contracts only; payroll has no floats. */
+arch('people does not use insurance or distribution')->expect('App\Modules\People')->not->toUse(['App\Modules\Insurance', 'App\Modules\Distribution']);
+arch('people does not use the finance domain')->expect('App\Modules\People')->not->toUse(['App\Modules\Finance\Bank\Domain', 'App\Modules\Finance\Bank\Infrastructure']);
+arch('no floats in payroll')->expect('App\Modules\People\Payroll')->not->toUse(['floatval', 'round', 'number_format', 'fdiv', 'ceil', 'floor']);

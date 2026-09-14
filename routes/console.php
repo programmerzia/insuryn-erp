@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Schedule;
 // turns, and each job reads each company's today from the BusinessClock. ASSUMPTION A-152.
 $businessZone = App\Modules\Platform\Tenancy\BusinessClock::defaultTimezone();
 Schedule::job(new OutboxRelayJob(), 'posting')->everySecond()->withoutOverlapping();
+Schedule::job(new App\Modules\Platform\Messaging\OutboxConsumerRelayJob())->everyMinute()->withoutOverlapping(); // addendum §B.2.6: commission payroll earnings and other consumed messages
 Schedule::job(new ReservationSweeperJob())->everyFifteenMinutes();
 Schedule::job(new PremiumEarningJob(), 'batch')->dailyAt('01:00')->timezone($businessZone)->withoutOverlapping();
 Schedule::job(new ReconciliationJob(), 'recon')->dailyAt('02:00')->timezone($businessZone)->withoutOverlapping();
@@ -73,6 +74,7 @@ Illuminate\Support\Facades\Artisan::command('erp:demo {--tenant=nonlife : slug o
         app()->call([(new $job())->forTenant($tenantId, null), 'handle']);
     }
     dispatch_sync(new OutboxRelayJob());
+    dispatch_sync(new App\Modules\Platform\Messaging\OutboxConsumerRelayJob()); // addendum §B.2.6 consumers (People: commission paid through payroll)
     $this->info("Seeded the Part A story in tenant {$slug}. Sign in at http://{$slug}.localhost:8000 as admin@{$slug}.local or <role>@{$slug}.local (for example accountant@{$slug}.local).");
     $this->line('September bank statement: '.storage_path(Database\Seeders\PartADemoSeeder::STATEMENT_FILE));
 

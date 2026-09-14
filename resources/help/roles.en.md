@@ -34,6 +34,7 @@ account role (do not translate it); the others say what a debit or a credit to t
 | fx_gain_loss | Loss from exchange rates | Gain from exchange rates |
 | salary_expense | Salary cost | Salary cost reduced |
 | employer_pf_expense | Employer's provident fund cost | Employer's provident fund cost reduced |
+| bonus_expense | Festival bonus cost | Festival bonus cost reduced |
 | salary_payable | Salary paid | Salary we owe staff |
 | employee_tax_payable | Employee tax paid to the government | Tax withheld from salaries, owed to the government |
 | pf_payable | Provident fund paid over | Provident fund we owe |

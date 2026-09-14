@@ -325,3 +325,6 @@ Route::middleware('auth')->group(function (): void {
     Route::get('reports/{report}/export', [ReportsPageController::class, 'export'])->where('report', '[a-z-]+');
     require __DIR__.'/regulatory.php'; // market gap G5: regulatory returns and technical provisions
 });
+
+// People and Payroll MVP (addendum §B.9–§B.11): employees, payroll runs, payslips, payroll settings.
+require __DIR__.'/people.php';

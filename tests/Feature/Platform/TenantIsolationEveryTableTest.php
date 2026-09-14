@@ -191,6 +191,24 @@ function populateEveryTenantTable(array $ctx): void
     activeRatingPlan($ctx['tenant_id'], ['code' => 'MOTOR-ISOLATION', 'name' => 'Isolation plan', 'class_code' => 'motor', 'effective_from' => '2026-01-01', // Phase 3 R2
         'tables' => [['code' => 'rates', 'name' => 'Rates', 'dimensions' => ['vehicle_type'], 'value_type' => 'rate_pct', 'rows' => [['keys' => ['vehicle_type' => 'private'], 'value_bp' => 250]]]],
         'steps' => [['order_no' => 1, 'code' => 'base', 'kind' => 'base', 'expression' => "pct(sum_insured, lookup('rates', risk.vehicle_type))", 'label_en' => 'Base', 'label_bn' => 'মূল']]]);
+    // People and Payroll MVP: reference data, rules, an employee with history, a commission payroll input, a posted and paid run (payslips, lines, bank file).
+    $hr = userWithPermissions($ctx['tenant_id'], ['hr.manage_employees', 'payroll.prepare', 'payroll.manage_rules']);
+    $payrollApprover = userWithPermissions($ctx['tenant_id'], ['payroll.approve']);
+    $payrollPayer = userWithPermissions($ctx['tenant_id'], ['payroll.pay']);
+    asTenant($ctx['tenant_id'], function () use ($ctx, $hr, $payrollApprover, $payrollPayer): void {
+        $ids = Database\Seeders\PeopleDemoSeeder::configure($ctx['entity_id'], $hr);
+        DB::table('parties')->insert(['id' => $party = (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'kind' => 'individual', 'display_name' => 'Isolation employee', 'status' => 'active']);
+        $employee = app(App\Modules\People\Employee\Application\EmployeeService::class)->hire($ctx['entity_id'], ['party_id' => $party, 'code' => 'ISO-1', 'full_name' => 'Isolation employee',
+            'joined_on' => '2024-01-01', 'branch_id' => $ctx['branch_id'], 'department_id' => $ids['departments']['UW'], 'designation_id' => $ids['designations']['Officer'], 'grade_id' => $ids['grades']['G7'],
+            'employment_type' => 'permanent', 'basic_minor' => 30_000_00, 'bank_name' => 'City Bank', 'account_no' => '1051000000099'], $hr);
+        app(App\Modules\People\Employee\Application\EmployeeService::class)->changeEmployment($employee, 'pay_change', CarbonImmutable::parse('2026-07-01'), ['basic_minor' => 32_000_00], $hr);
+        app(App\Modules\People\Payroll\Application\CommissionPayrollEarningConsumer::class)->handle(['commission_statement_id' => (string) Str::uuid7(), 'employee_id' => $employee,
+            'amount_minor' => 1_000_00, 'currency' => 'BDT', 'period_end' => '2026-11-30', 'paid_on' => '2026-11-05'], (string) Str::uuid7());
+        $runs = app(App\Modules\People\Payroll\Application\PayrollRunService::class);
+        $run = $runs->calculate($ctx['entity_id'], 2026, 11, $hr);
+        $runs->approve($run, $payrollApprover);
+        $runs->pay($run, (string) DB::table('bank_accounts')->value('id'), CarbonImmutable::parse('2026-11-30'), $payrollPayer);
+    });
 }
 
 it('shows the runtime role none of another tenant\'s rows in any tenant table', function (): void {

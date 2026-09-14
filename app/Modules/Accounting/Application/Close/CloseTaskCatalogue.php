@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application\Close;
 
+use App\Modules\Accounting\Application\Contracts\CloseTaskContributor;
+
 /**
  * Design §5.7 tasks built in Phases 1A/1B (7 AP/AR, 9 depreciation, 10 FX revaluation, 11 DAC and 12 tax
  * computation are LATER or not in the slice list). "Depends 1–12" for the trial balance means every earlier task that exists.
@@ -19,6 +21,9 @@ final class CloseTaskCatalogue
     /** Market gap G5: tasks listed only where a ConditionalCloseTask says they apply. */
     public const CONDITIONAL_TASKS = ['technical_provisions'];
 
+    /** @param iterable<CloseTaskContributor> $contributors addendum §B.2.8 (PD-8): tasks business contexts add for the entities that use them */
+    public function __construct(private readonly iterable $contributors = []) {}
+
     /**
      * The tasks of a close run. Gap fix GA-15: the year-end close task only in the close of a fiscal year's last month ($yearEnd); the other
      * months' runs do not list it.
@@ -26,14 +31,21 @@ final class CloseTaskCatalogue
      * @param list<string> $conditional codes of conditional tasks that apply to the run (ConditionalCloseTask)
      * @return list<CloseTaskDefinition>
      */
-    public function tasks(bool $yearEnd = false, array $conditional = []): array
+    public function tasks(bool $yearEnd = false, array $conditional = [], ?string $entityId = null): array
     {
         // Market gap G5 (D-111): the quarterly technical provisions, only in the runs a ConditionalCloseTask claims (a quarter's last month).
         $provisions = in_array('technical_provisions', $conditional, true);
+        $contributed = [];
+        foreach ($this->contributors as $contributor) {
+            if ($entityId !== null && $contributor->appliesTo($entityId)) {
+                array_push($contributed, ...$contributor->definitions());
+            }
+        }
+        $contributedCodes = array_map(fn (CloseTaskDefinition $task): string => $task->code, $contributed);
         // Gap fix GA-43: the unearned premium, suspense, VAT payable and stamp duty payable reconciliations run before the trial balance too.
         $reconciliations = ['premium_reconciliation', 'claims_reconciliation', 'commission_reconciliation', 'upr_reconciliation', 'suspense_reconciliation',
             'vat_reconciliation', 'stamp_duty_reconciliation'];
-        $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals', ...($provisions ? ['technical_provisions'] : [])];
+        $beforeYearEnd = ['premium_earning', 'suspense_review', 'bank_reconciliation', ...$reconciliations, 'accruals', ...($provisions ? ['technical_provisions'] : []), ...$contributedCodes];
         $beforeTrialBalance = $yearEnd ? [...$beforeYearEnd, 'year_end_close'] : $beforeYearEnd;
 
         return [
@@ -52,6 +64,7 @@ final class CloseTaskCatalogue
             new CloseTaskDefinition(11, 'stamp_duty_reconciliation', CloseTaskKind::Reconciliation, [], 'accounting', 'periods.soft_lock', subledger: 'stamp_duty'),
             // Market gap G5: the quarter's technical provisions run is posted before the trial balance (the task shares number 12 with the year-end close, which follows it).
             ...($provisions ? [new CloseTaskDefinition(12, 'technical_provisions', CloseTaskKind::Check, [], 'finance_manager', 'provisions.run')] : []),
+            ...$contributed,
             // Gap fix GA-15 (D-81): in the fiscal year's last month, once everything that posts to income and expense is done.
             ...($yearEnd ? [new CloseTaskDefinition(12, 'year_end_close', CloseTaskKind::YearEndClose, $beforeYearEnd, 'finance_manager', 'periods.lock')] : []),
             new CloseTaskDefinition(13, 'trial_balance', CloseTaskKind::TrialBalance, $beforeTrialBalance, 'finance_manager', 'periods.soft_lock'),
@@ -66,6 +79,13 @@ final class CloseTaskCatalogue
         foreach ($this->tasks(yearEnd: true, conditional: ['technical_provisions']) as $task) {
             if ($task->code === $code) {
                 return $task;
+            }
+        }
+        foreach ($this->contributors as $contributor) {
+            foreach ($contributor->definitions() as $task) {
+                if ($task->code === $code) {
+                    return $task;
+                }
             }
         }
 

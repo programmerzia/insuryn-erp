@@ -53,7 +53,9 @@ final class RoleTemplates
         // ASSUMPTION A-232 (gap fixes W7, GA-24): the finance manager (and CFO) approve writing off a cancelled policy's small unpaid premium.
         'receipt.write_off_approve',
         // ASSUMPTION A-268 (market gap G5): the finance manager (and CFO) prepare the technical provisions run and mark regulatory returns filed.
-        'regulatory.file', 'provisions.run'];
+        'regulatory.file', 'provisions.run',
+        // ASSUMPTION A-287 (People/Payroll MVP): the finance manager (and CFO) approve and post the payroll the HR manager calculated (SoD object rule).
+        'payroll.approve'];
     // ASSUMPTION A-268 (market gap G5): the CFO approves and posts the technical provisions run, never one they prepared (SoD object rule).
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve'];
 
@@ -87,9 +89,13 @@ final class RoleTemplates
                 // activity, the close checklist and the reports (read-only; the finance manager already holds it, so it is added here, not to ACCOUNTANT).
                 'reports.financial',
                 // ASSUMPTION A-219 (gap fix GA-27): the accountant who reconciles the bank records an unknown credit on the statement as a receipt held in suspense.
-                'receipt.create']],
+                'receipt.create',
+                // ASSUMPTION A-287 (People/Payroll MVP): the accountant releases the salary bank transfer of the payroll the finance manager approved.
+                'payroll.pay']],
             'finance_manager' => ['name' => 'Finance Manager', 'permissions' => $financeManager],
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
+            // ASSUMPTION A-287 (People/Payroll MVP): HR keeps the employee records and the payroll rules and calculates the monthly payroll; finance approves it.
+            'hr_manager' => ['name' => 'HR Manager', 'permissions' => ['hr.manage_employees', 'payroll.prepare', 'payroll.manage_rules', 'party.manage']],
             self::AUDITOR => ['name' => 'Auditor', 'permissions' => self::READ_ONLY_PERMISSIONS],
             // Interpretation (A-54, fix F3): approval limits are platform configuration (platform.*), not a financial permission.
             'tenant_admin' => ['name' => 'Tenant Admin', 'permissions' => ['platform.manage_users', 'platform.manage_roles', 'platform.manage_approvals',

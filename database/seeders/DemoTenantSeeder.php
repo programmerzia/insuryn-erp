@@ -72,6 +72,7 @@ final class DemoTenantSeeder extends Seeder
                 '5300' => ['Salaries', 'expense', 'debit', 'salary_expense', false, null],
                 '5310' => ['Employer PF Contribution', 'expense', 'debit', 'employer_pf_expense', false, null],
                 '5450' => ['Premium Written Off', 'expense', 'debit', 'premium_written_off', false, null], // gap fixes W7 (GA-24)
+                '5320' => ['Festival Bonus', 'expense', 'debit', 'bonus_expense', false, null], // People/Payroll MVP
                 '5900' => ['Rounding Differences', 'expense', 'debit', 'rounding_difference', false, null],
             ];
             $accounts = [];

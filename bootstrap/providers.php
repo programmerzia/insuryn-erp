@@ -17,4 +17,5 @@ return [
     InsuranceServiceProvider::class,
     FinanceServiceProvider::class,
     App\Modules\Insurance\Regulatory\RegulatoryServiceProvider::class, // market gap G5
+    App\Modules\People\Providers\PeopleServiceProvider::class,
 ];

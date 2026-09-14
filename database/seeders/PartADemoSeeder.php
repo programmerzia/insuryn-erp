@@ -257,6 +257,7 @@ final class PartADemoSeeder extends Seeder
 
         $this->importStatement("date,description,reference,amount\n2026-08-01,Balance brought forward,,2000000.00\n2026-08-04,Transfer,TRF RAHIMA MOTOR,{$major($receipt['motor'])}\n"
             ."2026-08-08,Transfer,DGL FIRE Q1,{$major($receipt['fire'])}\n2026-08-15,Transfer,CSC MARINE,{$major($receipt['marine'])}\n2026-08-27,Claim payment,,-180000.00\n", 'city-bank-2026-08.csv', matchAll: true);
+        (new PeopleDemoSeeder())->run($this->entityId, $this->branchId, $this->secondBranchId, $this->bankAccountId, $this->users, $bdo); // People and Payroll MVP: 30 employees, August paid, September in preview
         $this->closeMonth('2026-08-01');
 
         // September (open): more business, suspense, a claim waiting, the statement to match.

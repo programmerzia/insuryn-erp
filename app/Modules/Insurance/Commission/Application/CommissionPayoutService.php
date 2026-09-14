@@ -64,6 +64,8 @@ final class CommissionPayoutService
                     idempotencyKey: $eventType.':'.$statement->id, transactionDate: $paidOn, effectiveDate: $paidOn, currency: $statement->currency,
                     // Gap fix GA-27: the statement number is the payout's reference, so the bank line of the payment names it and the statement line matches it.
                     payload: ['amount' => $statement->net_minor, 'commission_statement_id' => $statement->id, 'bank_account_id' => $bankAccountId, 'reference' => $statement->number]
+                        // Addendum §B.10.7: COMMISSION_PAYOUT_TO_PAYROLL v2 carries the employee on the salary payable line.
+                        + ($statement->paid_via === 'payroll' && $agent->employeeId !== null ? ['employee_id' => $agent->employeeId] : [])
                         + ($bankGl === null || $statement->paid_via !== 'bank' ? [] : ['account_overrides' => ['bank_main' => $bankGl]]),
                     dimensions: ['branch' => $agent->branchId, 'agent' => $agent->id],
                 );
@@ -71,7 +73,8 @@ final class CommissionPayoutService
             // Payroll and payables are Phase 2 modules: they pick the payout up from these messages (Distribution design note §2 step 6, §4 "bonus posts through payroll as an earning type").
             if ($statement->paid_via === 'payroll') {
                 app(Outbox::class)->add('CommissionPayrollEarning', ['commission_statement_id' => $statement->id, 'producer_id' => $agent->id, 'employee_id' => $agent->employeeId,
-                    'earning_type' => 'commission', 'amount_minor' => $statement->net_minor, 'currency' => $statement->currency, 'period_end' => $statement->period_end?->toDateString()]);
+                    'earning_type' => 'commission', 'amount_minor' => $statement->net_minor, 'currency' => $statement->currency, 'period_end' => $statement->period_end?->toDateString(),
+                    'paid_on' => $paidOn->toDateString(), 'reference' => $statement->number]); // addendum §B.11: the payroll consumer dates the liability and names the statement
             } elseif ($statement->paid_via === 'ap') {
                 app(Outbox::class)->add('CommissionPayableToAp', ['commission_statement_id' => $statement->id, 'producer_id' => $agent->id, 'party_id' => $agent->partyId,
                     'amount_minor' => $statement->net_minor, 'currency' => $statement->currency, 'period_end' => $statement->period_end?->toDateString()]);
