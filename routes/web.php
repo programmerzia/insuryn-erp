@@ -144,6 +144,8 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
     Route::get('journals/create', [ManualJournalPageController::class, 'create'])->name('journals.create');
     Route::post('journals', [ManualJournalPageController::class, 'store'])->name('journals.store');
+    // Flow fix X10: an account created from a manual journal line (a one-row chart-of-accounts import).
+    Route::post('accounts', [ManualJournalPageController::class, 'createAccount'])->name('accounts.inline');
     Route::post('journals/{journal}/approve', [ManualJournalPageController::class, 'approve'])->whereUuid('journal')->middleware('moves-money');
     Route::post('journals/{journal}/reject', [ManualJournalPageController::class, 'reject'])->whereUuid('journal');
     Route::post('journals/{journal}/reversal-requests', [ManualJournalPageController::class, 'requestReversal'])->whereUuid('journal');
