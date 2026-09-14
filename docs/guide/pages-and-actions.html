@@ -1,0 +1,180 @@
+<title>Insuryn Pages and Actions</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root{--ink:#1f2a37;--ink2:#5b6672;--paper:#fbfaf7;--card:#ffffff;--line:#d9d5cc;--accent:#0f6e74;--soft:#e6f1f1}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336}}
+:root[data-theme="dark"]{--ink:#e8e6e1;--ink2:#a6adb5;--paper:#171a1f;--card:#1f242b;--line:#343a43;--accent:#5fc2c8;--soft:#1d3336}
+body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans","Noto Sans Bengali",system-ui,sans-serif;font-size:15px;line-height:1.55;padding:0 20px;padding-block:32px 64px}
+main{max-width:1000px;margin:0 auto}
+h1{font-size:1.9rem;font-weight:600;margin:0 0 .25rem;text-wrap:balance}
+.sub{color:var(--ink2);margin:0 0 1rem}
+h2{font-size:1.2rem;font-weight:600;margin:2.2rem 0 .4rem;padding-top:1rem;border-top:1px solid var(--line)}
+h3{font-size:1rem;font-weight:600;margin:1.2rem 0 .3rem;color:var(--accent)}
+.toggle{display:flex;gap:.4rem;margin:.6rem 0 1rem;flex-wrap:wrap;position:sticky;top:0;background:var(--paper);padding:.5rem 0;z-index:2}
+.toggle button{font:inherit;font-size:.9rem;padding:.35rem .8rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:4px;cursor:pointer}
+.toggle button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-size:.92rem;margin:.4rem 0 .8rem}
+th,td{text-align:left;padding:.38rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2);white-space:nowrap}
+td:first-child{font-weight:500;white-space:nowrap}
+td.bn{font-family:"Noto Sans Bengali","IBM Plex Sans",sans-serif;line-height:1.7}
+body.only-en td.bn,body.only-en th.bn{display:none}body.only-bn td.en,body.only-bn th.en{display:none}
+.wrap{overflow-x:auto}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--soft);padding:.05em .35em;border-radius:3px}
+.key{background:var(--soft);border-left:3px solid var(--accent);padding:.5rem .8rem;margin:.5rem 0 1rem;border-radius:0 4px 4px 0;font-size:.92rem}
+.toc{columns:3;column-gap:2rem;font-size:.93rem}@media (max-width:640px){.toc{columns:1}}
+.toc li{margin:.1rem 0}
+</style>
+<main>
+<h1>Insuryn Pages and Actions</h1>
+<p class="sub">Every page in the menu: what it shows, each button on it, who may press it, and what happens. Companion to <i>Insuryn Explained From Zero</i>, which explains the ideas.</p>
+<div class="toggle" role="group" aria-label="Language">
+<button type="button" id="both" aria-pressed="true">Both</button><button type="button" id="en" aria-pressed="false">English</button><button type="button" id="bn" aria-pressed="false">বাংলা</button>
+</div>
+<script>
+for (const id of ['both','en','bn']) document.getElementById(id).addEventListener('click', () => {
+  document.body.className = id === 'both' ? '' : 'only-' + id;
+  for (const b of ['both','en','bn']) document.getElementById(b).setAttribute('aria-pressed', String(b === id));
+});
+</script>
+<div class="key"><b>How to read:</b> "Preview" means the button first shows the journal lines it will post; nothing posts until you confirm. "Roles" names the demo role that holds the permission; the admin can grant it to anyone under Admin → Roles. Roles: officer = branch officer, manager = branch manager, CO/CM = claims officer/manager, acct = accountant, FM = finance manager, CFO, HR = HR manager.</div>
+<ol class="toc">
+<li><a href="#home">Home &amp; Approvals</a></li><li><a href="#sales">Sales</a></li><li><a href="#coll">Collections</a></li><li><a href="#claims">Claims</a></li><li><a href="#pay">Payables</a></li><li><a href="#ri">Reinsurance</a></li><li><a href="#hr">HR &amp; Payroll</a></li><li><a href="#assets">Assets &amp; budgets</a></li><li><a href="#acc">Accounting</a></li><li><a href="#reg">Regulatory</a></li><li><a href="#admin">Admin</a></li><li><a href="#every">On every page</a></li>
+</ol>
+
+<h2 id="home">Home &amp; Approvals</h2>
+<h3>Home</h3>
+<div class="wrap"><table><tr><th>Element</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Work queues</td><td>all</td><td class="en">Blocks of things waiting for you, oldest first: installments due, receipts to allocate, claims to settle, bills to approve, payroll to approve… Click a row to open the record with the right filter.</td><td class="bn">আপনার অপেক্ষায় থাকা কাজের ব্লক, পুরনোটা আগে: কিস্তি, বণ্টনের রিসিট, সেটেল করার ক্লেইম, অনুমোদনের বিল, পেরোল… সারিতে ক্লিক করলে রেকর্ড খোলে।</td></tr>
+<tr><td>Start actions</td><td>by permission</td><td class="en">New quote, Record a receipt, Register a claim, New manual journal, Enter a supplier bill, Hire employee, Calculate payroll, Record a petty cash voucher.</td><td class="bn">নতুন কোটেশন, রিসিট, ক্লেইম, ম্যানুয়াল জার্নাল, সাপ্লায়ার বিল, নিয়োগ, পেরোল হিসাব, পেটি ক্যাশ ভাউচার।</td></tr>
+<tr><td>Expense vs budget</td><td>FM, CFO</td><td class="en">This month's spending against the approved budget.</td><td class="bn">অনুমোদিত বাজেটের বিপরীতে এ মাসের খরচ।</td></tr></table></div>
+<h3>Approvals</h3>
+<div class="wrap"><table><tr><th>Element</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Inbox rows</td><td>whoever holds the step</td><td class="en">Everything routed to you: journals, reversals, claim payments over limit, refunds, bills, payment runs, write-offs, period reopen. The panel shows the facts, a link to the record and the lines approving will post.</td><td class="bn">আপনার কাছে আসা সব: জার্নাল, রিভার্সাল, সীমার বেশি ক্লেইম, রিফান্ড, বিল, পেমেন্ট রান, রাইট-অফ। প্যানেলে তথ্য, রেকর্ডের লিংক আর পোস্ট হবে এমন লাইন।</td></tr>
+<tr><td>Approve / Reject</td><td>same</td><td class="en">Preview, then post; reject needs a reason. You never see your own requests.</td><td class="bn">প্রিভিউ, তারপর পোস্ট; প্রত্যাখ্যানে কারণ লাগে। নিজের অনুরোধ নিজে দেখেন না।</td></tr></table></div>
+
+<h2 id="sales">Sales</h2>
+<h3>Quotes → New quote (the quote workbench)</h3>
+<div class="wrap"><table><tr><th>Action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Product, customer, producer, risk fields</td><td>officer</td><td class="en">Premium recalculates on every keystroke from the tariff. Customer and producer are lookups; <code>Ctrl+N</code> creates one inline. Chassis number is optional at quote.</td><td class="bn">প্রতি টাইপে ট্যারিফ থেকে প্রিমিয়াম হিসাব হয়। গ্রাহক ও প্রডিউসার লুকআপ; <code>Ctrl+N</code> এ নতুন তৈরি। চেসিস নম্বর কোটেশনে ঐচ্ছিক।</td></tr>
+<tr><td>Save draft</td><td>officer</td><td class="en">Keeps the quote to finish later (drafts list).</td><td class="bn">পরে শেষ করার জন্য খসড়া রাখে।</td></tr>
+<tr><td>Issue quotation</td><td>officer</td><td class="en">Freezes the price for 15 days, gives it a QUO number, prints a quotation PDF (EN/BN).</td><td class="bn">১৫ দিনের জন্য দাম স্থির, QUO নম্বর, কোটেশন PDF।</td></tr>
+<tr><td>Make proposal</td><td>officer</td><td class="en">Turns the quotation into a proposal (PRP number) for KYC and underwriting.</td><td class="bn">কোটেশনকে প্রপোজালে (PRP) রূপান্তর, KYC ও আন্ডাররাইটিংয়ের জন্য।</td></tr></table></div>
+<h3>Proposal page</h3>
+<div class="wrap"><table><tr><th>Action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Verify identity</td><td>officer</td><td class="en">Records the NID/passport/trade licence checked (KYC). Unverified proposals are referred.</td><td class="bn">যাচাই করা NID/পাসপোর্ট/ট্রেড লাইসেন্স লিপিবদ্ধ (KYC)।</td></tr>
+<tr><td>Enter risk details</td><td>officer</td><td class="en">Fills fields required at proposal stage (chassis). Re-rates; refuses if the premium would change.</td><td class="bn">প্রপোজাল পর্যায়ের বাধ্যতামূলক ঘর (চেসিস) পূরণ।</td></tr>
+<tr><td>Submit to underwriting</td><td>officer</td><td class="en">Rules decide: approved automatically within the branch's limit and with no risk flags, else referred to an underwriter (Referrals page).</td><td class="bn">নিয়ম ঠিক করে: সীমার মধ্যে ও ঝুঁকির চিহ্ন না থাকলে স্বয়ংক্রিয় অনুমোদন, নইলে আন্ডাররাইটারের কাছে।</td></tr>
+<tr><td>Issue cover note</td><td>officer</td><td class="en">Temporary proof of cover (max 30 days), needs premium received or a credit product. No accounting.</td><td class="bn">অস্থায়ী কভারের প্রমাণ (সর্বোচ্চ ৩০ দিন); হিসাবে কিছু পোস্ট হয় না।</td></tr>
+<tr><td>Issue policy</td><td>officer</td><td class="en"><b>Preview.</b> Allocates the POL number, posts receivable / unearned premium / VAT / stamp duty, then offers "Record the premium receipt?".</td><td class="bn"><b>প্রিভিউ।</b> POL নম্বর, রিসিভেবল/আনআর্নড/ভ্যাট/স্ট্যাম্প পোস্ট, তারপর "রিসিট নেবেন?"</td></tr></table></div>
+<h3>Policies → policy page</h3>
+<div class="wrap"><table><tr><th>Action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Record receipt</td><td>officer, manager</td><td class="en">Opens the receipt form prefilled with what is outstanding.</td><td class="bn">বকেয়া দিয়ে পূরণ করা রিসিট ফর্ম খোলে।</td></tr>
+<tr><td>Endorse</td><td>manager</td><td class="en"><b>Preview.</b> Changes risk details or sum insured; re-rates; the difference becomes an extra installment numbered <code>POL…/E1</code>; printable endorsement.</td><td class="bn"><b>প্রিভিউ।</b> ঝুঁকি বা বিমাকৃত অঙ্ক বদল; পার্থক্য বাড়তি কিস্তি <code>/E1</code>; ছাপার যোগ্য।</td></tr>
+<tr><td>Change details</td><td>manager</td><td class="en">Name, address, mortgagee, contact — numbered endorsement, no premium, no journal.</td><td class="bn">নাম, ঠিকানা, বন্ধকদাতা — নম্বরযুক্ত, প্রিমিয়াম বা জার্নাল নেই।</td></tr>
+<tr><td>Cancel policy</td><td>manager</td><td class="en"><b>Preview.</b> Earned part kept, unearned part reversed; then offers "Request refund X" or "Collect X".</td><td class="bn"><b>প্রিভিউ।</b> আর্নড রাখা, আনআর্নড ফেরত; তারপর রিফান্ড বা আদায়ের অফার।</td></tr>
+<tr><td>Request refund / Write off small balance</td><td>manager</td><td class="en">Sends a refund (FM releases) or a small write-off (FM approves) through the approval engine.</td><td class="bn">রিফান্ড (FM ছাড়ে) বা ছোট রাইট-অফ (FM অনুমোদন) অনুমোদন ইঞ্জিনে পাঠায়।</td></tr>
+<tr><td>Lapse / Reinstate / Renew</td><td>manager</td><td class="en">Lapse for non-payment; reinstate when paid; Renew makes a renewal quotation with no-claim bonus.</td><td class="bn">অনাদায়ে ল্যাপস; পরিশোধে পুনর্বহাল; নবায়নে NCB সহ নতুন কোটেশন।</td></tr>
+<tr><td>Tabs</td><td>all readers</td><td class="en">Installments, Accounting (every journal), Reinsurance (cessions), Documents (print/attach), Timeline, Audit.</td><td class="bn">কিস্তি, হিসাব, রিইন্স্যুরেন্স, ডকুমেন্ট, টাইমলাইন, অডিট।</td></tr></table></div>
+<h3>Other Sales pages</h3>
+<div class="wrap"><table><tr><th>Page</th><th>Roles</th><th class="en">Actions</th><th class="bn">কাজ</th></tr>
+<tr><td>Referrals</td><td>manager, FM, CFO</td><td class="en">Approve or decline referred proposals within your underwriting limit, with a reason.</td><td class="bn">সীমার মধ্যে রেফার্ড প্রপোজাল অনুমোদন/প্রত্যাখ্যান, কারণসহ।</td></tr>
+<tr><td>Cover notes</td><td>officer</td><td class="en">List by end date; Cancel with reason; print EN/BN.</td><td class="bn">শেষ তারিখ অনুযায়ী তালিকা; বাতিল; ছাপা।</td></tr>
+<tr><td>Renewals</td><td>officer, manager</td><td class="en">Expiry register in 60/30/15/7-day buckets; renewal quotes are made 45 days before expiry by the nightly job; Convert or Mark lost with a reason.</td><td class="bn">৬০/৩০/১৫/৭ দিনের মেয়াদ রেজিস্টার; ৪৫ দিন আগে নবায়ন কোটেশন; রূপান্তর বা হারানো চিহ্নিত।</td></tr>
+<tr><td>Parties</td><td>manager (edit), all (read)</td><td class="en">Customer page: contact, NID, policies, claims, receipts, documents; Edit details; Add bank account.</td><td class="bn">গ্রাহকের পাতা: যোগাযোগ, NID, পলিসি, ক্লেইম, রিসিট; সম্পাদনা; ব্যাংক হিসাব যোগ।</td></tr>
+<tr><td>Producers</td><td>manager</td><td class="en">New producer (with licence), record licence, assign scheme, block/unblock; export the agency register.</td><td class="bn">নতুন প্রডিউসার (লাইসেন্সসহ), স্কিম, ব্লক; এজেন্সি রেজিস্টার এক্সপোর্ট।</td></tr>
+<tr><td>Hierarchy, Compensation schemes, Targets</td><td>FM</td><td class="en">Who reports to whom (effective-dated); scheme rules (rate by producer type, policy year); monthly targets and the leaderboard.</td><td class="bn">কে কার অধীনে; স্কিমের নিয়ম; মাসিক লক্ষ্য ও লিডারবোর্ড।</td></tr>
+<tr><td>Tariffs</td><td>FM drafts, CFO approves</td><td class="en">Rating plans, rate tables, steps; Draft → Approve → Activate (maker ≠ checker); golden test cases.</td><td class="bn">রেটিং প্ল্যান, টেবিল, ধাপ; খসড়া → অনুমোদন → সক্রিয়।</td></tr>
+<tr><td>Products</td><td>FM</td><td class="en">Products and versions: term, earning method, tax profile, credit allowed, scheme, risk form.</td><td class="bn">পণ্য ও ভার্সন: মেয়াদ, আর্নিং পদ্ধতি, কর, ক্রেডিট, স্কিম, ঝুঁকির ফর্ম।</td></tr></table></div>
+
+<h2 id="coll">Collections</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Receipts → Record a receipt</td><td>officer, manager, acct</td><td class="en"><b>Preview.</b> Channel (cash, cheque, transfer, MFS), payer, branch, allocation lines to installments. Officer's receipt goes to suspense for the manager to allocate.</td><td class="bn"><b>প্রিভিউ।</b> মাধ্যম, প্রদানকারী, ব্রাঞ্চ, কিস্তিতে বণ্টন। অফিসারেরটা সাসপেন্সে যায়, ম্যানেজার বণ্টন করে।</td></tr>
+<tr><td>Receipt page: Allocate / Print / Cheque cleared / Cheque bounced</td><td>manager, acct</td><td class="en">Allocate opens the workbench (candidates: the payer's installments first). Cleared moves clearing → bank. Bounced (<b>preview</b>) reverses allocations, flags the policy, sends the first reminder, optional bank charge.</td><td class="bn">বণ্টন ওয়ার্কবেঞ্চ খোলে। ক্লিয়ার হলে ক্লিয়ারিং → ব্যাংক। বাউন্স (<b>প্রিভিউ</b>) বণ্টন উল্টায়, পলিসিতে সতর্কতা, প্রথম তাগাদা।</td></tr>
+<tr><td>Suspense</td><td>manager, acct</td><td class="en">Open suspense items by age; open the allocation workbench; explain.</td><td class="bn">বয়স অনুযায়ী সাসপেন্স; বণ্টন; ব্যাখ্যা।</td></tr>
+<tr><td>Bank accounts → account page</td><td>acct</td><td class="en">Import statement (CSV), Accept suggestion, Match (incl. offsetting a bounce pair), Explain, Record receipt from an unknown credit, Post as bank charge.</td><td class="bn">স্টেটমেন্ট আমদানি, পরামর্শ গ্রহণ, মিলানো, ব্যাখ্যা, অজানা ক্রেডিট থেকে রিসিট, ব্যাংক চার্জ পোস্ট।</td></tr>
+<tr><td>Cheque register</td><td>acct, manager</td><td class="en">Cheques in clearing / cleared / bounced; Cheque cleared from the row.</td><td class="bn">ক্লিয়ারিং/ক্লিয়ার/বাউন্স চেক; সারি থেকে ক্লিয়ার।</td></tr>
+<tr><td>Payment reminders</td><td>officer, manager</td><td class="en">Overdue installments and the reminder levels sent by the nightly job; grace and auto-lapse per product.</td><td class="bn">বকেয়া কিস্তি ও পাঠানো তাগাদা; পণ্য অনুযায়ী গ্রেস ও অটো-ল্যাপস।</td></tr>
+<tr><td>Refunds</td><td>manager requests; FM releases</td><td class="en">Request (policy lookup, amount prefilled) → FM Pay (<b>preview</b>) or Reject.</td><td class="bn">অনুরোধ (পলিসি লুকআপ, অঙ্ক পূরণ) → FM পরিশোধ (<b>প্রিভিউ</b>) বা প্রত্যাখ্যান।</td></tr>
+<tr><td>Agent cash</td><td>manager, acct</td><td class="en">Cash each agent holds; Record deposit (<b>preview</b>, amount = undeposited).</td><td class="bn">এজেন্টের হাতে নগদ; জমা লিপিবদ্ধ (<b>প্রিভিউ</b>)।</td></tr>
+<tr><td>Commission statements</td><td>FM prepares/approves; acct pays</td><td class="en">Prepare statements for a month (entries, gross, 5% tax withheld, net) → Approve → Pay (<b>preview</b>, bank or payroll); Run incentives for targets.</td><td class="bn">মাসের স্টেটমেন্ট তৈরি (এন্ট্রি, কর কাটা, নিট) → অনুমোদন → পরিশোধ (<b>প্রিভিউ</b>); ইনসেনটিভ রান।</td></tr></table></div>
+
+<h2 id="claims">Claims</h2>
+<div class="wrap"><table><tr><th>Action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Register a claim</td><td>CO</td><td class="en">Policy lookup (warns if premium unpaid), date of loss, description; then attach documents. No accounting.</td><td class="bn">পলিসি লুকআপ (প্রিমিয়াম বকেয়া থাকলে সতর্কতা), ক্ষতির তারিখ, বিবরণ; ডকুমেন্ট। হিসাবে কিছু নয়।</td></tr>
+<tr><td>Set reserve</td><td>CO</td><td class="en"><b>Preview.</b> New total reserve and reason; posts the increase or release. Then says who approves.</td><td class="bn"><b>প্রিভিউ।</b> নতুন মোট রিজার্ভ ও কারণ; বৃদ্ধি বা হ্রাস পোস্ট।</td></tr>
+<tr><td>Approve payment</td><td>CM (within limit; else FM/CFO)</td><td class="en"><b>Preview.</b> Amount (proposed = uncommitted reserve), payee (policyholder, or a new payee inline), date. Moves reserve → payable.</td><td class="bn"><b>প্রিভিউ।</b> অঙ্ক (প্রস্তাবিত), প্রাপক, তারিখ। রিজার্ভ → পেয়েবল।</td></tr>
+<tr><td>Request release → Pay</td><td>CM requests; FM pays</td><td class="en"><b>Preview.</b> Pay from the bank account; posts payable → bank.</td><td class="bn"><b>প্রিভিউ।</b> ব্যাংক থেকে পরিশোধ; পেয়েবল → ব্যাংক।</td></tr>
+<tr><td>Record recovery</td><td>acct (receipt.create)</td><td class="en">Salvage/third-party money received: a receipt with bank and payer, posts recovery income.</td><td class="bn">উদ্ধারকৃত টাকা: ব্যাংক ও প্রদানকারীসহ রিসিট, আদায় আয় পোস্ট।</td></tr>
+<tr><td>Close / Reject / Reopen</td><td>CM</td><td class="en"><b>Preview.</b> Close releases the unused reserve; Reject releases it all; Reopen (approval if configured) re-reserves.</td><td class="bn"><b>প্রিভিউ।</b> বন্ধ করলে অব্যবহৃত রিজার্ভ ফেরত; প্রত্যাখ্যানে সব; পুনরায় খুললে আবার রিজার্ভ।</td></tr>
+<tr><td>Claim payments</td><td>FM</td><td class="en">Approved payments waiting for release, across claims.</td><td class="bn">ছাড়ের অপেক্ষায় অনুমোদিত পেমেন্ট।</td></tr></table></div>
+
+<h2 id="pay">Payables</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Suppliers → New supplier</td><td>acct</td><td class="en">Party, category (sets VAT/VDS/TDS rates), bank account for payment, terms. Supplier page shows the statement; Block.</td><td class="bn">পার্টি, ধরন (কর হার), পেমেন্টের ব্যাংক, শর্ত। স্টেটমেন্ট; ব্লক।</td></tr>
+<tr><td>Supplier bills → Enter a bill</td><td>acct</td><td class="en">Supplier lookup, lines with account lookup, optional claim/policy link, attachment; taxes computed as you type. Send for approval.</td><td class="bn">সাপ্লায়ার লুকআপ, হিসাবসহ লাইন, ক্লেইম/পলিসি লিংক, সংযুক্তি; কর স্বয়ংক্রিয়। অনুমোদনে পাঠান।</td></tr>
+<tr><td>Bill page: Approve and post / Cancel bill</td><td>FM</td><td class="en"><b>Preview.</b> Posts expense / supplier payable / VDS / TDS. Cancel reverses.</td><td class="bn"><b>প্রিভিউ।</b> ব্যয় / সাপ্লায়ার পেয়েবল / VDS / TDS পোস্ট। বাতিলে উল্টো।</td></tr>
+<tr><td>Payment runs → New run</td><td>acct</td><td class="en">Pick due bills (by date/supplier) → Send for approval.</td><td class="bn">বকেয়া বিল বাছাই → অনুমোদনে।</td></tr>
+<tr><td>Run page: Approve run → Release to bank → Download bank file</td><td>FM approves; CFO releases</td><td class="en"><b>Preview</b> on release: supplier payable → bank. The CSV is the BEFTN-style transfer list; the bank line then matches on the Bank page.</td><td class="bn">ছাড়ে <b>প্রিভিউ</b>: পেয়েবল → ব্যাংক। CSV ট্রান্সফার তালিকা; ব্যাংক পাতায় মেলে।</td></tr>
+<tr><td>Reports → AP ageing</td><td>FM, acct</td><td class="en">What is owed per bill and supplier by days past due, reconciled to the ledger.</td><td class="bn">বিল ও সাপ্লায়ার অনুযায়ী বকেয়া, লেজারের সাথে মিলানো।</td></tr></table></div>
+
+<h2 id="ri">Reinsurance</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Treaties → New treaty / Edit</td><td>FM</td><td class="en">Class, underwriting year, type (quota share % or surplus retention + lines), commission %, participants with shares. Reinsurers are added from the side panel.</td><td class="bn">শ্রেণি, বছর, ধরন (কোটা % বা সারপ্লাস রিটেনশন + লাইন), কমিশন %, অংশীদার।</td></tr>
+<tr><td>Cessions</td><td>FM, acct</td><td class="en">Every share ceded automatically on issue/endorse/cancel: SBC first, then the treaty. Above-capacity policies are listed to place.</td><td class="bn">ইস্যু/পরিবর্তন/বাতিলে স্বয়ংক্রিয় সেশন: আগে SBC, তারপর ট্রিটি। সামর্থ্যের বেশি পলিসির তালিকা।</td></tr>
+<tr><td>Policy → Reinsurance tab → Place facultative</td><td>FM, manager</td><td class="en"><b>Preview.</b> Reinsurer, share %, premium, commission for this policy alone.</td><td class="bn"><b>প্রিভিউ।</b> শুধু এই পলিসির জন্য রিইন্স্যুরার, অংশ, প্রিমিয়াম, কমিশন।</td></tr>
+<tr><td>Reinsurer statements → Prepare</td><td>FM</td><td class="en">Quarter per reinsurer: premium ceded − commission − claims recoverable = balance; links to bordereaux.</td><td class="bn">ত্রৈমাসিক: প্রিমিয়াম − কমিশন − ক্লেইম = ব্যালান্স; বর্ডেরো লিংক।</td></tr>
+<tr><td>Reports → Premium / Claims bordereau</td><td>FM, auditor</td><td class="en">Policy-by-policy listings for a period, CSV/XLSX.</td><td class="bn">সময়কালের পলিসি অনুযায়ী তালিকা, CSV/XLSX।</td></tr></table></div>
+
+<h2 id="hr">HR &amp; Payroll</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Employees → Hire employee</td><td>HR</td><td class="en">Person details, code, branch, department, designation, grade, joining date, bank account, TIN, NID. Employee page: Change (promotion, transfer, pay change, effective-dated), payslips, Audit.</td><td class="bn">ব্যক্তিগত তথ্য, কোড, ব্রাঞ্চ, বিভাগ, পদ, গ্রেড, যোগদান, ব্যাংক, TIN, NID। পরিবর্তন (পদোন্নতি, বদলি, বেতন), পে-স্লিপ।</td></tr>
+<tr><td>Payroll runs → Calculate payroll</td><td>HR</td><td class="en">Picks the month; computes every employee's earnings, deductions and net from the structures and slabs; Inputs drawer for one-off items; Recalculate.</td><td class="bn">মাস বাছাই; কাঠামো ও স্ল্যাব থেকে প্রতিটি কর্মীর আয়, কর্তন, নিট; এককালীন ইনপুট; পুনর্গণনা।</td></tr>
+<tr><td>Run page: Approve and post</td><td>FM</td><td class="en"><b>Preview.</b> One journal per branch × department: salary and bonus expense; net salary, PF and tax payable.</td><td class="bn"><b>প্রিভিউ।</b> ব্রাঞ্চ × বিভাগ অনুযায়ী জার্নাল: বেতন ও বোনাস ব্যয়; নিট বেতন, PF, কর পেয়েবল।</td></tr>
+<tr><td>Release salaries</td><td>acct</td><td class="en"><b>Preview.</b> Net salary payable → bank; produces the salary bank file.</td><td class="bn"><b>প্রিভিউ।</b> নিট বেতন → ব্যাংক; বেতনের ব্যাংক ফাইল।</td></tr>
+<tr><td>Payslips → Payslip PDF</td><td>HR, employee's manager</td><td class="en">Per employee per month, English or Bangla.</td><td class="bn">কর্মী ও মাস অনুযায়ী, বাংলা/ইংরেজি।</td></tr>
+<tr><td>Payroll settings</td><td>HR</td><td class="en">Grades, salary structures (house rent/medical/conveyance % of basic), PF %, festival bonus, income tax slabs by fiscal year, commission-through-payroll switch.</td><td class="bn">গ্রেড, বেতন কাঠামো, PF, বোনাস, অর্থবছর অনুযায়ী কর স্ল্যাব।</td></tr></table></div>
+
+<h2 id="assets">Assets &amp; budgets</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Fixed assets → Capitalise</td><td>acct</td><td class="en"><b>Preview.</b> Class, cost, date, branch, custodian, supplier ref; posts asset cost ← bank/payable. Asset page: Dispose (<b>preview</b>, gain/loss), Move to another branch, schedule, documents.</td><td class="bn"><b>প্রিভিউ।</b> শ্রেণি, দাম, তারিখ, ব্রাঞ্চ, হেফাজতকারী; সম্পদ ← ব্যাংক/পেয়েবল। বাতিল (<b>প্রিভিউ</b>), স্থানান্তর।</td></tr>
+<tr><td>Monthly depreciation → Preview → Post</td><td>FM posts</td><td class="en">One batch per month per entity; straight line or reducing balance per class; also a close task.</td><td class="bn">মাসে একটি ব্যাচ; শ্রেণি অনুযায়ী পদ্ধতি; ক্লোজের কাজও।</td></tr>
+<tr><td>Asset classes</td><td>acct</td><td class="en">Method, life or rate, residual, accounts per class.</td><td class="bn">পদ্ধতি, আয়ু/হার, অবশিষ্ট, হিসাব।</td></tr>
+<tr><td>Budgets → New version</td><td>acct prepares; FM approves</td><td class="en">Grid account × branch × month; paste from Excel; copy last year ± %; Send for approval → Approve (previous version superseded). Variance report on Reports.</td><td class="bn">হিসাব × ব্রাঞ্চ × মাস গ্রিড; এক্সেল থেকে পেস্ট; গত বছর ± %; অনুমোদন। পার্থক্যের রিপোর্ট।</td></tr>
+<tr><td>Petty cash → float page</td><td>manager spends; acct requests; FM approves</td><td class="en">Pay a voucher (<b>preview</b>, receipt photo) → Request replenishment → Approve (<b>preview</b>, bank → petty cash) → Cash count (difference posted). Petty cash book export.</td><td class="bn">ভাউচার (<b>প্রিভিউ</b>) → পূরণের অনুরোধ → অনুমোদন (<b>প্রিভিউ</b>) → নগদ গণনা। পেটি ক্যাশ বই।</td></tr></table></div>
+
+<h2 id="acc">Accounting</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Journals → New manual journal</td><td>acct</td><td class="en">Date (today), description, reason, lines with account lookup, voucher attachment; Save and submit. Journal page: Approve and post (FM, <b>preview</b>), Reject, Request reversal (approved by another, mirrors the journal), Move to next period.</td><td class="bn">তারিখ, বিবরণ, কারণ, হিসাবসহ লাইন, ভাউচার; জমা। অনুমোদন ও পোস্ট (FM, <b>প্রিভিউ</b>), প্রত্যাখ্যান, রিভার্সাল, পরের মাসে সরানো।</td></tr>
+<tr><td>Chart of accounts</td><td>FM</td><td class="en">Tree by code with balances; Add account, Edit, Deactivate (only if unused).</td><td class="bn">কোড অনুযায়ী গাছ ও ব্যালান্স; যোগ, সম্পাদনা, নিষ্ক্রিয়।</td></tr>
+<tr><td>Account roles</td><td>FM</td><td class="en">Map each role (premium_receivable…) to one of your accounts, effective-dated; unmapped roles are flagged.</td><td class="bn">প্রতিটি ভূমিকা আপনার হিসাবে ম্যাপ; ম্যাপ না হলে সতর্কতা।</td></tr>
+<tr><td>Accounting events → Requeue</td><td>FM</td><td class="en">Failed or stuck postings with the reason; fix the cause, requeue.</td><td class="bn">ব্যর্থ পোস্টিং ও কারণ; ঠিক করে আবার চালান।</td></tr>
+<tr><td>Imports</td><td>FM</td><td class="en">CSV: chart of accounts, opening balances.</td><td class="bn">CSV: হিসাবের চার্ট, প্রারম্ভিক ব্যালান্স।</td></tr>
+<tr><td>Trial balance</td><td>FM, acct, auditor</td><td class="en">As-of date; click a figure → account activity with a Source column → the document. Links to P&amp;L and balance sheet.</td><td class="bn">তারিখ; অঙ্কে ক্লিক → হিসাবের লেনদেন → ডকুমেন্ট।</td></tr>
+<tr><td>Month-end close → Open the checklist</td><td>FM</td><td class="en">Work on each task: Run / Review and run (<b>preview</b> for posting tasks); pending documents listed; Nightly jobs "last ran" + Run now; Lock (soft from the last day, hard after month end; CFO early with reason); Open next fiscal year.</td><td class="bn">প্রতিটি কাজ চালান (পোস্টিং কাজে <b>প্রিভিউ</b>); অপেক্ষমাণ কাগজ; রাতের কাজ; লক; পরের অর্থবছর খোলা।</td></tr>
+<tr><td>Reports</td><td>FM, acct, auditor</td><td class="en">P&amp;L, balance sheet, premium register, unearned premium, receivable ageing, outstanding claims, claims paid, loss ratio, expiry, renewal conversion, AP ageing, bordereaux, asset register, budget variance, petty cash book — each with Export CSV/XLSX/PDF.</td><td class="bn">সব রিপোর্ট, প্রতিটি এক্সপোর্টসহ।</td></tr></table></div>
+
+<h2 id="reg">Regulatory</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Regulatory dashboard</td><td>FM, CFO, auditor</td><td class="en">Solvency snapshot, returns status, latest provisions run.</td><td class="bn">সলভেন্সি, রিটার্নের অবস্থা, সর্বশেষ প্রভিশন।</td></tr>
+<tr><td>Regulatory returns → Generate → Mark reviewed → Mark filed</td><td>FM generates/reviews; FM/CFO files</td><td class="en">Per quarter: five forms from the ledger; Export XLSX (sheet per form) or PDF; Mark filed with date and reference (date must fall after the period).</td><td class="bn">ত্রৈমাসিক পাঁচটি ফর্ম; XLSX/PDF; দাখিল চিহ্নিত (তারিখ ও রেফারেন্স)।</td></tr>
+<tr><td>Technical provisions → Prepare → Mark reviewed → Approve and post</td><td>FM prepares; CFO approves</td><td class="en"><b>Preview.</b> IBNR per class (chain ladder or %), premium deficiency notes; posts the provision and reverses last quarter's.</td><td class="bn"><b>প্রিভিউ।</b> শ্রেণি অনুযায়ী IBNR; প্রভিশন পোস্ট ও আগেরটা উল্টানো।</td></tr></table></div>
+
+<h2 id="admin">Admin</h2>
+<div class="wrap"><table><tr><th>Page / action</th><th>Roles</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td>Users → Invite</td><td>admin</td><td class="en">Email, name, first role and scope (tenant or a branch); Resend invitation; Disable.</td><td class="bn">ইমেইল, নাম, প্রথম রোল ও পরিধি; আবার আমন্ত্রণ; নিষ্ক্রিয়।</td></tr>
+<tr><td>Roles → New role / Edit</td><td>admin</td><td class="en">Tick permissions by group with one-line help; conflicting pairs (maker/checker) show a warning; assign to users with a scope.</td><td class="bn">গ্রুপ অনুযায়ী অনুমতি; সাংঘর্ষিক জোড়ায় সতর্কতা; পরিধিসহ বরাদ্দ।</td></tr>
+<tr><td>Approval limits</td><td>admin</td><td class="en">Per object type (claim payment, release, journal, bill, run…): amount thresholds and the roles that must approve above them, effective-dated.</td><td class="bn">ধরন অনুযায়ী অঙ্কের সীমা ও অনুমোদক রোল।</td></tr>
+<tr><td>Underwriting limits</td><td>admin</td><td class="en">Largest sum insured each role may approve per class.</td><td class="bn">শ্রেণি অনুযায়ী প্রতিটি রোলের সর্বোচ্চ বিমাকৃত অঙ্ক।</td></tr>
+<tr><td>Setup</td><td>admin, FM</td><td class="en">Wizard: company (time zone), fiscal year, chart of accounts from a template, first product with a tariff template, bank account, limits, users. Skippable, resumable.</td><td class="bn">উইজার্ড: কোম্পানি, অর্থবছর, চার্ট, প্রথম পণ্য, ব্যাংক, সীমা, ব্যবহারকারী।</td></tr></table></div>
+
+<h2 id="every">On every page</h2>
+<div class="wrap"><table><tr><th>Element</th><th class="en">What it does</th><th class="bn">কী করে</th></tr>
+<tr><td><code>Ctrl+K</code></td><td class="en">Search any number or name (policy, claim, receipt, quote, cover note, producer, bill, run, supplier, treaty, asset, employee, vehicle registration) and run actions.</td><td class="bn">যেকোনো নম্বর/নাম খোঁজা ও কাজ চালানো।</td></tr>
+<tr><td>How this works</td><td class="en">Help for the current screen, EN/BN, plus a guided tour for first-time users.</td><td class="bn">বর্তমান স্ক্রিনের সহায়িকা, বাংলা/ইংরেজি, ও গাইডেড ট্যুর।</td></tr>
+<tr><td>Lists</td><td class="en">Sort, filter, choose columns, save views, page through ("Showing N of M"); the right-hand inspector shows the selected row's details and actions.</td><td class="bn">সাজানো, ফিল্টার, কলাম, ভিউ সংরক্ষণ, পাতা; ডানে বিস্তারিত ও কাজ।</td></tr>
+<tr><td>Record pages</td><td class="en">Status, key facts, actions top right; tabs Overview · Timeline · Accounting · Documents · Audit.</td><td class="bn">অবস্থা, তথ্য, কাজ; ট্যাব: সারসংক্ষেপ, টাইমলাইন, হিসাব, ডকুমেন্ট, অডিট।</td></tr>
+<tr><td>Journal preview</td><td class="en">Every money button shows the debit/credit lines with plain captions before posting; Confirm and post / Back to the form.</td><td class="bn">টাকার প্রতিটি বোতাম পোস্টের আগে ডেবিট/ক্রেডিট লাইন দেখায়।</td></tr>
+<tr><td>User menu</td><td class="en">Language (English/বাংলা), theme, density, branch, sign out.</td><td class="bn">ভাষা, থিম, ঘনত্ব, ব্রাঞ্চ, সাইন আউট।</td></tr></table></div>
+</main>
