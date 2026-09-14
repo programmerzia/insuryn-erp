@@ -146,6 +146,11 @@ return [
         'producer_code_prefixes' => ['agent' => 'AG', 'agency_org' => 'AGY', 'bdo' => 'BDO', 'broker' => 'BRK', 'partner' => 'PTR'],
         'idra_register_columns' => ['licence_no', 'authority', 'producer_code', 'producer_name', 'producer_type', 'class', 'issued_on', 'expires_on', 'status', 'branch_code'],
     ],
+    'parties' => [
+        // ASSUMPTION: A-193 (GA-17) — where an individual's mobile number is required: the Parties form (new and edit) yes; the quote's inline
+        // "New customer" drawer no, so a walk-in can be quoted before giving it (the drawer asks for it and the customer page flags it as missing).
+        'mobile_required' => ['party_form' => (bool) env('ERP_PARTY_MOBILE_REQUIRED', true), 'quote_drawer' => (bool) env('ERP_QUOTE_CUSTOMER_MOBILE_REQUIRED', false)],
+    ],
     'collections' => [
         // ASSUMPTION: A-10 — dunning schedule and grace period are not specified (spec §4 names the feature only).
         'dunning_notice_days' => [7, 21],

@@ -30,7 +30,7 @@ use Illuminate\Validation\Rule;
  * inline"): GET /lookup/{customer|agent|policy|installment|payee}?q=, POST /lookup/customer to create a customer inline and (flow fix X8)
  * POST /lookup/payee to create a claim payee. Read access follows the areas that use the field. Flow fix X9: POST /lookup/producer creates a
  * producer inline (party, producer on the form's branch, licence) through the Party and Distribution services, for holders of agent.manage;
- * GET /lookup/producer/new suggests its code. Phone search is not possible: parties have no phone number yet.
+ * GET /lookup/producer/new suggests its code. GA-17: customers are also found by mobile number and NID/BRN.
  */
 final class LookupController
 {
@@ -65,10 +65,13 @@ final class LookupController
     public function createCustomer(Request $request, PartyService $parties): JsonResponse
     {
         /** @var array{kind: string, display_name: string, tax_id?: string|null} $data */
-        $data = $request->validate(['kind' => ['required', Rule::enum(PartyKind::class)], 'display_name' => ['required', 'string', 'max:255'], 'tax_id' => ['nullable', 'string', 'max:64']]);
-        $party = $parties->create(PartyKind::from($data['kind']), $data['display_name'], $data['tax_id'] ?? null, [PartyRoleType::Customer, PartyRoleType::Policyholder], PageSupport::actor($request));
+        $data = $request->validate(['kind' => ['required', Rule::enum(PartyKind::class)], 'display_name' => ['required', 'string', 'max:255'], 'tax_id' => ['nullable', 'string', 'max:64'],
+            ...PartyPageController::contactRules()]);
+        // GA-17: the drawer takes the mobile, email and NID/BRN too (the mobile is optional here, A-193).
+        $contact = PartyPageController::contact($request, PartyKind::from($data['kind']), 'quote_drawer');
+        $party = $parties->create(PartyKind::from($data['kind']), $data['display_name'], $data['tax_id'] ?? null, [PartyRoleType::Customer, PartyRoleType::Policyholder], PageSupport::actor($request), $contact);
 
-        return response()->json(['result' => self::customer((string) $party->id, $party->display_name, $data['kind'], $data['tax_id'] ?? null)], 201);
+        return response()->json(['result' => self::customer((string) $party->id, $party->display_name, $data['kind'], $data['tax_id'] ?? null, $party->mobile)], 201);
     }
 
     public function createPayee(Request $request, PartyService $parties): JsonResponse
@@ -157,10 +160,12 @@ final class LookupController
     private function customers(string $like): array
     {
         $rows = DB::table('parties')->whereExists(fn ($q) => $q->from('party_roles')->whereColumn('party_roles.party_id', 'parties.id')->whereIn('role', ['customer', 'policyholder']))
-            ->where(fn ($q) => $q->where('display_name', 'ilike', $like)->orWhere('tax_id', 'ilike', $like))->orderBy('display_name')->limit(self::LIMIT)->get(['id', 'display_name', 'kind', 'tax_id']);
+            // GA-17: a customer is also found by NID/BRN or mobile number (typed with or without the leading 0).
+            ->where(fn ($q) => $q->where('display_name', 'ilike', $like)->orWhere('tax_id', 'ilike', $like)->orWhere('identity_no', 'ilike', $like)->orWhere('mobile', 'ilike', '%'.ltrim(trim($like, '%'), '0').'%'))
+            ->orderBy('display_name')->limit(self::LIMIT)->get(['id', 'display_name', 'kind', 'tax_id', 'mobile']);
         $results = [];
         foreach ($rows as $row) {
-            $results[] = self::customer((string) $row->id, (string) $row->display_name, (string) $row->kind, $row->tax_id === null ? null : (string) $row->tax_id);
+            $results[] = self::customer((string) $row->id, (string) $row->display_name, (string) $row->kind, $row->tax_id === null ? null : (string) $row->tax_id, $row->mobile === null ? null : (string) $row->mobile);
         }
 
         return $results;
@@ -231,8 +236,8 @@ final class LookupController
     }
 
     /** @return array{id: string, label: string, detail: string} */
-    private static function customer(string $id, string $name, string $kind, ?string $taxId): array
+    private static function customer(string $id, string $name, string $kind, ?string $taxId, ?string $mobile = null): array
     {
-        return ['id' => $id, 'label' => $name, 'detail' => ucfirst($kind).($taxId !== null ? " · TIN {$taxId}" : '')];
+        return ['id' => $id, 'label' => $name, 'detail' => ucfirst($kind).($mobile !== null ? " · {$mobile}" : '').($taxId !== null ? " · TIN {$taxId}" : '')];
     }
 }

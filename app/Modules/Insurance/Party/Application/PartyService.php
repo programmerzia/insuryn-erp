@@ -9,6 +9,7 @@ use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
 use App\Modules\Insurance\Party\Domain\Models\Party;
 use App\Modules\Insurance\Party\Domain\Models\PartyBankAccount;
 use App\Modules\Insurance\Party\Domain\Models\PartyRole;
+use App\Modules\Insurance\Party\Domain\PartyContact;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
 use App\Modules\Platform\Audit\AuditSubject;
@@ -28,12 +29,15 @@ final class PartyService
     /** Roles a payee created in the course of paying someone may take (flow fix X8). */
     public const PAYEE_ROLES = [PartyRoleType::Vendor, PartyRoleType::Beneficiary];
 
-    /** @param list<PartyRoleType> $roles */
-    public function create(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId): Party
+    /**
+     * @param list<PartyRoleType> $roles
+     * @param PartyContact|null $contact GA-17: mobile, email, address, NID/BRN, date of birth, contact person
+     */
+    public function create(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId, ?PartyContact $contact = null): Party
     {
         $this->permissions->authorize($actorUserId, 'party.manage');
 
-        return $this->insert($kind, $displayName, $taxId, $roles, $actorUserId, 'party.manage');
+        return $this->insert($kind, $displayName, $taxId, $roles, $actorUserId, 'party.manage', $contact);
     }
 
     /**
@@ -53,10 +57,10 @@ final class PartyService
     }
 
     /** @param list<PartyRoleType> $roles */
-    private function insert(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId, string $permission): Party
+    private function insert(PartyKind $kind, string $displayName, ?string $taxId, array $roles, string $actorUserId, string $permission, ?PartyContact $contact = null): Party
     {
-        return DB::transaction(function () use ($kind, $displayName, $taxId, $roles, $actorUserId, $permission): Party {
-            $party = Party::query()->create(['kind' => $kind->value, 'display_name' => $displayName, 'tax_id' => $taxId, 'status' => 'active']);
+        return DB::transaction(function () use ($kind, $displayName, $taxId, $roles, $actorUserId, $permission, $contact): Party {
+            $party = Party::query()->create(['kind' => $kind->value, 'display_name' => $displayName, 'tax_id' => $taxId, 'status' => 'active', ...($contact ?? new PartyContact())->toColumns()]);
             $this->syncRoles($party, $roles);
             $this->audit->record('party.created', AuditSubject::of('party', $party->id), null, $this->snapshot($party), null, $permission, Actor::user($actorUserId));
 
@@ -67,15 +71,16 @@ final class PartyService
     /**
      * @param array{display_name?: string, tax_id?: string|null, status?: string} $attributes
      * @param list<PartyRoleType>|null $roles null keeps the current roles
+     * @param PartyContact|null $contact GA-17: replaces every contact detail; null keeps them
      */
-    public function update(string $partyId, array $attributes, ?array $roles, string $actorUserId): Party
+    public function update(string $partyId, array $attributes, ?array $roles, string $actorUserId, ?PartyContact $contact = null): Party
     {
         $this->permissions->authorize($actorUserId, 'party.manage');
 
-        return DB::transaction(function () use ($partyId, $attributes, $roles, $actorUserId): Party {
+        return DB::transaction(function () use ($partyId, $attributes, $roles, $actorUserId, $contact): Party {
             $party = Party::query()->whereKey($partyId)->lockForUpdate()->firstOrFail();
             $before = $this->snapshot($party);
-            $party->fill($attributes)->save();
+            $party->fill([...$attributes, ...($contact?->toColumns() ?? [])])->save();
             if ($roles !== null) {
                 $this->syncRoles($party, $roles);
             }
@@ -127,6 +132,8 @@ final class PartyService
     private function snapshot(Party $party): array
     {
         return ['display_name' => $party->display_name, 'kind' => $party->kind->value, 'tax_id' => $party->tax_id, 'status' => $party->status,
+            'mobile' => $party->mobile, 'email' => $party->email, 'address' => $party->address, 'identity_no' => $party->identity_no,
+            'date_of_birth' => $party->date_of_birth === null ? null : substr((string) $party->date_of_birth, 0, 10), 'contact_person' => $party->contact_person,
             'roles' => PartyRole::query()->where('party_id', $party->id)->orderBy('role')->pluck('role')->map(fn (PartyRoleType $r): string => $r->value)->all()];
     }
 }

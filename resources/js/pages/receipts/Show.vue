@@ -17,8 +17,9 @@ import { usePreferences } from '@/lib/preferences';
 const props = defineProps<{
     receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null;
         /** GA-03: the policy the money was taken for while it waits in suspense. */
-        for_policy?: { id: string; number: string } | null };
-    allocations: { id: string; policy_number: string | null; amount: string; posted_on: string; reversed_on: string | null }[];
+        for_policy?: { id: string; number: string } | null,
+        payer: { id: string; name: string } | null; collected_by: { id: string; code: string } | null };
+    allocations: { id: string; policy_id: string | null; policy_number: string | null; amount: string; posted_on: string; reversed_on: string | null }[];
     suspense: { id: string; amount: string; open: string; status: string } | null;
     /** Flow fix X5: print from the header (then download what was printed); allocate while part of the receipt waits in suspense. */
     actions: { bounce: boolean; print: boolean; allocate: boolean };
@@ -44,6 +45,8 @@ const facts = computed(() => [
     { label: 'Value date', value: formatDate(props.receipt.value_date) },
     { label: 'In suspense', value: props.suspense ? formatMoney(props.suspense.open) : '0.00', num: true },
     { label: 'Received by', value: words(props.receipt.channel) },
+    { label: 'Received from', value: props.receipt.payer?.name ?? '—' },
+    ...(props.receipt.collected_by ? [{ label: 'Collected by agent', value: props.receipt.collected_by.code }] : []),
 ]);
 </script>
 
@@ -74,13 +77,17 @@ const facts = computed(() => [
                 <p v-if="receipt.for_policy && suspense && suspense.status === 'open'" class="mb-3 text-ui text-ink-2">
                     Taken for <Link :href="`/policies/${receipt.for_policy.id}`" class="text-accent-text hover:underline">{{ receipt.for_policy.number }}</Link>.
                     {{ actions.allocate ? 'Allocate it to the policy\'s installments.' : 'It is held in suspense until your branch manager allocates it.' }}
+                <p v-if="receipt.payer || receipt.collected_by" class="mb-3 text-ui text-ink-2">
+                    <template v-if="receipt.payer">Received from <Link :href="`/parties/${receipt.payer.id}`" class="text-accent-text hover:underline">{{ receipt.payer.name }}</Link></template>
+                    <template v-if="receipt.payer && receipt.collected_by"> · </template>
+                    <template v-if="receipt.collected_by">collected by agent <Link :href="`/distribution/producers/${receipt.collected_by.id}`" class="text-accent-text hover:underline">{{ receipt.collected_by.code }}</Link></template>
                 </p>
                 <h2 class="mb-2 text-ui font-medium">Allocations</h2>
                 <div class="max-w-[760px] overflow-x-auto border border-line">
                     <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
                         <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Policy</th><th class="w-32 border-b border-line px-3 text-left font-medium">Posted</th><th class="w-36 border-b border-line px-3 text-right font-medium">Amount (BDT)</th><th class="w-32 border-b border-line px-3 text-left font-medium">Reversed</th></tr></thead>
                         <tbody>
-                            <tr v-for="a in allocations" :key="a.id" class="h-(--row-h)"><td class="border-b border-line px-3">{{ a.policy_number }}</td><td class="border-b border-line px-3">{{ formatDate(a.posted_on) }}</td><td class="num border-b border-line px-3">{{ formatMoney(a.amount) }}</td><td class="border-b border-line px-3 text-danger">{{ formatDate(a.reversed_on) }}</td></tr>
+                            <tr v-for="a in allocations" :key="a.id" class="h-(--row-h)"><td class="border-b border-line px-3"><Link v-if="a.policy_id" :href="`/policies/${a.policy_id}`" class="text-accent-text hover:underline">{{ a.policy_number }}</Link><template v-else>{{ a.policy_number }}</template></td><td class="border-b border-line px-3">{{ formatDate(a.posted_on) }}</td><td class="num border-b border-line px-3">{{ formatMoney(a.amount) }}</td><td class="border-b border-line px-3 text-danger">{{ formatDate(a.reversed_on) }}</td></tr>
                             <tr v-if="allocations.length === 0"><td colspan="4" class="px-3 py-6 text-center text-ui text-ink-2">Not allocated yet.</td></tr>
                         </tbody>
                     </table>

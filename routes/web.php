@@ -185,6 +185,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('parties', [PartyPageController::class, 'store']);
     Route::get('parties/{party}', [PartyPageController::class, 'show'])->whereUuid('party');
     Route::post('parties/{party}/bank-accounts', [PartyPageController::class, 'storeBankAccount'])->whereUuid('party');
+    // GA-17: edit the customer's details; supporting documents on the customer.
+    Route::put('parties/{party}', [PartyPageController::class, 'update'])->whereUuid('party');
+    Route::post('parties/{party}/documents', [PartyPageController::class, 'attachDocument'])->whereUuid('party');
+    Route::get('parties/{party}/documents/{document}', [PartyPageController::class, 'downloadDocument'])->whereUuid(['party', 'document']);
     // GA-10: one producer register; the Phase 1 agents list opens the producers queue filtered to agents.
     Route::redirect('agents', '/distribution/producers?f.type=agent');
     Route::get('products', [ProductPageController::class, 'index']);

@@ -2,7 +2,7 @@
 import { useField } from '@/lib/field';
 
 /** Plain text input wired to its Field (id, description, invalid state). */
-const props = defineProps<{ id?: string; placeholder?: string; maxlength?: number; inputmode?: 'text' | 'decimal' | 'numeric' }>();
+const props = defineProps<{ id?: string; placeholder?: string; maxlength?: number; inputmode?: 'text' | 'decimal' | 'numeric' | 'tel' | 'email' }>();
 const model = defineModel<string | number>({ default: '' });
 const field = useField(props.id);
 </script>

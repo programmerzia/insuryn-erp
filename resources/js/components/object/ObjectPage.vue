@@ -34,6 +34,9 @@ const props = defineProps<{
     /** Slice R8: printed documents (generate and versions) on the Documents tab; loaded with the documents. */
     documentGeneration?: DocumentGeneration | null;
     transactionsLabel?: string;
+    /** GA-17: tabs of their own after Overview (each fills the slot `tab-<value>`), and built-in tabs an object has no use for (a party has no accounting). */
+    extraTabs?: { value: string; label: string }[];
+    hiddenTabs?: string[];
 }>();
 
 const initial = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('tab') ?? 'overview') : 'overview';
@@ -48,6 +51,7 @@ watch(tab, (value) => {
 });
 const tabs = [
     { value: 'overview', label: 'Overview' },
+    ...(props.extraTabs ?? []),
     { value: 'transactions', label: props.transactionsLabel ?? 'Transactions' },
     // Slice R7: the policy page's Rating tab (frozen breakdown and endorsement re-ratings), shown when the page fills the slot.
     { value: 'rating', label: 'Rating' },
@@ -77,7 +81,7 @@ const tabs = [
                     </div>
                 </dl>
                 <div class="ml-auto flex flex-wrap items-center gap-2">
-                    <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control px-2 text-ui text-ink-2 hover:bg-surface-2 hover:text-ink" @click="panel = true">
+                    <button v-if="!(hiddenTabs ?? []).includes('accounting')" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control px-2 text-ui text-ink-2 hover:bg-surface-2 hover:text-ink" @click="panel = true">
                         <BookOpen :size="16" :stroke-width="1.5" />View accounting
                     </button>
                     <slot name="actions" />
@@ -87,17 +91,18 @@ const tabs = [
         <TabsRoot v-model="tab" class="flex flex-1 flex-col">
             <TabsList class="flex gap-5 border-b border-line px-6" aria-label="Sections">
                 <template v-for="item in tabs" :key="item.value">
-                    <TabsTrigger v-if="(item.value !== 'transactions' || $slots.transactions) && (item.value !== 'rating' || $slots.rating)" :value="item.value" class="-mb-px h-9 border-b-2 border-transparent text-ui text-ink-2 hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink">
+                    <TabsTrigger v-if="(item.value !== 'transactions' || $slots.transactions) && (item.value !== 'rating' || $slots.rating) && !(hiddenTabs ?? []).includes(item.value)" :value="item.value" class="-mb-px h-9 border-b-2 border-transparent text-ui text-ink-2 hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink">
                         {{ item.label }}
                     </TabsTrigger>
                 </template>
             </TabsList>
             <div class="flex-1 px-6 py-4">
                 <TabsContent value="overview" class="outline-none"><slot name="overview" /></TabsContent>
+                <TabsContent v-for="extra in extraTabs ?? []" :key="extra.value" :value="extra.value" class="outline-none"><slot :name="`tab-${extra.value}`" /></TabsContent>
                 <TabsContent v-if="$slots.transactions" value="transactions" class="outline-none"><slot name="transactions" /></TabsContent>
                 <TabsContent v-if="$slots.rating" value="rating" class="outline-none"><slot name="rating" /></TabsContent>
                 <TabsContent value="timeline" class="outline-none"><Timeline :entries="timeline ?? []" /></TabsContent>
-                <TabsContent value="accounting" class="max-w-[900px] outline-none">
+                <TabsContent v-if="!(hiddenTabs ?? []).includes('accounting')" value="accounting" class="max-w-[900px] outline-none">
                     <Deferred data="accounting"><template #fallback><SkeletonRows /></template><AccountingList :journals="accounting ?? []" :currency="currency" :from="title" /></Deferred>
                 </TabsContent>
                 <TabsContent value="documents" class="outline-none">
@@ -108,7 +113,7 @@ const tabs = [
                 </TabsContent>
             </div>
         </TabsRoot>
-        <Drawer v-model:open="panel" :title="`Accounting for ${title}`" width="w-[680px]">
+        <Drawer v-if="!(hiddenTabs ?? []).includes('accounting')" v-model:open="panel" :title="`Accounting for ${title}`" width="w-[680px]">
             <Deferred data="accounting"><template #fallback><SkeletonRows /></template><AccountingList :journals="accounting ?? []" :currency="currency" :from="title" /></Deferred>
         </Drawer>
     </div>

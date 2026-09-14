@@ -1,7 +1,7 @@
 /**
  * Inline create from a lookup (brief §4 "Ctrl+N to create inline in a drawer"): which lookups can create, what the drawer calls the new record,
  * where it posts and which party roles it offers. Customers become customer + policyholder; payees (flow fix X8) are a vendor such as a garage
- * or hospital, or a beneficiary, created while approving a claim payment.
+ * or hospital, or a beneficiary, created while approving a claim payment. GA-17: a new customer also takes a mobile number, email and NID/BRN.
  */
 export type LookupType = 'customer' | 'agent' | 'policy' | 'installment' | 'payee';
 
@@ -9,6 +9,8 @@ export interface LookupCreateConfig {
     noun: string;
     endpoint: string;
     roles: { value: string; label: string }[] | null;
+    /** GA-17: the drawer asks for contact details (customers). */
+    contact?: boolean;
 }
 
 export interface LookupCreateDraft {
@@ -16,10 +18,13 @@ export interface LookupCreateDraft {
     kind: string;
     tax_id: string;
     role: string;
+    mobile?: string;
+    email?: string;
+    identity_no?: string;
 }
 
 export function lookupCreateConfig(type: LookupType): LookupCreateConfig | null {
-    if (type === 'customer') return { noun: 'customer', endpoint: '/lookup/customer', roles: null };
+    if (type === 'customer') return { noun: 'customer', endpoint: '/lookup/customer', roles: null, contact: true };
     if (type === 'payee') {
         return { noun: 'payee', endpoint: '/lookup/payee', roles: [{ value: 'vendor', label: 'Vendor (garage, surveyor, hospital)' }, { value: 'beneficiary', label: 'Beneficiary' }] };
     }
@@ -27,12 +32,24 @@ export function lookupCreateConfig(type: LookupType): LookupCreateConfig | null 
 }
 
 export function blankCreateDraft(config: LookupCreateConfig | null, name = ''): LookupCreateDraft {
-    return { display_name: name, kind: config?.roles ? 'organization' : 'individual', tax_id: '', role: config?.roles?.[0]?.value ?? '' };
+    const draft: LookupCreateDraft = { display_name: name, kind: config?.roles ? 'organization' : 'individual', tax_id: '', role: config?.roles?.[0]?.value ?? '' };
+    return config?.contact ? { ...draft, mobile: '', email: '', identity_no: '' } : draft;
 }
 
-/** The request body: an empty tax ID is sent as null, the role only where the lookup offers roles, and the context (e.g. the claim) as given. */
+/** Label of the identity number for the kind of party: a person's national ID, an organisation's business registration number. */
+export function identityLabel(kind: string): string {
+    return kind === 'organization' ? 'Business registration number (BRN)' : 'National ID (NID)';
+}
+
+/** The request body: empty optional fields are sent as null, the role only where the lookup offers roles, contact details only for customers, and the context (e.g. the claim) as given. */
 export function createPayload(config: LookupCreateConfig, draft: LookupCreateDraft, context: Record<string, string> = {}): Record<string, string | null> {
+    const blank = (value: string | undefined) => (value === undefined || value.trim() === '' ? null : value.trim());
     const body: Record<string, string | null> = { display_name: draft.display_name, kind: draft.kind, tax_id: draft.tax_id.trim() === '' ? null : draft.tax_id };
     if (config.roles) body.role = draft.role;
+    if (config.contact) {
+        body.mobile = blank(draft.mobile);
+        body.email = blank(draft.email);
+        body.identity_no = blank(draft.identity_no);
+    }
     return { ...context, ...body };
 }

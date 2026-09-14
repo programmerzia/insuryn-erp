@@ -120,19 +120,18 @@ final class ReceiptService
     }
 
     /**
-     * Agent collections (spec §4) are cash for known policies: fully allocated, so the cash is owed by the agent, never parked in suspense.
+     * Agent collections (spec §4): cash an agent collects is for known policies, fully allocated, so the cash is owed by the agent, never parked in suspense.
+     * ASSUMPTION: A-194 (GA-38) — an agent may also collect a cheque or a mobile-money payment; the agent is recorded on the receipt, but the money reaches the
+     * company's bank and posts as any receipt of that channel (nothing is owed by the agent).
      *
-     * @throws BusinessRuleViolation AGENT_COLLECTION_CASH_ONLY | AGENT_COLLECTION_UNALLOCATED | UNKNOWN_AGENT
+     * @throws BusinessRuleViolation AGENT_COLLECTION_UNALLOCATED | UNKNOWN_AGENT
      */
     private function assertAgentCollection(RecordReceiptRequest $request): void
     {
         if ($request->collectedByAgentId === null) {
             return;
         }
-        if ($request->channel !== 'cash') {
-            throw new BusinessRuleViolation('AGENT_COLLECTION_CASH_ONLY', 'Agents collect cash; other channels are received by the company.');
-        }
-        if ($request->allocatedMinor() !== $request->amountMinor) {
+        if ($request->channel === 'cash' && $request->allocatedMinor() !== $request->amountMinor) {
             throw new BusinessRuleViolation('AGENT_COLLECTION_UNALLOCATED', 'Cash an agent collects must be allocated to installments in full.');
         }
         if (app(ProducerDirectory::class)->find($request->collectedByAgentId)?->isActive() !== true) {

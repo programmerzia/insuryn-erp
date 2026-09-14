@@ -51,14 +51,22 @@ describe('initial receipt', () => {
             { installment_id: 'i1', label: 'POL-1 #1', amount: '60,000.00', outstanding: '60,000.00' },
             { installment_id: 'i2', label: 'POL-1 #2', amount: '60,000.00', outstanding: '60,000.00' },
         ] }, defaults, branches);
-        expect(start).toEqual({ branch_id: 'ho', channel: 'cash', amount: '120,000.00', value_date: '2026-09-15', allocations: [
+        expect(start).toEqual({ branch_id: 'ho', party_id: '', channel: 'cash', amount: '120,000.00', value_date: '2026-09-15', allocations: [
             { installment_id: 'i1', amount: '60,000.00', outstanding: '60,000.00', label: 'POL-1 #1' },
             { installment_id: 'i2', amount: '60,000.00', outstanding: '60,000.00', label: 'POL-1 #2' },
         ] });
     });
 
+    it('takes the payer from the policy and starts with that payer\'s last channel (GA-38)', () => {
+        const start = initialReceipt({ policy: { id: 'p1', number: 'POL-1' }, amount: '10.00', branch_id: 'ho', allocations: [], payer: { id: 'party-1', label: 'Rahima Akter' }, channel: 'mobile_money' },
+            { ...defaults, channel: 'bank_transfer' }, branches);
+        expect([start.party_id, start.channel]).toEqual(['party-1', 'mobile_money']);
+        expect(initialReceipt({ policy: { id: 'p1', number: 'POL-1' }, amount: '10.00', branch_id: 'ho', allocations: [], payer: null, channel: null }, { ...defaults, channel: 'bank_transfer' }, branches).channel)
+            .toBe('bank_transfer');
+    });
+
     it('starts unfilled with the user\'s branch, or the first branch when nothing decides it', () => {
-        expect(initialReceipt(null, defaults, branches)).toEqual({ branch_id: 'ctg', channel: 'cash', amount: '', value_date: '2026-09-15', allocations: [] });
+        expect(initialReceipt(null, defaults, branches)).toEqual({ branch_id: 'ctg', party_id: '', channel: 'cash', amount: '', value_date: '2026-09-15', allocations: [] });
         expect(initialReceipt(null, { ...defaults, branch_id: null }, branches).branch_id).toBe('ho');
         expect(initialReceipt(null, { ...defaults, branch_id: 'closed' }, branches).branch_id).toBe('ho');
     });

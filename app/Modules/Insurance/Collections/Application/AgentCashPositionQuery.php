@@ -21,7 +21,7 @@ final class AgentCashPositionQuery
     /** Cash the agent holds now: collections not bounced less deposits. */
     public function undepositedMinor(string $agentId): int
     {
-        return (int) DB::table('receipts')->where('collected_by_agent_id', $agentId)->where('status', '<>', 'bounced')->sum('amount_minor')
+        return (int) DB::table('receipts')->where('collected_by_agent_id', $agentId)->where('channel', 'cash')->where('status', '<>', 'bounced')->sum('amount_minor')
             - (int) DB::table('agent_deposits')->where('agent_id', $agentId)->sum('amount_minor');
     }
 
@@ -36,7 +36,7 @@ final class AgentCashPositionQuery
         // Follow-up H1 (ASSUMPTION A-159): a branch-scoped user sees the agents whose branch is within reach, each with their whole position, so the GL by agent still matches.
         $inReach = $reach === null || $reach->tenantWide ? null
             : array_flip($reach->constrain(DB::table('producers as a')->join('branches as b', 'b.id', '=', 'a.branch_id'), 'b.entity_id', 'a.branch_id')->pluck('a.id')->map(fn ($id): string => (string) $id)->all());
-        $collections = DB::table('receipts')->where('entity_id', $entityId)->whereNotNull('collected_by_agent_id')->where('value_date', '<=', $day)
+        $collections = DB::table('receipts')->where('entity_id', $entityId)->whereNotNull('collected_by_agent_id')->where('channel', 'cash')->where('value_date', '<=', $day)
             ->where(fn ($q) => $q->whereNull('bounced_on')->orWhere('bounced_on', '>', $day))
             ->orderBy('value_date')->get(['collected_by_agent_id', 'value_date', 'amount_minor'])->groupBy('collected_by_agent_id');
         $deposits = DB::table('agent_deposits')->where('entity_id', $entityId)->where('deposited_on', '<=', $day)

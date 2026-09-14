@@ -32,9 +32,11 @@ final class CollectionsAccountingEvents
      */
     public function premiumReceived(Receipt $receipt, ReceiptAllocation $allocation, Policy $policy): void
     {
-        $eventType = $receipt->collected_by_agent_id === null ? 'PREMIUM_RECEIVED' : 'AGENT_CASH_COLLECTED';
+        // GA-38 (A-194): only cash is held by the collecting agent; a cheque or mobile-money payment an agent collected goes to the bank like any receipt.
+        $agentHoldsCash = $receipt->collected_by_agent_id !== null && $receipt->channel === 'cash';
+        $eventType = $agentHoldsCash ? 'AGENT_CASH_COLLECTED' : 'PREMIUM_RECEIVED';
         $dimensions = PolicyAccountingEvents::dimensions($policy) + ['receipt' => $receipt->id];
-        if ($receipt->collected_by_agent_id !== null) {
+        if ($agentHoldsCash) {
             $dimensions['agent'] = $receipt->collected_by_agent_id;
         }
         ($this->submit)(

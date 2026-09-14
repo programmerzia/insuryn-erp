@@ -73,12 +73,12 @@ final class CollectionsPageController
         $branches = $reach->constrain(DB::table('branches'), 'entity_id', 'id')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all();
 
         return Inertia::render('receipts/Create', [
-            // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch, today and their last channel.
+            // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch and today.
+            // ASSUMPTION: A-195 (GA-38) — the channel starts as bank transfer, or as the payer's last channel when the payer is known (the policyholder of a prefilled receipt).
             'prefill' => is_string($policy) && Str::isUuid($policy) ? $this->prefill($entity, $policy, $reach) : null,
             // GA-07: opened from Home's "Receipts to record" (/receipts/create?statement_line=…), the receipt starts with the bank line's amount, date and reference.
             'statementLine' => is_string($line = $request->query('statement_line')) && Str::isUuid($line) ? self::statementLine($entity, $line) : null,
-            'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => app(BusinessClock::class)->today()->toDateString(),
-                'channel' => self::channel($defaults->remembered($actor, FormDefaults::LAST_RECEIPT_CHANNEL))],
+            'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => app(BusinessClock::class)->today()->toDateString(), 'channel' => 'bank_transfer'],
             'entity' => $entity,
             'channels' => self::CHANNELS,
             'branches' => $branches,
@@ -92,10 +92,10 @@ final class CollectionsPageController
         ]);
     }
 
-    public function store(Request $request, ReceiptService $receipts, FormDefaults $defaults, NextSteps $nextSteps): RedirectResponse
+    public function store(Request $request, ReceiptService $receipts, NextSteps $nextSteps): RedirectResponse
     {
-        /** @var array{branch_id: string, channel: string, amount: string, value_date: string, reference?: string|null, bank_account_id?: string|null, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null, for_policy_id?: string|null, allocations?: list<array{installment_id: string, amount: string}>} $data */
-        $data = $request->validate(['branch_id' => ['required', 'uuid'], 'channel' => ['required', 'in:'.implode(',', self::CHANNELS)], 'amount' => ['required', 'string'],
+        /** @var array{branch_id: string, party_id?: string|null, channel: string, amount: string, value_date: string, reference?: string|null, bank_account_id?: string|null, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null, for_policy_id?: string|null, allocations?: list<array{installment_id: string, amount: string}>} $data */
+        $data = $request->validate(['branch_id' => ['required', 'uuid'], 'party_id' => ['nullable', 'uuid', 'exists:parties,id'], 'channel' => ['required', 'in:'.implode(',', self::CHANNELS)], 'amount' => ['required', 'string'],
             'value_date' => ['required', 'date_format:Y-m-d'], 'reference' => ['nullable', 'string', 'max:255'], 'bank_account_id' => ['nullable', 'uuid'],
             'cheque_no' => ['nullable', 'string', 'max:64'], 'cheque_bank' => ['nullable', 'string', 'max:255'], 'cheque_date' => ['nullable', 'date_format:Y-m-d'],
             'collected_by_agent_id' => ['nullable', 'uuid'], 'for_policy_id' => ['nullable', 'uuid'], 'allocations' => ['sometimes', 'array'], 'allocations.*.installment_id' => ['required', 'uuid'], 'allocations.*.amount' => ['required', 'string']]);
@@ -106,10 +106,11 @@ final class CollectionsPageController
         }
         $cheque = isset($data['cheque_no'], $data['cheque_bank'], $data['cheque_date']) && $data['cheque_no'] !== ''
             ? new ChequeDetails($data['cheque_no'], $data['cheque_bank'], CarbonImmutable::parse($data['cheque_date'])) : null;
-        $receipt = $receipts->record(new RecordReceiptRequest($entity['id'], $data['branch_id'], null, $data['channel'], PageSupport::minor('amount', $data['amount'], $entity['currency']),
+        // GA-38: "Received from"; left empty, the policyholder when every allocated installment belongs to one policyholder.
+        $payer = ($data['party_id'] ?? '') !== '' ? $data['party_id'] : self::singleHolder(array_map(fn (AllocationLine $l): string => $l->installmentId, $allocations));
+        $receipt = $receipts->record(new RecordReceiptRequest($entity['id'], $data['branch_id'], $payer, $data['channel'], PageSupport::minor('amount', $data['amount'], $entity['currency']),
             $entity['currency'], CarbonImmutable::parse($data['value_date']), $data['bank_account_id'] ?? null, $data['reference'] ?? null, $allocations, $cheque,
             ($data['collected_by_agent_id'] ?? '') === '' ? null : $data['collected_by_agent_id'], ($data['for_policy_id'] ?? '') === '' ? null : $data['for_policy_id']), PageSupport::actor($request));
-        $defaults->remember(PageSupport::actor($request), FormDefaults::LAST_RECEIPT_CHANNEL, $data['channel']);
         $status = "Receipt {$receipt->number} recorded.";
         if ($receipt->for_policy_id !== null && $allocations === [] && ! $this->permissions->has(PageSupport::actor($request), 'receipt.allocate', AuthorizationScope::branch($receipt->entity_id, $receipt->branch_id))) {
             $number = (string) DB::table('policies')->where('id', $receipt->for_policy_id)->value('number');
@@ -131,13 +132,16 @@ final class CollectionsPageController
 
         return Inertia::render('receipts/Show', [
             'receipt' => ['id' => $model->id, 'number' => $model->number, 'channel' => $model->channel, 'amount' => $money($model->amount_minor), 'value_date' => $model->value_date->toDateString(),
+                // GA-38: who paid and which agent collected it, each linked.
+                'payer' => $model->party_id === null ? null : ['id' => $model->party_id, 'name' => (string) DB::table('parties')->where('id', $model->party_id)->value('display_name')],
+                'collected_by' => $model->collected_by_agent_id === null ? null : ['id' => $model->collected_by_agent_id, 'code' => (string) DB::table('producers')->where('id', $model->collected_by_agent_id)->value('code')],
                 'reference' => $model->reference, 'status' => $model->status->value, 'cheque_no' => $model->cheque_no, 'cheque_bank' => $model->cheque_bank,
                 'bounced_on' => $model->bounced_on?->toDateString(), 'bounce_reason' => $model->bounce_reason,
                 // GA-03: the policy the money was taken for, while it waits in suspense for someone who allocates.
                 'for_policy' => $model->for_policy_id === null ? null : ['id' => $model->for_policy_id, 'number' => (string) DB::table('policies')->where('id', $model->for_policy_id)->value('number')]],
             'allocations' => DB::table('receipt_allocations as a')->leftJoin('policies as p', 'p.id', '=', 'a.policy_id')->where('a.receipt_id', $model->id)->orderBy('a.allocated_at')
-                ->get(['a.id', 'p.number', 'a.amount_minor', 'a.posted_on', 'a.reversed_on'])
-                ->map(fn (object $a): array => ['id' => (string) $a->id, 'policy_number' => $a->number, 'amount' => $money((int) $a->amount_minor), 'posted_on' => (string) $a->posted_on,
+                ->get(['a.id', 'a.policy_id', 'p.number', 'a.amount_minor', 'a.posted_on', 'a.reversed_on'])
+                ->map(fn (object $a): array => ['id' => (string) $a->id, 'policy_id' => $a->policy_id === null ? null : (string) $a->policy_id, 'policy_number' => $a->number, 'amount' => $money((int) $a->amount_minor), 'posted_on' => (string) $a->posted_on,
                     'reversed_on' => $a->reversed_on === null ? null : (string) $a->reversed_on])->values()->all(),
             'suspense' => $item === null ? null : ['id' => $item->id, 'amount' => $money($item->amount_minor), 'open' => $money($item->openMinor()), 'status' => $item->status->value],
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id)))
@@ -369,7 +373,7 @@ final class CollectionsPageController
     private function prefill(array $entity, string $policyId, AreaReach $reach): ?array
     {
         $policy = $reach->constrain(DB::table('policies'), 'entity_id', 'branch_id')->where('id', $policyId)->where('entity_id', $entity['id'])->whereIn('status', NextSteps::COLLECTABLE_STATUSES)
-            ->first(['id', 'number', 'branch_id', 'currency']);
+            ->first(['id', 'number', 'branch_id', 'currency', 'policyholder_party_id']);
         $installments = $policy === null ? [] : NextSteps::outstandingInstallments($policyId);
         if ($policy === null || $installments === []) {
             return null;
@@ -378,8 +382,13 @@ final class CollectionsPageController
         $lines = array_map(fn (array $i): array => ['installment_id' => $i['id'], 'label' => "{$policy->number} #{$i['no']}", 'amount' => PageSupport::money($i['outstanding_minor'], $currency),
             'outstanding' => PageSupport::money($i['outstanding_minor'], $currency)], $installments);
 
+        $holder = (string) $policy->policyholder_party_id;
+        $lastChannel = DB::table('receipts')->where('party_id', $holder)->where('status', '<>', 'bounced')->orderByDesc('value_date')->orderByDesc('created_at')->value('channel');
+
         return ['policy' => ['id' => (string) $policy->id, 'number' => (string) $policy->number], 'amount' => PageSupport::money(array_sum(array_column($installments, 'outstanding_minor')), $currency),
-            'branch_id' => (string) $policy->branch_id, 'allocations' => $lines];
+            'branch_id' => (string) $policy->branch_id, 'allocations' => $lines,
+            'payer' => ['id' => $holder, 'label' => (string) DB::table('parties')->where('id', $holder)->value('display_name')],
+            'channel' => is_string($lastChannel) && in_array($lastChannel, self::CHANNELS, true) ? $lastChannel : null];
     }
 
     /**
@@ -397,10 +406,19 @@ final class CollectionsPageController
             'reference' => $line->reference === null ? ($line->description === null ? null : (string) $line->description) : (string) $line->reference, 'bank_account_id' => (string) $line->bank_account_id];
     }
 
-    /** The channel a receipt form starts with: the user's last one while it is still offered, else bank transfer. */
-    private static function channel(?string $remembered): string
+    /**
+     * GA-38: the payer of a receipt nobody named — the policyholder when every allocated installment belongs to one; otherwise nobody.
+     *
+     * @param list<string> $installmentIds
+     */
+    private static function singleHolder(array $installmentIds): ?string
     {
-        return $remembered !== null && in_array($remembered, self::CHANNELS, true) ? $remembered : 'bank_transfer';
+        if ($installmentIds === []) {
+            return null;
+        }
+        $holders = DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->whereIn('i.id', $installmentIds)->distinct()->pluck('p.policyholder_party_id');
+
+        return $holders->count() === 1 ? (string) $holders->first() : null;
     }
 
     /**

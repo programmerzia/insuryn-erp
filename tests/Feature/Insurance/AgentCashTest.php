@@ -53,12 +53,27 @@ it('moves premium an agent collects in cash into the agent receivable, not the b
     });
 });
 
-it('accepts agent collections only as fully allocated cash from a known agent', function (): void {
+it('accepts agent cash collections only fully allocated and from a known agent', function (): void {
     asTenant($this->ctx['tenant_id'], function (): void {
-        expect(thrownBy(fn () => ($this->collect)(4_000_000, 0, '2026-09-10', 'cheque'), BusinessRuleViolation::class)->reasonCode)->toBe('AGENT_COLLECTION_CASH_ONLY')
-            ->and(thrownBy(fn () => ($this->collect)(4_000_000, 0, '2026-09-10', 'cash', null, 3_000_000), BusinessRuleViolation::class)->reasonCode)->toBe('AGENT_COLLECTION_UNALLOCATED')
+        expect(thrownBy(fn () => ($this->collect)(4_000_000, 0, '2026-09-10', 'cash', null, 3_000_000), BusinessRuleViolation::class)->reasonCode)->toBe('AGENT_COLLECTION_UNALLOCATED')
             ->and(thrownBy(fn () => ($this->collect)(4_000_000, 0, '2026-09-10', 'cash', (string) Str::uuid7()), BusinessRuleViolation::class)->reasonCode)->toBe('UNKNOWN_AGENT')
+            ->and(thrownBy(fn () => ($this->collect)(4_000_000, 0, '2026-09-10', 'mobile_money', (string) Str::uuid7()), BusinessRuleViolation::class)->reasonCode)->toBe('UNKNOWN_AGENT')
             ->and(DB::table('receipts')->count())->toBe(0);
+    });
+});
+
+it('records the agent on a mobile-money or cheque collection, which reaches the bank and is not agent cash (GA-38, A-194)', function (): void {
+    asTenant($this->ctx['tenant_id'], function (): void {
+        ($this->collect)(4_000_000, 0, '2026-09-10', 'mobile_money', null, 3_000_000); // part may wait in suspense: the money is the company's, not the agent's
+        app(ReceiptService::class)->record(new RecordReceiptRequest($this->ctx['entity_id'], $this->ctx['branch_id'], null, 'cheque', 1_000_000, 'BDT', CarbonImmutable::parse('2026-09-11'), null, 'chq',
+            [new AllocationLine($this->installments[1], 1_000_000)], new App\Modules\Insurance\Collections\Application\ChequeDetails('000777', 'Sonali Bank', CarbonImmutable::parse('2026-09-11')),
+            $this->world['agent_id']), $this->world['admin']);
+
+        expect(DB::table('receipts')->whereNotNull('collected_by_agent_id')->orderBy('value_date')->pluck('channel')->all())->toBe(['mobile_money', 'cheque'])
+            ->and(DB::table('accounting_events')->where('event_type', 'AGENT_CASH_COLLECTED')->count())->toBe(0)
+            ->and(DB::table('accounting_events')->where('event_type', 'PREMIUM_RECEIVED')->count())->toBe(2)
+            ->and(DB::table('journal_lines')->where('role_code', 'agent_receivable')->count())->toBe(0)
+            ->and(app(AgentCashPositionQuery::class)->undepositedMinor($this->world['agent_id']))->toBe(0);
     });
 });
 

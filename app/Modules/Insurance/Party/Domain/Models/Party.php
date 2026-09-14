@@ -17,6 +17,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $display_name
  * @property string|null $tax_id
  * @property string $status
+ * @property string|null $mobile
+ * @property string|null $email
+ * @property string|null $address
+ * @property string|null $identity_no
+ * @property string|null $date_of_birth
+ * @property string|null $contact_person
  */
 final class Party extends Model
 {

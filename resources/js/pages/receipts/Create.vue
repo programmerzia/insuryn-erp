@@ -78,6 +78,10 @@ function post(): void {
             <Field id="value_date" label="Value date" :error="dateErrors.value_date ?? form.errors.value_date" hint="t for today, -1 for yesterday.">
                 <DateInput v-model="form.value_date" @invalid="dateErrors.value_date = $event" />
             </Field>
+            <!-- GA-38: who paid; the policyholder when the receipt starts from a policy. -->
+            <Field id="party_id" label="Received from" optional hint="Name, mobile or tax ID. Left empty, the policyholder of the installments paid." :error="form.errors.party_id">
+                <LookupInput id="party_id" v-model="form.party_id" type="customer" :initial="prefill?.payer ?? null" placeholder="Payer name or mobile" />
+            </Field>
             <Field id="channel" label="Received by" :error="form.errors.channel">
                 <SelectInput v-model="form.channel" :options="channels.map((c) => ({ value: c, label: words(c) }))" />
             </Field>
@@ -92,8 +96,8 @@ function post(): void {
                     <DateInput v-model="form.cheque_date" @invalid="dateErrors.cheque_date = $event" />
                 </Field>
             </template>
-            <Field v-if="form.channel === 'cash'" id="collected_by_agent_id" label="Collected by agent" optional hint="Agent collections must be allocated in full." :error="form.errors.collected_by_agent_id">
-                <LookupInput v-model="form.collected_by_agent_id" type="agent" placeholder="Agent code or name" />
+            <Field id="collected_by_agent_id" label="Collected by agent" optional :hint="form.channel === 'cash' ? 'The agent owes the cash until it is deposited, so it must be allocated in full.' : 'Recorded for the agent; the money reaches the company\'s bank.'" :error="form.errors.collected_by_agent_id">
+                <LookupInput v-model="form.collected_by_agent_id" type="agent" placeholder="Producer code or name" />
             </Field>
             <Field id="reference" label="Reference" optional :error="form.errors.reference" hint="The payer's reference or transaction number, as on the statement.">
                 <input id="reference" v-model="form.reference" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body" />

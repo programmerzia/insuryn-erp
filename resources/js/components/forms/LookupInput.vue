@@ -7,7 +7,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import Kbd from '@/components/ui/Kbd.vue';
 import { useField } from '@/lib/field';
 import { HttpError, requestJson } from '@/lib/http';
-import { blankCreateDraft, createPayload, lookupCreateConfig, type LookupType } from '@/lib/lookupCreate';
+import { blankCreateDraft, createPayload, identityLabel, lookupCreateConfig, type LookupType } from '@/lib/lookupCreate';
 import { usePermissions } from '@/lib/permissions';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { ASK_FOR_PRODUCER, lookupCreateMode } from '@/lib/producerCreate';
@@ -230,6 +230,17 @@ async function create(): Promise<void> {
                 <Field id="new-customer-tin" label="Tax ID" optional :error="createErrors.tax_id">
                     <input id="new-customer-tin" v-model="draft.tax_id" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body" />
                 </Field>
+                <template v-if="createConfig?.contact">
+                    <Field id="new-customer-mobile" label="Mobile" optional hint="Renewal and claim messages go to it." :error="createErrors.mobile">
+                        <input id="new-customer-mobile" v-model="draft.mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="01712 345678" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body" />
+                    </Field>
+                    <Field id="new-customer-email" label="Email" optional :error="createErrors.email">
+                        <input id="new-customer-email" v-model="draft.email" type="email" autocomplete="email" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body" />
+                    </Field>
+                    <Field id="new-customer-identity" :label="identityLabel(draft.kind)" optional :error="createErrors.identity_no">
+                        <input id="new-customer-identity" v-model="draft.identity_no" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body" />
+                    </Field>
+                </template>
                 <Field v-if="createConfig?.roles" id="new-party-role" label="Paid as" :error="createErrors.role">
                     <select id="new-party-role" v-model="draft.role" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body">
                         <option v-for="role in createConfig.roles" :key="role.value" :value="role.value">{{ role.label }}</option>

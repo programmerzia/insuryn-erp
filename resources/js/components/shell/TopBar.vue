@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Bell, ChevronDown, CircleHelp, CircleUser, LogOut, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-vue-next';
+import { Bell, ChevronDown, CircleHelp, CircleUser, Languages, LogOut, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-vue-next';
 import { computed } from 'vue';
 import Logo from '@/components/Logo.vue';
 import Kbd from '@/components/ui/Kbd.vue';
@@ -20,6 +20,9 @@ const branchLabel = computed(() => shell.value?.branches.find((b) => b.id === pr
 const branchValue = computed({ get: () => preferences.branch_id ?? 'all', set: (value: string) => savePreference('branch_id', value === 'all' ? null : value, 0) });
 const theme = computed({ get: () => preferences.theme, set: (value: string) => savePreference('theme', value, 0) });
 const density = computed({ get: () => preferences.density, set: (value: string) => savePreference('density', value, 0) });
+// GA-30: the user's language, a deliberate choice in the user menu: help, tour, captions, risk labels and printed documents follow it. The help panel's own
+// switch no longer changes it, so choosing a language here also resets the panel to it.
+const language = computed({ get: () => preferences.locale, set: (value: string) => { savePreference('locale', value, 0); savePreference('help_locale', null, 0); } });
 const toggleSidebar = () => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed);
 const signOut = () => router.post('/logout');
 </script>
@@ -108,6 +111,12 @@ const signOut = () => router.post('/logout');
             <MenuContent>
                 <MenuLabel>{{ user.email }}</MenuLabel>
                 <MenuItem @select="router.visit('/account/security')"><ShieldCheck :size="16" :stroke-width="1.5" />Security settings</MenuItem>
+                <MenuSeparator class="my-1 h-px bg-line" />
+                <MenuLabel><span class="inline-flex items-center gap-1.5"><Languages :size="14" :stroke-width="1.5" />Language</span></MenuLabel>
+                <MenuRadioGroup v-model="language" data-testid="language-switch">
+                    <MenuRadioItem value="en">English</MenuRadioItem>
+                    <MenuRadioItem value="bn"><span lang="bn">বাংলা</span></MenuRadioItem>
+                </MenuRadioGroup>
                 <MenuSeparator class="my-1 h-px bg-line" />
                 <MenuItem @select="signOut"><LogOut :size="16" :stroke-width="1.5" />Sign out</MenuItem>
             </MenuContent>

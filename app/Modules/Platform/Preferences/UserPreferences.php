@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 final class UserPreferences
 {
     public const DEFAULTS = ['theme' => 'system', 'density' => 'compact', 'sidebar_collapsed' => false, 'branch_id' => null,
-        'splits' => [], 'tabs' => [], 'tables' => [], 'views' => [], 'recents' => [], 'drafts' => [], 'locale' => 'en', 'help_open' => false, 'tour' => null];
+        'splits' => [], 'tabs' => [], 'tables' => [], 'views' => [], 'recents' => [], 'drafts' => [], 'locale' => 'en', 'help_open' => false, 'help_locale' => null, 'tour' => null];
 
     private const GROUPS = ['splits', 'tables', 'views', 'drafts'];
 
@@ -71,9 +71,11 @@ final class UserPreferences
             'theme' => ['value' => ['required', 'in:system,light,dark']],
             'density' => ['value' => ['required', 'in:compact,comfortable']],
             'sidebar_collapsed' => ['value' => ['required', 'boolean:strict']],
-            // Session S3/S4: help panel language and whether it is open; the guided tour's state (null = never started).
+            // Session S3/S4: the user's language (GA-30: chosen in the user menu) and whether the help panel is open; the guided tour's state (null = never started).
             'locale' => ['value' => ['required', 'in:en,bn']],
             'help_open' => ['value' => ['required', 'boolean:strict']],
+            // GA-30: the help panel's own language switch reads the panel in the other language without changing the user's language (null = the user's language).
+            'help_locale' => ['value' => ['present', 'nullable', 'in:en,bn']],
             'tour' => ['value' => ['present', 'nullable', 'array'], 'value.status' => ['required_with:value', 'in:active,dismissed,finished'], 'value.step' => ['required_with:value', 'integer', 'between:0,50']],
             'branch_id' => ['value' => ['nullable', 'uuid']],
             'splits' => ['value' => ['required', 'integer', 'between:240,1400']],

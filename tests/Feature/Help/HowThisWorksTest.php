@@ -45,6 +45,16 @@ it('serves a module\'s help in the reader\'s language, as escaped HTML', functio
     actingAs($this->user)->getJson('/help/claims', $this->headers)->assertJsonPath('locale', 'bn');
     actingAs($this->user)->putJson('/preferences/locale', ['value' => 'fr'], $this->headers)->assertUnprocessable();
 
+    // GA-30: the panel's own language switch (help_locale) reads the panel in the other language without changing the user's language, which the
+    // user menu sets; null follows the user's language again.
+    actingAs($this->user)->putJson('/preferences/help_locale', ['value' => 'en'], $this->headers)->assertNoContent();
+    actingAs($this->user)->putJson('/preferences/help_locale', ['value' => 'fr'], $this->headers)->assertUnprocessable();
+    $preferences = fn (): array => asTenant($this->ctx['tenant_id'], fn (): array => app(App\Modules\Platform\Preferences\UserPreferences::class)->of((string) $this->user->id));
+    expect([$preferences()['locale'], $preferences()['help_locale']])->toBe(['bn', 'en']);
+    actingAs($this->user)->getJson('/help/claims', $this->headers)->assertJsonPath('locale', 'bn'); // the panel asks with ?locale=; the user's language is unchanged
+    actingAs($this->user)->putJson('/preferences/help_locale', ['value' => null], $this->headers)->assertNoContent();
+    expect($preferences()['help_locale'])->toBeNull();
+
     actingAs($this->user)->getJson('/help/payroll', $this->headers)->assertNotFound();
     $this->app['auth']->forgetGuards();
     Pest\Laravel\getJson('/help/claims', $this->headers)->assertUnauthorized();

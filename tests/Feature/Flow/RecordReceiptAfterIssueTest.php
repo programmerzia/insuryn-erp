@@ -71,7 +71,7 @@ it('shows Record receipt on the policy page while money is outstanding and the u
     actingAs($this->admin)->get("/policies/{$policyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('actions.record_receipt', false));
 });
 
-it('prefills the receipt from the policy: total outstanding, a line per unpaid installment oldest first, its branch, today and the last channel', function (): void {
+it('prefills the receipt from the policy: total outstanding, a line per unpaid installment oldest first, its branch, today, the policyholder as payer and the payer\'s last channel', function (): void {
     $policyId = ($this->quote)(2);
     ($this->in)(fn () => app(PolicyLifecycle::class)->issue($policyId, CarbonImmutable::parse('2026-09-15'), $this->world['admin']));
     [$first, $second] = ($this->in)(fn (): array => DB::table('installments')->where('policy_id', $policyId)->orderBy('no')->pluck('id')->map(fn ($id): string => (string) $id)->all());
@@ -81,15 +81,18 @@ it('prefills the receipt from the policy: total outstanding, a line per unpaid i
         ->where('prefill', ['policy' => ['id' => $policyId, 'number' => $number], 'amount' => '120,000.00', 'branch_id' => $this->ctx['branch_id'], 'allocations' => [
             ['installment_id' => $first, 'label' => "{$number} #1", 'amount' => '60,000.00', 'outstanding' => '60,000.00'],
             ['installment_id' => $second, 'label' => "{$number} #2", 'amount' => '60,000.00', 'outstanding' => '60,000.00'],
-        ]])
+        ], 'payer' => ['id' => $this->world['policyholder_id'], 'label' => 'Rahima Akter'], 'channel' => null])
         ->where('defaults', ['branch_id' => $this->ctx['branch_id'], 'value_date' => '2026-09-15', 'channel' => 'bank_transfer']));
 
-    // Part of the first installment paid by cash: the next prefill carries what is left, and the channel remembered is cash.
+    // Part of the first installment paid by cash: the next prefill carries what is left. GA-38: the receipt is from the policyholder (nobody named another payer),
+    // so the policyholder's next receipt starts as cash, while a receipt of an unknown payer still starts as bank transfer.
     actingAs($this->admin)->post('/receipts', ['branch_id' => $this->ctx['branch_id'], 'channel' => 'cash', 'amount' => '10,000.00', 'value_date' => '2026-09-15',
         'allocations' => [['installment_id' => $first, 'amount' => '10,000.00']]], $this->headers)->assertSessionHasNoErrors();
+    expect(($this->in)(fn () => DB::table('receipts')->value('party_id')))->toBe($this->world['policyholder_id']);
     actingAs($this->admin)->get("/receipts/create?policy={$policyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('prefill.amount', '110,000.00')->where('prefill.allocations.0.amount', '50,000.00')->where('prefill.allocations.1.amount', '60,000.00')
-        ->where('defaults.channel', 'cash'));
+        ->where('prefill.channel', 'cash')->where('defaults.channel', 'bank_transfer'));
+    actingAs($this->admin)->get('/receipts/create', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('defaults.channel', 'bank_transfer'));
 });
 
 it('keeps the receipt form without a policy unfilled, with the user\'s branch and today', function (): void {
