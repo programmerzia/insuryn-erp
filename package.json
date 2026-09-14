@@ -6,7 +6,9 @@
         "build": "vite build",
         "dev": "vite",
         "typecheck": "vue-tsc --noEmit",
-        "test": "vitest run"
+        "test": "vitest run",
+        "test:e2e": "scripts/e2e.sh",
+        "test:e2e:run": "node tests/e2e/happy-path.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

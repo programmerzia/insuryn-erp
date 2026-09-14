@@ -78,7 +78,7 @@ code and in the register below, configurable.
 | U10 | UX: performance | done | see git log |
 | 2.0a | Phase 1 carry-over: user and role administration screens | done | see git log |
 | 2.0b | Phase 1 carry-over: CI pipeline | done | see git log |
-| 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo (pending, after Distribution D1–D9) | |
+| 2.0c | Phase 1 carry-over: Playwright E2E happy path | done | see git log |
 | 2.0d | Phase 1 carry-over: claim reserve property test | done | see git log |
 | 2.1 | Design addendum v2 and Phase 2 customer questions | done | see git log |
 | D1 | Distribution: agents → producers with channels | done | see git log |
@@ -189,6 +189,9 @@ Each entry is also marked `ASSUMPTION:` in code at the named location and is con
 | A-135 | R9 | When the renewal run happens is not specified: nightly at 00:30 (after issued quotations expire at 00:15, so an expired renewal quotation gets no reminder), one tenant at a time; a quotation that cannot be offered (for example no tariff in force on the renewal date) keeps the row `upcoming` with the reason shown on the queue and is tried again the next night. | `routes/console.php`, `RenewalRunJob`, `RenewalQuotations::offerDue`. |
 | A-143 | 2.0d | Design §5.5 says only "closed ─reopen(approval)─▶ reserved": one reopening waits at a time. Asking again while a `claim_reopen` approval is pending is refused (`REOPEN_PENDING`, nothing written) and the claim page hides Reopen meanwhile; after a rejection it can be asked again. Before, a second request left a second approval that could never complete once the first reopened the claim, or that would reopen it again after a later close without anyone asking. | `ClaimService::reopen` (`ASSUMPTION:`), `ClaimPageController::show` `actions.reopen`, `ReasonMessages`; `ClaimsTest`, `ClaimsCommissionApprovalsPagesTest`. |
 | A-150 | G5 | The customer has not chosen the receipt, claim and agent deposit number formats (CQ-E5): they carry the branch code like policies, `{prefix}-{branch}-{fy}-{seq}` (`RCT-HO-2026-000001`, `CLM-HO-…`, `ADP-HO-…`), each set in the numbering settings (env `ERP_RECEIPT_NUMBER_FORMAT`, `ERP_CLAIM_NUMBER_FORMAT`, `ERP_AGENT_DEPOSIT_NUMBER_FORMAT`). Numbers already issued keep their branch-less shape and the running sequences continue; a format chosen later applies to new numbers only. Verify with the customer (regulators check receipt numbering). | `config/erp.php` `numbering.formats` (`ASSUMPTION:`), `DocumentNumberer`; `BranchNumberingTest`. |
+| A-147 | 2.0c | Which database the E2E runner may wipe is not specified: only the one named by `DB_DATABASE` set explicitly in the environment (a value only in `.env` is refused, exit 2), because the runner runs `migrate:fresh` and `erp:demo` on it; CI names `erp` in its throwaway Postgres service. `E2E_SKIP_SEED=1` reuses an already seeded database (the test is repeatable on the same story: its customer, registration and references carry a run stamp). | `scripts/e2e.sh`, `.github/workflows/ci.yml` job `e2e`. |
+| A-148 | 2.0c | Which date the E2E happy path acts on is not specified: today, as a user would (the forms' own "today" defaults, `t` in the date inputs), on the Part A demo whose story sits in August–September 2026 with open periods to June 2027. The test refuses to start outside 2026-09-01 … 2027-06-30 with a message to move the demo story forward, rather than failing somewhere in the flow. Dates come from the browser clock (UTC on CI), so a run across midnight in the tenant's timezone is not covered. | `tests/e2e/happy-path.mjs` (`ASSUMPTION A-148`). |
+| A-149 | 2.0c | What counts as a regression beyond the explicit checks is not specified: any uncaught page error or any HTTP 5xx response seen by the browser during a step fails the run, even when the screen recovered; console warnings and errors are only logged (to storage/e2e/console.log on failure). | `tests/e2e/lib.mjs` `createRun().step`. |
 
 ## Catalogue extensions and interpretations (not OPEN items)
 
@@ -2577,3 +2580,64 @@ Phase 1 exit checklist: "add a generator-based property test for the claim reser
   (the entity-level `RCT-2026-000001` unchanged), the voided list `RCT-HO-2026-000001`, and in the F1 test a HO and a CTG receipt instead of "other documents keep their format";
   `CollectionsTest`, `ClaimsTest`, `AgentCashTest` assert the exact number (`RCT-HO-2026-000001`, `CLM-HO-2026-000001`, `ADP-HO-2026-000002` — its 000001 is reserved by the
   refused deposit just before) instead of a `…-2026-` prefix.
+
+### 2.0c — Playwright E2E happy path — done
+Phase 1 carry-over (design §9.1, CI-blocking; exit checklist §2 "E2E (Playwright)"). A browser test that fails on regressions, not a measurement: `tests/e2e/happy-path.mjs` on `playwright-core` with the system Chrome and a small assert helper, `tests/e2e/lib.mjs` (D-48).
+
+**What it covers**, on the Part A demo tenant (`nonlife`), each step as its role:
+1. Branch officer: New quote from Home, new customer created inline, producer AG-001, motor risk; issue the quotation → make proposal → KYC → risk details (chassis) → submit; the proposal is approved automatically.
+2. Branch officer: issue the policy. The journal preview must balance and debit Premium Receivable with the gross premium and credit the Unearned Premium Reserve. The policy has a `POL-` number and is Issued/Active.
+3. Branch manager: "Record the premium receipt" from the policy. The amount is prefilled with the premium; allocate it to the installment. The preview must debit the bank and credit Premium Receivable. The receipt is Allocated.
+4. Claims officer: register a claim from Home, then reserve 200,000. The preview must debit Claims Incurred and credit the Outstanding Claims Reserve.
+5. Claims manager: approve 180,000 (the preview moves it to Claims Payable) and request release.
+6. Finance manager: pay (the preview debits Claims Payable and credits the bank).
+7. Claims manager: close the claim (the preview releases the remaining 20,000).
+8. Outcomes on the screens:
+   - the policy is still in force;
+   - the receipt is Allocated;
+   - the claim is Closed;
+   - the "View accounting" panels of the policy, receipt and claim list only Posted journals with the expected accounts;
+   - the trial balance says Balanced, with equal non-zero totals;
+   - the accountant's Home "Failed accounting events" queue is empty.
+
+Every journal preview is also checked line by line: it balances, its lines add up to its totals, and it shows no "would not post". Any uncaught page error or HTTP 5xx fails the step (A-149). The run acts on today's date inside the demo's open periods (A-148).
+
+**Not in it:** earning and closing the month (the checklist's original "earn → close month"). Closing the current month needs the bank statement imported and matched first: the bank reconciliation task blocks on the new receipt and claim payment. That is flow-audit steps 8–13, not a happy path. The close is covered by `Close/MonthEndCloseTest` and the flow audit.
+
+**Run it locally** (Postgres from docker compose; the database is wiped, A-147):
+```bash
+DB_DATABASE=erp_test_c scripts/e2e.sh     # or: DB_DATABASE=erp_test_c npm run test:e2e
+```
+`scripts/e2e.sh` (D-49):
+- runs `migrate:fresh --seed` and `php artisan erp:demo` on that database, and builds the frontend if `public/build/manifest.json` is missing;
+- starts `php artisan serve` on `E2E_PORT` (default 8771) and a queue worker;
+- waits until `http://127.0.0.1:<port>/login` with `Host: nonlife.localhost:<port>` answers 200;
+- runs the test against `http://nonlife.localhost:<port>` (Chrome resolves `*.localhost` to loopback);
+- stops both processes by PID, child processes included, and exits with the test's status.
+
+Options:
+- `CHROME` picks another Chrome binary.
+- `E2E_TENANT` and `ERP_ADMIN_PASSWORD` as for the demo.
+- `E2E_SKIP_SEED=1` reuses a seeded database.
+- Against a server you already run: `npm run test:e2e:run -- --base http://nonlife.localhost:8765`.
+
+On failure, `storage/e2e/` (gitignored) holds:
+- `failure-<role>.png` and the page URL, per signed-in role;
+- `trace-<role>.zip` (`npx playwright-core show-trace storage/e2e/trace-branch-manager.zip`);
+- `console.log`, with the failing step, the 5xx responses and the browser console;
+- `logs/server.log`, `logs/worker.log` and `logs/laravel-tail.log`.
+
+A full run takes about 40 seconds after seeding. On the final code it ran green twice in a row against `erp_test_c` on port 8771, after the full Pest suite (1357 passed). A deliberately wrong expected status failed with exit 1 and left the evidence above.
+
+**CI:** the `e2e` job in `.github/workflows/ci.yml`:
+- ubuntu-24.04, its own Postgres 17 service, PHP 8.4 (with pcntl, so `serve` stops its child on SIGTERM), Node 24;
+- `composer install`, `npm ci`, `npm run build`, `scripts/ci/prepare-database.sh`, then `scripts/e2e.sh` with `DB_DATABASE=erp` and `CHROME=/usr/bin/google-chrome` (preinstalled, nothing downloaded);
+- on failure it uploads `storage/e2e/` and `storage/logs/laravel.log` as `e2e-evidence`.
+
+Make `e2e` a required status check next to `backend` and `frontend`. The YAML was checked with PyYAML: jobs frontend, backend, e2e.
+
+**Files:** `tests/e2e/happy-path.mjs`, `tests/e2e/lib.mjs`, `scripts/e2e.sh`, `package.json` scripts `test:e2e` and `test:e2e:run`, `.gitignore` (`/storage/e2e`), `.github/workflows/ci.yml`. No application code, migrations or permissions changed.
+
+**Remaining:**
+- The demo story is dated August–September 2026 with periods to June 2027. After June 2027 the test refuses to start until the demo story moves forward (A-148).
+- The exit checklist row can move from gap to done once the job has run green on the hosted CI.

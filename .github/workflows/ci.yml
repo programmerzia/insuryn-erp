@@ -1,5 +1,5 @@
-# Design §9.1 DECISION: CI blocks merge on every test layer except the performance smoke. Make the `backend` and `frontend` jobs
-# required status checks in the branch protection of `main`. Each job only calls scripts/ci/*.sh, so any CI runs the same steps.
+# Design §9.1 DECISION: CI blocks merge on every test layer except the performance smoke. Make the `backend`, `frontend` and `e2e` jobs
+# required status checks in the branch protection of `main`. Each job only calls scripts/ci/*.sh (e2e: scripts/e2e.sh), so any CI runs the same steps.
 name: CI
 
 on:
@@ -74,3 +74,67 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
       - run: scripts/ci/backend.sh
+
+  # Slice 2.0c (design §9.1, CI-blocking): the Playwright happy path in a real browser — quote → policy → receipt → claim → close — on the Part A
+  # demo tenant. scripts/e2e.sh seeds the database, starts the server and a queue worker, runs tests/e2e/happy-path.mjs and stops them.
+  # playwright-core drives the runner's preinstalled Google Chrome, so no browser download.
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      # The database scripts/e2e.sh wipes and seeds (created by prepare-database.sh; the runtime role erp_app has its grants there).
+      DB_DATABASE: erp
+      E2E_PORT: 8771
+      CHROME: /usr/bin/google-chrome
+      ERP_CHROME_BINARY: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql, bcmath, intl, pcntl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('composer.lock') }}
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - run: npm ci
+      - run: npm run build
+      - name: Prepare database
+        run: scripts/ci/prepare-database.sh
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+      - run: scripts/e2e.sh
+      - name: Upload E2E evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidence
+          path: |
+            storage/e2e/
+            storage/logs/laravel.log
+          if-no-files-found: ignore
+          retention-days: 14
