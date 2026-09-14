@@ -18,8 +18,6 @@ export interface NavItem {
     any: string[];
     badge?: string;
     secondary?: boolean;
-    /** Design addendum v2 §B.6–B.8: the heading of a named sidebar group the item sits in. */
-    group?: string;
     /** Inertia page components (the list and the record it opens), so their code can be fetched ahead of the first visit. */
     page?: string;
     detail?: string;
@@ -64,13 +62,13 @@ export const navigation: NavItem[] = [
     { id: 'reports', detail: 'reports/Show', page: 'reports/Index', label: 'Reports', href: '/reports', icon: ChartColumn, any: [reader, 'reports.claims'] },
     // Market gap G5: the Regulatory dashboard, returns and the quarterly technical provisions run.
     { id: 'regulatory', page: 'regulatory/Dashboard', label: 'Regulatory dashboard', href: '/regulatory', icon: ShieldCheck, any: regulatory },
-    // Design addendum v2 §B.7: fixed assets (register, depreciation, classes) in the Assets & budgets group.
-    { id: 'fixed-assets', detail: 'fixedAssets/Show', page: 'fixedAssets/Index', label: 'Fixed assets', href: '/fixed-assets', icon: Armchair, any: assets, group: 'Assets & budgets' },
-    { id: 'depreciation', page: 'fixedAssets/Depreciation', label: 'Monthly depreciation', href: '/fixed-assets/depreciation', icon: TrendingDown, any: assets, group: 'Assets & budgets' },
+    // Design addendum v2 §B.7: fixed assets (register, depreciation, classes) (secondary items like the other finance registers).
+    { id: 'fixed-assets', detail: 'fixedAssets/Show', page: 'fixedAssets/Index', label: 'Fixed assets', href: '/fixed-assets', icon: Armchair, any: assets, secondary: true },
+    { id: 'depreciation', page: 'fixedAssets/Depreciation', label: 'Monthly depreciation', href: '/fixed-assets/depreciation', icon: TrendingDown, any: assets, secondary: true },
     // Design addendum v2 §B.8.1: budgets and the variance report.
-    { id: 'budgets', detail: 'budgets/Show', page: 'budgets/Index', label: 'Budgets', href: '/budgets', icon: PiggyBank, any: ['budget.prepare', 'budget.approve', reader], group: 'Assets & budgets' },
+    { id: 'budgets', detail: 'budgets/Show', page: 'budgets/Index', label: 'Budgets', href: '/budgets', icon: PiggyBank, any: ['budget.prepare', 'budget.approve', reader], secondary: true },
     // Design addendum v2 §B.6: petty cash floats, vouchers, replenishment and counts.
-    { id: 'petty-cash', detail: 'pettyCash/Show', page: 'pettyCash/Index', label: 'Petty cash', href: '/petty-cash', icon: Coins, any: ['pettycash.spend', 'pettycash.replenish', 'pettycash.approve', reader], group: 'Assets & budgets' },
+    { id: 'petty-cash', detail: 'pettyCash/Show', page: 'pettyCash/Index', label: 'Petty cash', href: '/petty-cash', icon: Coins, any: ['pettycash.spend', 'pettycash.replenish', 'pettycash.approve', reader], secondary: true },
     // Secondary: registers used weekly.
     { id: 'parties', label: 'Parties', href: '/parties', icon: Users, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
     { id: 'refunds', label: 'Refunds', href: '/refunds', icon: BanknoteArrowDown, any: collections, secondary: true },

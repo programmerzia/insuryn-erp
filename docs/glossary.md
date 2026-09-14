@@ -99,6 +99,31 @@ Bangla terms follow the words Bangladeshi non-life insurers and IDRA commonly us
 | Float | Imprest, petty cash fund | The fixed amount of petty cash a branch custodian holds, up to its limit. | ফ্লোট (খুচরা নগদ তহবিল) |
 | Voucher | Petty cash slip, chit | A record of one petty cash payment, with its receipt. | ভাউচার |
 | Replenishment | Top-up, refill | Paying the float back up to its limit for the vouchers spent, approved by someone other than the one who asks. | পুনঃপূরণ |
+## Payables, assets, budgets and petty cash
+
+| Use | Not | Meaning | Bangla |
+|---|---|---|---|
+| Supplier | Vendor (on payables screens), creditor | Someone the company pays for goods or services: a landlord, utility, garage, surveyor. | সরবরাহকারী |
+| Supplier bill | Invoice (for the record), AP bill, purchase bill | A supplier's invoice recorded for approval and payment; the supplier's own number is its invoice number. | সরবরাহকারীর বিল |
+| Payment run | Payment batch, bulk payment | The bills paid together from one bank account on a pay date: prepared, approved, released. | পেমেন্ট রান |
+| Release | Disburse, execute (for payment runs) | The third person's step that pays a run and produces the bank file. | রিলিজ |
+| VAT deducted at source (VDS) | VAT withheld | VAT the company keeps back from a supplier's bill and pays to the government. | উৎসে কর্তিত ভ্যাট |
+| Tax deducted at source (TDS) | Withholding tax, AIT (for suppliers) | Income tax the company keeps back from a supplier's bill. | উৎসে কর্তিত কর |
+| AP ageing | Payables ageing, creditors ageing | What is owed to suppliers, by how long past due. | প্রদেয় বয়সভিত্তিক বিশ্লেষণ |
+| Fixed asset | Capital item, asset (alone) | Furniture, computers, vehicles or fit-outs kept for more than a year and depreciated. | স্থায়ী সম্পদ |
+| Capitalise | Add an asset, book an asset | Record a purchase as a fixed asset instead of an expense. | মূলধনীকরণ |
+| Monthly depreciation | Depreciation run | The batch that posts each asset's depreciation for a month. | মাসিক অবচয় |
+| Net book value | NBV (in sentences), carrying amount | Cost less accumulated depreciation. | নিট বুক ভ্যালু |
+| Asset class | Asset category | Sets an asset's depreciation method, useful life and accounts. | সম্পদ শ্রেণি |
+| Dispose | Retire, scrap (for the action) | Sell or write off an asset, posting the gain or loss. | নিষ্পত্তি |
+| Budget | Plan, forecast | Expected income and expense per account, branch and month; each approved change is a new version. | বাজেট |
+| Budget variance | Budget vs actual | Actuals against the approved budget, for the month and the year to date. | বাজেট ভ্যারিয়েন্স |
+| Petty cash | Imprest (on screens), cash float (alone) | The small cash a branch keeps for small expenses; each branch's is a float. | পেটি ক্যাশ |
+| Float | Imprest | One branch's petty cash, held by its custodian, with a float limit. | ফ্লোট |
+| Custodian | Cashier, holder | The person who holds a float's cash and pays its vouchers. | রক্ষক |
+| Voucher | Petty cash slip, expense slip | One payment from a float, with its receipt. | ভাউচার |
+| Replenishment | Top-up, reimbursement | Paying a float back up from the bank by what its vouchers spent; someone other than the requester approves it. | রিপ্লেনিশমেন্ট |
+| Petty cash book | Cash book (alone) | A float's receipts, payments and running balance for a period. | পেটি ক্যাশ বই |
 
 ## Where the words live
 
