@@ -45,3 +45,8 @@ php artisan schedule:work &                                    # nightly jobs
   - bulk policy import
   - loans and final settlement in payroll
 - **Known demo quirk:** the petty cash and fixed asset demo entries add bank ledger lines that are not on the demo bank statement, so they show as unmatched on the bank screen.
+
+## Verified before the demo
+- `scripts/e2e.sh`: the core insurance flow (quote → issue → receipt → claim → pay → close) and the phone layout, in a real browser.
+- `node scripts/demo-flows.mjs http://nonlife.localhost:8765`: every action in the new modules (bill approve/post, payment run release and bank file, capitalise/dispose/transfer/depreciate, budget approve, petty cash voucher/replenish/count, hire/payroll post/pay/payslip PDF, treaty/facultative/reinsurer statement, Q4 returns and provisions, the September close) — all pass on a fresh demo.
+- Rules to know: Q4 2026 appears only via `?period=2026-Q4`; a Q4 return cannot be marked filed before 1 Oct; dispose assets before posting the month's depreciation.
