@@ -46,7 +46,7 @@ function attach(): void {
         <GeneratedDocuments v-if="generation" :generation="generation" />
         <h2 v-if="generation" class="text-ui font-medium">All documents</h2>
         <div v-if="documents.length" class="overflow-x-auto border border-line">
-            <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+            <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                 <colgroup><col /><col style="width: 90px" /><col style="width: 170px" /><col style="width: 110px" /><col style="width: 90px" /></colgroup>
                 <thead class="bg-surface-2 text-ink-2">
                     <tr class="h-(--row-h)">

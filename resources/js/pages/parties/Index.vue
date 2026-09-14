@@ -11,6 +11,7 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { serverPage } from '@/lib/paging';
 import { usePermissions } from '@/lib/permissions';
 
 interface PartyRow { id: string; kind: string; display_name: string; tax_id: string | null; mobile: string | null; roles: string[] }
@@ -38,6 +39,7 @@ const columns: DataColumn<PartyRow>[] = [
             title="Parties"
             :columns="columns"
             :rows="parties.data"
+            :page="serverPage(parties)"
             :row-key="(p) => p.id"
             empty-text="No parties yet: add the first customer."
             :action="can('party.manage') ? { label: 'New party' } : null"

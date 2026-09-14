@@ -88,12 +88,12 @@ function bars(days: { date: string; net: string }[]): { date: string; net: strin
 
             <section v-for="queue in queues" :key="queue.key" class="rounded-panel border border-line" :aria-labelledby="`queue-${queue.key}`">
                 <div class="flex h-11 items-center gap-3 border-b border-line bg-surface-2 px-4">
-                    <h2 :id="`queue-${queue.key}`" class="text-ui font-semibold">{{ queue.title }}</h2>
+                    <h2 :id="`queue-${queue.key}`" class="min-w-0 truncate text-ui font-semibold">{{ queue.title }}</h2>
                     <span v-if="!queue.cash" class="num inline-flex items-center gap-1.5 text-ui" :class="queue.count ? 'text-ink' : 'text-ink-2'">
                         <span v-if="queue.count" class="size-1.5 rounded-full bg-accent" aria-hidden="true" />{{ queue.count }}
                     </span>
                     <span v-if="queue.progress" class="text-ui text-ink-2 tabular-nums">{{ queue.progress.done }} of {{ queue.progress.total }} tasks done</span>
-                    <Link v-if="queue.href" :href="queue.href" class="ml-auto inline-flex items-center gap-1 text-ui text-accent-text hover:underline">
+                    <Link v-if="queue.href" :href="queue.href" class="ml-auto inline-flex shrink-0 items-center gap-1 text-ui whitespace-nowrap text-accent-text hover:underline">
                         Open queue <ArrowRight :size="14" :stroke-width="1.5" aria-hidden="true" />
                     </Link>
                 </div>
@@ -120,7 +120,23 @@ function bars(days: { date: string; net: string }[]): { date: string; net: strin
                     <Link :href="queue.emptyAction.href" class="text-accent-text hover:underline">{{ queue.emptyAction.label }}</Link>
                 </div>
 
-                <table v-else class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                <!-- GA-16: on a phone each row is a card: the first column (the link) and the amount on top, the other columns below. -->
+                <ul v-else class="divide-y divide-line sm:hidden" :aria-label="queue.title">
+                    <li v-for="(row, index) in queue.rows" :key="index" class="grid gap-0.5 px-4 py-2 text-dense">
+                        <div class="flex items-baseline gap-3">
+                            <PinLink v-if="row.href && queue.columns[0]" :href="row.href" :title="row.cells[queue.columns[0].id] ?? queue.title" class="min-w-0 truncate font-medium text-accent-text hover:underline">{{ cell(queue.columns[0].type, row.cells[queue.columns[0].id]) }}</PinLink>
+                            <span v-else-if="queue.columns[0]" class="min-w-0 truncate font-medium">{{ cell(queue.columns[0].type, row.cells[queue.columns[0].id]) }}</span>
+                            <span v-for="column in queue.columns.slice(1).filter((c) => c.type === 'money')" :key="column.id" class="num ml-auto shrink-0">{{ cell(column.type, row.cells[column.id]) }} <span class="text-ink-2">{{ currency }}</span></span>
+                        </div>
+                        <p class="flex flex-wrap items-center gap-x-2 text-ink-2">
+                            <template v-for="column in queue.columns.slice(1).filter((c) => c.type !== 'money')" :key="column.id">
+                                <StatusBadge v-if="column.type === 'status' && row.cells[column.id]" :status="row.cells[column.id]!" />
+                                <span v-else-if="row.cells[column.id]" class="min-w-0 [overflow-wrap:anywhere]"><span class="sr-only">{{ column.label }}: </span>{{ cell(column.type, row.cells[column.id]) }}</span>
+                            </template>
+                        </p>
+                    </li>
+                </ul>
+                <table v-if="!queue.cash && queue.rows.length > 0" class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:hidden">
                     <thead>
                         <tr class="h-8">
                             <th v-for="column in queue.columns" :key="column.id" class="border-b border-line px-4 font-medium whitespace-nowrap text-ink-2" :class="column.type === 'money' ? 'w-36 text-right' : 'text-left'">

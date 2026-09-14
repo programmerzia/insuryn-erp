@@ -11,6 +11,7 @@ import Toaster from '@/components/shell/Toaster.vue';
 import TopBar from '@/components/shell/TopBar.vue';
 import { type HelpModule, helpModule } from '@/lib/help';
 import { openPalette, paletteOpen } from '@/lib/palette';
+import { navOpen, toggleNavigation } from '@/lib/phone';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useShortcut } from '@/lib/shortcuts';
 import { confirmationToast, followStep, type NextStep, toast } from '@/lib/toasts';
@@ -32,7 +33,9 @@ onBeforeUnmount(() => {
 
 const page = usePage<SharedProps>();
 const preferences = usePreferences();
-useShortcut('app.sidebar', () => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed));
+useShortcut('app.sidebar', () => toggleNavigation(() => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed)));
+// GA-16: a page opens with the phone menu closed.
+navOpen.value = false;
 useShortcut('app.palette', openPalette, { allowInInputs: true });
 useShortcut('app.home', () => router.visit('/home'), { allowInInputs: true });
 useShortcut('app.theme', () => savePreference('theme', preferences.theme === 'dark' ? 'light' : 'dark', 0), { allowInInputs: true });
@@ -54,14 +57,16 @@ watch(() => page.props.errors?.form, (message) => message && toast(message, { to
 <template>
     <Head :title="title" />
     <a href="#main" class="sr-only z-50 rounded-control bg-surface px-3 py-2 text-ui text-ink focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:shadow-float">Skip to the main content</a>
-    <div class="grid h-screen grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-surface text-ink">
+    <div class="grid h-screen grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)_auto] bg-surface text-ink" @keydown.esc="navOpen = false">
         <TopBar class="col-span-3 col-start-1 row-start-1" />
         <TabStrip class="col-span-3 col-start-1 row-start-2" />
         <Sidebar class="col-start-1 row-start-3" />
-        <main id="main" tabindex="-1" class="col-start-2 row-start-3 min-h-0 outline-none" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4'">
+        <main id="main" tabindex="-1" class="col-start-2 row-start-3 min-h-0 min-w-0 outline-none max-sm:col-span-3 max-sm:col-start-1" :class="fill ? 'flex flex-col' : 'overflow-y-auto px-6 py-4 max-sm:px-3'">
             <slot />
         </main>
-        <HelpPanel v-if="help && preferences.help_open" :module="help" class="col-start-3 row-start-3" />
+        <!-- GA-16: on a phone the sidebar opens over the page; tapping outside it or Escape closes it. -->
+        <div v-if="navOpen" class="fixed inset-x-0 top-(--topbar-h) bottom-0 z-30 bg-scrim sm:hidden" aria-hidden="true" @click="navOpen = false" />
+        <HelpPanel v-if="help && preferences.help_open" :module="help" class="col-start-3 row-start-3 max-sm:fixed max-sm:inset-x-0 max-sm:top-(--topbar-h) max-sm:bottom-0 max-sm:z-30 max-sm:w-auto" />
         <StatusBar class="col-span-3 col-start-1 row-start-4" />
         <Toaster />
         <CommandPalette v-if="paletteOpen" />

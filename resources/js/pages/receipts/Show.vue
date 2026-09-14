@@ -101,7 +101,7 @@ const facts = computed(() => [
                 </p>
                 <h2 class="mb-2 text-ui font-medium">Allocations</h2>
                 <div class="max-w-[760px] overflow-x-auto border border-line">
-                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                         <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Policy</th><th class="w-32 border-b border-line px-3 text-left font-medium">Posted</th><th class="w-36 border-b border-line px-3 text-right font-medium">Amount (BDT)</th><th class="w-32 border-b border-line px-3 text-left font-medium">Reversed</th></tr></thead>
                         <tbody>
                             <tr v-for="a in allocations" :key="a.id" class="h-(--row-h)"><td class="border-b border-line px-3"><Link v-if="a.policy_id" :href="`/policies/${a.policy_id}`" class="text-accent-text hover:underline">{{ a.policy_number }}</Link><template v-else>{{ a.policy_number }}</template></td><td class="border-b border-line px-3">{{ formatDate(a.posted_on) }}</td><td class="num border-b border-line px-3">{{ formatMoney(a.amount) }}</td><td class="border-b border-line px-3 text-danger">{{ formatDate(a.reversed_on) }}</td></tr>

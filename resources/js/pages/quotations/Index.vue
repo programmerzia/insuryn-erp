@@ -13,7 +13,7 @@ interface QuotationRow {
     id: string; number: string | null; status: string; customer: string | null; product: string; producer: string | null; producer_eligible: boolean | null;
     inception: string; valid_until: string | null; sum_insured: string | null; gross_premium: string | null; created_at: string; created_by: string;
 }
-const props = defineProps<{ quotations: QuotationRow[]; statuses: string[]; currency: string; canCreate: boolean }>();
+const props = defineProps<{ quotations: QuotationRow[]; quotationsTotal?: number; statuses: string[]; currency: string; canCreate: boolean }>();
 
 const active = ref<string | null>(null);
 const eligibility = (q: QuotationRow) => (q.producer === null ? 'Direct' : q.producer_eligible ? 'Licensed' : 'Not licensed for this class');
@@ -37,6 +37,7 @@ const columns: DataColumn<QuotationRow>[] = [
             title="Quotes"
             :columns="columns"
             :rows="quotations"
+            :total="quotationsTotal ?? null"
             :row-key="(q) => q.id"
             :currency="currency"
             empty-text="No quotations yet."

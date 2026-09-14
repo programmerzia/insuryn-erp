@@ -84,8 +84,7 @@ final class ProducersPageController
             'producers' => $rows,
             'channels' => $channels->map(fn (object $c): array => (array) $c)->values()->all(),
             'branches' => $branches->map(fn (object $b): array => (array) $b)->values()->all(),
-            'parties' => DB::table('parties')->whereNotIn('id', DB::table('producers')->select('party_id'))->orderBy('display_name')->limit(500)->get(['id', 'display_name'])
-                ->map(fn (object $p): array => (array) $p)->values()->all(),
+            // GA-40: the new producer's party is looked up (GET /lookup/party) instead of a select capped at 500 parties.
             'can' => ['manage' => $this->permissions->has($actor, 'agent.manage'), 'export_register' => $this->permissions->has($actor, 'reports.regulatory')],
         ]);
     }
@@ -152,6 +151,7 @@ final class ProducersPageController
                     ->orderBy('p.code')->get(['p.id', 'p.code', 'h.level_code'])->map(fn (object $r): array => (array) $r)->values()->all(),
             ],
             'compensation' => [
+                'entries_total' => DB::table('commission_entries')->where('agent_id', $model->id)->count(), // GA-40: the latest 100 are listed
                 'entries' => DB::table('commission_entries as e')->leftJoin('policies as p', 'p.id', '=', 'e.policy_id')->where('e.agent_id', $model->id)->orderByDesc('e.earned_on')->orderByDesc('e.created_at')->limit(100)
                     ->get(['e.id', 'e.earned_on', 'e.kind', 'e.beneficiary_role', 'e.level_code', 'p.number', 'e.policy_id', 'e.rate_bp', 'e.amount_minor', 'e.withholding_minor', 'e.status'])
                     ->map(fn (object $e): array => ['id' => (string) $e->id, 'earned_on' => (string) $e->earned_on, 'kind' => (string) $e->kind, 'role' => (string) $e->beneficiary_role, 'level' => $e->level_code,

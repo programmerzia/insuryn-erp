@@ -71,7 +71,7 @@ it('lists products with their versions and creates a product and a version', fun
 
 it('quotes a policy with payers from the form and takes it through issue, endorsement and cancellation', function (): void {
     actingAs($this->admin)->get('/policies/create', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('policies/Create')
-        ->has('branches', 1)->has('products', 1)->has('parties', 2)->has('agents', 1));
+        ->has('branches', 1)->has('products', 1)->missing('parties')->has('agents', 1)); // GA-40: payers are looked up, not listed
 
     actingAs($this->admin)->post('/policies', ['branch_id' => $this->ctx['branch_id'], 'product_id' => $this->world['product_id'], 'policyholder_party_id' => $this->world['policyholder_id'],
         'agent_id' => $this->world['agent_id'], 'inception' => '2026-09-01', 'premium' => '120,000.00', 'installment_count' => 2], $this->headers);

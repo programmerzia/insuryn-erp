@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import LookupInput, { type LookupResult } from '@/components/forms/LookupInput.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
-import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import DetailList from '@/components/table/DetailList.vue';
@@ -15,17 +15,19 @@ import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
-import { refundAmount } from '@/lib/drawerDefaults';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 
 interface RefundRow { id: string; policy_number: string | null; amount: string; reason: string; status: string; requested_at: string; decision_reason: string | null }
 const props = defineProps<{
-    refundable: { policy_id: string; policy_number: string | null; policyholder: string; available: string }[];
     refunds: RefundRow[];
+    /** GA-40: every refund, when `refunds` holds only the latest. */
+    refundsTotal?: number;
+    /** GA-40: how many policies have money to refund (the request drawer looks them up). */
+    refundableCount: number;
     can: { request: boolean; release: boolean };
     /** GA-01: opened from a cancellation, the request starts with that policy and what is still refundable on it. */
-    prefill?: { policy_id: string; amount: string; reason: string } | null;
+    prefill?: { policy_id: string; label: string; amount: string; reason: string } | null;
 }>();
 
 const active = ref<string | null>(null);
@@ -34,9 +36,11 @@ const requestForm = useForm({ policy_id: props.prefill?.policy_id ?? '', amount:
 // Gap fix GA-19: a refund is paid today unless changed; the request starts with what is still refundable on the chosen policy (GA-01's prefill kept).
 const today = useBusinessToday();
 const paidOn = ref(today);
-watch(() => requestForm.policy_id, (policyId, previous) => {
-    if (requestForm.amount === '' || requestForm.amount === refundAmount(props.refundable, previous ?? '')) requestForm.amount = refundAmount(props.refundable, policyId);
-});
+let lastRefundable = props.prefill?.amount ?? '';
+function policyPicked(result: LookupResult | null): void {
+    if (requestForm.amount === '' || requestForm.amount === lastRefundable) requestForm.amount = result?.amount ?? '';
+    lastRefundable = result?.amount ?? '';
+}
 const rejectReason = ref('');
 const confirm = useJournalConfirm();
 const columns: DataColumn<RefundRow>[] = [
@@ -64,11 +68,12 @@ function reject(row: RefundRow): void {
             title="Refunds"
             :columns="columns"
             :rows="refunds"
+            :total="refundsTotal ?? null"
             :row-key="(r) => r.id"
             currency="BDT"
             empty-text="No refunds: they follow cancelled policies with money left over."
             :empty-action="{ label: 'Open policies', href: '/policies' }"
-            :action="can.request && refundable.length ? { label: 'Request a refund' } : null"
+            :action="can.request && refundableCount > 0 ? { label: 'Request a refund' } : null"
             :inspector-title="(r) => `Refund on ${r.policy_number}`"
             :inspector-subtitle="(r) => r.reason"
             :primary-label="(r) => (releasable(r) ? 'Pay refund' : undefined)"
@@ -91,7 +96,7 @@ function reject(row: RefundRow): void {
         <Drawer v-model:open="requesting" title="Request a refund">
             <FormLayout submit-label="Request refund" :dirty="requestForm.isDirty" :processing="requestForm.processing" :error="(requestForm.errors as Record<string, string>).form" @submit="requestForm.post('/refunds', { onSuccess: () => (requesting = false) })" @cancel="requesting = false">
                 <Field id="policy_id" label="Cancelled policy" :error="requestForm.errors.policy_id">
-                    <SelectInput id="policy_id" v-model="requestForm.policy_id" placeholder="Choose a policy" :options="refundable.map((r) => ({ value: r.policy_id, label: `${r.policy_number} · ${r.policyholder} · ${formatMoney(r.available)} due` }))" />
+                    <LookupInput id="policy_id" v-model="requestForm.policy_id" type="refundable" @selected="policyPicked" :initial="prefill ? { id: prefill.policy_id, label: prefill.label } : null" placeholder="Policy number or policyholder" />
                 </Field>
                 <Field id="amount" label="Amount (BDT)" :error="requestForm.errors.amount"><MoneyInput v-model="requestForm.amount" /></Field>
                 <Field id="reason" label="Reason" :error="requestForm.errors.reason"><TextInput v-model="requestForm.reason" /></Field>

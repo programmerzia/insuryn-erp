@@ -4,6 +4,8 @@ import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toasts';
@@ -27,6 +29,14 @@ const drafts = ref<Record<string, string>>({});
 const saving = ref<string | null>(null);
 const metricWords = { premium: 'Written premium (BDT)', policies: 'Policies', persistency: '13th-month persistency (%)', collections: 'Collections (BDT)' };
 const visible = computed(() => props.rows[subject.value]);
+// GA-40: the grid is the shared table (sort, filter, export); the target cell stays editable in place.
+const columns = computed<DataColumn<Row>[]>(() => [
+    { id: 'code', header: 'Code', value: (r) => r.code, width: 110 },
+    { id: 'name', header: 'Name', value: (r) => r.name, width: 240 },
+    { id: 'target', header: 'Target', type: 'number', value: (r) => r.target, width: 160 },
+    { id: 'actual', header: 'Actual', type: 'number', value: (r) => (subject.value !== 'producer' && props.metric === 'persistency' ? null : r.actual), width: 160 },
+    { id: 'achievement', header: 'Achieved (%)', type: 'number', value: (r) => r.achievement_percent, width: 130 },
+]);
 
 function reload(changes: Record<string, string>): void {
     router.get('/distribution/targets', { period_type: props.periodType, period_start: props.periodStart, metric: props.metric, ...changes }, { preserveState: true, replace: true });
@@ -63,30 +73,19 @@ function save(row: Row): void {
             <button v-for="tab in [{ id: 'producer', label: 'Producers' }, { id: 'branch', label: 'Branches' }, { id: 'channel', label: 'Channels' }] as const" :key="tab.id" type="button" role="tab" :aria-selected="subject === tab.id"
                 class="-mb-px h-8 border-b-2 text-ui" :class="subject === tab.id ? 'border-accent text-ink' : 'border-transparent text-ink-2 hover:text-ink'" @click="subject = tab.id">{{ tab.label }}</button>
         </div>
-        <div class="max-w-[960px] overflow-x-auto border border-line">
-            <table class="w-full border-separate border-spacing-0 text-dense">
-                <thead class="sticky top-0 bg-surface-2 text-ink-2">
-                    <tr class="h-(--row-h)">
-                        <th class="w-24 border-b border-line px-3 text-left font-medium">Code</th><th class="border-b border-line px-3 text-left font-medium">Name</th>
-                        <th class="w-40 border-b border-line px-3 text-right font-medium">Target</th><th class="w-40 border-b border-line px-3 text-right font-medium">Actual</th><th class="w-32 border-b border-line px-3 text-right font-medium">Achieved (%)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="row in visible" :key="row.id" class="h-(--row-h)">
-                        <td class="border-b border-line px-3"><Link v-if="subject === 'producer'" :href="`/distribution/producers/${row.id}?tab=production`" class="text-accent-text hover:underline">{{ row.code }}</Link><template v-else>{{ row.code }}</template></td>
-                        <td class="truncate border-b border-line px-3">{{ row.name }}</td>
-                        <td class="border-b border-line px-1">
-                            <input v-if="can.edit" :value="drafts[row.id] ?? row.target ?? ''" :aria-label="`Target for ${row.code}`" :inputmode="metric === 'policies' ? 'numeric' : 'decimal'" :disabled="saving === row.id"
-                                class="h-7 w-full rounded-control border border-transparent bg-transparent px-2 text-right tabular-nums hover:border-line-control focus:border-line-control focus:bg-surface"
-                                placeholder="—" @input="(e) => (drafts[row.id] = (e.target as HTMLInputElement).value)" @keydown.enter.prevent="save(row)" @blur="save(row)" />
-                            <span v-else class="block px-2 text-right tabular-nums">{{ row.target ?? '—' }}</span>
-                        </td>
-                        <td class="num border-b border-line px-3">{{ subject !== 'producer' && metric === 'persistency' ? '—' : row.actual }}</td>
-                        <td class="num border-b border-line px-3">{{ row.achievement_percent ?? '—' }}</td>
-                    </tr>
-                    <tr v-if="visible.length === 0"><td colspan="5" class="px-3 py-6 text-ui text-ink-2">Nothing to set targets for yet.</td></tr>
-                </tbody>
-            </table>
+        <div class="max-w-[960px] border border-line" data-testid="targets-grid">
+            <DataTable :id="`targets-${subject}`" :key="subject" :label="`Targets for ${subject}s`" :columns="columns" :rows="visible" :row-key="(r) => r.id" :url-sync="false" :open-on-click="false" compact-toolbar
+                empty-text="Nothing to set targets for yet.">
+                <template #cell-code="{ row }"><Link v-if="subject === 'producer'" :href="`/distribution/producers/${row.id}?tab=production`" class="text-accent-text hover:underline">{{ row.code }}</Link><template v-else>{{ row.code }}</template></template>
+                <template #cell-target="{ row }">
+                    <input v-if="can.edit" :value="drafts[row.id] ?? row.target ?? ''" :aria-label="`Target for ${row.code}`" :inputmode="metric === 'policies' ? 'numeric' : 'decimal'" :disabled="saving === row.id"
+                        class="h-7 w-full rounded-control border border-transparent bg-transparent px-2 text-right tabular-nums hover:border-line-control focus:border-line-control focus:bg-surface"
+                        placeholder="—" @click.stop @input="(e) => (drafts[row.id] = (e.target as HTMLInputElement).value)" @keydown.enter.prevent="save(row)" @blur="save(row)" />
+                    <span v-else class="block px-2 text-right tabular-nums">{{ row.target ?? '—' }}</span>
+                </template>
+                <template #cell-actual="{ row, value }">{{ value ?? (subject !== 'producer' && metric === 'persistency' ? '—' : row.actual) }}</template>
+                <template #cell-achievement="{ row }">{{ row.achievement_percent ?? '—' }}</template>
+            </DataTable>
         </div>
     </AppLayout>
 </template>

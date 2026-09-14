@@ -22,7 +22,7 @@ import type { ProposalData } from '@/lib/proposals';
  * lets an underwriter approve, approve with a loading (special terms, reason required) or decline (reason required). Nobody decides a proposal they prepared.
  */
 interface Referral extends ProposalData { risk: { label_en: string; label_bn: string; value: string }[]; can_decide: boolean }
-const props = defineProps<{ referrals: Referral[]; currency: string }>();
+const props = defineProps<{ referrals: Referral[]; referralsTotal?: number; currency: string }>();
 
 const preferences = usePreferences();
 // GA-07: finance and administrators decide referrals but do not open the quotes screen.
@@ -63,6 +63,7 @@ const title = computed(() => (form.decision === 'decline' ? 'Decline' : form.dec
             title="Referrals"
             :columns="columns"
             :rows="referrals"
+            :total="referralsTotal ?? null"
             :row-key="(r) => r.id"
             :currency="currency"
             empty-text="No proposals are referred to underwriting."

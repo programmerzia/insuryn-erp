@@ -26,8 +26,9 @@ export interface LookupResult {
     amount?: string;
 }
 
-const props = withDefaults(defineProps<{ type: LookupType; placeholder?: string; initial?: LookupResult | null; creatable?: boolean; createContext?: Record<string, string>; id?: string; branchId?: string }>(), {
-    placeholder: undefined, initial: null, creatable: false, createContext: () => ({}), id: undefined, branchId: '',
+/** `params`: extra query parameters for the lookup (GA-40: `for: 'agent-cash'` limits producers to the branches the user deposits for). */
+const props = withDefaults(defineProps<{ type: LookupType; placeholder?: string; initial?: LookupResult | null; creatable?: boolean; createContext?: Record<string, string>; id?: string; branchId?: string; params?: Record<string, string> }>(), {
+    placeholder: undefined, initial: null, creatable: false, createContext: () => ({}), id: undefined, branchId: '', params: () => ({}),
 });
 const model = defineModel<string>({ default: '' });
 const emit = defineEmits<{ selected: [result: LookupResult | null] }>();
@@ -43,7 +44,7 @@ const open = ref(false);
 const active = ref(0);
 const loading = ref(false);
 const failed = ref<string | null>(null);
-const recentKey = `lookup-${props.type}`;
+const recentKey = `lookup-${props.type}${props.params.for ? `-${props.params.for}` : ''}`;
 const recents = computed(() => ((preferences.drafts[recentKey] as LookupResult[] | undefined) ?? []).slice(0, 5));
 const shown = computed(() => (query.value.trim() === '' || query.value === selectedLabel.value ? recents.value : results.value));
 const selectedLabel = ref(props.initial?.label ?? '');
@@ -64,7 +65,7 @@ watch(query, (value) => {
     timer = setTimeout(async () => {
         controller = new AbortController();
         try {
-            results.value = (await requestJson<{ results: LookupResult[] }>('GET', `/lookup/${props.type}?q=${encodeURIComponent(value)}`, undefined, controller.signal)).results;
+            results.value = (await requestJson<{ results: LookupResult[] }>('GET', `/lookup/${props.type}?${new URLSearchParams({ ...props.params, q: value }).toString()}`, undefined, controller.signal)).results;
             failed.value = null;
         } catch (error) {
             if (error instanceof HttpError) failed.value = error.status === 403 ? 'You cannot look these up.' : 'The search did not answer. Try again.';

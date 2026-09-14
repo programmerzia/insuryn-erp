@@ -28,8 +28,10 @@ const props = withDefaults(
         primaryLabel?: (row: T) => string | undefined;
         urlSync?: boolean;
         emptyAction?: { label: string; href?: string } | null;
+        /** GA-40: the server's row count when `rows` are only the first of them (a capped list without pages). */
+        total?: number | null;
     }>(),
-    { currency: undefined, page: undefined, selectable: false, action: null, inspectorTitle: undefined, inspectorSubtitle: undefined, primaryLabel: undefined, urlSync: true, emptyAction: null },
+    { currency: undefined, page: undefined, selectable: false, action: null, inspectorTitle: undefined, inspectorSubtitle: undefined, primaryLabel: undefined, urlSync: true, emptyAction: null, total: null },
 );
 const emit = defineEmits<{ action: []; primary: [row: T] }>();
 const active = defineModel<string | null>('active', { default: null });
@@ -48,6 +50,7 @@ const selected = computed(() => (active.value === null ? null : (props.rows.find
             :row-key="rowKey"
             :currency="currency"
             :page="page"
+            :total="total"
             :selectable="selectable"
             :empty-text="emptyText"
             :empty-action="emptyState"

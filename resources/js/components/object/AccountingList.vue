@@ -21,7 +21,7 @@ const captions = useLineCaptions();
                 <span class="text-ink-2">{{ formatDate(journal.date) }}</span>
                 <StatusBadge :status="journal.status" class="ml-auto" />
             </header>
-            <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+            <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                 <colgroup><col /><col style="width: 128px" /><col style="width: 128px" /></colgroup>
                 <thead class="sr-only"><tr><th>Account</th><th>Debit ({{ currency }})</th><th>Credit ({{ currency }})</th></tr></thead>
                 <tbody>

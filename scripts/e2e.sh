@@ -4,7 +4,8 @@
 #      environment, never only in .env — ASSUMPTION A-147);
 #   2. builds the frontend when public/build/manifest.json is missing;
 #   3. starts `php artisan serve` on E2E_PORT (default 8771) and a queue worker, and waits until the demo tenant's sign-in page answers;
-#   4. runs tests/e2e/happy-path.mjs against http://<E2E_TENANT>.localhost:<E2E_PORT> (Chrome resolves *.localhost to 127.0.0.1);
+#   4. runs tests/e2e/happy-path.mjs against http://<E2E_TENANT>.localhost:<E2E_PORT> (Chrome resolves *.localhost to 127.0.0.1), then
+#      tests/e2e/phone-width.mjs (GA-16: the phone-used screens at 400 px);
 #   5. stops the server and the worker (by the PIDs it started) and exits with the test's status.
 # Failure evidence (screenshots, Playwright traces, console log, server and worker logs) lands in storage/e2e/ (gitignored).
 #
@@ -84,5 +85,10 @@ if [ -z "$ready" ]; then echo "e2e: the ${TENANT} sign-in page did not answer 20
 set +e
 node tests/e2e/happy-path.mjs --base "http://${TENANT}.localhost:${PORT}"
 status=$?
+# Gap audit GA-16: the phone-used screens fit 400 px and the sidebar hides behind the menu button there.
+if [ "$status" -eq 0 ]; then
+    node tests/e2e/phone-width.mjs --base "http://${TENANT}.localhost:${PORT}"
+    status=$?
+fi
 set -e
 exit "$status"

@@ -15,7 +15,7 @@ import { formatDate, formatMoney } from '@/lib/format';
  */
 interface Plan { id: string; code: string; name: string; rate_percent: string; withholding: string | null; status: string }
 interface Statement { id: string; number: string; agent_code: string; agent_name: string; agent_id: string; up_to: string; period_end: string | null; gross: string; withholding: string; advances: string; net: string; status: string; paid_via: string; approved_on: string | null; paid_on: string | null }
-defineProps<{ plans: Plan[]; statements: Statement[]; can: { run: boolean } }>();
+defineProps<{ plans: Plan[]; statements: Statement[]; statementsTotal?: number; can: { run: boolean } }>();
 
 const view = ref<'statements' | 'plans'>('statements');
 const active = ref<string | null>(null);
@@ -57,6 +57,7 @@ const planColumns: DataColumn<Plan>[] = [
             title="Commission history"
             :columns="statementColumns"
             :rows="statements"
+            :total="statementsTotal ?? null"
             :row-key="(s) => s.id"
             currency="BDT"
             empty-text="No commission statement has been approved yet."

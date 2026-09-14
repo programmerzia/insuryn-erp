@@ -6,6 +6,7 @@ import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
 import { usePermissions } from '@/lib/permissions';
 
@@ -33,6 +34,7 @@ const columns: DataColumn<ClaimRow>[] = [
             title="Claims"
             :columns="columns"
             :rows="claims.data"
+            :page="serverPage(claims)"
             :row-key="(c) => c.id"
             currency="BDT"
             empty-text="No claims yet."

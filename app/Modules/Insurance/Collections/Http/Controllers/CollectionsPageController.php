@@ -42,6 +42,12 @@ final class CollectionsPageController
 {
     public const AREA = ['receipt.create', 'receipt.allocate', 'receipt.refund_request', 'receipt.refund_release', 'reports.financial'];
 
+    /** GA-40: the allocation workbench lists this many candidate installments and says how many there are. */
+    private const CANDIDATE_LIMIT = 500;
+
+    /** GA-40: the refunds list shows the latest this many and says how many there are. */
+    private const REFUND_LIMIT = 100;
+
     /** ASSUMPTION: A-53 — who may attach documents to a receipt is not specified: the people who record or allocate receipts. Reading follows AREA. */
     public const ATTACH_DOCUMENTS = ['receipt.create', 'receipt.allocate'];
 
@@ -54,7 +60,7 @@ final class CollectionsPageController
         // G2: opens for the area's permissions in any scope; a branch-scoped user lists only their branches' receipts.
         $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
-        $page = $reach->constrain(DB::table('receipts'), 'entity_id', 'branch_id')->where('entity_id', $entity['id'])->orderByDesc('value_date')->orderByDesc('number')->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
+        $page = $reach->constrain(DB::table('receipts'), 'entity_id', 'branch_id')->where('entity_id', $entity['id'])->orderByDesc('value_date')->orderByDesc('number')->paginate(PageSupport::listPageSize())->withQueryString();
         $rows = [];
         foreach ($page->items() as $r) {
             /** @var object{id: string, number: string, channel: string, amount_minor: int|string, currency: string, value_date: string, reference: string|null, status: string, collected_by_agent_id: string|null} $r */
@@ -221,7 +227,9 @@ final class CollectionsPageController
         $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
             ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             // GA-03: the policy the money was taken for comes first, then the payer's own installments.
-            ->orderByRaw('case when p.id = ? then 0 when i.payer_party_id = ? then 1 else 2 end', [$r->for_policy_id, $r->party_id])->orderBy('i.due_date')->orderBy('p.number')->limit(500)
+            ->orderByRaw('case when p.id = ? then 0 when i.payer_party_id = ? then 1 else 2 end', [$r->for_policy_id, $r->party_id])->orderBy('i.due_date')->orderBy('p.number');
+        $candidatesTotal = (clone $rows)->count(); // GA-40: the workbench says when it lists only the first of them
+        $rows = $rows->limit(self::CANDIDATE_LIMIT)
             ->get(['i.id', 'i.no', 'i.due_date', 'i.payer_party_id', 'p.number', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
         foreach ($rows as $row) {
             $candidates[] = ['id' => (string) $row->id, 'policy_number' => (string) $row->number, 'no' => (int) $row->no, 'due_date' => (string) $row->due_date,
@@ -236,6 +244,7 @@ final class CollectionsPageController
                 'for_policy' => $r->for_policy_number === null ? null : (string) $r->for_policy_number],
             'suspenseItemId' => $item === null ? null : (string) $item->id,
             'candidates' => $candidates,
+            'candidatesTotal' => $candidatesTotal,
             'today' => app(BusinessClock::class)->today($entity['id'])->toDateString(), // slice 2.1b: the company's today, not the browser's
         ]);
     }
@@ -270,20 +279,25 @@ final class CollectionsPageController
         $reach = $this->permissions->authorizeArea($actor, self::AREA); // H1: a branch-scoped user sees only their branches' refunds
         $entity = PageSupport::entity();
 
-        $rows = array_map(fn (array $r): array => $r + ['available' => PageSupport::money($r['available_minor'], $r['currency'])], $refundable->refundable($entity['id'], $reach));
+        $rows = $refundable->refundable($entity['id'], $reach);
         $policy = $request->query('policy');
         // GA-01: opened from a cancellation (/refunds?policy=…) the request starts with that policy and everything still refundable on it.
         $prefill = null;
         foreach ($rows as $row) {
             if ($row['policy_id'] === $policy) {
-                $prefill = ['policy_id' => $row['policy_id'], 'amount' => $row['available'], 'reason' => 'Policy cancelled'];
+                $prefill = ['policy_id' => $row['policy_id'], 'label' => trim(($row['policy_number'] ?? '').' · '.$row['policyholder']), 'amount' => PageSupport::money($row['available_minor'], $row['currency']),
+                    'reason' => 'Policy cancelled'];
             }
         }
 
+        $refunds = $reach->constrain(DB::table('refunds as r'), 'r.entity_id', 'r.branch_id')->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')->where('r.entity_id', $entity['id']);
+
         return Inertia::render('refunds/Index', [
-            'refundable' => $rows,
+            // GA-40: the request drawer looks the policy up (GET /lookup/refundable); the page only needs to know whether there is one.
+            'refundableCount' => count($rows),
+            'refundsTotal' => (clone $refunds)->count(),
             'prefill' => $prefill,
-            'refunds' => $reach->constrain(DB::table('refunds as r'), 'r.entity_id', 'r.branch_id')->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')->where('r.entity_id', $entity['id'])->orderByDesc('r.requested_at')->limit(100)
+            'refunds' => $refunds->orderByDesc('r.requested_at')->limit(self::REFUND_LIMIT)
                 ->get(['r.id', 'p.number', 'r.amount_minor', 'r.currency', 'r.reason', 'r.status', 'r.requested_at', 'r.decision_reason'])
                 ->map(fn (object $r): array => ['id' => (string) $r->id, 'policy_number' => $r->number, 'amount' => PageSupport::money((int) $r->amount_minor, (string) $r->currency),
                     'reason' => (string) $r->reason, 'status' => (string) $r->status, 'requested_at' => (string) $r->requested_at, 'decision_reason' => $r->decision_reason])->values()->all(),
@@ -332,9 +346,7 @@ final class CollectionsPageController
                 'deposited' => $money($r['deposited_minor']), 'undeposited' => $money($r['undeposited_minor']), 'gl' => $money($r['gl_minor']), 'difference' => $money($r['difference_minor']),
                 'oldest_undeposited_on' => $r['oldest_undeposited_on'], 'days_undeposited' => $r['days_undeposited']], $result['rows']),
                 'totals' => array_map($money, $result['totals'])],
-            // GA-19: code and name, so the deposit drawer's agent lookup can show the chosen agent as code · name.
-            'agents' => $reach->constrain(DB::table('producers as a')->join('branches as b', 'b.id', '=', 'a.branch_id')->join('parties as p', 'p.id', '=', 'a.party_id'), 'b.entity_id', 'a.branch_id')->where('a.status', 'active')->orderBy('a.code')
-                ->get(['a.id', 'a.code', 'p.display_name as name'])->map(fn (object $a): array => (array) $a)->values()->all(),
+            // GA-40: the deposit's agent is looked up (GET /lookup/agent?for=agent-cash, limited to the same branches).
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('bank_name')
                 ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
         ]);

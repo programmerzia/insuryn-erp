@@ -3,7 +3,8 @@
  * where it posts and which party roles it offers. Customers become customer + policyholder; payees (flow fix X8) are a vendor such as a garage
  * or hospital, or a beneficiary, created while approving a claim payment. GA-17: a new customer also takes a mobile number, email and NID/BRN.
  */
-export type LookupType = 'customer' | 'agent' | 'policy' | 'installment' | 'payee' | 'account' | 'payer'; // GA-21: payer of a claim recovery
+/** GA-40: `party` is any active party (a producer's person or organisation); `refundable` a policy with money still refundable. GA-21: `payer` of a claim recovery. */
+export type LookupType = 'customer' | 'agent' | 'policy' | 'installment' | 'payee' | 'account' | 'payer' | 'party' | 'refundable';
 
 export interface LookupCreateConfig {
     noun: string;

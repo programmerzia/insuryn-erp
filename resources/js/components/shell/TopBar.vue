@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Bell, ChevronDown, CircleHelp, CircleUser, Languages, LogOut, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-vue-next';
+import { Bell, Building2, ChevronDown, CircleHelp, CircleUser, Languages, LogOut, Menu as MenuIcon, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-vue-next';
 import { computed } from 'vue';
 import Logo from '@/components/Logo.vue';
 import Kbd from '@/components/ui/Kbd.vue';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu';
 import { helpModule } from '@/lib/help';
 import { openPalette } from '@/lib/palette';
+import { navOpen, toggleNavigation } from '@/lib/phone';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { shortcutKeys } from '@/lib/shortcuts';
 import type { SharedProps } from '@/types/shared';
@@ -24,19 +25,25 @@ const density = computed({ get: () => preferences.density, set: (value: string) 
 // switch no longer changes it, so choosing a language here also resets the panel to it.
 const language = computed({ get: () => preferences.locale, set: (value: string) => { savePreference('locale', value, 0); savePreference('help_locale', null, 0); } });
 const toggleSidebar = () => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed);
+// GA-16: on a phone the same button (☰) opens the sidebar over the page.
+const toggleMenu = () => toggleNavigation(toggleSidebar);
 const signOut = () => router.post('/logout');
 </script>
 
 <template>
-    <header class="flex h-(--topbar-h) items-center gap-2 border-b border-line bg-surface px-2">
-        <button type="button" class="inline-flex size-8 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink" :title="`Collapse or expand the sidebar (${shortcutKeys('app.sidebar')})`" aria-label="Collapse or expand the sidebar" @click="toggleSidebar">
+    <header class="flex h-(--topbar-h) min-w-0 items-center gap-2 border-b border-line bg-surface px-2 max-sm:gap-1">
+        <button type="button" class="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink max-sm:hidden" :title="`Collapse or expand the sidebar (${shortcutKeys('app.sidebar')})`" aria-label="Collapse or expand the sidebar" @click="toggleMenu">
             <PanelLeft :size="16" :stroke-width="1.5" />
         </button>
-        <Link href="/home" class="flex items-center gap-2 pr-2 text-ui font-semibold text-ink" aria-label="Insuryn home"><Logo :size="18" /><span class="max-lg:sr-only">Insuryn</span></Link>
+        <button type="button" class="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink sm:hidden" aria-label="Menu" aria-controls="main-navigation" :aria-expanded="navOpen" data-testid="phone-menu" @click="toggleMenu">
+            <MenuIcon :size="18" :stroke-width="1.5" />
+        </button>
+        <Link href="/home" class="flex shrink-0 items-center gap-2 pr-2 text-ui font-semibold text-ink max-sm:pr-0" aria-label="Insuryn home"><Logo :size="18" /><span class="max-lg:sr-only">Insuryn</span></Link>
 
         <Menu v-if="shell?.entity">
-            <MenuTrigger class="flex h-8 items-center gap-1.5 rounded-control px-2 text-ui text-ink hover:bg-surface-2">
-                <span class="font-medium">{{ shell.entity.name }}</span>
+            <MenuTrigger class="flex h-8 shrink-0 items-center gap-1.5 rounded-control px-2 text-ui text-ink hover:bg-surface-2 max-sm:px-1" :aria-label="`${shell.entity.name} · ${branchLabel}`">
+                <Building2 :size="16" :stroke-width="1.5" class="text-ink-2 sm:hidden" aria-hidden="true" />
+                <span class="font-medium whitespace-nowrap max-sm:sr-only">{{ shell.entity.name }}</span>
                 <span class="text-ink-2 max-md:hidden">· {{ branchLabel }}</span>
                 <ChevronDown :size="14" :stroke-width="1.5" class="text-ink-2" />
             </MenuTrigger>
@@ -54,12 +61,12 @@ const signOut = () => router.post('/logout');
 
         <button
             type="button"
-            class="mx-auto flex h-8 w-full max-w-md items-center gap-2 rounded-control border border-line-control bg-surface px-2 text-ui text-ink-2 hover:border-ink-2"
+            class="mx-auto flex h-8 w-full min-w-0 max-w-md items-center gap-2 rounded-control border border-line-control bg-surface px-2 text-ui text-ink-2 hover:border-ink-2"
             @click="openPalette"
         >
             <Search :size="16" :stroke-width="1.5" aria-hidden="true" />
             <span class="truncate">Search or run a command</span>
-            <Kbd class="ml-auto" :keys="shortcutKeys('app.palette')" />
+            <Kbd class="ml-auto max-sm:hidden" :keys="shortcutKeys('app.palette')" />
         </button>
 
         <button
@@ -75,13 +82,13 @@ const signOut = () => router.post('/logout');
             <CircleHelp :size="16" :stroke-width="1.5" aria-hidden="true" /><span class="max-lg:sr-only">How this works</span>
         </button>
 
-        <Link href="/approvals" class="relative inline-flex size-8 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink" :aria-label="`Approvals waiting for you: ${shell?.approvals ?? 0}`" :title="`Approvals waiting for you: ${shell?.approvals ?? 0}`">
+        <Link href="/approvals" class="relative inline-flex size-8 shrink-0 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink" :aria-label="`Approvals waiting for you: ${shell?.approvals ?? 0}`" :title="`Approvals waiting for you: ${shell?.approvals ?? 0}`">
             <Bell :size="16" :stroke-width="1.5" />
             <span v-if="shell?.approvals" class="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-accent" aria-hidden="true" />
         </Link>
 
         <Menu>
-            <MenuTrigger class="inline-flex size-8 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink" aria-label="Display settings" title="Display settings">
+            <MenuTrigger class="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2 hover:text-ink max-sm:hidden" aria-label="Display settings" title="Display settings">
                 <Settings :size="16" :stroke-width="1.5" />
             </MenuTrigger>
             <MenuContent>
@@ -103,7 +110,7 @@ const signOut = () => router.post('/logout');
         </Menu>
 
         <Menu v-if="user">
-            <MenuTrigger class="flex h-8 items-center gap-1.5 rounded-control px-2 text-ui text-ink hover:bg-surface-2">
+            <MenuTrigger class="flex h-8 shrink-0 items-center gap-1.5 rounded-control px-2 text-ui text-ink hover:bg-surface-2 max-sm:px-1">
                 <CircleUser :size="16" :stroke-width="1.5" class="text-ink-2" />
                 <span class="max-md:sr-only">{{ user.name }}</span>
                 <ChevronDown :size="14" :stroke-width="1.5" class="text-ink-2" />

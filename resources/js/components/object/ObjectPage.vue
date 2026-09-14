@@ -64,23 +64,24 @@ const tabs = [
 
 <template>
     <div class="flex min-h-full flex-col">
-        <header class="border-b border-line px-6 pt-3">
+        <!-- GA-16: on a phone (below 640 px) the header stacks — number and status, subtitle, facts two to a row, then the actions. -->
+        <header class="border-b border-line px-6 pt-3 max-sm:px-4">
             <Breadcrumb :base="crumbs" />
-            <div class="flex flex-wrap items-end gap-x-8 gap-y-3 pb-3">
+            <div class="flex flex-wrap items-end gap-x-8 gap-y-3 pb-3 max-sm:flex-col max-sm:items-stretch">
                 <div class="min-w-0">
-                    <div class="flex items-center gap-3">
-                        <h1 class="text-title font-semibold">{{ title }}</h1>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <h1 class="min-w-0 text-title font-semibold [overflow-wrap:anywhere]">{{ title }}</h1>
                         <StatusBadge :status="status" />
                     </div>
-                    <p v-if="subtitle" class="truncate text-ui text-ink-2">{{ subtitle }}</p>
+                    <p v-if="subtitle" class="truncate text-ui text-ink-2 max-sm:whitespace-normal">{{ subtitle }}</p>
                 </div>
-                <dl class="flex flex-wrap gap-x-8 gap-y-1">
+                <dl class="flex flex-wrap gap-x-8 gap-y-1 max-sm:grid max-sm:grid-cols-2 max-sm:gap-x-4">
                     <div v-for="fact in facts" :key="fact.label">
                         <dt class="text-dense text-ink-2">{{ fact.label }}</dt>
                         <dd class="text-ui font-medium" :class="{ 'tabular-nums': fact.num }">{{ fact.value }}</dd>
                     </div>
                 </dl>
-                <div class="ml-auto flex flex-wrap items-center gap-2">
+                <div class="ml-auto flex flex-wrap items-center gap-2 max-sm:ml-0">
                     <button v-if="!(hiddenTabs ?? []).includes('accounting')" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control px-2 text-ui text-ink-2 hover:bg-surface-2 hover:text-ink" @click="panel = true">
                         <BookOpen :size="16" :stroke-width="1.5" />View accounting
                     </button>
@@ -89,14 +90,14 @@ const tabs = [
             </div>
         </header>
         <TabsRoot v-model="tab" class="flex flex-1 flex-col">
-            <TabsList class="flex gap-5 border-b border-line px-6" aria-label="Sections">
+            <TabsList class="flex gap-5 overflow-x-auto border-b border-line px-6 max-sm:gap-4 max-sm:px-4" aria-label="Sections">
                 <template v-for="item in tabs" :key="item.value">
-                    <TabsTrigger v-if="(item.value !== 'transactions' || $slots.transactions) && (item.value !== 'rating' || $slots.rating) && !(hiddenTabs ?? []).includes(item.value)" :value="item.value" class="-mb-px h-9 border-b-2 border-transparent text-ui text-ink-2 hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink">
+                    <TabsTrigger v-if="(item.value !== 'transactions' || $slots.transactions) && (item.value !== 'rating' || $slots.rating) && !(hiddenTabs ?? []).includes(item.value)" :value="item.value" class="-mb-px h-9 shrink-0 border-b-2 border-transparent text-ui whitespace-nowrap text-ink-2 hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink">
                         {{ item.label }}
                     </TabsTrigger>
                 </template>
             </TabsList>
-            <div class="flex-1 px-6 py-4">
+            <div class="min-w-0 flex-1 px-6 py-4 max-sm:px-4">
                 <TabsContent value="overview" class="outline-none"><slot name="overview" /></TabsContent>
                 <TabsContent v-for="extra in extraTabs ?? []" :key="extra.value" :value="extra.value" class="outline-none"><slot :name="`tab-${extra.value}`" /></TabsContent>
                 <TabsContent v-if="$slots.transactions" value="transactions" class="outline-none"><slot name="transactions" /></TabsContent>

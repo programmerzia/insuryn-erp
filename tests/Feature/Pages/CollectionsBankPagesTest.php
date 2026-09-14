@@ -77,7 +77,8 @@ it('requests a refund and releases it only by someone else', function (): void {
         'allocations' => [['installment_id' => $this->installments[0], 'amount' => '60,000.00'], ['installment_id' => $this->installments[1], 'amount' => '60,000.00']]], $this->headers);
     asTenant($this->ctx['tenant_id'], fn () => app(PolicyLifecycle::class)->cancel($this->policyId, CarbonImmutable::parse('2026-12-01'), 'sold', $this->world['admin']));
 
-    actingAs($requester)->get('/refunds', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('refunds/Index')->has('refundable', 1));
+    actingAs($requester)->get('/refunds', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('refunds/Index')->where('refundableCount', 1)->missing('refundable'));
+    actingAs($requester)->getJson('/lookup/refundable?q=', $this->headers)->assertOk()->assertJsonCount(1, 'results')->assertJsonPath('results.0.id', $this->policyId); // GA-40
     actingAs($requester)->post('/refunds', ['policy_id' => $this->policyId, 'amount' => '1,000.00', 'reason' => 'cancellation'], $this->headers)->assertSessionHasNoErrors();
     $refundId = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('refunds')->value('id'));
 

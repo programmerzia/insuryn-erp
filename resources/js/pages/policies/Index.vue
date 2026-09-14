@@ -6,6 +6,7 @@ import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useOnboarding } from '@/lib/onboarding';
 import { usePermissions } from '@/lib/permissions';
@@ -38,6 +39,7 @@ const columns: DataColumn<PolicyRow>[] = [
             title="Policies"
             :columns="columns"
             :rows="policies.data"
+            :page="serverPage(policies)"
             :row-key="(p) => p.id"
             currency="BDT"
             selectable

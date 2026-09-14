@@ -62,7 +62,7 @@ final class PolicyPageController
             ->where('p.entity_id', $entity['id'])->when($status !== '', fn ($q) => $q->where('p.status', $status))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->whereRaw('p.number ilike ?', ["%{$search}%"])->orWhereRaw('h.display_name ilike ?', ["%{$search}%"])))
             ->orderByDesc('p.created_at')->select(['p.id', 'p.number', 'p.status', 'p.inception', 'p.expiry', 'p.gross_premium_minor', 'p.currency', 'h.display_name as policyholder', 'pr.code as product_code'])
-            ->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
+            ->paginate(PageSupport::listPageSize())->withQueryString();
 
         return Inertia::render('policies/Index', [
             'filters' => ['status' => $status, 'search' => $search],
@@ -91,7 +91,7 @@ final class PolicyPageController
             // Slice R7: typing a premium stays only for products without a rating plan.
             'products' => self::unratedProducts()->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'ratedProducts' => DB::table('products')->whereExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))->count(),
-            'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
+            // GA-40: payers are looked up (GET /lookup/customer), not listed from every party.
             'agents' => DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')->orderBy('a.code')
                 ->get(['a.id', 'a.code', 'p.display_name'])->map(fn (object $a): array => (array) $a)->values()->all(),
         ]);

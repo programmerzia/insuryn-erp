@@ -8,7 +8,7 @@ defineProps<{ rows: AuditRow[] }>();
 
 <template>
     <div v-if="rows.length" class="overflow-x-auto border border-line">
-        <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+        <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
             <colgroup><col style="width: 170px" /><col style="width: 190px" /><col style="width: 150px" /><col /></colgroup>
             <thead class="bg-surface-2 text-ink-2">
                 <tr class="h-(--row-h)">

@@ -12,6 +12,7 @@ import { useDataTable } from '@/components/table/useDataTable';
 import Kbd from '@/components/ui/Kbd.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatMinor, parseMoney } from '@/lib/money';
+import { partialNotice } from '@/lib/paging';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useReloading } from '@/lib/loading';
 import { useShortcut } from '@/lib/shortcuts';
@@ -44,8 +45,10 @@ const props = withDefaults(
         /** Empty state's one primary action (brief §4 "one sentence + one primary action"). */
         /** Brief §4 empty state: one sentence and one action — a link, or (without href) the `emptyAction` event. */
         emptyAction?: { label: string; href?: string } | null;
+        /** GA-40: how many rows the server has when `rows` is only the first part of them (a capped list without pages). */
+        total?: number | null;
     }>(),
-    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false, emptyAction: null },
+    { currency: undefined, page: undefined, selectable: false, loading: false, emptyText: 'Nothing to show.', urlSync: true, exportName: undefined, openOnClick: true, compactToolbar: false, emptyAction: null, total: null },
 );
 const emit = defineEmits<{ open: [row: T]; close: []; emptyAction: [] }>();
 const active = defineModel<string | null>('active', { default: null });
@@ -91,6 +94,8 @@ const selectedSum = computed(() => {
     return column ? formatMinor(selectedRows.value.reduce((sum, row) => sum + (parseMoney(String(column.value(row) ?? '')) ?? 0n), 0n)) : null;
 });
 const hasTotals = computed(() => props.columns.some((c) => c.total));
+// GA-40: a list never stops silently — "Showing 5,000 of 12,431" with the pager in the status bar, or the cap of a list without pages.
+const partial = computed(() => partialNotice(props.rows.length, props.page, props.total));
 const activeFilters = computed(() => state.columnFilters.value.length);
 
 watch(active, (key) => {
@@ -238,6 +243,7 @@ defineExpose({ state, focusRow });
             <template #bulk><slot name="bulk" :rows="selectedRows" :clear="state.clearSelection" /></template>
         </DataTableToolbar>
 
+        <p v-if="partial" class="border-b border-line bg-surface-2 px-3 py-1 text-dense text-ink-2" role="status" data-testid="partial-list">{{ partial }}</p>
         <ContextMenuRoot>
             <ContextMenuTrigger as-child>
                 <div ref="scroller" class="relative min-h-0 flex-1 overflow-auto">
@@ -384,7 +390,7 @@ defineExpose({ state, focusRow });
                                 <td v-if="selectable" class="border-t border-line" />
                                 <td v-for="({ column, meta }, i) in columns" :key="column.id" class="border-t border-line px-3" :class="meta.total ? 'num' : ''">
                                     <template v-if="meta.total">{{ totals[column.id] }}</template>
-                                    <template v-else-if="i === 0">Total</template>
+                                    <template v-else-if="i === 0">{{ page && page.last > 1 ? 'Page total' : 'Total' }}</template>
                                 </td>
                                 <td class="border-t border-line" />
                             </tr>

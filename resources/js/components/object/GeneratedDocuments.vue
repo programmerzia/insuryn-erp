@@ -49,7 +49,7 @@ const language = (code: string) => props.generation.locales.find((l) => l.value 
         <p v-if="(form.errors as Record<string, string>).form" class="text-dense text-danger" role="alert">{{ (form.errors as Record<string, string>).form }}</p>
 
         <div v-if="generation.history.length" class="overflow-x-auto border border-line">
-            <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+            <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                 <colgroup><col /><col style="width: 70px" /><col style="width: 90px" /><col style="width: 160px" /><col style="width: 110px" /><col style="width: 120px" /><col style="width: 90px" /></colgroup>
                 <thead class="bg-surface-2 text-ink-2">
                     <tr class="h-(--row-h)">

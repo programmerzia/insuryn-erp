@@ -21,7 +21,6 @@ const props = defineProps<{
     entity: { id: string; code: string; name: string; currency: string };
     branches: { id: string; code: string; name: string }[];
     products: { id: string; code: string; name: string }[];
-    parties: { id: string; display_name: string }[];
     agents: { id: string; code: string; display_name: string }[];
     /** Slice R7: products priced by a tariff are not listed here; they are quoted in the quote workbench. */
     ratedProducts: number;
@@ -45,7 +44,9 @@ const perInstallment = computed(() => {
     return premium === null || form.installment_count < 1 ? null : formatMinor(premium / BigInt(form.installment_count));
 });
 const shareTotal = computed(() => form.payers.reduce((sum, p) => sum + (parseMoney(p.share_percent) ?? 0n), 0n));
-const partyName = (id: string) => props.parties.find((p) => p.id === id)?.display_name ?? '';
+// GA-40: payers are looked up like the policyholder; their names are kept for the review step (and the draft).
+const payerNames = ref<Record<string, string>>({});
+const partyName = (id: string) => payerNames.value[id] ?? '';
 
 onMounted(() => {
     const draft = preferences.drafts[DRAFT] as (Record<string, unknown> & { holder?: LookupResult | null; agent?: LookupResult | null }) | null | undefined;
@@ -114,7 +115,7 @@ function saveDraft(): void {
                 <template v-else-if="step === 2">
                     <p class="text-ui text-ink-2">Leave this empty when the policyholder pays everything. Shares must add up to 100%.</p>
                     <div v-for="(payer, index) in form.payers" :key="index" class="grid grid-cols-[minmax(0,1fr)_110px_32px] items-center gap-2">
-                        <SelectInput v-model="payer.party_id" placeholder="Choose a payer" :options="parties.map((p) => ({ value: p.id, label: p.display_name }))" :aria-label="`Payer ${index + 1}`" />
+                        <LookupInput v-model="payer.party_id" type="customer" placeholder="Payer name or mobile" :initial="payer.party_id && payerNames[payer.party_id] ? { id: payer.party_id, label: payerNames[payer.party_id]! } : null" :aria-label="`Payer ${index + 1}`" @selected="(r) => r && (payerNames[r.id] = r.label)" />
                         <input v-model="payer.share_percent" inputmode="decimal" class="h-8 rounded-control border border-line-control bg-surface px-2 text-right text-body tabular-nums" placeholder="%" :aria-label="`Share of payer ${index + 1} in percent`" />
                         <button type="button" class="inline-flex size-8 items-center justify-center rounded-control text-ink-2 hover:bg-surface-2" :aria-label="`Remove payer ${index + 1}`" @click="form.payers.splice(index, 1)"><X :size="14" :stroke-width="1.5" /></button>
                     </div>

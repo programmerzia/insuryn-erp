@@ -46,7 +46,7 @@ final class ClaimPageController
         $entity = PageSupport::entity();
         $page = $reach->constrain(DB::table('claims as c'), 'c.entity_id', 'c.branch_id')->join('policies as p', 'p.id', '=', 'c.policy_id')->leftJoin('parties as h', 'h.id', '=', 'p.policyholder_party_id')
             ->where('c.entity_id', $entity['id'])->when($status !== '', fn ($q) => $q->where('c.status', $status))->orderByDesc('c.reported_on')->orderByDesc('c.number')
-            ->select(['c.id', 'c.number', 'c.status', 'c.loss_date', 'c.reported_on', 'c.reserve_minor', 'c.currency', 'p.number as policy_number', 'h.display_name'])->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
+            ->select(['c.id', 'c.number', 'c.status', 'c.loss_date', 'c.reported_on', 'c.reserve_minor', 'c.currency', 'p.number as policy_number', 'h.display_name'])->paginate(PageSupport::listPageSize())->withQueryString();
         $rows = [];
         foreach ($page->items() as $c) {
             /** @var object{id: string, number: string, status: string, loss_date: string, reported_on: string, reserve_minor: int|string, currency: string, policy_number: string|null, display_name: string|null} $c */

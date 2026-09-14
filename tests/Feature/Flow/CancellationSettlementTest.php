@@ -80,7 +80,8 @@ it('offers the refund after cancelling a paid policy and opens the refund reques
         ->assertSessionHas('next', ['label' => "Request the refund of {$amount}", 'url' => "/refunds?policy={$policyId}", 'prompt' => "The customer is owed {$amount}. Request the refund?"]);
 
     actingAs($manager)->get("/refunds?policy={$policyId}", $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('refunds/Index')
-        ->where('can.request', true)->where('prefill', ['policy_id' => $policyId, 'amount' => $amount, 'reason' => 'Policy cancelled']));
+        ->where('can.request', true)->where('prefill', fn ($prefill): bool => array_diff_key((array) json_decode((string) json_encode($prefill), true), ['label' => true]) === ['policy_id' => $policyId, 'amount' => $amount, 'reason' => 'Policy cancelled'])
+        ->where('prefill.label', fn (string $label): bool => str_starts_with($label, (string) ($this->in)(fn () => DB::table('policies')->where('id', $policyId)->value('number')).' · ')));
     actingAs($manager)->get('/refunds', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('prefill', null));
 
     actingAs($manager)->post('/refunds', ['policy_id' => $policyId, 'amount' => $amount, 'reason' => 'Policy cancelled'], $this->headers)->assertSessionHasNoErrors();

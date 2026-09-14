@@ -37,11 +37,13 @@ final class ReferralsPageController
         $mine = array_column(array_filter($this->inbox->decidableBy($actor), fn (array $a): bool => $a['object_type'] === 'proposal_referral'), 'object_id');
         $referred = Proposal::query();
         $reach->constrain($referred->getQuery(), 'entity_id', 'branch_id'); // Follow-up H1: a branch-scoped user lists only their branches' referrals
-        $proposals = $referred->where('entity_id', $entity['id'])->whereNotNull('approval_id')
-            ->orderByRaw("case when status = 'submitted' then 0 else 1 end")->orderBy('submitted_at')->limit(PageSupport::LIST_PAGE_SIZE)->get();
+        $referred->where('entity_id', $entity['id'])->whereNotNull('approval_id');
+        $total = (clone $referred)->count(); // GA-40
+        $proposals = $referred->orderByRaw("case when status = 'submitted' then 0 else 1 end")->orderBy('submitted_at')->limit(PageSupport::listPageSize())->get();
 
         return Inertia::render('underwriting/Referrals', [
             'currency' => $entity['currency'],
+            'referralsTotal' => $total,
             'referrals' => $proposals->map(fn (Proposal $p): array => [
                 ...ProposalPageController::present($p),
                 'risk' => ProposalPageController::risk($p),

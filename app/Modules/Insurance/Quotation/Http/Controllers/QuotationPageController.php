@@ -48,7 +48,9 @@ final class QuotationPageController
         // G2: a branch-scoped user lists only their branches' quotations.
         $rows = $reach->constrain(DB::table('quotations as q'), 'q.entity_id', 'q.branch_id')->leftJoin('parties as c', 'c.id', '=', 'q.customer_party_id')->leftJoin('products as p', 'p.id', '=', 'q.product_id')
             ->leftJoin('producers as pr', 'pr.id', '=', 'q.producer_id')->leftJoin('users as u', 'u.id', '=', 'q.created_by')
-            ->where('q.entity_id', $entity['id'])->orderByDesc('q.created_at')->limit(PageSupport::LIST_PAGE_SIZE)
+            ->where('q.entity_id', $entity['id'])->orderByDesc('q.created_at');
+        $total = (clone $rows)->count(); // GA-40
+        $rows = $rows->limit(PageSupport::listPageSize())
             ->get(['q.id', 'q.number', 'q.status', 'q.inception', 'q.valid_until', 'q.sum_insured_minor', 'q.gross_premium_minor', 'q.currency', 'q.producer_eligible',
                 'q.created_at', 'c.display_name as customer', 'p.code as product_code', 'p.name as product_name', 'pr.code as producer_code', 'u.name as created_by']);
 
@@ -56,6 +58,7 @@ final class QuotationPageController
             'currency' => $entity['currency'],
             'statuses' => array_column(QuotationStatus::cases(), 'value'),
             'canCreate' => in_array(QuotationService::PERMISSION, $this->permissions->permissionsOf(PageSupport::actor($request)), true),
+            'quotationsTotal' => $total,
             'quotations' => $rows->map(fn (object $q): array => [
                 'id' => (string) $q->id, 'number' => $q->number === null ? null : (string) $q->number, 'status' => (string) $q->status,
                 'customer' => $q->customer === null ? null : (string) $q->customer, 'product' => trim("{$q->product_code} · {$q->product_name}", ' ·'),

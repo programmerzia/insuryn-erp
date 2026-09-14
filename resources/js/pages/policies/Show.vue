@@ -10,7 +10,9 @@ import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import EndorseRiskDrawer from '@/components/rating/EndorseRiskDrawer.vue';
 import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
+import DataTable from '@/components/table/DataTable.vue';
 import DetailList from '@/components/table/DetailList.vue';
+import type { DataColumn } from '@/components/table/types';
 import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
@@ -20,6 +22,7 @@ import { dateWithin } from '@/lib/drawerDefaults';
 import { formatDate, formatMoney } from '@/lib/format';
 import { basisSentence, changeRows, type EndorsementRatingData } from '@/lib/endorsement';
 import { useMoneyForm } from '@/lib/moneyForm';
+import { policyPageActions, usePageActions } from '@/lib/pageActions';
 import { usePreferences } from '@/lib/preferences';
 import type { RatingResultData, RiskFieldDefinition } from '@/lib/riskForm';
 
@@ -29,7 +32,7 @@ const props = defineProps<{
     transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null }[];
     installments: { id: string; no: number; label: string; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
-    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
+    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean; refund: boolean };
     /** Slice R7: the frozen rating of a policy issued from a proposal; null for products without a rating plan. */
     rating: {
         result: RatingResultData; risk: { label_en: string; label_bn: string; value: string }[]; special_terms: string[]; issue_basis: string | null; premium_received_reference: string | null;
@@ -70,12 +73,28 @@ const facts = computed(() => [
     { label: 'Cover', value: `${formatDate(props.policy.inception)} to ${formatDate(props.policy.expiry)}` },
 ]);
 const outstanding = computed(() => props.installments.reduce((sum, i) => sum + Number(i.outstanding !== '0.00'), 0));
+// GA-40: installments in the shared table — sort, filter, totals and export; filters stay out of the page URL.
+type InstallmentRow = (typeof props.installments)[number];
+const installmentColumns: DataColumn<InstallmentRow>[] = [
+    { id: 'no', header: 'No', value: (i) => i.label, width: 72 },
+    { id: 'payer', header: 'Payer', value: (i) => i.payer, width: 180 },
+    { id: 'due', header: 'Due', type: 'date', value: (i) => i.due_date },
+    { id: 'amount', header: 'Amount', type: 'money', value: (i) => i.amount, total: true },
+    { id: 'paid', header: 'Paid', type: 'money', value: (i) => i.paid, total: true },
+    { id: 'credited', header: 'Credited', type: 'money', value: (i) => i.credited, total: true },
+    { id: 'outstanding', header: 'Outstanding', type: 'money', value: (i) => i.outstanding, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (i) => i.status, filterOptions: [...new Set(props.installments.map((i) => i.status))] },
+];
 
 async function renew(): Promise<void> {
     if (await confirmAction({ title: `Renew ${title.value}?`, body: 'A renewal quote is created for the next term with the same product, policyholder, producer and payers.', confirmLabel: 'Create renewal quote' })) {
         router.post(`${base}/renew`, {}, { preserveScroll: true });
     }
 }
+// GA-29: the actions this page allows, offered in the command palette too.
+usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.value, props.policy.id, props.actions, {
+    endorse: () => (drawer.value = 'endorse'), endorseRisk: () => (endorseRiskOpen.value = true), cancel: () => (drawer.value = 'cancel'), renew: () => void renew(), issue: () => (drawer.value = 'issue'),
+}) }));
 </script>
 
 <template>
@@ -100,6 +119,7 @@ async function renew(): Promise<void> {
                 <button v-if="actions.lapse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'lapse'">Lapse</button>
                 <button v-if="actions.reinstate" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reinstate'">Reinstate</button>
                 <button v-if="actions.renew" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="renew">Renew</button>
+                <Link v-if="actions.refund" :href="`/refunds?policy=${policy.id}`" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Request refund</Link>
                 <button v-if="actions.cancel" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'cancel'">Cancel policy</button>
                 <button v-if="actions.issue" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'issue'">Issue policy</button>
                 <Link v-if="actions.record_receipt" :href="`/receipts/create?policy=${policy.id}`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Record receipt</Link>
@@ -117,27 +137,13 @@ async function renew(): Promise<void> {
                     <p class="mt-1 text-ink-2">The first payment reminder went out when it bounced. Take the premium again, or cancel the policy if the customer does not pay.</p>
                 </div>
                 <h2 class="mb-2 text-ui font-medium">Installments <span class="font-normal text-ink-2">· {{ outstanding }} with money outstanding</span></h2>
-                <div class="mb-6 max-w-[1000px] overflow-x-auto border border-line">
-                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
-                        <colgroup><col style="width: 48px" /><col /><col style="width: 112px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 120px" /></colgroup>
-                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)">
-                            <th class="border-b border-line px-3 text-left font-medium">No</th><th class="border-b border-line px-3 text-left font-medium">Payer</th><th class="border-b border-line px-3 text-left font-medium">Due</th>
-                            <th class="border-b border-line px-3 text-right font-medium">Amount</th><th class="border-b border-line px-3 text-right font-medium">Paid</th><th class="border-b border-line px-3 text-right font-medium">Credited</th>
-                            <th class="border-b border-line px-3 text-right font-medium">Outstanding</th><th class="border-b border-line px-3 text-left font-medium">Status</th>
-                        </tr></thead>
-                        <tbody>
-                            <tr v-for="i in installments" :key="i.id" class="h-(--row-h)">
-                                <td class="border-b border-line px-3 tabular-nums">{{ i.label }}</td><td class="truncate border-b border-line px-3">{{ i.payer }}</td><td class="border-b border-line px-3">{{ formatDate(i.due_date) }}</td>
-                                <td class="num border-b border-line px-3">{{ formatMoney(i.amount) }}</td><td class="num border-b border-line px-3">{{ formatMoney(i.paid) }}</td><td class="num border-b border-line px-3">{{ formatMoney(i.credited) }}</td>
-                                <td class="num border-b border-line px-3 font-medium">{{ formatMoney(i.outstanding) }}</td><td class="border-b border-line px-3"><StatusBadge :status="i.status" /></td>
-                            </tr>
-                            <tr v-if="installments.length === 0"><td colspan="8" class="px-3 py-6 text-center text-ui text-ink-2">Installments are created when the policy is issued.</td></tr>
-                        </tbody>
-                    </table>
+                <div class="mb-6 max-w-[1000px] border border-line" data-testid="policy-installments">
+                    <DataTable :id="`policy-installments`" label="Installments" :columns="installmentColumns" :rows="installments" :row-key="(i) => i.id" :currency="policy.currency" :url-sync="false"
+                        :open-on-click="false" compact-toolbar empty-text="Installments are created when the policy is issued." />
                 </div>
                 <h2 class="mb-2 text-ui font-medium">Payers</h2>
                 <div class="max-w-[760px] overflow-x-auto border border-line">
-                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                         <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Payer</th><th class="w-24 border-b border-line px-3 text-right font-medium">Share (%)</th><th class="w-32 border-b border-line px-3 text-right font-medium">Billed</th><th class="w-32 border-b border-line px-3 text-right font-medium">Paid</th><th class="w-32 border-b border-line px-3 text-right font-medium">Outstanding</th></tr></thead>
                         <tbody><tr v-for="p in payers" :key="p.name" class="h-(--row-h)"><td class="border-b border-line px-3">{{ p.name }}</td><td class="num border-b border-line px-3">{{ p.share_percent }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.billed) }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.paid) }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.outstanding) }}</td></tr></tbody>
                     </table>
@@ -190,7 +196,7 @@ async function renew(): Promise<void> {
             </template>
             <template #transactions>
                 <div class="max-w-[900px] overflow-x-auto border border-line">
-                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
+                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                         <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="w-40 border-b border-line px-3 text-left font-medium">Transaction</th><th class="w-32 border-b border-line px-3 text-left font-medium">Effective</th><th class="w-40 border-b border-line px-3 text-right font-medium">Premium change ({{ policy.currency }})</th><th class="border-b border-line px-3 text-left font-medium">Reason</th></tr></thead>
                         <tbody><tr v-for="t in transactions" :key="t.id" class="h-(--row-h)"><td class="border-b border-line px-3">{{ words(t.type) }}</td><td class="border-b border-line px-3">{{ formatDate(t.effective_date) }}</td><td class="num border-b border-line px-3">{{ formatMoney(t.premium_delta) }}</td><td class="truncate border-b border-line px-3 text-ink-2">{{ t.reason }}</td></tr></tbody>
                     </table>

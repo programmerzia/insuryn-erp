@@ -30,7 +30,10 @@ final class CommissionPageController
         $this->permissions->authorizeAny($actor, self::AREA);
         $entity = PageSupport::entity();
 
+        $statements = DB::table('commission_statements as s')->where('s.entity_id', $entity['id'])->where('s.status', '!=', 'draft');
+
         return Inertia::render('commission/Index', [
+            'statementsTotal' => (clone $statements)->count(), // GA-40: the history lists the latest 500 and says how many there are
             'plans' => DB::table('commission_plans')->orderBy('code')->get(['id', 'code', 'name', 'rate_bp', 'withholding_jurisdiction', 'withholding_tax_type', 'status'])
                 ->map(fn (object $p): array => ['id' => (string) $p->id, 'code' => (string) $p->code, 'name' => (string) $p->name, 'rate_percent' => self::percent((int) $p->rate_bp),
                     'withholding' => $p->withholding_tax_type === null ? null : "{$p->withholding_tax_type} ({$p->withholding_jurisdiction})", 'status' => (string) $p->status])->values()->all(),

@@ -27,6 +27,8 @@ const props = defineProps<{
     receipt: { id: string; number: string; amount: string; currency: string; value_date: string; reference: string | null; channel: string; status: string; payer: string | null; open: string; for_policy?: string | null };
     suspenseItemId: string | null;
     candidates: Candidate[];
+    /** GA-40: every waiting installment, when `candidates` holds only the first of them. */
+    candidatesTotal?: number;
     today: string;
 }>();
 
@@ -120,7 +122,7 @@ useShortcut('inspector.primary', () => void review(), { allowInInputs: true });
                 </div>
             </section>
             <section class="flex min-h-0 flex-col" aria-label="Candidate installments">
-                <DataTable id="allocation-candidates" :open-on-click="false" compact-toolbar label="Candidate installments" :columns="columns" :rows="available" :row-key="(c) => c.id" currency="BDT" :url-sync="false" empty-text="No installments are waiting for payment." @open="add">
+                <DataTable id="allocation-candidates" :open-on-click="false" compact-toolbar label="Candidate installments" :columns="columns" :rows="available" :row-key="(c) => c.id" currency="BDT" :url-sync="false" :total="(candidatesTotal ?? 0) > candidates.length ? candidatesTotal : null" empty-text="No installments are waiting for payment." @open="add">
                     <template #toolbar>
                         <h2 class="text-section font-semibold whitespace-nowrap">Waiting for payment</h2>
                         <span class="ml-3 text-dense whitespace-nowrap text-ink-2 max-xl:hidden">↑↓ choose · Enter adds · / filters</span>

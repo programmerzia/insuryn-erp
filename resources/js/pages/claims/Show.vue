@@ -13,6 +13,8 @@ import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -60,6 +62,16 @@ const reopening = useMoneyForm(() => `${base}/reopen`, { reason: '', on: '' }, d
 const decision = computed(() => (drawer.value === 'reopen' ? reopening : rejecting));
 const money = computed(() => ({ reserve, payment, recover, close: closing, release, reject: rejecting, reopen: reopening })[drawer.value as 'reserve'] ?? null);
 const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+// GA-40: the reserve history in the shared table — sort, filter and export; filters stay out of the page URL.
+type ReserveRow = (typeof props.reserves)[number];
+const reserveColumns: DataColumn<ReserveRow>[] = [
+    { id: 'version', header: 'Version', type: 'number', value: (r) => r.version, width: 88 },
+    { id: 'recorded', header: 'Recorded', type: 'date', value: (r) => r.recorded_on },
+    { id: 'reserve', header: 'Reserve', type: 'money', value: (r) => r.reserve },
+    { id: 'change', header: 'Change', type: 'money', value: (r) => r.delta, total: true },
+    { id: 'kind', header: 'Kind', value: (r) => words(r.kind), width: 150, filterOptions: undefined },
+    { id: 'reason', header: 'Reason', value: (r) => r.reason, width: 260, muted: true },
+];
 const paid = computed(() => props.payments.filter((p) => p.status === 'paid').length);
 const facts = computed(() => [
     { label: `Case reserve (${props.claim.currency})`, value: formatMoney(props.claim.reserve), num: true },
@@ -181,11 +193,9 @@ function openRelease(id: string): void {
             </template>
             <template #transactions>
                 <h2 class="mb-2 text-ui font-medium">Reserve history</h2>
-                <div class="max-w-[900px] overflow-x-auto border border-line">
-                    <table class="w-full table-fixed border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="w-12 border-b border-line px-3 text-left font-medium">Version</th><th class="w-32 border-b border-line px-3 text-left font-medium">Recorded</th><th class="w-36 border-b border-line px-3 text-right font-medium">Reserve ({{ claim.currency }})</th><th class="w-36 border-b border-line px-3 text-right font-medium">Change</th><th class="w-32 border-b border-line px-3 text-left font-medium">Kind</th><th class="border-b border-line px-3 text-left font-medium">Reason</th></tr></thead>
-                        <tbody><tr v-for="r in reserves" :key="r.version" class="h-(--row-h)"><td class="border-b border-line px-3 tabular-nums">{{ r.version }}</td><td class="border-b border-line px-3">{{ formatDate(r.recorded_on) }}</td><td class="num border-b border-line px-3">{{ formatMoney(r.reserve) }}</td><td class="num border-b border-line px-3">{{ formatMoney(r.delta) }}</td><td class="border-b border-line px-3">{{ words(r.kind) }}</td><td class="truncate border-b border-line px-3 text-ink-2">{{ r.reason }}</td></tr></tbody>
-                    </table>
+                <div class="max-w-[900px] border border-line" data-testid="claim-reserve-history">
+                    <DataTable id="claim-reserve-history" label="Reserve history" :columns="reserveColumns" :rows="reserves" :row-key="(r) => String(r.version)" :currency="claim.currency" :url-sync="false"
+                        :open-on-click="false" compact-toolbar empty-text="No reserve has been set yet." />
                 </div>
             </template>
         </ObjectPage>

@@ -26,7 +26,7 @@ const facts = computed(() => {
             <template v-for="(fact, index) in facts" :key="fact"><span v-if="index > 0" aria-hidden="true">·</span><span :class="{ 'text-ink': fact.startsWith('Σ') }">{{ fact }}</span></template>
             <span v-if="bar.message" class="text-ink">{{ bar.message }}</span>
         </p>
-        <div class="ml-auto flex items-center gap-4">
+        <div class="ml-auto flex min-w-0 items-center gap-4">
             <div v-if="bar.page && bar.page.last > 1" class="num flex items-center gap-1">
                 <button type="button" class="inline-flex size-5 items-center justify-center rounded-control hover:bg-surface disabled:opacity-40" :disabled="bar.page.current <= 1" aria-label="Previous page" @click="bar.page.go(bar.page.current - 1)">
                     <ChevronLeft :size="14" :stroke-width="1.5" />
@@ -36,7 +36,7 @@ const facts = computed(() => {
                     <ChevronRight :size="14" :stroke-width="1.5" />
                 </button>
             </div>
-            <span v-if="shell?.entity">{{ shell.entity.name }} · {{ branch }} · {{ shell.entity.currency }}</span>
+            <span v-if="shell?.entity" class="truncate max-sm:hidden">{{ shell.entity.name }} · {{ branch }} · {{ shell.entity.currency }}</span>
         </div>
     </footer>
 </template>

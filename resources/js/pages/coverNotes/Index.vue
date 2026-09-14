@@ -22,7 +22,7 @@ interface CoverNoteRow {
     /** Printed versions of the cover note, newest first. */
     documents: { id: string; version: number; locale: string; rendered_at: string; url: string }[];
 }
-const props = defineProps<{ coverNotes: CoverNoteRow[]; today: string; within: number | null; expiringDays: number }>();
+const props = defineProps<{ coverNotes: CoverNoteRow[]; coverNotesTotal?: number; today: string; within: number | null; expiringDays: number }>();
 
 const active = ref<string | null>(null);
 const cancelling = ref<CoverNoteRow | null>(null);
@@ -61,6 +61,7 @@ const columns: DataColumn<CoverNoteRow>[] = [
             title="Cover notes"
             :columns="columns"
             :rows="coverNotes"
+            :total="coverNotesTotal ?? null"
             :row-key="(n) => n.id"
             :empty-text="within === null ? 'No cover notes yet.' : `No cover notes end in the next ${within} days.`"
             :empty-action="within === null ? { label: 'Open quotes', href: '/quotations' } : { label: 'Show all cover notes', href: '/cover-notes' }"

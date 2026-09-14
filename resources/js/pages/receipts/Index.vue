@@ -6,6 +6,7 @@ import SplitPane from '@/components/shell/SplitPane.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { type DataColumn, DataTable } from '@/components/table';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { SharedProps } from '@/types/shared';
 
@@ -46,6 +47,7 @@ const columns: DataColumn<ReceiptRow>[] = [
                 label="Receipts"
                 :columns="columns"
                 :rows="receipts.data"
+                :page="serverPage(receipts)"
                 :row-key="(r) => r.id"
                 :currency="currency"
                 selectable

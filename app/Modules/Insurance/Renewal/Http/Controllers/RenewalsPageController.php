@@ -58,7 +58,9 @@ final class RenewalsPageController
             ->when($status !== null, fn ($q) => $q->where('r.status', $status))
             ->when($branch !== null, fn ($q) => $q->where('r.branch_id', $branch))
             ->when($producer !== null, fn ($q) => $q->where('r.agent_id', $producer))
-            ->orderByRaw("case when r.status in ('upcoming','renewal_offered') then 0 else 1 end")->orderBy('r.expiry')->limit(PageSupport::LIST_PAGE_SIZE)
+            ->orderByRaw("case when r.status in ('upcoming','renewal_offered') then 0 else 1 end")->orderBy('r.expiry');
+        $total = (clone $rows)->count(); // GA-40
+        $rows = $rows->limit(PageSupport::listPageSize())
             ->get(['r.*', 'c.display_name as customer', 'pr.code as product', 'b.code as branch_code', 'a.code as producer_code', 'ap.display_name as producer_name',
                 'q.number as quotation_number', 'q.status as quotation_status', 'q.gross_premium_minor as quotation_gross', 'q.currency as quotation_currency', 'q.valid_until as quotation_valid_until',
                 'rp.number as renewal_policy_number', 'p.status as policy_status', 'p.gross_premium_minor as policy_gross', 'p.currency as policy_currency']);
@@ -75,6 +77,7 @@ final class RenewalsPageController
             'branches' => $reach->constrain(DB::table('branches'), 'entity_id', 'id')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code'])->map(fn (object $b): array => ['id' => (string) $b->id, 'code' => (string) $b->code])->all(),
             'producers' => DB::table('producers as a')->join('parties as ap', 'ap.id', '=', 'a.party_id')->orderBy('a.code')->get(['a.id', 'a.code', 'ap.display_name'])
                 ->map(fn (object $a): array => ['id' => (string) $a->id, 'label' => "{$a->code} {$a->display_name}"])->all(),
+            'entriesTotal' => $total,
             'entries' => $rows->map(function (object $r) use ($actor, $today, $notices, &$manageable): array {
                 $key = "{$r->entity_id}:{$r->branch_id}";
                 $canManage = $manageable[$key] ??= $this->permissions->has($actor, ExpiryRegister::PERMISSION, AuthorizationScope::branch((string) $r->entity_id, (string) $r->branch_id));

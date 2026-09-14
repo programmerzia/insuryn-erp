@@ -27,7 +27,7 @@ interface Entry {
     can_offer: boolean; can_record: boolean;
 }
 const props = defineProps<{
-    entries: Entry[]; today: string; buckets: number[]; quoteDaysBefore: number;
+    entries: Entry[]; entriesTotal?: number; today: string; buckets: number[]; quoteDaysBefore: number;
     filters: { bucket: number | null; status: string | null; branch: string | null; producer: string | null };
     reasons: { value: string; label: string }[]; branches: { id: string; code: string }[]; producers: { id: string; label: string }[];
 }>();
@@ -75,6 +75,7 @@ const columns: DataColumn<Entry>[] = [
             title="Renewals"
             :columns="columns"
             :rows="entries"
+            :total="entriesTotal ?? null"
             :row-key="(e) => e.id"
             currency="BDT"
             :empty-text="filtered ? 'No policies match these filters.' : `No policies expire in the next ${buckets[buckets.length - 1]} days.`"

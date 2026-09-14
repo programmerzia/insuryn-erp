@@ -16,6 +16,8 @@ import DocumentList from '@/components/object/DocumentList.vue';
 import SkeletonRows from '@/components/object/SkeletonRows.vue';
 import type { AuditRow, StoredDocumentRow } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
+import DataTable from '@/components/table/DataTable.vue';
+import type { DataColumn } from '@/components/table/types';
 import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -34,7 +36,8 @@ const props = defineProps<{
     licences: Licence[];
     advances: { id: string; issued_on: string; amount: string; balance: string; status: string; recovery: string }[];
     hierarchy: { chain: string[]; history: { from: string; to: string | null; parent_code: string | null; level: string | null }[]; team: { id: string; code: string; level_code: string | null }[] };
-    compensation: { entries: Entry[]; exceptions: { occurred_on: string; reason_code: string; message: string }[] };
+    /** GA-40: `entries_total` counts every entry when `entries` holds only the latest ones. */
+    compensation: { entries: Entry[]; entries_total?: number; exceptions: { occurred_on: string; reason_code: string; message: string }[] };
     production: { month: ProductionPeriod; quarter: ProductionPeriod; year: ProductionPeriod; persistency_13: string | null; persistency_25: string | null };
     statements: { id: string; number: string | null; period: string; net: string; status: string; paid_via: string; paid_on: string | null }[];
     parents: { id: string; code: string }[];
@@ -59,6 +62,17 @@ watch(tab, (value) => {
 const tabs = [['overview', 'Overview'], ['hierarchy', 'Hierarchy'], ['compensation', 'Compensation'], ['production', 'Production'], ['statements', 'Statements'], ['documents', 'Documents'], ['audit', 'Audit']] as const;
 const words = (value: string) => value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 const routeWords: Record<string, string> = { bank: 'Bank', payroll: 'Payroll', ap: 'Accounts payable' };
+// GA-40: commission entries in the shared table — sort, filter, totals and export; filters stay out of the page URL.
+const entryKind = (e: Entry) => (e.kind === 'earned' ? (e.role === 'override' ? `Override ${e.level ?? ''}`.trim() : 'Direct') : words(e.kind));
+const entryColumns: DataColumn<Entry>[] = [
+    { id: 'date', header: 'Date', type: 'date', value: (e) => e.earned_on },
+    { id: 'kind', header: 'Kind', value: entryKind, width: 140 },
+    { id: 'policy', header: 'Policy', value: (e) => e.policy_number, href: (e) => (e.policy_id ? `/policies/${e.policy_id}` : null), width: 180 },
+    { id: 'rate', header: 'Rate (%)', type: 'number', value: (e) => e.rate_percent, width: 96 },
+    { id: 'amount', header: 'Amount', type: 'money', value: (e) => e.amount, total: true },
+    { id: 'withholding', header: 'Withheld', type: 'money', value: (e) => e.withholding, total: true },
+    { id: 'status', header: 'Status', type: 'status', value: (e) => e.status, filterOptions: [...new Set(props.compensation.entries.map((e) => e.status))] },
+];
 
 const drawer = ref<'licence' | 'advance' | 'move' | 'status' | null>(null);
 const done = () => (drawer.value = null);
@@ -158,23 +172,9 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                     <TabsContent value="compensation" class="grid max-w-[1200px] gap-6 outline-none">
                         <section>
                             <h2 class="mb-2 text-ui font-medium">Commission entries</h2>
-                            <div class="overflow-x-auto border border-line">
-                                <table class="w-full border-separate border-spacing-0 text-dense">
-                                    <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)">
-                                        <th class="border-b border-line px-3 text-left font-medium">Date</th><th class="border-b border-line px-3 text-left font-medium">Kind</th><th class="border-b border-line px-3 text-left font-medium">Policy</th>
-                                        <th class="border-b border-line px-3 text-right font-medium">Rate (%)</th><th class="border-b border-line px-3 text-right font-medium">Amount (BDT)</th><th class="border-b border-line px-3 text-right font-medium">Withheld</th><th class="border-b border-line px-3 text-left font-medium">Status</th>
-                                    </tr></thead>
-                                    <tbody>
-                                        <tr v-for="e in compensation.entries" :key="e.id" class="h-(--row-h)">
-                                            <td class="border-b border-line px-3">{{ formatDate(e.earned_on) }}</td>
-                                            <td class="border-b border-line px-3">{{ e.kind === 'earned' ? (e.role === 'override' ? `Override ${e.level ?? ''}` : 'Direct') : words(e.kind) }}</td>
-                                            <td class="border-b border-line px-3"><Link v-if="e.policy_id" :href="`/policies/${e.policy_id}`" class="text-accent-text hover:underline">{{ e.policy_number }}</Link></td>
-                                            <td class="num border-b border-line px-3">{{ e.rate_percent }}</td><td class="num border-b border-line px-3">{{ formatMoney(e.amount) }}</td><td class="num border-b border-line px-3">{{ formatMoney(e.withholding) }}</td>
-                                            <td class="border-b border-line px-3"><StatusBadge :status="e.status" /></td>
-                                        </tr>
-                                        <tr v-if="compensation.entries.length === 0"><td colspan="7" class="px-3 py-4 text-ui text-ink-2">No commission yet.</td></tr>
-                                    </tbody>
-                                </table>
+                            <div class="border border-line" data-testid="producer-commission-entries">
+                                <DataTable id="producer-commission-entries" label="Commission entries" :columns="entryColumns" :rows="compensation.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false"
+                                    :open-on-click="false" compact-toolbar :total="compensation.entries_total ?? null" empty-text="No commission yet." />
                             </div>
                         </section>
                         <section v-if="compensation.exceptions.length">

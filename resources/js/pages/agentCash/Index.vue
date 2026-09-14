@@ -22,7 +22,7 @@ import { type PreviewResult, previewJournal } from '@/lib/preview';
 import { usePermissions } from '@/lib/permissions';
 
 interface Row { agent_id: string; agent_code: string; collected: string; deposited: string; undeposited: string; gl: string; difference: string; oldest_undeposited_on: string | null; days_undeposited: number | null }
-const props = defineProps<{ asOf: string; position: { rows: Row[]; totals: Record<string, string> }; agents: { id: string; code: string; name?: string | null }[]; bankAccounts: { id: string; bank_name: string; account_no_masked: string }[] }>();
+const props = defineProps<{ asOf: string; position: { rows: Row[]; totals: Record<string, string> }; bankAccounts: { id: string; bank_name: string; account_no_masked: string }[] }>();
 
 const { can } = usePermissions();
 const active = ref<string | null>(null);
@@ -30,8 +30,6 @@ const depositing = ref(false);
 // Gap fix GA-19: a deposit starts at today with the agent's undeposited cash; the agent is looked up by code or name.
 const today = useBusinessToday();
 const form = useForm({ agent_id: '', amount: '', deposited_on: today, bank_account_id: '', reference: '' });
-const agentPicked = ref<LookupResult | null>(null);
-const pickerKey = ref(0);
 const preview = ref<PreviewResult | null>(null);
 const previewOpen = ref(false);
 const columns: DataColumn<Row>[] = [
@@ -45,14 +43,14 @@ const columns: DataColumn<Row>[] = [
     { id: 'days', header: 'Days held', type: 'number', value: (r) => r.days_undeposited, width: 90 },
 ];
 
-function agentLabel(agentId: string): LookupResult | null {
-    const agent = props.agents.find((a) => a.id === agentId);
-    return agent ? { id: agent.id, label: agent.name ? `${agent.code} · ${agent.name}` : agent.code } : null;
-}
+// GA-40: the agent is looked up (the producers of the branches the user deposits for) instead of a select of every agent.
+const agentPick = ref<LookupResult | null>(null);
+const opened = ref(0);
 function openDeposit(agentId = ''): void {
     Object.assign(form, depositDraft(props.position.rows, agentId, today));
-    agentPicked.value = agentLabel(agentId);
-    pickerKey.value++;
+    const row = props.position.rows.find((r) => r.agent_id === agentId);
+    agentPick.value = row ? { id: row.agent_id, label: row.agent_code } : null;
+    opened.value++;
     depositing.value = true;
 }
 watch(() => form.agent_id, (agentId, previous) => {
@@ -102,7 +100,7 @@ function post(): void {
         </QueueView>
         <Drawer v-model:open="depositing" title="Record a deposit">
             <FormLayout submit-label="Review and post" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review" @cancel="depositing = false">
-                <Field id="agent_id" label="Agent" :error="form.errors.agent_id"><LookupInput id="agent_id" :key="pickerKey" v-model="form.agent_id" type="agent" placeholder="Agent code or name" :initial="agentPicked" @selected="agentPicked = $event" /></Field>
+                <Field id="agent_id" label="Agent" :error="form.errors.agent_id"><LookupInput id="agent_id" :key="opened" v-model="form.agent_id" type="agent" :params="{ for: 'agent-cash' }" :initial="agentPick" placeholder="Agent code or name" /></Field>
                 <Field id="amount" label="Amount (BDT)" hint="Starts at the cash the agent has not deposited yet." :error="form.errors.amount"><MoneyInput v-model="form.amount" /></Field>
                 <Field id="deposited_on" label="Deposited on" :error="form.errors.deposited_on"><DateInput v-model="form.deposited_on" /></Field>
                 <Field id="bank_account_id" label="Bank account" optional :error="form.errors.bank_account_id"><SelectInput id="bank_account_id" v-model="form.bank_account_id" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" /></Field>

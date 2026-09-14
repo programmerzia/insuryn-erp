@@ -51,7 +51,14 @@ final class LookupController
             // Follow-up H1: lookups open for the area's permissions in any scope. Policies and installments are branch-bound and limited to the user's reach;
             // customers, producers and payees are parties of the whole tenant (ASSUMPTION A-160).
             'customer' => $this->guarded($actor, [...PartyPageController::AREA, ...PolicyPageController::AREA, 'claim.pay_request'], fn (): array => $this->customers($like)),
-            'agent' => $this->guarded($actor, [...PartyPageController::AREA, ...CollectionsPageController::AREA], fn (): array => $this->agents($like)),
+            // GA-40: `for=agent-cash` (the deposit form) lists only the producers of the branches where the user takes collections, as the agent cash screen does (A-159).
+            'agent' => $request->query('for') === 'agent-cash'
+                ? $this->guarded($actor, CollectionsPageController::AREA, fn (AreaReach $reach): array => $this->agents($like, $reach))
+                : $this->guarded($actor, [...PartyPageController::AREA, ...CollectionsPageController::AREA], fn (): array => $this->agents($like)),
+            // GA-40: any active party that is not a producer yet (the new producer form), for those who open the parties area.
+            'party' => $this->guarded($actor, PartyPageController::AREA, fn (): array => $this->parties($like)),
+            // GA-40: cancelled policies with money still refundable, within reach (the refund request form).
+            'refundable' => $this->guarded($actor, ['receipt.refund_request', 'receipt.refund_release', 'reports.financial'], fn (AreaReach $reach): array => $this->refundable(trim((string) $request->query('q', '')), $reach)),
             'policy' => $this->guarded($actor, [...PolicyPageController::AREA, 'claim.register'], fn (AreaReach $reach): array => $this->policies($like, $reach)),
             'installment' => $this->guarded($actor, CollectionsPageController::AREA, fn (AreaReach $reach): array => $this->installments($like, $reach)),
             // GA-31: the manual journal's account picker, searchable by code or name.
@@ -176,6 +183,38 @@ final class LookupController
     }
 
     /** @return list<array<string, string>> */
+    private function parties(string $like): array
+    {
+        $rows = DB::table('parties as p')->where('p.status', 'active')->whereNotIn('p.id', DB::table('producers')->select('party_id'))
+            ->where(fn ($q) => $q->where('p.display_name', 'ilike', $like)->orWhere('p.tax_id', 'ilike', $like))->orderBy('p.display_name')->limit(self::LIMIT)->get(['p.id', 'p.display_name', 'p.kind', 'p.tax_id']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['id' => (string) $row->id, 'label' => (string) $row->display_name, 'detail' => ucfirst((string) $row->kind).($row->tax_id !== null ? " · TIN {$row->tax_id}" : '')];
+        }
+
+        return $results;
+    }
+
+    /** @return list<array<string, string>> */
+    private function refundable(string $query, AreaReach $reach): array
+    {
+        $needle = mb_strtolower($query);
+        $results = [];
+        foreach (app(\App\Modules\Insurance\Collections\Application\RefundableQuery::class)->refundable(PageSupport::entity()['id'], $reach) as $row) {
+            $label = trim(($row['policy_number'] ?? '').' · '.$row['policyholder']);
+            if ($needle === '' || str_contains(mb_strtolower($label), $needle)) {
+                $results[] = ['id' => $row['policy_id'], 'label' => $label, 'detail' => PageSupport::money($row['available_minor'], $row['currency']).' refundable',
+                    'amount' => PageSupport::money($row['available_minor'], $row['currency'])]; // GA-19: the request starts with what is refundable
+            }
+            if (count($results) === self::LIMIT) {
+                break;
+            }
+        }
+
+        return $results;
+    }
+
+    /** @return list<array<string, string>> */
     private function payees(string $like): array
     {
         $rows = DB::table('parties as p')->where('p.status', 'active')->where(fn ($q) => $q->where('p.display_name', 'ilike', $like)->orWhere('p.tax_id', 'ilike', $like))
@@ -190,9 +229,13 @@ final class LookupController
     }
 
     /** @return list<array<string, string>> */
-    private function agents(string $like): array
+    private function agents(string $like, ?AreaReach $reach = null): array
     {
-        $rows = DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')
+        $producers = DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id');
+        if ($reach !== null) {
+            $reach->constrain($producers->join('branches as b', 'b.id', '=', 'a.branch_id'), 'b.entity_id', 'a.branch_id');
+        }
+        $rows = $producers->where('a.status', 'active')
             ->where(fn ($q) => $q->where('a.code', 'ilike', $like)->orWhere('p.display_name', 'ilike', $like))->orderBy('a.code')->limit(self::LIMIT)->get(['a.id', 'a.code', 'p.display_name']);
         $results = [];
         foreach ($rows as $row) {

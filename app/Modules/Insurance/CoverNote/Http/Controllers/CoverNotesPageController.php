@@ -43,7 +43,9 @@ final class CoverNotesPageController
         $rows = $reach->constrain(DB::table('cover_notes as n'), 'n.entity_id', 'n.branch_id')->join('proposals as p', 'p.id', '=', 'n.proposal_id')->leftJoin('parties as c', 'c.id', '=', 'p.customer_party_id')
             ->leftJoin('products as pr', 'pr.id', '=', 'p.product_id')->leftJoin('users as u', 'u.id', '=', 'n.issued_by')->where('n.entity_id', $entity['id'])
             ->when($days !== null, fn ($q) => $q->where('n.status', 'active')->where('n.valid_to', '<=', $today->addDays((int) $days)->toDateString()))
-            ->orderByRaw("case when n.status = 'active' then 0 else 1 end")->orderBy('n.valid_to')->limit(PageSupport::LIST_PAGE_SIZE)
+            ->orderByRaw("case when n.status = 'active' then 0 else 1 end")->orderBy('n.valid_to');
+        $total = (clone $rows)->count(); // GA-40
+        $rows = $rows->limit(PageSupport::listPageSize())
             ->leftJoin('policies as pol', 'pol.id', '=', 'n.superseded_by_policy_id')
             ->get(['n.id', 'n.number', 'n.status', 'n.valid_from', 'n.valid_to', 'n.cancel_reason', 'n.issued_at', 'n.branch_id', 'n.entity_id', 'p.id as proposal_id', 'p.number as proposal_number',
                 'c.display_name as customer', 'pr.code as product', 'u.name as issued_by', 'n.issue_basis', 'n.premium_received_reference', 'pol.id as policy_id', 'pol.number as policy_number']);
@@ -52,6 +54,7 @@ final class CoverNotesPageController
             'today' => $today->toDateString(),
             'within' => $days,
             'expiringDays' => (int) config('erp.cover_notes.expiring_within_days', 7),
+            'coverNotesTotal' => $total,
             'coverNotes' => $rows->map(fn (object $n): array => [
                 'id' => (string) $n->id, 'number' => (string) $n->number, 'status' => (string) $n->status, 'valid_from' => (string) $n->valid_from, 'valid_to' => (string) $n->valid_to,
                 'days_left' => $n->status === 'active' ? (int) $today->diffInDays(CarbonImmutable::parse((string) $n->valid_to), false) : null,

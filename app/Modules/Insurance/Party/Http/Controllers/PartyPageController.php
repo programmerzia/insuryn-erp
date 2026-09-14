@@ -46,7 +46,7 @@ final class PartyPageController
         $page = Party::query()->with('roles')
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->whereRaw('display_name ilike ?', ["%{$search}%"])->orWhere('tax_id', $search)->orWhere('identity_no', $search)
                 ->when($mobile !== null, fn ($m) => $m->orWhere('mobile', $mobile))))
-            ->orderBy('display_name')->paginate(PageSupport::LIST_PAGE_SIZE)->withQueryString();
+            ->orderBy('display_name')->paginate(PageSupport::listPageSize())->withQueryString();
 
         return Inertia::render('parties/Index', [
             'search' => $search,

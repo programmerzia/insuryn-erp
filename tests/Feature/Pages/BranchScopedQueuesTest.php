@@ -132,12 +132,15 @@ it('opens suspense, refunds, agent cash, cheques and dunning to a branch-scoped 
             && ($this->every)($rows, fn (array $row): bool => str_starts_with((string) $row['receipt_number'], 'RCT-HO-')))
         ->where('installments', fn ($rows): bool => ($this->rows)($rows) !== [] && ($this->every)($rows, fn (array $row): bool => str_starts_with((string) $row['label'], $this->mine['number'].' '))));
 
-    actingAs($manager)->get('/refunds', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('refunds/Index')
-        ->where('refundable', fn ($rows): bool => ($this->ids)($rows, 'policy_id') === [$this->mine['paid']]));
+    // GA-40: the refund request looks the policy up; the page counts them.
+    actingAs($manager)->get('/refunds', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('refunds/Index')->where('refundableCount', 1));
+    expect(($this->ids)(actingAs($manager)->getJson('/lookup/refundable?q=POL', $this->headers)->assertOk()->json('results')))->toBe([$this->mine['paid']]);
 
     actingAs($manager)->get('/agent-cash?as_of=2026-09-30', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('agentCash/Index')
-        ->where('position.rows', fn ($rows): bool => ($this->ids)($rows, 'agent_id') === [$this->mine['agent']])->where('position.totals.collected_minor', '6,000.00')
-        ->where('agents', fn ($rows): bool => ! in_array($this->theirs['agent'], ($this->ids)($rows), true) && in_array($this->mine['agent'], ($this->ids)($rows), true)));
+        ->where('position.rows', fn ($rows): bool => ($this->ids)($rows, 'agent_id') === [$this->mine['agent']])->where('position.totals.collected_minor', '6,000.00')->missing('agents'));
+    // GA-40: the deposit form looks the agent up among the producers of the user's branches.
+    $agents = ($this->ids)(actingAs($manager)->getJson('/lookup/agent?for=agent-cash&q=AG', $this->headers)->assertOk()->json('results'));
+    expect($agents)->toContain($this->mine['agent'])->and(in_array($this->theirs['agent'], $agents, true))->toBeFalse();
 
     actingAs($manager)->get('/cheques?from=2026-09-01&to=2026-09-30', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('receipts/Cheques')
         ->where('register.rows', fn ($rows): bool => ($this->ids)($rows, 'receipt_id') === [$this->mine['cheque']])->where('register.totals.presented', '500.00'));
@@ -152,7 +155,9 @@ it('lists every branch on those screens for a tenant-wide user', function (): vo
 
     actingAs($manager)->get('/suspense?as_of=2026-09-30', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('ageing.items', fn ($rows): bool => array_intersect([$this->mine['receipt'], $this->theirs['receipt']], ($this->ids)($rows, 'receipt_id')) === [$this->mine['receipt'], $this->theirs['receipt']]));
-    actingAs($manager)->get('/refunds', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->has('refundable', 2));
+    actingAs($manager)->get('/refunds', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('refundableCount', 2));
+    expect(actingAs($manager)->getJson('/lookup/refundable?q=POL', $this->headers)->json('results'))->toHaveCount(2)
+        ->and(($this->ids)(actingAs($manager)->getJson('/lookup/agent?for=agent-cash&q=AG', $this->headers)->json('results')))->toContain($this->mine['agent'], $this->theirs['agent']);
     actingAs($manager)->get('/agent-cash?as_of=2026-09-30', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->has('position.rows', 2));
     actingAs($manager)->get('/cheques?from=2026-09-01&to=2026-09-30', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->has('register.rows', 2));
     actingAs($manager)->get('/dunning?from=2026-10-01&to=2026-10-31', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page

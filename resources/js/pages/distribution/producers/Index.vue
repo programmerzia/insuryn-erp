@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
+import LookupInput from '@/components/forms/LookupInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -24,7 +25,6 @@ const props = defineProps<{
     producers: ProducerRow[];
     channels: { id: string; code: string; name: string; type: string }[];
     branches: { id: string; code: string; name: string }[];
-    parties: { id: string; display_name: string }[];
     can: { manage: boolean; export_register: boolean };
 }>();
 
@@ -92,7 +92,7 @@ const columns: DataColumn<ProducerRow>[] = [
         <Drawer v-model:open="creating" title="New producer">
             <FormLayout submit-label="Create producer" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="form.post('/distribution/producers')" @cancel="creating = false">
                 <Field id="party_id" label="Party" hint="The person or organisation. Create it under Parties first." :error="form.errors.party_id">
-                    <SelectInput id="party_id" v-model="form.party_id" placeholder="Choose a party" :options="parties.map((p) => ({ value: p.id, label: p.display_name }))" />
+                    <LookupInput id="party_id" v-model="form.party_id" type="party" placeholder="Name or tax ID" />
                 </Field>
                 <Field id="code" label="Code" :error="form.errors.code"><TextInput v-model="form.code" /></Field>
                 <Field id="type" label="Type" :error="form.errors.type"><SelectInput id="type" v-model="form.type" :options="types.map((t) => ({ value: t, label: producerTypeLabel(t) }))" /></Field>
