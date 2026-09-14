@@ -198,7 +198,7 @@ const validUntil = computed(() => q?.valid_until ?? null);
                         <LookupInput id="customer_party_id" v-model="state.customer_party_id" type="customer" creatable :initial="customer" @selected="customer = $event" />
                     </Field>
                     <Field id="producer_id" label="Producer" optional hint="Leave empty for direct business.">
-                        <LookupInput id="producer_id" v-model="state.producer_id" type="agent" :initial="producer" @selected="producer = $event" />
+                        <LookupInput id="producer_id" v-model="state.producer_id" type="agent" creatable :branch-id="state.branch_id" :initial="producer" @selected="producer = $event" />
                     </Field>
                     <p v-if="q?.producer_eligible === false" class="border-l-2 border-warn pl-3 text-ui">{{ q.producer_eligibility_note }} The proposal will be referred to underwriting.</p>
 

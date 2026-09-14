@@ -32,6 +32,9 @@ Route::middleware('auth')->get('search', GlobalSearchController::class)->name('s
 Route::middleware('auth')->get('lookup/{type}', [LookupController::class, 'search'])->where('type', '[a-z]+');
 Route::middleware('auth')->post('lookup/customer', [LookupController::class, 'createCustomer']);
 Route::middleware('auth')->post('lookup/payee', [LookupController::class, 'createPayee']); // flow fix X8
+// Flow fix X9: a producer (with its licence) created from the quote's producer lookup.
+Route::middleware('auth')->get('lookup/producer/new', [LookupController::class, 'newProducer']);
+Route::middleware('auth')->post('lookup/producer', [LookupController::class, 'createProducer']);
 Route::middleware('auth')->get('help/{module}', \App\Http\Help\HelpController::class)->where('module', '[a-z]+');
 Route::middleware('auth')->put('preferences/{key}', PreferencesController::class)->where('key', '.{1,80}')->name('preferences.update');
 

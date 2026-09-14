@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Search;
 
 use App\Http\Pages\PageSupport;
+use App\Modules\Distribution\Application\CreateProducer;
+use App\Modules\Distribution\Application\Licences\LicenceService;
+use App\Modules\Distribution\Application\Licences\RecordLicence;
+use App\Modules\Distribution\Application\ProducerService;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
 use App\Modules\Insurance\Party\Application\PartyService;
 use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
@@ -13,6 +17,7 @@ use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +26,9 @@ use Illuminate\Validation\Rule;
 /**
  * Typeahead lookups for form fields (UX brief §4 "Lookups (policy, customer, agent): typeahead with number/name/phone … Ctrl+N to create
  * inline"): GET /lookup/{customer|agent|policy|installment|payee}?q=, POST /lookup/customer to create a customer inline and (flow fix X8)
- * POST /lookup/payee to create a claim payee. Read access follows the areas that use the field. Phone search is not possible: parties have no
- * phone number yet.
+ * POST /lookup/payee to create a claim payee. Read access follows the areas that use the field. Flow fix X9: POST /lookup/producer creates a
+ * producer inline (party, producer on the form's branch, licence) through the Party and Distribution services, for holders of agent.manage;
+ * GET /lookup/producer/new suggests its code. Phone search is not possible: parties have no phone number yet.
  */
 final class LookupController
 {
@@ -30,6 +36,8 @@ final class LookupController
 
     /** Flow fix X8: the duty that looks up and creates claim payees, checked on the claim's branch for creation — the same check as approving. */
     private const PAYEE_DUTY = 'claim.approve';
+
+    private const PRODUCER_TYPES = ['agent', 'agency_org', 'bdo', 'broker', 'partner'];
 
     public function __construct(private readonly PermissionChecker $permissions) {}
 
@@ -69,6 +77,66 @@ final class LookupController
             self::PAYEE_DUTY, AuthorizationScope::branch((string) $claim->entity_id, (string) $claim->branch_id));
 
         return response()->json(['result' => ['id' => (string) $party->id, 'label' => $party->display_name, 'detail' => ucfirst($data['kind']).' · '.$data['role']]], 201);
+    }
+
+    /** Flow fix X9: the next free code for a producer type (erp.distribution.producer_code_prefixes: AG-001, BDO-004…) and today, for the create drawer. */
+    public function newProducer(Request $request): JsonResponse
+    {
+        $this->permissions->authorize(PageSupport::actor($request), 'agent.manage');
+        $type = in_array($request->query('type'), self::PRODUCER_TYPES, true) ? (string) $request->query('type') : 'agent';
+
+        return response()->json(['code' => self::suggestedCode($type), 'today' => CarbonImmutable::today()->toDateString()]);
+    }
+
+    /**
+     * Flow fix X9 (Part A step 1): a producer created from the quote — the party (an individual agent or BDO, otherwise an organisation), the producer on the
+     * quote's branch from today and its licence, in one transaction, each through its own service (permissions, rules and audit as on the producer pages).
+     */
+    public function createProducer(Request $request, PartyService $parties, ProducerService $producers, LicenceService $licences): JsonResponse
+    {
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorize($actor, 'agent.manage');
+        $this->permissions->authorize($actor, 'party.manage');
+        /** @var array{name: string, producer_type: string, code: string, branch_id: string, licence_no: string, licence_class: string, issued_on: string, expires_on: string} $data */
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'], 'producer_type' => ['required', Rule::in(self::PRODUCER_TYPES)],
+            'code' => ['required', 'string', 'max:32', Rule::unique('producers', 'code')], 'branch_id' => ['required', 'uuid', Rule::exists('branches', 'id')],
+            'licence_no' => ['required', 'string', 'max:64', Rule::unique('producer_licences', 'licence_no')->where('authority', 'IDRA')],
+            'licence_class' => ['required', Rule::in(LicenceService::CLASSES)], 'issued_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'expires_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'after_or_equal:issued_on'],
+        ], [
+            'name.required' => 'Enter the producer\'s name.', 'code.unique' => 'Another producer has this code.', 'branch_id.required' => 'Choose the branch on the quote first.',
+            'licence_no.required' => 'Enter the licence number: a producer writing new business needs a valid licence.', 'licence_no.unique' => 'This licence number is already recorded.',
+            'issued_on.before_or_equal' => 'A licence cannot be issued in the future.', 'expires_on.after_or_equal' => 'The licence must be valid today to write new business.',
+        ]);
+        $kind = in_array($data['producer_type'], ['agent', 'bdo'], true) ? PartyKind::Individual : PartyKind::Organization;
+        $role = $data['producer_type'] === 'bdo' ? PartyRoleType::Employee : PartyRoleType::Agent;
+
+        $producer = DB::transaction(function () use ($data, $kind, $role, $actor, $parties, $producers, $licences) {
+            $party = $parties->create($kind, trim($data['name']), null, [$role], $actor);
+            $producer = $producers->create(new CreateProducer((string) $party->id, trim($data['code']), $data['producer_type'], $data['branch_id']), $actor);
+            $licences->record(new RecordLicence($producer->id, trim($data['licence_no']), $data['licence_class'], CarbonImmutable::parse($data['issued_on']),
+                CarbonImmutable::parse($data['expires_on'])), $actor);
+
+            return $producer;
+        });
+
+        return response()->json(['result' => ['id' => $producer->id, 'label' => "{$producer->code} · ".trim($data['name']), 'detail' => 'Agent']], 201);
+    }
+
+    private static function suggestedCode(string $type): string
+    {
+        /** @var array<string, string> $prefixes */
+        $prefixes = (array) config('erp.distribution.producer_code_prefixes', []);
+        $prefix = $prefixes[$type] ?? 'PR';
+        $highest = 0;
+        foreach (DB::table('producers')->where('code', 'like', addcslashes($prefix, '%_\\').'-%')->pluck('code') as $code) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'-(\d{1,9})$/', (string) $code, $match) === 1) {
+                $highest = max($highest, (int) $match[1]);
+            }
+        }
+
+        return sprintf('%s-%03d', $prefix, $highest + 1);
     }
 
     /**

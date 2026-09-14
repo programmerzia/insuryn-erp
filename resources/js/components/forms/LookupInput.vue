@@ -2,18 +2,22 @@
 import { Plus, Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import Field from '@/components/forms/Field.vue';
+import ProducerCreateDrawer from '@/components/forms/ProducerCreateDrawer.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import Kbd from '@/components/ui/Kbd.vue';
 import { useField } from '@/lib/field';
 import { HttpError, requestJson } from '@/lib/http';
 import { blankCreateDraft, createPayload, lookupCreateConfig, type LookupType } from '@/lib/lookupCreate';
+import { usePermissions } from '@/lib/permissions';
 import { savePreference, usePreferences } from '@/lib/preferences';
+import { ASK_FOR_PRODUCER, lookupCreateMode } from '@/lib/producerCreate';
 import { shortcutKeys } from '@/lib/shortcuts';
 
 /**
  * Brief §4 lookup: type a number or name, pick with ↑↓ Enter; recent picks show first; Ctrl+N creates a customer (or, flow fix X8, a claim payee)
  * inline in a drawer. GET /lookup/{type}?q=, POST /lookup/customer or /lookup/payee (with `createContext`, e.g. the claim). The model is the
- * record id; `selected` carries the picked label for summaries.
+ * record id; `selected` carries the picked label for summaries. Flow fix X9: a creatable producer lookup (type agent) creates a producer with its
+ * licence (POST /lookup/producer) for holders of agent.manage, on `branchId`; others are told who can add one.
  */
 export interface LookupResult {
     id: string;
@@ -22,13 +26,16 @@ export interface LookupResult {
     amount?: string;
 }
 
-const props = withDefaults(defineProps<{ type: LookupType; placeholder?: string; initial?: LookupResult | null; creatable?: boolean; createContext?: Record<string, string>; id?: string }>(), {
-    placeholder: undefined, initial: null, creatable: false, createContext: () => ({}), id: undefined,
+const props = withDefaults(defineProps<{ type: LookupType; placeholder?: string; initial?: LookupResult | null; creatable?: boolean; createContext?: Record<string, string>; id?: string; branchId?: string }>(), {
+    placeholder: undefined, initial: null, creatable: false, createContext: () => ({}), id: undefined, branchId: '',
 });
 const model = defineModel<string>({ default: '' });
 const emit = defineEmits<{ selected: [result: LookupResult | null] }>();
 const field = useField(props.id);
 const preferences = usePreferences();
+const { can } = usePermissions();
+const producerMode = computed(() => (props.type === 'agent' ? lookupCreateMode(props.type, props.creatable, can('agent.manage') && can('party.manage')) : null));
+const creatingProducer = ref(false);
 
 const query = ref(props.initial?.label ?? '');
 const results = ref<LookupResult[]>([]);
@@ -90,7 +97,12 @@ function onBlur(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n' && props.creatable) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n' && producerMode.value === 'producer') {
+        event.preventDefault();
+        creatingProducer.value = true;
+        return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n' && canCreate.value) {
         event.preventDefault();
         startCreate();
         return;
@@ -162,7 +174,7 @@ async function create(): Promise<void> {
             />
         </div>
         <ul
-            v-if="open && (shown.length || loading || failed || canCreate)"
+            v-if="open && (shown.length || loading || failed || canCreate || producerMode)"
             :id="`${field.id}-options`"
             role="listbox"
             class="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-panel border border-line bg-surface p-1 text-ui shadow-float"
@@ -184,6 +196,12 @@ async function create(): Promise<void> {
             <li v-if="loading && !shown.length" class="px-2 py-1.5 text-ink-2" role="status">Searching…</li>
             <li v-else-if="failed" class="px-2 py-1.5 text-danger" role="alert">{{ failed }}</li>
             <li v-else-if="!loading && query.trim() !== '' && query !== selectedLabel && !shown.length" class="px-2 py-1.5 text-ink-2">Nothing matches “{{ query }}”.</li>
+            <li v-if="producerMode === 'producer'" class="mt-1 border-t border-line pt-1">
+                <button type="button" class="flex h-8 w-full items-center gap-2 rounded-control px-2 text-accent-text hover:bg-surface-2" @mousedown.prevent="creatingProducer = true">
+                    <Plus :size="14" :stroke-width="1.5" />New producer <Kbd :keys="shortcutKeys('lookup.create')" class="ml-auto" />
+                </button>
+            </li>
+            <li v-else-if="producerMode === 'ask'" class="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-ink-2">{{ ASK_FOR_PRODUCER }}</li>
             <li v-if="canCreate" class="mt-1 border-t border-line pt-1">
                 <button type="button" class="flex h-8 w-full items-center gap-2 rounded-control px-2 text-accent-text hover:bg-surface-2" @mousedown.prevent="startCreate">
                     <Plus :size="14" :stroke-width="1.5" />New {{ noun }} <Kbd :keys="shortcutKeys('lookup.create')" class="ml-auto" />
@@ -191,6 +209,7 @@ async function create(): Promise<void> {
             </li>
         </ul>
 
+        <ProducerCreateDrawer v-if="producerMode === 'producer'" v-model:open="creatingProducer" :name="query === selectedLabel ? '' : query" :branch-id="branchId" @created="pick" />
         <Drawer v-if="canCreate" v-model:open="creating" :title="`New ${noun}`">
             <form class="grid gap-4" @submit.prevent="create">
                 <p v-if="createErrors.form" class="text-ui text-danger" role="alert">{{ createErrors.form }}</p>

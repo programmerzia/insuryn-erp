@@ -116,6 +116,8 @@ return [
         // ASSUMPTION: A-22 — payout route: producers with an employee record are paid through payroll; others by type (default accounts payable).
         'payout_route_by_type' => ['agent' => 'ap', 'agency_org' => 'ap', 'broker' => 'ap', 'partner' => 'ap', 'bdo' => 'payroll'],
         // ASSUMPTION: A-16 — IDRA's register file format is not specified: CSV with these columns, in this order.
+        // Flow fix X9: the prefix of the code suggested for a producer created inline from a quote (PREFIX-001, the next free number); the code can be changed.
+        'producer_code_prefixes' => ['agent' => 'AG', 'agency_org' => 'AGY', 'bdo' => 'BDO', 'broker' => 'BRK', 'partner' => 'PTR'],
         'idra_register_columns' => ['licence_no', 'authority', 'producer_code', 'producer_name', 'producer_type', 'class', 'issued_on', 'expires_on', 'status', 'branch_code'],
     ],
     'collections' => [
