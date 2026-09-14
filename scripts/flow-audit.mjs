@@ -154,7 +154,7 @@ async function lookup(input, text, pick = text) {
 /** Confirms the journal preview dialog (the deliberate stop before money moves), returns its lines. */
 async function confirmJournal() {
     const page = meter.page;
-    const dialog = page.getByRole('dialog').filter({ hasText: 'Back to the form' });
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Back to the form' }).filter({ hasNot: page.getByRole('dialog') }).last();
     await dialog.waitFor();
     const lines = (await dialog.locator('tbody tr').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
     await dialog.getByRole('button').last().click();
