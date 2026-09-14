@@ -69,6 +69,30 @@ it('takes a claim from registration to close, with release by someone else', fun
     actingAs($officer)->get('/claims?status=closed', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('claims/Index')->has('claims.data', 1));
 });
 
+it('hides reopen while a reopening waits for approval and explains a second request', function (): void {
+    approvalPolicy($this->ctx['tenant_id'], 'claim_reopen', ['min_amount_minor' => 1], [['permission' => 'periods.lock']]);
+    $officer = ($this->userWith)(['claim.register', 'claim.reserve']);
+    $manager = ($this->userWith)(['claim.approve', 'claim.pay_request', 'claim.close']);
+    $finance = ($this->userWith)(['claim.pay_release']);
+
+    actingAs($officer)->post('/claims', ['policy_id' => $this->policyId, 'loss_date' => '2026-09-05', 'reported_on' => '2026-09-06', 'description' => 'Collision'], $this->headers)->assertSessionHasNoErrors();
+    $claimId = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('claims')->value('id'));
+    actingAs($officer)->post("/claims/{$claimId}/reserve", ['reserve' => '30,000.00', 'reason' => 'Initial', 'on' => '2026-09-06'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($manager)->post("/claims/{$claimId}/payments", ['amount' => '20,000.00', 'payee_party_id' => $this->world['policyholder_id'], 'on' => '2026-09-07'], $this->headers)->assertSessionHasNoErrors();
+    $paymentId = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('claim_payments')->value('id'));
+    actingAs($manager)->post("/claim-payments/{$paymentId}/request-release", [], $this->headers)->assertSessionHasNoErrors();
+    actingAs($finance)->post("/claim-payments/{$paymentId}/release", ['paid_on' => '2026-09-08'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($manager)->post("/claims/{$claimId}/close", ['reason' => 'Settled', 'on' => '2026-09-12'], $this->headers)->assertSessionHasNoErrors();
+
+    actingAs($manager)->post("/claims/{$claimId}/reopen", ['reason' => 'Further damage', 'on' => '2026-09-13'], $this->headers)
+        ->assertSessionHasNoErrors()->assertSessionHas('status', 'Reopening sent for approval.');
+    actingAs($manager)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('claims/Show')
+        ->where('claim.status', 'closed')->where('actions.reopen', false));
+    actingAs($manager)->post("/claims/{$claimId}/reopen", ['reason' => 'Asked again', 'on' => '2026-09-14'], $this->headers)
+        ->assertSessionHasErrors(['form' => 'Reopening this claim is already waiting for approval. It reopens once the approver accepts it.']);
+    expect(asTenant($this->ctx['tenant_id'], fn (): int => DB::table('approvals')->where('object_type', 'claim_reopen')->count()))->toBe(1);
+});
+
 it('lists pending approvals a user may decide and decides them from the inbox', function (): void {
     approvalPolicy($this->ctx['tenant_id'], 'claim_payment', ['min_amount_minor' => 5_000_000], [['permission' => 'periods.lock']]);
     $officer = ($this->userWith)(['claim.register', 'claim.reserve']);

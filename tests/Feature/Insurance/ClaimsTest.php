@@ -218,3 +218,35 @@ it('drives claims over the API with the claim permissions', function (): void {
         ->assertCreated()->assertJsonPath('data.status', 'approved');
     Pest\Laravel\actingAs($manager)->getJson("/api/insurance/claims/{$claimId}", $headers)->assertOk()->assertJsonCount(1, 'data.reserves')->assertJsonCount(1, 'data.payments');
 });
+
+it('refuses a second reopening while one waits for approval, so no stale approval can reopen the claim later (found by 2.0d)', function (): void {
+    approvalPolicy($this->ctx['tenant_id'], 'claim_reopen', ['min_amount_minor' => 1], [['permission' => 'periods.lock']]);
+    $cfo = userWithPermissions($this->ctx['tenant_id'], ['periods.lock']);
+
+    asTenant($this->ctx['tenant_id'], function () use ($cfo): void {
+        $claim = ($this->claims)()->register($this->policyId, ($this->on)('2026-09-05'), 'Collision', $this->officer, ($this->on)('2026-09-06'));
+        ($this->claims)()->reserve($claim->id, 1_000_000, 'Initial', $this->officer, ($this->on)('2026-09-06'));
+        $payment = ($this->payments)()->approve($claim->id, 800_000, $this->world['policyholder_id'], $this->manager, ($this->on)('2026-09-07'));
+        ($this->payments)()->requestRelease($payment->id, $this->manager, null);
+        ($this->payments)()->release($payment->id, $this->finance, ($this->on)('2026-09-08'));
+        ($this->claims)()->close($claim->id, 'Settled', $this->manager, ($this->on)('2026-09-09'));
+        $approvals = app(ApprovalService::class);
+
+        // A rejected reopening leaves the claim closed, and it can be asked for again.
+        $first = ($this->claims)()->reopen($claim->id, 'Another look', $this->manager, ($this->on)('2026-09-10'));
+        $approvals->decide((string) $first, $cfo, Decision::Rejected, 'No new facts');
+        $second = ($this->claims)()->reopen($claim->id, 'Further damage found', $this->manager, ($this->on)('2026-09-11'));
+        $approvalRows = DB::table('approvals')->count();
+        $audits = DB::table('audit_events')->count();
+
+        expect($second)->not->toBeNull()
+            ->and(thrownBy(fn () => ($this->claims)()->reopen($claim->id, 'Asked again', $this->manager, ($this->on)('2026-09-12')), BusinessRuleViolation::class)->reasonCode)->toBe('REOPEN_PENDING')
+            ->and(DB::table('approvals')->count())->toBe($approvalRows)
+            ->and(DB::table('audit_events')->count())->toBe($audits)
+            ->and(DB::table('claims')->where('id', $claim->id)->value('status'))->toBe('closed');
+
+        $approvals->decide((string) $second, $cfo, Decision::Approved, null);
+        expect(DB::table('claims')->where('id', $claim->id)->value('status'))->toBe('reserved')
+            ->and(DB::table('approvals')->where('object_type', 'claim_reopen')->where('status', 'pending')->count())->toBe(0);
+    });
+});

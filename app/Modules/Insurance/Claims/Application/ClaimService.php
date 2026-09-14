@@ -134,8 +134,10 @@ final class ClaimService
 
     /**
      * closed ─reopen(approval)─▶ reserved. An approval policy for `claim_reopen` makes it wait for approval (returns the approval id).
+     * ASSUMPTION: A-143 — one reopening waits at a time: a second request would leave an approval that, once the first reopened the claim, could never complete — or
+     * would reopen the claim again after a later close without anyone asking (found by the 2.0d property test).
      *
-     * @throws BusinessRuleViolation REASON_REQUIRED | INVALID_CLAIM_TRANSITION
+     * @throws BusinessRuleViolation REASON_REQUIRED | INVALID_CLAIM_TRANSITION | REOPEN_PENDING
      */
     public function reopen(string $claimId, string $reason, string $actorUserId, CarbonImmutable $on): ?string
     {
@@ -144,6 +146,9 @@ final class ClaimService
 
         return DB::transaction(function () use ($claimId, $reason, $actorUserId, $on): ?string {
             $claim = $this->lock($claimId, [ClaimStatus::Closed], 'reopen');
+            if ($this->approvals->pendingFor('claim_reopen', $claim->id) !== null) {
+                throw new BusinessRuleViolation('REOPEN_PENDING', "Reopening claim {$claim->number} is already waiting for approval.");
+            }
             $approvalId = $this->approvals->request('claim_reopen', $claim->id, new ApprovalFacts($claim->reserve_minor), $actorUserId, $on, ['reason' => $reason]);
             if ($approvalId === null) {
                 $this->completeReopen($claim->id, $reason, $actorUserId);

@@ -118,7 +118,8 @@ final class ClaimPageController
                 'recover' => in_array($status, [ClaimStatus::Paid, ClaimStatus::Closed], true) && $can('claim.pay_request'),
                 'close' => in_array($status, [ClaimStatus::Approved, ClaimStatus::Paid], true) && ! $unsettled && $can('claim.close'),
                 'reject' => in_array($status, [ClaimStatus::Registered, ClaimStatus::Reserved], true) && $can('claim.approve'),
-                'reopen' => $status === ClaimStatus::Closed && $can('claim.approve'),
+                'reopen' => $status === ClaimStatus::Closed && $can('claim.approve')
+                    && ! DB::table('approvals')->where('object_type', 'claim_reopen')->where('object_id', $model->id)->where('status', 'pending')->exists(),
             ],
         ]);
     }
