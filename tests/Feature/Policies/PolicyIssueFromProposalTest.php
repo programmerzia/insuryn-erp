@@ -10,6 +10,7 @@ use App\Modules\Insurance\Policy\Application\QuoteRequest;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyIssued;
 use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
+use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
 use App\Modules\Insurance\Quotation\Application\QuotationTerms;
 use App\Modules\Insurance\Rating\Application\RatingEngine;
@@ -26,6 +27,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\travelTo;
 
 /**
@@ -287,3 +289,38 @@ it('finds issued policies as duplicate risks by their current risk keys', functi
         ->and(array_column($new->referral_reasons ?? [], 'code'))->toBe(['DUPLICATE_RISK'])->and($new->referral_reasons[0]['detail'] ?? '')->toContain((string) $policy->number);
 });
 
+
+it('refuses an endorsement that empties a risk detail needed only from the proposal, and endorses while it stays filled', function (): void {
+    // Flow fix X7 made the motor chassis number optional on the quote and required at the proposal; an endorsement changes an issued policy, so it needs it too.
+    $policy = ($this->issue)(($this->submitted)());
+    $admin = $this->world['admin'];
+    $headers = ['X-Tenant' => $this->ctx['tenant_id']];
+    $user = ($this->in)(fn (): User => User::query()->findOrFail((string) $admin));
+    $issued = ($this->in)(fn (): Policy => Policy::query()->whereKey($policy->id)->firstOrFail());
+    $chassis = (string) ($issued->risk_inputs['chassis_no'] ?? '');
+    $older = [...($issued->risk_inputs ?? []), 'driver_age' => 30];
+    expect($chassis)->not->toBe('');
+
+    ($this->in)(function () use ($policy, $older, $admin): void {
+        $lifecycle = app(PolicyLifecycle::class);
+        foreach ([[...$older, 'chassis_no' => null], [...$older, 'chassis_no' => ''], array_diff_key($older, ['chassis_no' => true])] as $cleared) {
+            expect(thrownBy(fn () => $lifecycle->rateEndorsement($policy->id, CarbonImmutable::parse('2026-10-15'), $cleared, $admin), RiskInputsInvalid::class)->errors)->toBe(['chassis_no' => 'REQUIRED'])
+                ->and(thrownBy(fn () => $lifecycle->endorseRisk($policy->id, CarbonImmutable::parse('2026-10-15'), $cleared, 'Named driver changed', $admin), RiskInputsInvalid::class)->errors)->toBe(['chassis_no' => 'REQUIRED']);
+        }
+    });
+
+    // On the policy page: the live re-rating names the field (the drawer shows "Enter the chassis number."), and posting is refused.
+    actingAs($user)->postJson("/policies/{$policy->id}/endorsement-rating", ['effective_date' => '2026-10-15', 'risk_inputs' => [...$older, 'chassis_no' => '']], $headers)
+        ->assertStatus(422)->assertJsonPath('reason', 'RISK_INPUTS_INVALID')->assertJsonPath('errors', ['chassis_no' => 'REQUIRED']);
+    actingAs($user)->post("/policies/{$policy->id}/endorse-risk", ['effective_date' => '2026-10-15', 'risk_inputs' => [...$older, 'chassis_no' => ''], 'reason' => 'Named driver changed'], $headers)
+        ->assertSessionHasErrors(['reason' => 'RISK_INPUTS_INVALID', 'form' => 'The risk details are not valid (chassis_no: REQUIRED).']);
+    expect(($this->in)(fn (): array => [DB::table('policy_transactions')->where('policy_id', $policy->id)->where('type', 'endorsement')->count(),
+        Policy::query()->whereKey($policy->id)->firstOrFail()->risk_inputs['chassis_no'] ?? null]))->toBe([0, $chassis]);
+
+    actingAs($user)->post("/policies/{$policy->id}/endorse-risk", ['effective_date' => '2026-10-15', 'risk_inputs' => $older, 'reason' => 'Named driver changed'], $headers)
+        ->assertSessionHasNoErrors()->assertRedirect("/policies/{$policy->id}?tab=rating");
+    // The endorsement's rating (the risk now in force) keeps the chassis number; the issue rating stays frozen.
+    [$version, $rated] = ($this->in)(fn (): array => [Policy::query()->whereKey($policy->id)->firstOrFail()->version,
+        json_decode((string) DB::table('policy_transactions')->where('policy_id', $policy->id)->where('type', 'endorsement')->value('rating_result'), true)['risk_inputs'] ?? []]);
+    expect($version)->toBe(2)->and($rated['chassis_no'] ?? null)->toBe($chassis)->and($rated['driver_age'] ?? null)->toBe(30);
+});
