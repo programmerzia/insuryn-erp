@@ -27,7 +27,7 @@ php artisan schedule:work &                                    # nightly jobs
 | 8 | cfo | Release the payment run; download the BEFTN file. Expense vs budget on Home. | Home → Payment runs |
 | 9 | hr.manager | **People**: 30 employees, August payroll paid, September preview, payslip PDF. | People |
 | 10 | finance.manager | **Reinsurance**: treaties, the SBC share, the 150 crore garment factory (POL-HO-2026-000008) split by SBC, the surplus treaty and facultative cover; reinsurer statements and bordereaux. | Reinsurance |
-| 11 | finance.manager | **Assets & budgets**: asset register and depreciation, budget variance (HO marketing 36% over), petty cash floats. | Assets & budgets |
+| 11 | finance.manager | **Fixed assets, budgets, petty cash**: asset register and depreciation, budget variance (HO marketing 36% over), petty cash floats. | Fixed assets, Budgets, Petty cash |
 | 12 | finance.manager | **Month-end close** checklist: reconciliations (premium, claims, commission, UPR, VAT, stamp duty, AP, reinsurance, fixed assets, payroll), nightly jobs, pending documents. **Trial balance** → account activity → source policy. P&L ↔ balance sheet. | Close, Trial balance |
 | 13 | cfo | **Regulatory**: IDRA returns (XLSX/PDF, one marked filed), technical provisions (IBNR chain ladder), solvency snapshot. | Regulatory |
 | 14 | admin | Users and roles with SoD warnings, approval and underwriting limits, setup wizard. | Admin |
