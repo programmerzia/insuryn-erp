@@ -82,7 +82,8 @@ beforeEach(function (): void {
 
 it('issues a policy from an auto-approved proposal on its frozen rating, marks the proposal issued and supersedes its cover note in one transaction', function (): void {
     $proposal = ($this->submitted)();
-    $note = ($this->in)(fn () => app(CoverNoteService::class)->issue($proposal->id, CarbonImmutable::parse('2026-09-15'), CarbonImmutable::parse('2026-10-14'), $this->officer->id));
+    // GA-28: the product does not issue on credit, so the cover note is issued against the premium received, like the policy.
+    $note = ($this->in)(fn () => app(CoverNoteService::class)->issue($proposal->id, CarbonImmutable::parse('2026-09-15'), CarbonImmutable::parse('2026-10-14'), $this->officer->id, 'TRF 4471'));
 
     $policy = ($this->issue)($proposal, 'TRF 4471', 2);
 
@@ -139,7 +140,7 @@ it('issues a referred proposal once approved with a loading, carrying the specia
 
 it('rolls everything back when the issue fails after the proposal and the cover note were changed', function (): void {
     $proposal = ($this->submitted)();
-    $note = ($this->in)(fn () => app(CoverNoteService::class)->issue($proposal->id, CarbonImmutable::parse('2026-09-15'), CarbonImmutable::parse('2026-10-14'), $this->officer->id));
+    $note = ($this->in)(fn () => app(CoverNoteService::class)->issue($proposal->id, CarbonImmutable::parse('2026-09-15'), CarbonImmutable::parse('2026-10-14'), $this->officer->id, 'TRF 4471'));
     Event::listen(PolicyIssued::class, fn () => throw new RuntimeException('listener failed'));
 
     expect(fn () => ($this->issue)($proposal))->toThrow(RuntimeException::class, 'listener failed');

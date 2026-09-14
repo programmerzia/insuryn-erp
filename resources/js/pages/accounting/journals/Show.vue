@@ -8,6 +8,8 @@ import Field from '@/components/forms/Field.vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import DocumentList from '@/components/object/DocumentList.vue';
+import type { StoredDocumentRow } from '@/components/object/types';
 import DetailList from '@/components/table/DetailList.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -32,6 +34,9 @@ const props = defineProps<{
     dimensions?: Record<number, { name: string; value: string }[]>;
     sourceLink?: string | null;
     today?: string;
+    /** GA-31: a manual journal's supporting documents (null for system postings) and where to attach one (null when the user may not). */
+    documents?: StoredDocumentRow[] | null;
+    documentUpload?: string | null;
 }>();
 
 const actions = computed(() => props.actions ?? { approve: false, requestReversal: false, decideReversal: false });
@@ -41,7 +46,8 @@ const rejectReason = ref('');
 const confirm = useJournalConfirm();
 const captions = useLineCaptions();
 const total = computed(() => formatMinor(sumMoney(props.journal.lines.filter((l) => l.side === 'debit').map((l) => l.amount))));
-const title = computed(() => props.journal.number ?? 'Draft journal');
+// GA-31: until it posts, a journal is known by its provisional reference, and its title says where it is ("pending approval"), not "draft".
+const title = computed(() => props.journal.number ?? (props.journal.provisionalReference ? `${props.journal.provisionalReference} (${props.journal.status.replaceAll('_', ' ')})` : 'Draft journal'));
 const chain = computed<{ label: string; journal: JournalRef }[]>(() =>
     [
         { label: 'Reverses', journal: props.journal.reverses },
@@ -170,6 +176,10 @@ function rejectReversal(): void {
                             <template v-else>{{ journal.source ? sourceWord : '—' }}</template>
                         </template>
                     </DetailList>
+                </section>
+                <section v-if="documents" aria-labelledby="documents-title" class="md:col-span-2">
+                    <h2 id="documents-title" class="mb-2 text-ui font-medium">Supporting documents</h2>
+                    <DocumentList :documents="documents" :upload-url="documentUpload" />
                 </section>
                 <section v-if="chain.length" aria-labelledby="chain-title">
                     <h2 id="chain-title" class="mb-2 text-ui font-medium">Reversals and corrections</h2>

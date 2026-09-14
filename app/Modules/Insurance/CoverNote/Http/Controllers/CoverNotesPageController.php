@@ -44,8 +44,9 @@ final class CoverNotesPageController
             ->leftJoin('products as pr', 'pr.id', '=', 'p.product_id')->leftJoin('users as u', 'u.id', '=', 'n.issued_by')->where('n.entity_id', $entity['id'])
             ->when($days !== null, fn ($q) => $q->where('n.status', 'active')->where('n.valid_to', '<=', $today->addDays((int) $days)->toDateString()))
             ->orderByRaw("case when n.status = 'active' then 0 else 1 end")->orderBy('n.valid_to')->limit(PageSupport::LIST_PAGE_SIZE)
+            ->leftJoin('policies as pol', 'pol.id', '=', 'n.superseded_by_policy_id')
             ->get(['n.id', 'n.number', 'n.status', 'n.valid_from', 'n.valid_to', 'n.cancel_reason', 'n.issued_at', 'n.branch_id', 'n.entity_id', 'p.id as proposal_id', 'p.number as proposal_number',
-                'c.display_name as customer', 'pr.code as product', 'u.name as issued_by']);
+                'c.display_name as customer', 'pr.code as product', 'u.name as issued_by', 'n.issue_basis', 'n.premium_received_reference', 'pol.id as policy_id', 'pol.number as policy_number']);
 
         return Inertia::render('coverNotes/Index', [
             'today' => $today->toDateString(),
@@ -55,6 +56,9 @@ final class CoverNotesPageController
                 'id' => (string) $n->id, 'number' => (string) $n->number, 'status' => (string) $n->status, 'valid_from' => (string) $n->valid_from, 'valid_to' => (string) $n->valid_to,
                 'days_left' => $n->status === 'active' ? (int) $today->diffInDays(CarbonImmutable::parse((string) $n->valid_to), false) : null,
                 'proposal_id' => (string) $n->proposal_id, 'proposal_number' => (string) $n->proposal_number, 'customer' => (string) $n->customer, 'product' => (string) $n->product,
+                // GA-28: the policy that replaced the cover note, and whether it was issued on credit or against a premium received.
+                'policy' => $n->policy_id === null ? null : ['id' => (string) $n->policy_id, 'number' => (string) $n->policy_number],
+                'issue_basis' => (string) $n->issue_basis, 'premium_received_reference' => $n->premium_received_reference === null ? null : (string) $n->premium_received_reference,
                 'issued_by' => (string) $n->issued_by, 'documents' => app(\App\Http\Documents\GeneratedDocumentsController::class)->forCoverNote((string) $n->id), 'cancel_reason' => $n->cancel_reason === null ? null : (string) $n->cancel_reason,
                 'can_cancel' => $n->status === 'active' && $cancelAnywhere
                     && $this->permissions->has($actor, CoverNoteService::CANCEL, \App\Modules\Platform\Authorization\AuthorizationScope::branch((string) $n->entity_id, (string) $n->branch_id)),
@@ -64,9 +68,12 @@ final class CoverNotesPageController
 
     public function store(Request $request, string $proposal): RedirectResponse
     {
-        /** @var array{valid_from: string, valid_to: string} $data */
-        $data = $request->validate(['valid_from' => ['required', 'date_format:Y-m-d'], 'valid_to' => ['required', 'date_format:Y-m-d']]);
-        $note = $this->coverNotes->issue($proposal, CarbonImmutable::parse($data['valid_from']), CarbonImmutable::parse($data['valid_to']), PageSupport::actor($request));
+        /** @var array{valid_from: string, valid_to: string, premium_received?: bool|null, premium_reference?: string|null} $data */
+        $data = $request->validate(['valid_from' => ['required', 'date_format:Y-m-d'], 'valid_to' => ['required', 'date_format:Y-m-d'], 'premium_received' => ['nullable', 'boolean'],
+            'premium_reference' => ['nullable', 'string', 'max:128']]);
+        // GA-28: the premium received and its reference, as when issuing the policy (A-117); on credit only where the product allows it.
+        $reference = ($data['premium_received'] ?? false) ? trim((string) ($data['premium_reference'] ?? '')) : null;
+        $note = $this->coverNotes->issue($proposal, CarbonImmutable::parse($data['valid_from']), CarbonImmutable::parse($data['valid_to']), PageSupport::actor($request), $reference);
 
         return redirect("/proposals/{$proposal}")->with('status', "Cover note {$note->number} issued.");
     }

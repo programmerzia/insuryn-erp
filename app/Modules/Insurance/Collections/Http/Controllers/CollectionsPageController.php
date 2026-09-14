@@ -379,7 +379,7 @@ final class CollectionsPageController
             return null;
         }
         $currency = (string) $policy->currency;
-        $lines = array_map(fn (array $i): array => ['installment_id' => $i['id'], 'label' => "{$policy->number} #{$i['no']}", 'amount' => PageSupport::money($i['outstanding_minor'], $currency),
+        $lines = array_map(fn (array $i): array => ['installment_id' => $i['id'], 'label' => \App\Modules\Insurance\Policy\Domain\InstallmentLabel::of((string) $policy->number, $i['no'], $i['endorsement_no']), 'amount' => PageSupport::money($i['outstanding_minor'], $currency),
             'outstanding' => PageSupport::money($i['outstanding_minor'], $currency)], $installments);
 
         $holder = (string) $policy->policyholder_party_id;
@@ -430,10 +430,10 @@ final class CollectionsPageController
         $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
             ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->orderBy('i.due_date')->orderBy('p.number')->limit(500)
-            ->get(['i.id', 'p.number', 'i.no', 'i.due_date', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
+            ->get(['i.id', 'p.number', 'i.no', 'i.endorsement_no', 'i.due_date', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
         $options = [];
         foreach ($rows as $row) {
-            $options[] = ['id' => (string) $row->id, 'label' => "{$row->number} #{$row->no} · {$row->display_name} · due {$row->due_date}",
+            $options[] = ['id' => (string) $row->id, 'label' => \App\Modules\Insurance\Policy\Domain\InstallmentLabel::of((string) $row->number, (int) $row->no, $row->endorsement_no === null ? null : (int) $row->endorsement_no)." · {$row->display_name} · due {$row->due_date}",
                 'outstanding' => PageSupport::money((int) $row->outstanding, $entity['currency'])];
         }
 

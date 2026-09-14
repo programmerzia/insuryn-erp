@@ -8,6 +8,7 @@ import { dismissToast, toasts } from '@/lib/toasts';
             <span class="size-1.5 shrink-0 rounded-full" :class="{ 'bg-ok': item.tone === 'ok', 'bg-danger': item.tone === 'danger', 'bg-ink-2': item.tone === 'neutral' }" aria-hidden="true" />
             <span class="min-w-0 flex-1">{{ item.message }}</span>
             <button v-if="item.action" type="button" class="shrink-0 font-medium text-accent-text hover:underline" @click="item.action?.run(); dismissToast(item.id)">{{ item.action.label }}</button>
+            <button v-if="item.secondary" type="button" class="shrink-0 text-accent-text hover:underline" @click="item.secondary?.run(); dismissToast(item.id)">{{ item.secondary.label }}</button>
             <button v-if="item.undo"type="button" class="font-medium text-accent-text hover:underline" @click="item.undo?.(); dismissToast(item.id)">Undo</button>
         </div>
     </div>

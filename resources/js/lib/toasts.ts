@@ -8,14 +8,16 @@ export interface Toast {
     undo?: () => void;
     /** Flow audit: the next step offered with the confirmation, e.g. "Record receipt" after issuing a policy. */
     action?: { label: string; run: () => void };
+    /** GA-25: a second step beside it, e.g. "Print endorsement". */
+    secondary?: { label: string; run: () => void };
 }
 
 export const toasts = reactive<Toast[]>([]);
 let next = 1;
 
-export function toast(message: string, options: { tone?: Toast['tone']; undo?: () => void; action?: Toast['action']; duration?: number } = {}): void {
+export function toast(message: string, options: { tone?: Toast['tone']; undo?: () => void; action?: Toast['action']; secondary?: Toast['secondary']; duration?: number } = {}): void {
     const id = next++;
-    toasts.push({ id, message, tone: options.tone ?? 'neutral', undo: options.undo, action: options.action });
+    toasts.push({ id, message, tone: options.tone ?? 'neutral', undo: options.undo, action: options.action, secondary: options.secondary });
     setTimeout(() => dismissToast(id), options.duration ?? 4000);
 }
 
@@ -33,6 +35,8 @@ export interface NextStep {
     prompt?: string | null;
     /** How the action follows the url: open the page (default), post to it (print a receipt) or download the file (a printed document). */
     method?: 'get' | 'post' | 'download';
+    /** GA-25: a second step offered beside this one. */
+    also?: NextStep | null;
 }
 
 /**
@@ -40,11 +44,13 @@ export interface NextStep {
  * premium receipt?") with its action; an undo when the action is reversible. Longer on screen when there is something to click.
  */
 export function confirmationToast(status: string, undo: { label: string; url: string } | null | undefined, step: NextStep | null | undefined, follow: (step: NextStep) => void, reverse: (url: string) => void): {
-    message: string; options: { tone: 'ok'; undo?: () => void; action?: Toast['action']; duration: number };
+    message: string; options: { tone: 'ok'; undo?: () => void; action?: Toast['action']; secondary?: Toast['secondary']; duration: number };
 } {
     const action = step ? { label: step.label, run: () => follow(step) } : undefined;
+    const also = step?.also;
+    const secondary = also ? { label: also.label, run: () => follow(also) } : undefined;
     const message = step?.prompt ? `${status} ${step.prompt}` : status;
-    return { message, options: { tone: 'ok', undo: undo ? () => reverse(undo.url) : undefined, action, duration: action ? 10000 : undo ? 6000 : 4000 } };
+    return { message, options: { tone: 'ok', undo: undo ? () => reverse(undo.url) : undefined, action, secondary, duration: action ? 10000 : undo ? 6000 : 4000 } };
 }
 
 /** Follows a next step: a page visit, a post (with the user's document language, which printing needs) or a download of the file. */

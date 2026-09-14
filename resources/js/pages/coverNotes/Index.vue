@@ -17,6 +17,8 @@ import { formatDate } from '@/lib/format';
 interface CoverNoteRow {
     id: string; number: string; status: string; valid_from: string; valid_to: string; days_left: number | null; proposal_id: string; proposal_number: string;
     customer: string; product: string; issued_by: string; cancel_reason: string | null; can_cancel: boolean;
+    /** GA-28: the policy that superseded the cover note, and the basis it was issued on. */
+    policy: { id: string; number: string } | null; issue_basis: string; premium_received_reference: string | null;
     /** Printed versions of the cover note, newest first. */
     documents: { id: string; version: number; locale: string; rendered_at: string; url: string }[];
 }
@@ -42,6 +44,7 @@ const columns: DataColumn<CoverNoteRow>[] = [
     { id: 'number', header: 'Cover note', value: (n) => n.number, width: 170 },
     { id: 'customer', header: 'Customer', value: (n) => n.customer, width: 200 },
     { id: 'proposal', header: 'Proposal', value: (n) => n.proposal_number, href: (n) => `/proposals/${n.proposal_id}`, width: 170 },
+    { id: 'policy', header: 'Policy', value: (n) => n.policy?.number ?? '', href: (n) => (n.policy ? `/policies/${n.policy.id}` : null), width: 190 },
     { id: 'product', header: 'Product', value: (n) => n.product, width: 110 },
     { id: 'from', header: 'From', type: 'date', value: (n) => n.valid_from, width: 120 },
     { id: 'to', header: 'Until', type: 'date', value: (n) => n.valid_to, width: 120 },
@@ -78,12 +81,14 @@ const columns: DataColumn<CoverNoteRow>[] = [
                         { label: 'Left', value: left(row) },
                         { label: 'Product', value: row.product },
                         { label: 'Issued by', value: row.issued_by },
+                        { label: 'Premium', value: row.issue_basis === 'premium_received' ? `Received · ${row.premium_received_reference}` : 'On credit' },
                         { label: 'Cancelled because', value: row.cancel_reason },
                     ]"
                 >
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <Link v-if="row.policy" :href="`/policies/${row.policy.id}`" class="text-ui text-accent-text hover:underline">Open policy {{ row.policy.number }}</Link>
                     <Link :href="`/proposals/${row.proposal_id}`" class="text-ui text-accent-text hover:underline">Open proposal {{ row.proposal_number }}</Link>
                     <Button v-if="row.can_cancel" variant="ghost" @click="cancelling = row; form.reset(); form.clearErrors()">Cancel cover note</Button>
                 </div>

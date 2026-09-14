@@ -32,10 +32,13 @@ final class InstallmentPlanner
         }
     }
 
-    /** A premium increase becomes a new installment due on the effective date, billed to the payers by share. */
-    public function addIncrease(Policy $policy, CarbonImmutable $dueDate, int $amountMinor): void
+    /**
+     * A premium increase becomes a new installment due on the effective date, billed to the payers by share. GA-25: it carries the endorsement's number, so
+     * it reads `<policy>/E<n>` wherever installments are listed.
+     */
+    public function addIncrease(Policy $policy, CarbonImmutable $dueDate, int $amountMinor, ?int $endorsementNo = null): void
     {
-        $this->addForPayers($policy, (int) Installment::query()->where('policy_id', $policy->id)->max('no') + 1, $dueDate, $amountMinor);
+        $this->addForPayers($policy, (int) Installment::query()->where('policy_id', $policy->id)->max('no') + 1, $dueDate, $amountMinor, $endorsementNo);
     }
 
     public function outstanding(Policy $policy): int
@@ -114,11 +117,11 @@ final class InstallmentPlanner
         return $portions;
     }
 
-    private function addForPayers(Policy $policy, int $no, CarbonImmutable $dueDate, int $amountMinor): void
+    private function addForPayers(Policy $policy, int $no, CarbonImmutable $dueDate, int $amountMinor, ?int $endorsementNo = null): void
     {
         foreach ($this->split($policy, $amountMinor) as [$payerId, $portion]) {
             if ($portion > 0) {
-                Installment::query()->create(['policy_id' => $policy->id, 'no' => $no, 'payer_party_id' => $payerId, 'due_date' => $dueDate->toDateString(),
+                Installment::query()->create(['policy_id' => $policy->id, 'no' => $no, 'endorsement_no' => $endorsementNo, 'payer_party_id' => $payerId, 'due_date' => $dueDate->toDateString(),
                     'amount_minor' => $portion, 'paid_minor' => 0, 'cancelled_minor' => 0, 'status' => InstallmentStatus::Pending->value]);
             }
         }

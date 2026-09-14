@@ -54,7 +54,7 @@ beforeEach(function (): void {
         $proposal = $proposals->createFromQuotation($quotation->id, $this->officer->id);
         $proposals->verifyKyc($proposal->id, 'nid', '1990123456789', $this->officer->id);
         $proposals->submit($proposal->id, $this->officer->id);
-        $note = app(CoverNoteService::class)->issue($proposal->id, CarbonImmutable::parse('2026-09-20'), CarbonImmutable::parse('2026-10-19'), $this->officer->id);
+        $note = app(CoverNoteService::class)->issue($proposal->id, CarbonImmutable::parse('2026-09-20'), CarbonImmutable::parse('2026-10-19'), $this->officer->id, 'TRF 1001'); // GA-28: not on credit
 
         return [$draft->id, $quotation->id, $note->id];
     });

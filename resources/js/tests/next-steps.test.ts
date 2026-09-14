@@ -26,6 +26,18 @@ describe('confirmation toast with a next step', () => {
         expect([handlers.visit.mock.calls.length, handlers.post.mock.calls.length, handlers.download.mock.calls.length]).toEqual([1, 1, 1]);
     });
 
+    it('offers a second step beside the first after an endorsement: collect the increase, print the endorsement (GA-25)', () => {
+        const follow = vi.fn();
+        const print = { label: 'Print endorsement', url: '/policies/p1/generated-documents?template_code=endorsement&object_id=t1', method: 'post' as const };
+        const { message, options } = confirmationToast('Endorsement POL-HO-2026-000001/E1 recorded.', null,
+            { label: 'Record receipt', url: '/receipts/create?policy=p1', prompt: 'Collect the additional premium?', also: print }, follow, vi.fn());
+        expect(message).toBe('Endorsement POL-HO-2026-000001/E1 recorded. Collect the additional premium?');
+        expect([options.action?.label, options.secondary?.label]).toEqual(['Record receipt', 'Print endorsement']);
+        options.secondary?.run();
+        expect(follow).toHaveBeenCalledWith(print);
+        expect(confirmationToast('Receipt recorded.', null, { label: 'Print receipt', url: '/r' }, vi.fn(), vi.fn()).options.secondary).toBeUndefined();
+    });
+
     it('offers Print receipt without a question when a receipt is recorded', () => {
         const { message, options } = confirmationToast('Receipt RCT-HO-2026-000001 recorded.', null, { label: 'Print receipt', url: '/receipts/r1/generated-documents', method: 'post' }, vi.fn(), vi.fn());
         expect(message).toBe('Receipt RCT-HO-2026-000001 recorded.');

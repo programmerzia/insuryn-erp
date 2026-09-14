@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Pages\PageSupport;
+use App\Modules\Platform\Documents\DocumentStore;
 use App\Modules\Accounting\Application\Imports\ChartOfAccountsImport;
 use App\Modules\Accounting\Application\Imports\ImportMode;
 use App\Modules\Accounting\Application\ManualJournals\ManualJournalLine;
@@ -81,7 +82,10 @@ final class ManualJournalPageController
         $data = $request->validate(['transaction_date' => ['required', 'date_format:Y-m-d'], 'description' => ['required', 'string', 'max:255'],
             'kind' => ['required', Rule::in([JournalKind::Manual->value, JournalKind::Adjustment->value])], 'reason' => ['nullable', 'string', 'max:1000'],
             'lines' => ['required', 'array', 'min:2'], 'lines.*.account_id' => ['required', 'uuid'], 'lines.*.side' => ['required', Rule::enum(Side::class)],
-            'lines.*.amount' => ['required', 'string'], 'lines.*.branch_id' => ['nullable', 'uuid'], 'lines.*.memo' => ['nullable', 'string', 'max:255']]);
+            'lines.*.amount' => ['required', 'string'], 'lines.*.branch_id' => ['nullable', 'uuid'], 'lines.*.memo' => ['nullable', 'string', 'max:255'],
+            // GA-31: the scanned voucher, attached as the journal is saved (more can be attached on the journal page).
+            'voucher' => ['nullable', ...array_values(array_filter(DocumentStore::uploadRules(), fn (mixed $rule): bool => $rule !== 'required'))]],
+            ['voucher.max' => 'The voucher must be '.intdiv(DocumentStore::maxUploadKb(), 1024).' MB or smaller.', 'voucher.extensions' => 'Attach the voucher as a PDF, a JPG or PNG image, or a Word or Excel file.']);
         $entity = PageSupport::entity();
         $lines = [];
         foreach ($data['lines'] as $index => $line) {
@@ -91,6 +95,10 @@ final class ManualJournalPageController
         $actor = PageSupport::actor($request);
         $journal = $journals->create(new ManualJournalRequest($entity['id'], CarbonImmutable::parse($data['transaction_date']), $data['description'], JournalKind::from($data['kind']),
             $data['reason'] ?? null, $entity['currency'], $lines), $actor);
+        $voucher = $request->file('voucher');
+        if ($voucher instanceof \Illuminate\Http\UploadedFile) {
+            app(DocumentStore::class)->attach('journal', $journal->id, $voucher, $actor, 'Supporting voucher');
+        }
         $approvalId = $journals->submit($journal->id, $actor);
 
         return redirect("/accounting/journals/{$journal->id}")->with('status', $approvalId === null ? 'Journal submitted; another user must approve it.' : 'Journal submitted for approval under the approval policy.');

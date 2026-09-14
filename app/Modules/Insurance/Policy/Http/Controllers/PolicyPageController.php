@@ -134,6 +134,7 @@ final class PolicyPageController
             'transactions' => $model->transactions()->get()->map(fn (PolicyTransaction $t): array => ['id' => $t->id, 'type' => $t->type->value, 'effective_date' => $t->effective_date->toDateString(),
                 'premium_delta' => $money($t->premium_delta_minor), 'reason' => $t->reason])->values()->all(),
             'installments' => Installment::query()->where('policy_id', $model->id)->orderBy('no')->orderBy('id')->get()->map(fn (Installment $i): array => ['id' => $i->id, 'no' => $i->no,
+                'label' => \App\Modules\Insurance\Policy\Domain\InstallmentLabel::short($i->no, $i->endorsement_no),
                 'payer' => (string) ($names[$i->payer_party_id] ?? ''), 'due_date' => $i->due_date->toDateString(), 'amount' => $money($i->amount_minor), 'paid' => $money($i->paid_minor),
                 'credited' => $money($i->cancelled_minor), 'outstanding' => $money($i->outstanding()), 'status' => $i->status->value])->values()->all(),
             'payers' => array_map(fn (array $p): array => ['name' => $p['name'], 'share_percent' => sprintf('%d.%02d', intdiv($p['share_bp'], 100), $p['share_bp'] % 100), 'billed' => $money($p['billed_minor']),
@@ -172,9 +173,10 @@ final class PolicyPageController
         /** @var array{effective_date: string, premium_delta: string, reason: string} $data */
         $data = $request->validate(['effective_date' => ['required', 'date_format:Y-m-d'], 'premium_delta' => ['required', 'string'], 'reason' => ['required', 'string', 'max:1000']]);
         $currency = (string) Policy::query()->whereKey($policy)->value('currency');
-        $this->lifecycle->endorse($policy, CarbonImmutable::parse($data['effective_date']), PageSupport::minor('premium_delta', $data['premium_delta'], $currency, true), $data['reason'], PageSupport::actor($request));
+        $delta = PageSupport::minor('premium_delta', $data['premium_delta'], $currency, true);
+        $endorsed = $this->lifecycle->endorse($policy, CarbonImmutable::parse($data['effective_date']), $delta, $data['reason'], PageSupport::actor($request));
 
-        return redirect("/policies/{$policy}")->with('status', 'Endorsement recorded.');
+        return $this->endorsed($request, $endorsed, "/policies/{$policy}", $delta > 0);
     }
 
     /** Slice R7: the re-rating of a risk change, nothing written (JSON for the endorse drawer): {rating} or 422 {reason, message, errors}. */
@@ -198,9 +200,20 @@ final class PolicyPageController
         [$date, $inputs, $coverages] = self::riskChange($request);
         /** @var array{reason: string} $data */
         $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
-        $this->lifecycle->endorseRisk($policy, $date, $inputs, $data['reason'], PageSupport::actor($request), $coverages);
+        $before = (int) Policy::query()->whereKey($policy)->value('gross_premium_minor');
+        $endorsed = $this->lifecycle->endorseRisk($policy, $date, $inputs, $data['reason'], PageSupport::actor($request), $coverages);
 
-        return redirect("/policies/{$policy}?tab=rating")->with('status', 'Endorsement recorded.');
+        return $this->endorsed($request, $endorsed, "/policies/{$policy}?tab=rating", $endorsed->gross_premium_minor > $before);
+    }
+
+    /** GA-25: the endorsement's number in the confirmation, and the next steps — collect an increase, print the endorsement. */
+    private function endorsed(Request $request, Policy $policy, string $url, bool $increased): RedirectResponse
+    {
+        $n = PolicyLifecycle::endorsementNo($policy);
+        $transaction = (string) PolicyTransaction::query()->where('policy_id', $policy->id)->where('type', 'endorsement')->orderByDesc('created_at')->orderByDesc('id')->value('id');
+
+        return redirect($url)->with('status', "Endorsement {$policy->number}/E{$n} recorded.")
+            ->with('next', $this->nextSteps->afterEndorsement(PageSupport::actor($request), $policy->id, $transaction, $increased));
     }
 
     /** @return array{0: CarbonImmutable, 1: array<string, mixed>, 2: list<string>|null} */

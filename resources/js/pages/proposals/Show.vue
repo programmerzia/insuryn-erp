@@ -74,7 +74,8 @@ async function submit(): Promise<void> {
 const addDays = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 const coverOpen = ref(false);
 const coverStart = props.proposal.inception > props.today ? props.proposal.inception : props.today;
-const cover = useForm({ valid_from: coverStart, valid_to: addDays(coverStart, props.coverNoteMaxDays - 1) });
+// GA-28: a cover note needs the premium received (with its reference) unless the product issues on credit, as the policy does.
+const cover = useForm({ valid_from: coverStart, valid_to: addDays(coverStart, props.coverNoteMaxDays - 1), premium_received: !props.policyIssue.allow_credit, premium_reference: '' });
 function issueCoverNote(): void {
     cover.post(`${base}/cover-notes`, { preserveScroll: true, onSuccess: () => (coverOpen.value = false) });
 }
@@ -192,6 +193,12 @@ const facts = computed(() => [
             <FormLayout submit-label="Issue cover note" :dirty="cover.isDirty" :processing="cover.processing" :error="(cover.errors as Record<string, string>).form" @submit="issueCoverNote" @cancel="coverOpen = false">
                 <Field id="valid_from" label="Cover from" :error="cover.errors.valid_from"><DateInput id="valid_from" v-model="cover.valid_from" /></Field>
                 <Field id="valid_to" label="Cover until" :hint="`Included. At most ${coverNoteMaxDays} days.`" :error="cover.errors.valid_to"><DateInput id="valid_to" v-model="cover.valid_to" /></Field>
+                <Field id="cover_premium_received" :label="policyIssue.allow_credit ? 'Premium' : 'Premium received'" :optional="policyIssue.allow_credit" :hint="policyIssue.allow_credit ? 'This product issues on credit; tick if the premium was already paid.' : 'This product is not issued on credit, so neither is its cover note.'">
+                    <label class="flex items-center gap-2 text-ui"><input id="cover_premium_received" v-model="cover.premium_received" type="checkbox" :disabled="!policyIssue.allow_credit" class="size-3.5 accent-accent" />The premium was received</label>
+                </Field>
+                <Field v-if="cover.premium_received" id="cover_premium_reference" label="Reference" hint="Receipt, bank transfer or cheque reference." :error="cover.errors.premium_reference">
+                    <TextInput id="cover_premium_reference" v-model="cover.premium_reference" :maxlength="128" />
+                </Field>
             </FormLayout>
         </Drawer>
         <Drawer v-model:open="detailsOpen" :title="`Risk details for ${proposal.number}`">

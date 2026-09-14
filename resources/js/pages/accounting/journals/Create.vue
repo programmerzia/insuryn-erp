@@ -5,6 +5,7 @@ import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
+import LookupInput, { type LookupResult } from '@/components/forms/LookupInput.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
@@ -17,6 +18,7 @@ import { formatMinor, parseMoney } from '@/lib/money';
 /**
  * Manual journal: header fields in one column, then the lines with a live debit/credit check. Saving submits it for someone else's approval.
  * Flow fix X10: an account missing from the chart is created from a line in a drawer (holders of accounting.manage_coa) and chosen on that line.
+ * GA-31: accounts are picked by typing their code or name, and the scanned voucher is attached with the journal.
  */
 const props = defineProps<{
     entity: { code: string; currency: string };
@@ -29,9 +31,19 @@ const props = defineProps<{
 
 type Line = { account_id: string; side: string; amount: string; branch_id: string; memo: string };
 const blank = (side: string): Line => ({ account_id: '', side, amount: '', branch_id: props.branches[0]?.id ?? '', memo: '' });
-const form = useForm({ transaction_date: props.today, description: '', kind: 'manual', reason: '', lines: [blank('debit'), blank('credit')] });
+const form = useForm<{ transaction_date: string; description: string; kind: string; reason: string; lines: Line[]; voucher: File | null }>({
+    transaction_date: props.today, description: '', kind: 'manual', reason: '', lines: [blank('debit'), blank('credit')], voucher: null,
+});
 const accounts = ref<AccountChoice[]>(props.accounts);
-const accountOptions = computed(() => accounts.value.map((a) => ({ value: a.id, label: `${a.code} ${a.name}${a.is_control ? ' (control account)' : ''}` })));
+const created = ref(0); // remounts the line lookups so a line shows an account created inline
+/** The label a line's lookup shows for its chosen account (also for one just created inline). */
+const accountPick = (id: string): LookupResult | null => {
+    const account = accounts.value.find((a) => a.id === id);
+    return account ? { id: account.id, label: `${account.code} ${account.name}`, detail: account.is_control ? 'Control account (adjustments only)' : undefined } : null;
+};
+function chooseVoucher(event: Event): void {
+    form.voucher = (event.target as HTMLInputElement).files?.[0] ?? null;
+}
 
 // Flow fix X10: new account for a line, through the chart-of-accounts import (one row), so the import's rules and audit apply.
 const accountLine = ref<number | null>(null);
@@ -58,6 +70,7 @@ async function createAccount(): Promise<void> {
             accounts.value = withAccount(accounts.value, account);
             const line = accountLine.value === null ? undefined : form.lines[accountLine.value];
             if (line) line.account_id = account.id;
+            created.value++;
         }
         accountLine.value = null;
     } catch (error) {
@@ -93,6 +106,9 @@ const words = (k: string) => k.replace(/^./, (c) => c.toUpperCase());
                 </Field>
                 <Field id="description" label="Description" :error="form.errors.description"><TextInput v-model="form.description" /></Field>
                 <Field id="reason" label="Reason" :error="form.errors.reason"><TextInput v-model="form.reason" /></Field>
+                <Field id="voucher" label="Supporting voucher" optional hint="The scanned voucher or invoice (PDF, image, Word or Excel). More can be attached on the journal page." :error="(form.errors as Record<string, string>).voucher">
+                    <input id="voucher" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" class="text-ui" @change="chooseVoucher" />
+                </Field>
             </div>
             <fieldset class="grid gap-2">
                 <legend class="mb-1 text-ui font-medium">Lines</legend>
@@ -101,7 +117,7 @@ const words = (k: string) => k.replace(/^./, (c) => c.toUpperCase());
                     <span>Account</span><span>Side</span><span class="text-right">Amount ({{ entity.currency }})</span><span>Branch</span><span>Memo</span><span />
                 </div>
                 <div v-for="(line, index) in form.lines" :key="index" class="grid grid-cols-[minmax(0,1fr)_104px_140px_110px_160px_28px] items-start gap-2">
-                    <div><SelectInput v-model="line.account_id" placeholder="Choose an account" :options="accountOptions" :aria-label="`Account, line ${index + 1}`" /><p v-if="errorFor(index, 'account_id')" class="text-dense text-danger" role="alert">{{ errorFor(index, 'account_id') }}</p><button v-if="canCreateAccount" type="button" class="mt-0.5 inline-flex items-center gap-1 text-dense text-accent-text hover:underline" @click="newAccount(index)"><Plus :size="12" :stroke-width="1.5" />New account</button></div>
+                    <div><LookupInput :id="`line-account-${index}`" :key="`${index}-${created}`" v-model="line.account_id" type="account" :initial="accountPick(line.account_id)" placeholder="Account code or name" :aria-label="`Account, line ${index + 1}`" /><p v-if="errorFor(index, 'account_id')" class="text-dense text-danger" role="alert">{{ errorFor(index, 'account_id') }}</p><button v-if="canCreateAccount" type="button" class="mt-0.5 inline-flex items-center gap-1 text-dense text-accent-text hover:underline" @click="newAccount(index)"><Plus :size="12" :stroke-width="1.5" />New account</button></div>
                     <SelectInput v-model="line.side" :options="[{ value: 'debit', label: 'Debit' }, { value: 'credit', label: 'Credit' }]" :aria-label="`Side, line ${index + 1}`" />
                     <div><MoneyInput :id="`line-amount-${index}`" v-model="line.amount" :aria-label="`Amount, line ${index + 1}`" /><p v-if="errorFor(index, 'amount')" class="text-dense text-danger" role="alert">{{ errorFor(index, 'amount') }}</p></div>
                     <SelectInput v-model="line.branch_id" placeholder="No branch" :options="branches.map((b) => ({ value: b.id, label: b.code }))" :aria-label="`Branch, line ${index + 1}`" />

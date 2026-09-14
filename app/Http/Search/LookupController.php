@@ -54,6 +54,8 @@ final class LookupController
             'agent' => $this->guarded($actor, [...PartyPageController::AREA, ...CollectionsPageController::AREA], fn (): array => $this->agents($like)),
             'policy' => $this->guarded($actor, [...PolicyPageController::AREA, 'claim.register'], fn (AreaReach $reach): array => $this->policies($like, $reach)),
             'installment' => $this->guarded($actor, CollectionsPageController::AREA, fn (AreaReach $reach): array => $this->installments($like, $reach)),
+            // GA-31: the manual journal's account picker, searchable by code or name.
+            'account' => $this->guarded($actor, ['accounting.create_manual_journal', 'accounting.manage_coa'], fn (): array => $this->accounts($like)),
             // Flow fix X8: whoever approves claim payments picks the payee from every active party.
             'payee' => $this->guarded($actor, [self::PAYEE_DUTY], fn (): array => $this->payees($like)),
             default => abort(404),
@@ -212,6 +214,19 @@ final class LookupController
         return $results;
     }
 
+    /** @return list<array<string, string>> postable, active accounts of the entity, by code */
+    private function accounts(string $like): array
+    {
+        $rows = DB::table('accounts')->where('entity_id', PageSupport::entity()['id'])->where('is_postable', true)->where('status', 'active')
+            ->where(fn ($q) => $q->where('code', 'ilike', $like)->orWhere('name', 'ilike', $like))->orderBy('code')->limit(self::LIMIT)->get(['id', 'code', 'name', 'type', 'is_control']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['id' => (string) $row->id, 'label' => "{$row->code} {$row->name}", 'detail' => ucfirst((string) $row->type).((bool) $row->is_control ? ' · control account (adjustments only)' : '')];
+        }
+
+        return $results;
+    }
+
     /** @return list<array<string, string>> */
     private function installments(string $like, AreaReach $reach): array
     {
@@ -219,11 +234,11 @@ final class LookupController
             ->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->where(fn ($q) => $q->where('p.number', 'ilike', $like)->orWhere('payer.display_name', 'ilike', $like))
             ->orderBy('p.number')->orderBy('i.no')->limit(self::LIMIT)
-            ->get(['i.id', 'p.number', 'i.no', 'i.due_date', 'p.currency', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
+            ->get(['i.id', 'p.number', 'i.no', 'i.endorsement_no', 'i.due_date', 'p.currency', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
         $results = [];
         foreach ($rows as $row) {
             $amount = PageSupport::money((int) $row->outstanding, (string) $row->currency);
-            $results[] = ['id' => (string) $row->id, 'label' => "{$row->number} #{$row->no}", 'detail' => "{$row->display_name} · due ".self::day((string) $row->due_date)." · {$amount} outstanding", 'amount' => $amount];
+            $results[] = ['id' => (string) $row->id, 'label' => \App\Modules\Insurance\Policy\Domain\InstallmentLabel::of((string) $row->number, (int) $row->no, $row->endorsement_no === null ? null : (int) $row->endorsement_no), 'detail' => "{$row->display_name} · due ".self::day((string) $row->due_date)." · {$amount} outstanding", 'amount' => $amount];
         }
 
         return $results;

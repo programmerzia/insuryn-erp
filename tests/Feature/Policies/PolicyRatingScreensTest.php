@@ -112,6 +112,30 @@ it('lists only products without a rating plan on the quote form and points to Qu
         ->where('products', fn ($products): bool => array_column((array) json_decode((string) json_encode($products), true), 'code') === ['MOTOR'])->where('ratedProducts', 2));
 });
 
+it('numbers the endorsement, labels its additional installment <policy>/E<n> and offers to collect it and print the endorsement (GA-25)', function (): void {
+    $policyId = ($this->in)(fn (): string => app(App\Modules\Insurance\Policy\Application\PolicyLifecycle::class)
+        ->issueFromProposal($this->proposal->id, CarbonImmutable::today(), $this->officer->id, 1, 'CHQ 1001')->id);
+    $older = ['effective_date' => '2026-10-15', 'risk_inputs' => [...$this->world['motor_inputs'], 'year_of_manufacture' => 2014], 'reason' => 'Registration papers show 2014'];
+
+    $response = actingAs($this->admin)->post("/policies/{$policyId}/endorse-risk", $older, $this->headers)->assertSessionHasNoErrors();
+    $transaction = ($this->in)(fn (): string => (string) DB::table('policy_transactions')->where('policy_id', $policyId)->where('type', 'endorsement')->value('id'));
+    $response->assertSessionHas('status', 'Endorsement POL-HO-2026-000001/E1 recorded.')
+        ->assertSessionHas('next', ['label' => 'Record receipt', 'url' => "/receipts/create?policy={$policyId}", 'prompt' => 'Collect the additional premium?',
+            'also' => ['label' => 'Print endorsement', 'url' => "/policies/{$policyId}/generated-documents?template_code=endorsement&object_id={$transaction}", 'method' => 'post']]);
+    expect(($this->in)(fn () => DB::table('installments')->where('policy_id', $policyId)->orderBy('no')->get(['no', 'endorsement_no'])->map(fn (object $i): array => [(int) $i->no, $i->endorsement_no])->all()))
+        ->toBe([[1, null], [2, 1]]);
+    actingAs($this->admin)->get("/policies/{$policyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('installments.0.label', '1')->where('installments.1.label', 'E1'));
+    actingAs($this->admin)->get("/receipts/create?policy={$policyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('prefill.allocations', fn (\Illuminate\Support\Collection $lines): bool => $lines->pluck('label')->contains('POL-HO-2026-000001/E1')));
+    actingAs($this->admin)->getJson('/lookup/installment?q=POL-HO-2026-000001', $this->headers)->assertOk()
+        ->assertJson(fn ($json) => $json->where('results', fn (\Illuminate\Support\Collection $rows): bool => $rows->pluck('label')->contains('POL-HO-2026-000001/E1'))->etc());
+
+    // A decrease is credited to the installments: nothing to collect, so only printing the endorsement is offered.
+    actingAs($this->admin)->post("/policies/{$policyId}/endorse-risk", [...$older, 'risk_inputs' => $this->world['motor_inputs'], 'reason' => 'Corrected back'], $this->headers)
+        ->assertSessionHasNoErrors()->assertSessionHas('status', 'Endorsement POL-HO-2026-000001/E2 recorded.')
+        ->assertSessionHas('next', fn (array $next): bool => $next['label'] === 'Print endorsement' && ! isset($next['also']));
+});
+
 it('offers the typed-premium form on the policies list only while a product has no rating plan (GA-11)', function (): void {
     actingAs($this->admin)->get('/policies', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('policies/Index')->where('unratedProducts', 1));
     ($this->in)(fn () => DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))

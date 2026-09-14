@@ -55,26 +55,40 @@ final class CoverNoteService
     }
 
     /**
-     * @throws BusinessRuleViolation PROPOSAL_NOT_APPROVED, RECOGNITION_AT_COVER_NOTE_NOT_SUPPORTED, COVER_NOTE_BACKDATED, COVER_NOTE_DATES_INVALID, COVER_NOTE_TOO_LONG, COVER_NOTE_ALREADY_ACTIVE
+     * ASSUMPTION: A-196 (GA-28) — a cover note is issued on the same basis as the policy (A-117) — on credit only when the product version allows credit issue, otherwise
+     * against a premium the officer confirms was received, whose reference (1–128 characters) is kept on the cover note and audited.
+     *
+     * @throws BusinessRuleViolation PROPOSAL_NOT_APPROVED, RECOGNITION_AT_COVER_NOTE_NOT_SUPPORTED, COVER_NOTE_BACKDATED, COVER_NOTE_DATES_INVALID, COVER_NOTE_TOO_LONG, COVER_NOTE_ALREADY_ACTIVE,
+     *     PREMIUM_NOT_RECEIVED, PREMIUM_REFERENCE_INVALID
      */
-    public function issue(string $proposalId, CarbonImmutable $validFrom, CarbonImmutable $validTo, string $actorUserId): CoverNote
+    public function issue(string $proposalId, CarbonImmutable $validFrom, CarbonImmutable $validTo, string $actorUserId, ?string $premiumReceivedReference = null): CoverNote
     {
         $proposal = Proposal::query()->findOrFail($proposalId);
         $this->permissions->authorize($actorUserId, self::ISSUE, AuthorizationScope::branch($proposal->entity_id, $proposal->branch_id));
         $today = app(BusinessClock::class)->today();
         $this->assertIssuable($proposal, $validFrom, $validTo, $today);
+        $reference = trim((string) $premiumReceivedReference);
+        $onCredit = (bool) ProductVersion::query()->whereKey($proposal->product_version_id)->value('allow_credit_issue');
+        if (! $onCredit && $reference === '') {
+            throw new BusinessRuleViolation('PREMIUM_NOT_RECEIVED', 'This product is not issued on credit, so neither is its cover note. Confirm the premium was received and give its reference (receipt, bank or cheque).');
+        }
+        if (mb_strlen($reference) > 128) {
+            throw new BusinessRuleViolation('PREMIUM_REFERENCE_INVALID', 'The premium reference is at most 128 characters.');
+        }
         $number = $this->numbers->reserve(new DocumentNumberScope($proposal->entity_id, $proposal->branch_id, 'cover_note', 'CVN', $today), $actorUserId);
 
-        return DB::transaction(function () use ($proposalId, $validFrom, $validTo, $actorUserId, $today, $number): CoverNote {
+        return DB::transaction(function () use ($proposalId, $validFrom, $validTo, $actorUserId, $today, $number, $reference): CoverNote {
             $proposal = Proposal::query()->whereKey($proposalId)->lockForUpdate()->firstOrFail();
             $this->assertIssuable($proposal, $validFrom, $validTo, $today);
             $note = new CoverNote(['id' => (string) Str::uuid7()]);
             $note->forceFill(['entity_id' => $proposal->entity_id, 'branch_id' => $proposal->branch_id, 'proposal_id' => $proposal->id, 'number' => $number->number,
                 'class_code' => $proposal->class_code, 'valid_from' => $validFrom->toDateString(), 'valid_to' => $validTo->toDateString(), 'status' => CoverNoteStatus::Active->value,
+                'issue_basis' => $reference === '' ? 'credit' : 'premium_received', 'premium_received_reference' => $reference === '' ? null : $reference,
                 'issued_by' => $actorUserId, 'issued_at' => CarbonImmutable::now()])->save();
             $this->numbers->markUsed($number->id, 'cover_note', $note->id);
             $this->audit->record('cover_note.issued', AuditSubject::of('cover_note', $note->id), null, ['number' => $note->number, 'proposal' => $proposal->number,
-                'valid_from' => $validFrom->toDateString(), 'valid_to' => $validTo->toDateString()], null, self::ISSUE, Actor::user($actorUserId));
+                'valid_from' => $validFrom->toDateString(), 'valid_to' => $validTo->toDateString(), 'issue_basis' => $reference === '' ? 'credit' : 'premium_received',
+                'premium_received_reference' => $reference === '' ? null : $reference], null, self::ISSUE, Actor::user($actorUserId));
 
             return $note;
         });

@@ -31,6 +31,7 @@ final class JournalController
             'journals' => [
                 'data' => array_map(fn (object $row): array => [
                     'id' => (string) $row->id, 'number' => $row->number, 'status' => (string) $row->status, 'kind' => (string) $row->kind,
+                    'provisionalReference' => $row->number === null ? \App\Modules\Accounting\Application\ManualJournals\ProvisionalReference::for((string) $row->id) : null, // GA-31
                     'postingDate' => (string) $row->posting_date, 'description' => $row->description,
                     'total' => MinorUnits::format((int) $row->total_minor, (string) $row->currency), 'currency' => (string) $row->currency,
                 ], $page->items()),
@@ -66,6 +67,7 @@ final class JournalController
                 'reason' => (string) $reversalRequest->reason, 'viaApproval' => $reversalRequest->approval_id !== null],
             'journal' => [
                 'id' => $j['id'], 'number' => $j['number'], 'status' => $j['status'], 'kind' => $j['kind'],
+                'provisionalReference' => $j['number'] === null ? \App\Modules\Accounting\Application\ManualJournals\ProvisionalReference::for((string) $j['id']) : null, // GA-31: quoted until the JV number is given on posting
                 'transactionDate' => $j['transaction_date'], 'postingDate' => $j['posting_date'], 'effectiveDate' => $j['effective_date'],
                 'description' => $j['description'], 'reason' => $j['reason'], 'currency' => $j['currency'], 'postedAt' => $j['posted_at'],
                 'postingRule' => $j['posting_rule_code'] === null ? null : ['code' => $j['posting_rule_code'], 'version' => $j['posting_rule_version']],

@@ -26,7 +26,7 @@ const props = defineProps<{
     policy: { id: string; number: string | null; status: string; version: number; inception: string; expiry: string; channel: string; currency: string; policyholder: string;
         product_code: string; agent_code: string | null; gross_premium: string; net_premium: string; tax: string; stamp_duty: string; cancel_date: string | null };
     transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null }[];
-    installments: { id: string; no: number; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
+    installments: { id: string; no: number; label: string; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
     actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
     /** Slice R7: the frozen rating of a policy issued from a proposal; null for products without a rating plan. */
@@ -113,7 +113,7 @@ async function renew(): Promise<void> {
                         </tr></thead>
                         <tbody>
                             <tr v-for="i in installments" :key="i.id" class="h-(--row-h)">
-                                <td class="border-b border-line px-3 tabular-nums">{{ i.no }}</td><td class="truncate border-b border-line px-3">{{ i.payer }}</td><td class="border-b border-line px-3">{{ formatDate(i.due_date) }}</td>
+                                <td class="border-b border-line px-3 tabular-nums">{{ i.label }}</td><td class="truncate border-b border-line px-3">{{ i.payer }}</td><td class="border-b border-line px-3">{{ formatDate(i.due_date) }}</td>
                                 <td class="num border-b border-line px-3">{{ formatMoney(i.amount) }}</td><td class="num border-b border-line px-3">{{ formatMoney(i.paid) }}</td><td class="num border-b border-line px-3">{{ formatMoney(i.credited) }}</td>
                                 <td class="num border-b border-line px-3 font-medium">{{ formatMoney(i.outstanding) }}</td><td class="border-b border-line px-3"><StatusBadge :status="i.status" /></td>
                             </tr>

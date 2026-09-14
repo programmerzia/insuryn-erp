@@ -157,6 +157,9 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     // Gap fix GA-08: accounting events that failed or wait too long, with Requeue (accounting.requeue_event, checked by the service).
     Route::get('events', [\App\Http\Pages\AccountingEventsPageController::class, 'index'])->name('events.index');
     Route::post('events/{event}/requeue', [\App\Http\Pages\AccountingEventsPageController::class, 'requeue'])->whereUuid('event')->name('events.requeue');
+    // GA-31: the supporting voucher of a manual journal.
+    Route::post('journals/{journal}/documents', [\App\Http\Pages\JournalPageController::class, 'attachDocument'])->whereUuid('journal');
+    Route::get('journals/{journal}/documents/{document}', [\App\Http\Pages\JournalPageController::class, 'downloadDocument'])->whereUuid(['journal', 'document']);
     Route::get('imports', [ImportController::class, 'page'])->name('imports');
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
 });

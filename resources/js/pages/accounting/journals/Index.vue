@@ -21,7 +21,7 @@ const active = ref<string | null>(null);
 const selected = computed(() => props.journals.data.find((journal) => journal.id === active.value) ?? null);
 
 const columns: DataColumn<JournalListItem>[] = [
-    { id: 'number', header: 'Number', value: (j) => j.number ?? 'Draft', href: (j) => `/accounting/journals/${j.id}`, width: 150 },
+    { id: 'number', header: 'Number', value: (j) => j.number ?? j.provisionalReference ?? 'Draft', href: (j) => `/accounting/journals/${j.id}`, width: 150 },
     { id: 'postingDate', header: 'Posting date', type: 'date', value: (j) => j.postingDate },
     { id: 'kind', header: 'Kind', value: (j) => j.kind, width: 96, filterOptions: ['system', 'manual', 'adjustment', 'reversal', 'opening'] },
     { id: 'description', header: 'Description', value: (j) => (j.description && /^[A-Z_]+$/.test(j.description) ? eventLabel(j.description) : j.description), width: 320, muted: true },
@@ -57,7 +57,7 @@ function visit(params: Record<string, unknown>): void {
                 </template>
             </DataTable>
             <template #inspector>
-                <Inspector v-if="selected" :title="selected.number ?? 'Draft journal'" :subtitle="selected.description ?? undefined" @close="active = null">
+                <Inspector v-if="selected" :title="selected.number ?? selected.provisionalReference ?? 'Draft journal'" :subtitle="selected.description ?? undefined" @close="active = null">
                     <template #details>
                         <dl class="grid grid-cols-[8rem_1fr] gap-y-2 text-ui">
                             <dt class="text-ink-2">Status</dt><dd><StatusBadge :status="selected.status" /></dd>

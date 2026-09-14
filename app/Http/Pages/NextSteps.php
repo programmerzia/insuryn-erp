@@ -21,14 +21,15 @@ final class NextSteps
     /**
      * The policy's installments with money outstanding, oldest due first.
      *
-     * @return list<array{id: string, no: int, due_date: string, outstanding_minor: int}>
+     * @return list<array{id: string, no: int, endorsement_no: int|null, due_date: string, outstanding_minor: int}>
      */
     public static function outstandingInstallments(string $policyId): array
     {
         $rows = [];
         foreach (DB::table('installments')->where('policy_id', $policyId)->whereRaw('amount_minor - paid_minor - cancelled_minor > 0')->orderBy('due_date')->orderBy('no')->orderBy('id')
-            ->get(['id', 'no', 'due_date', DB::raw('amount_minor - paid_minor - cancelled_minor as outstanding')]) as $row) {
-            $rows[] = ['id' => (string) $row->id, 'no' => (int) $row->no, 'due_date' => (string) $row->due_date, 'outstanding_minor' => (int) $row->outstanding];
+            ->get(['id', 'no', 'endorsement_no', 'due_date', DB::raw('amount_minor - paid_minor - cancelled_minor as outstanding')]) as $row) {
+            $rows[] = ['id' => (string) $row->id, 'no' => (int) $row->no, 'endorsement_no' => $row->endorsement_no === null ? null : (int) $row->endorsement_no, 'due_date' => (string) $row->due_date,
+                'outstanding_minor' => (int) $row->outstanding];
         }
 
         return $rows;
@@ -91,6 +92,23 @@ final class NextSteps
         }
 
         return null;
+    }
+
+    /**
+     * GA-25: after an endorsement, "Record receipt" for an increase the user may collect, with "Print endorsement" beside it (or alone) when the user may print.
+     *
+     * @return array{label: string, url: string, prompt?: string, method?: string, also?: array{label: string, url: string, method: string}|null}|null
+     */
+    public function afterEndorsement(string $userId, string $policyId, string $transactionId, bool $increased): ?array
+    {
+        $policy = DB::table('policies')->where('id', $policyId)->first(['entity_id', 'branch_id']);
+        $print = $policy !== null && $this->permissions->has($userId, DocumentGenerator::PERMISSION, AuthorizationScope::branch((string) $policy->entity_id, (string) $policy->branch_id))
+            ? ['label' => 'Print endorsement', 'url' => "/policies/{$policyId}/generated-documents?template_code=endorsement&object_id={$transactionId}", 'method' => 'post'] : null;
+        if ($increased && $this->canRecordReceipt($userId, $policyId)) {
+            return ['label' => 'Record receipt', 'url' => "/receipts/create?policy={$policyId}", 'prompt' => 'Collect the additional premium?', 'also' => $print];
+        }
+
+        return $print;
     }
 
     /** @return array{label: string, url: string, prompt: string}|null */

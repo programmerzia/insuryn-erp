@@ -151,7 +151,7 @@ final class PolicyLifecycle
             $policy->forceFill(['version' => $policy->version + 1, 'gross_premium_minor' => $policy->gross_premium_minor + $gross,
                 'net_premium_minor' => $policy->net_premium_minor + $net, 'tax_minor' => $policy->tax_minor + $tax])->save();
             $transaction = $this->record($policy, PolicyTransactionType::Endorsement, $effectiveDate, $gross, $net, $tax, $reason, null, $actorUserId);
-            $gross >= 0 ? $this->installments->addIncrease($policy, $effectiveDate, $gross) : $this->installments->credit($policy, -$gross);
+            $gross >= 0 ? $this->installments->addIncrease($policy, $effectiveDate, $gross, self::endorsementNo($policy)) : $this->installments->credit($policy, -$gross);
             $this->accounting->endorsed($policy, $transaction);
             $this->audit->record('policy.endorsed', AuditSubject::of('policy', $policy->id), null,
                 ['version' => $policy->version, 'gross_delta' => $gross, 'net_delta' => $net, 'tax_delta' => $tax], $reason, 'policy.endorse', Actor::user($actorUserId));
@@ -308,7 +308,7 @@ final class PolicyLifecycle
             $transaction = $this->record($policy, PolicyTransactionType::Endorsement, $effectiveDate, $change->grossMinor(), $change->netMinor, $change->taxMinor, trim($reason), null,
                 $actorUserId, null, $change->stampDutyMinor, $rating);
             if ($change->grossMinor() > 0) {
-                $this->installments->addIncrease($policy, $effectiveDate, $change->grossMinor());
+                $this->installments->addIncrease($policy, $effectiveDate, $change->grossMinor(), self::endorsementNo($policy));
             } elseif ($change->grossMinor() < 0) {
                 $this->installments->credit($policy, -$change->grossMinor());
             }
@@ -323,6 +323,12 @@ final class PolicyLifecycle
 
             return $policy;
         });
+    }
+
+    /** GA-25 (A-104): the number n of the policy's latest endorsement, its order among the policy's endorsements (`<policy>/E<n>`). */
+    public static function endorsementNo(Policy $policy): int
+    {
+        return PolicyTransaction::query()->where('policy_id', $policy->id)->where('type', PolicyTransactionType::Endorsement->value)->count();
     }
 
     /**

@@ -20,6 +20,8 @@ export interface TrialBalanceRow {
 export interface JournalRef {
     id: string;
     number: string | null;
+    /** GA-31: MJ-… while the journal has no JV number (it gets one when it posts). */
+    provisionalReference?: string | null;
     status: string;
     kind: string;
 }

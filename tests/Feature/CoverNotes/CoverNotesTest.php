@@ -48,6 +48,10 @@ beforeEach(function (): void {
     $this->officer = ($this->person)('Rafiq Officer', ['branch_officer']);
     $this->manager = ($this->person)('Salma Manager', ['branch_manager']);
     ($this->in)(function (): void {
+        // GA-28: these cases are about numbers, dates and states, so the world's products issue on credit; the premium rule has its own case below.
+        foreach (['motor_version_id', 'fire_version_id'] as $version) {
+            app(ProductCatalogue::class)->configureRating($this->world[$version], ['allow_credit_issue' => true], $this->world['admin']);
+        }
         app(UnderwritingLimits::class)->set('branch_officer', 'motor', 200_000_000, CarbonImmutable::today(), $this->world['admin']);
         app(UnderwritingLimits::class)->set('branch_officer', 'fire', 500_000_000_000, CarbonImmutable::today(), $this->world['admin']);
     });
@@ -171,6 +175,30 @@ it('expires nightly after the last day and cancels with a reason', function (): 
             ->and(CoverNote::query()->whereKey($cancelled->id)->firstOrFail()->status->value)->toBe('cancelled')
             ->and(DB::table('audit_events')->where('object_id', $ending->id)->where('action', 'cover_note.expired')->value('actor_type'))->toBe('system');
     });
+});
+
+it('issues a cover note on credit only when the product issues on credit, otherwise against a premium received with its reference (GA-28, A-196)', function (): void {
+    ($this->in)(fn () => app(ProductCatalogue::class)->configureRating($this->world['motor_version_id'], ['allow_credit_issue' => false], $this->world['admin']));
+    $proposal = ($this->approved)();
+    $refusal = thrownBy(fn () => ($this->in)(fn () => ($this->service)()->issue($proposal->id, ($this->d)('2026-09-20'), ($this->d)('2026-09-30'), $this->officer->id)), BusinessRuleViolation::class);
+    expect($refusal->reasonCode)->toBe('PREMIUM_NOT_RECEIVED')
+        ->and(thrownBy(fn () => ($this->in)(fn () => ($this->service)()->issue($proposal->id, ($this->d)('2026-09-20'), ($this->d)('2026-09-30'), $this->officer->id, str_repeat('x', 129))), BusinessRuleViolation::class)->reasonCode)
+        ->toBe('PREMIUM_REFERENCE_INVALID')
+        ->and(($this->in)(fn () => CoverNote::query()->count()))->toBe(0);
+
+    actingAs($this->officer)->get("/proposals/{$proposal->id}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('policyIssue.allow_credit', false));
+    actingAs($this->officer)->post("/proposals/{$proposal->id}/cover-notes", ['valid_from' => '2026-09-20', 'valid_to' => '2026-09-30'], $this->headers)->assertSessionHasErrors('form');
+    actingAs($this->officer)->post("/proposals/{$proposal->id}/cover-notes", ['valid_from' => '2026-09-20', 'valid_to' => '2026-09-30', 'premium_received' => true, 'premium_reference' => 'TRF 5521'], $this->headers)
+        ->assertSessionHasNoErrors();
+    $note = ($this->in)(fn () => DB::table('cover_notes')->first(['id', 'issue_basis', 'premium_received_reference']));
+    expect([$note?->issue_basis, $note?->premium_received_reference])->toBe(['premium_received', 'TRF 5521'])
+        ->and(($this->in)(fn () => json_decode((string) DB::table('audit_events')->where('object_id', $note?->id)->where('action', 'cover_note.issued')->value('after'), true)['premium_received_reference']))->toBe('TRF 5521');
+    actingAs($this->officer)->get('/cover-notes', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('coverNotes.0.issue_basis', 'premium_received')->where('coverNotes.0.premium_received_reference', 'TRF 5521')->where('coverNotes.0.policy', null));
+
+    // On a product that issues on credit, the note needs no reference and says so.
+    $fire = ($this->approved)('fire');
+    expect(($this->in)(fn () => ($this->service)()->issue($fire->id, ($this->d)('2026-09-20'), ($this->d)('2026-09-30'), $this->officer->id)->issue_basis))->toBe('credit');
 });
 
 it('lists cover notes by expiry with the expiring filter, issues from the proposal page and follows the permissions', function (): void {
