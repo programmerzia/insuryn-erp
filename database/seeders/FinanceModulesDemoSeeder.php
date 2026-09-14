@@ -87,17 +87,17 @@ final class FinanceModulesDemoSeeder
     /** September vouchers: [float, date, paid to, for, account code, BDT] */
     private const VOUCHERS = [
         ['HO', '2026-09-01', 'Nahar Stationery, Gulshan-1', 'A4 paper and toner for the accounts section', '5440', 1_850],
-        ['HO', '2026-09-02', 'Pathao courier', 'Policy documents to Motijheel customers', '5450', 640],
+        ['HO', '2026-09-02', 'Pathao courier', 'Policy documents to Motijheel customers', '5455', 640],
         ['HO', '2026-09-03', 'Rahman Tea Stall', 'Tea and snacks for the underwriting meeting', '5460', 920],
-        ['HO', '2026-09-06', 'CNG auto-rickshaw', 'Surveyor visit to Tejgaon claim site', '5450', 450],
+        ['HO', '2026-09-06', 'CNG auto-rickshaw', 'Surveyor visit to Tejgaon claim site', '5455', 450],
         ['HO', '2026-09-08', 'Bismillah Electric, Gulshan', 'Tube lights and switch repair, 3rd floor', '5470', 2_300],
         ['HO', '2026-09-09', 'Nahar Stationery, Gulshan-1', 'Receipt books and envelopes', '5440', 1_420],
-        ['HO', '2026-09-12', 'Uber', 'Cheque deposit run to City Bank Gulshan', '5450', 380],
+        ['HO', '2026-09-12', 'Uber', 'Cheque deposit run to City Bank Gulshan', '5455', 380],
         ['CTG', '2026-09-02', 'Agrabad Photocopy Centre', 'Photocopies of claim files', '5440', 560],
-        ['CTG', '2026-09-04', 'CNG auto-rickshaw', 'Branch officer visit to Khatunganj warehouse', '5450', 700],
+        ['CTG', '2026-09-04', 'CNG auto-rickshaw', 'Branch officer visit to Khatunganj warehouse', '5455', 700],
         ['CTG', '2026-09-07', 'Mezban House, Agrabad', 'Lunch for visiting surveyor', '5460', 1_250],
         ['CTG', '2026-09-09', 'Chittagong Sanitary Store', 'Washroom tap repair', '5470', 980],
-        ['CTG', '2026-09-11', 'Sundarban Courier', 'Documents to head office', '5450', 320],
+        ['CTG', '2026-09-11', 'Sundarban Courier', 'Documents to head office', '5455', 320],
     ];
 
     /**
@@ -129,18 +129,18 @@ final class FinanceModulesDemoSeeder
     }
 
     /** Operating expense accounts the budget and petty cash use: code => name (5300 Salaries exists in the chart). */
-    private const EXPENSE_ACCOUNTS = ['5400' => 'Office Rent', '5410' => 'Electricity, Gas and Water', '5420' => 'Marketing and Advertisement', '5430' => 'IT and Software Expenses',
-        '5440' => 'Printing and Stationery', '5450' => 'Conveyance and Travel', '5460' => 'Entertainment', '5470' => 'Repairs and Maintenance'];
+    private const EXPENSE_ACCOUNTS = ['5400' => 'Office Rent', '5415' => 'Electricity, Gas and Water', '5420' => 'Marketing and Advertisement', '5430' => 'IT and Software Expenses',
+        '5440' => 'Printing and Stationery', '5455' => 'Conveyance and Travel', '5460' => 'Entertainment', '5470' => 'Repairs and Maintenance'];
 
     /** Monthly budget per branch (BDT): account code => [HO, CTG]. Salaries double in March (Eid-ul-Fitr festival bonus). */
-    private const BUDGET = ['5300' => [1_850_000, 720_000], '5400' => [650_000, 220_000], '5410' => [120_000, 55_000], '5420' => [250_000, 90_000], '5430' => [180_000, 45_000],
-        '5440' => [4_000, 1_500], '5450' => [2_500, 1_200], '5460' => [1_500, 1_000], '5470' => [3_000, 1_000]];
+    private const BUDGET = ['5300' => [1_850_000, 720_000], '5400' => [650_000, 220_000], '5415' => [120_000, 55_000], '5420' => [250_000, 90_000], '5430' => [180_000, 45_000],
+        '5440' => [4_000, 1_500], '5455' => [2_500, 1_200], '5460' => [1_500, 1_000], '5470' => [3_000, 1_000]];
 
     /** Posted expense by month (BDT), billed on credit: month => branch => account code => amount. September shows the variances. */
     private const ACTUALS = [
-        '2026-07-28' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5410' => 116_400, '5420' => 238_000, '5430' => 176_500], 'CTG' => ['5300' => 720_000, '5400' => 220_000, '5410' => 53_900, '5420' => 85_000, '5430' => 44_000]],
-        '2026-08-28' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5410' => 124_800, '5420' => 262_500, '5430' => 169_000], 'CTG' => ['5300' => 720_000, '5400' => 220_000, '5410' => 57_200, '5420' => 88_000, '5430' => 47_500]],
-        '2026-09-10' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5410' => 128_500, '5420' => 340_000, '5430' => 150_000], 'CTG' => ['5300' => 735_000, '5400' => 220_000, '5410' => 49_800, '5420' => 60_000, '5430' => 52_500]],
+        '2026-07-28' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5415' => 116_400, '5420' => 238_000, '5430' => 176_500], 'CTG' => ['5300' => 720_000, '5400' => 220_000, '5415' => 53_900, '5420' => 85_000, '5430' => 44_000]],
+        '2026-08-28' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5415' => 124_800, '5420' => 262_500, '5430' => 169_000], 'CTG' => ['5300' => 720_000, '5400' => 220_000, '5415' => 57_200, '5420' => 88_000, '5430' => 47_500]],
+        '2026-09-10' => ['HO' => ['5300' => 1_850_000, '5400' => 650_000, '5415' => 128_500, '5420' => 340_000, '5430' => 150_000], 'CTG' => ['5300' => 735_000, '5400' => 220_000, '5415' => 49_800, '5420' => 60_000, '5430' => 52_500]],
     ];
 
     /** @param array<string, string> $users */
