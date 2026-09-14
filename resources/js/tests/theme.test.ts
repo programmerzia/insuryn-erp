@@ -113,7 +113,9 @@ describe('components consume tokens only', () => {
         const text = readFileSync(join(root, path), 'utf8');
         expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b(?![\w-])/);
         expect(text).not.toMatch(retired);
-        expect(text).not.toMatch(/\b(?:uppercase|font-display|font-bold|font-mono|font-light|font-extrabold)\b/);
+        // The sidebar's section headings are the one place for small capitals (UX: grouped sidebar); everywhere else labels keep sentence case.
+        const caps = path.endsWith('components/shell/Sidebar.vue') ? /\b(?:font-display|font-bold|font-mono|font-light|font-extrabold)\b/ : /\b(?:uppercase|font-display|font-bold|font-mono|font-light|font-extrabold)\b/;
+        expect(text).not.toMatch(caps);
         // brief §2 type scale and shape: text-dense/ui/body/section/title; rounded-control/panel (tables 0); one shadow for floating layers
         expect(text).not.toMatch(/\btext-(?:xs|sm|base|lg|xl|2xl|3xl|4xl|\[\d+px\])(?![\w-])/);
         expect(text).not.toMatch(/\brounded(?:-(?:sm|md|lg|xl|2xl|none))?(?=[\s"'`])/);

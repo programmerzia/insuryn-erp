@@ -36,6 +36,13 @@ describe('preferences', () => {
         expect(prefs.theme).toBe('dark');
         expect(prefs.splits).toEqual({ receipts: 420, claims: 380 });
     });
+
+    it('remembers which sidebar sections the user opened or closed', () => {
+        expect(prefs.sidebar_sections).toEqual({});
+        applyPreference(prefs, 'sidebar_sections.accounting', true);
+        applyPreference(prefs, 'sidebar_sections.sales', false);
+        expect(prefs.sidebar_sections).toEqual({ accounting: true, sales: false });
+    });
 });
 
 describe('pinned tabs', () => {

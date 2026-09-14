@@ -27,6 +27,8 @@ export interface Preferences {
     theme: 'system' | 'light' | 'dark';
     density: 'compact' | 'comfortable';
     sidebar_collapsed: boolean;
+    /** Sidebar sections the user has opened or closed, by section id (unset = the section's default). */
+    sidebar_sections: Record<string, boolean>;
     branch_id: string | null;
     splits: Record<string, number>;
     tabs: Tab[];
@@ -48,7 +50,7 @@ export interface TourState {
 }
 
 export function defaultPreferences(): Preferences {
-    return { theme: 'system', density: 'compact', sidebar_collapsed: false, branch_id: null, splits: {}, tabs: [], tables: {}, views: {}, recents: [], drafts: {}, locale: 'en', help_open: false, help_locale: null, tour: null };
+    return { theme: 'system', density: 'compact', sidebar_collapsed: false, sidebar_sections: {}, branch_id: null, splits: {}, tabs: [], tables: {}, views: {}, recents: [], drafts: {}, locale: 'en', help_open: false, help_locale: null, tour: null };
 }
 
 /** Sets `theme` or a grouped key such as `splits.receipts` on a preferences object. */

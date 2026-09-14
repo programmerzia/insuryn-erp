@@ -53,6 +53,16 @@ async function goto(page, url) {
     return res;
 }
 
+/** Follows a sidebar link by address, opening the collapsible section it lives in first (a closed section keeps its links out of the DOM). */
+async function nav(page, href) {
+    const section = page.locator(`nav[aria-label="Main"] section[data-hrefs~="${href}"]`).first();
+    const heading = section.locator('button[aria-expanded="false"]');
+    if (await heading.count()) await heading.first().click();
+    await section.locator(`a[href="${href}"]`).first().click();
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    await assertNoErrorPage(page);
+}
+
 async function assertNoErrorPage(page) {
     const text = await page.locator('body').innerText().catch(() => '');
     if (/Whoops|Server Error|Internal Server Error|SQLSTATE|Exception|Page Expired/.test(text)) fail(`${page.role} error page at ${page.url()}: ${text.slice(0, 200).replace(/\s+/g, ' ')}`);

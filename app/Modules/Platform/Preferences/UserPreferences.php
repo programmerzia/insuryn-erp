@@ -17,10 +17,10 @@ use Illuminate\Validation\ValidationException;
  */
 final class UserPreferences
 {
-    public const DEFAULTS = ['theme' => 'system', 'density' => 'compact', 'sidebar_collapsed' => false, 'branch_id' => null,
+    public const DEFAULTS = ['theme' => 'system', 'density' => 'compact', 'sidebar_collapsed' => false, 'sidebar_sections' => [], 'branch_id' => null,
         'splits' => [], 'tabs' => [], 'tables' => [], 'views' => [], 'recents' => [], 'drafts' => [], 'locale' => 'en', 'help_open' => false, 'help_locale' => null, 'tour' => null];
 
-    private const GROUPS = ['splits', 'tables', 'views', 'drafts'];
+    private const GROUPS = ['splits', 'tables', 'views', 'drafts', 'sidebar_sections'];
 
     /** @return array<string, mixed> */
     public function of(string $userId): array
@@ -71,6 +71,8 @@ final class UserPreferences
             'theme' => ['value' => ['required', 'in:system,light,dark']],
             'density' => ['value' => ['required', 'in:compact,comfortable']],
             'sidebar_collapsed' => ['value' => ['required', 'boolean:strict']],
+            // A sidebar section opened (true) or closed by the user, keyed by section id (`sidebar_sections.accounting`).
+            'sidebar_sections' => ['value' => ['required', 'boolean:strict']],
             // Session S3/S4: the user's language (GA-30: chosen in the user menu) and whether the help panel is open; the guided tour's state (null = never started).
             'locale' => ['value' => ['required', 'in:en,bn']],
             'help_open' => ['value' => ['required', 'boolean:strict']],

@@ -58,6 +58,14 @@ export async function click(page, locator) {
     await settle(page);
 }
 
+/** Follows a sidebar link by address, opening the collapsible section it lives in first (a closed section keeps its links out of the DOM). */
+export async function nav(page, href) {
+    const section = page.locator(`nav[aria-label="Main"] section[data-hrefs~="${href}"]`).first();
+    const heading = section.locator('button[aria-expanded="false"]');
+    if (await heading.count()) await heading.first().click();
+    await click(page, section.locator(`a[href="${href}"]`).first());
+}
+
 /** Types into a lookup and picks the option (the lookups choose on mousedown). */
 export async function lookup(page, input, text, pick = text) {
     await input.click();

@@ -174,7 +174,12 @@ async function nav(label) {
     // Sidebar items by address (their names carry badge counts, "Bank ● 5").
     const hrefs = { Quotes: '/quotations', Receipts: '/receipts', Suspense: '/suspense', Claims: '/claims', Bank: '/bank', Journals: '/accounting/journals', Close: '/close',
         'Trial balance': '/accounting/trial-balance', Reports: '/reports', Producers: '/distribution/producers', Policies: '/policies' };
-    await click(meter.page.locator(`nav[aria-label="Main"] a[href="${hrefs[label] ?? label}"]`).first());
+    // A link sits inside a collapsible section (data-hrefs names the section's addresses); a closed section keeps its links out of the DOM, so open it first.
+    const href = hrefs[label] ?? label;
+    const section = meter.page.locator(`nav[aria-label="Main"] section[data-hrefs~="${href}"]`).first();
+    const heading = section.locator('button[aria-expanded="false"]');
+    if (await heading.count()) await heading.first().click();
+    await click(section.locator(`a[href="${href}"]`).first());
 }
 /** Records whether the page now offers the natural next step (a button or link matching). */
 async function offers(pattern, what) {
