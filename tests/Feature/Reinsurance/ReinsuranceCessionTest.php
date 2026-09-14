@@ -96,7 +96,7 @@ it('cedes premium and claims to SBC and the treaty reinsurer, posts them, reconc
     $this->withHeaders(['X-Tenant' => $this->ctx['tenant_id']])->get('/reinsurance/treaties')->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->component('reinsurance/treaties/Index')->has('treaties', 1)->has('reinsurers', 2));
     $this->withHeaders(['X-Tenant' => $this->ctx['tenant_id']])->get('/reinsurance/cessions')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('reinsurance/cessions/Index'));
-    $this->withHeaders(['X-Tenant' => $this->ctx['tenant_id']])->get('/reinsurance/statements')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('reinsurance/statements/Index')->has('statements', 1));
+    $this->withHeaders(['X-Tenant' => $this->ctx['tenant_id']])->get('/reinsurance/statements')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('reinsurance/statements/Index')->has('statements.data', 1));
     $this->withHeaders(['X-Tenant' => $this->ctx['tenant_id']])->get('/reports/ri-premium-bordereau?from=2026-07-01&to=2026-09-30')->assertOk();
     $this->withHeaders(['X-Tenant' => $this->ctx['tenant_id']])->get('/reports/ri-premium-bordereau/export?format=csv&from=2026-07-01&to=2026-09-30')->assertOk();
 });

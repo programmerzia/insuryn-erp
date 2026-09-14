@@ -22,7 +22,7 @@ beforeEach(function (): void {
 it('has English and Bangla help for every module, each five to eight sentences with the three parts', function (): void {
     // Gap fixes W7 (GA-30): the screens that had no help have their own module now.
     expect(HelpContent::MODULES)->toBe(['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports',
-        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events']);
+        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events', 'reinsurance', 'regulatory']);
     foreach (HelpContent::MODULES as $module) {
         foreach (['en', 'bn'] as $locale) {
             $path = resource_path("help/{$module}.{$locale}.md");
@@ -91,6 +91,8 @@ it('opens the panel on every module screen', function (): void {
         'limits' => ['admin/approval-limits/Index', 'admin/underwriting-limits/Index'],
         'chart' => ['accounting/ChartOfAccounts', 'accounting/AccountRoles'],
         'events' => ['accounting/events/Index'],
+        'reinsurance' => ['reinsurance/treaties/Index', 'reinsurance/treaties/Show', 'reinsurance/treaties/Edit', 'reinsurance/cessions/Index', 'reinsurance/statements/Index', 'reinsurance/statements/Show'],
+        'regulatory' => ['regulatory/Dashboard', 'regulatory/Returns', 'regulatory/Provisions'],
     ];
     foreach ($pages as $module => $components) {
         foreach ($components as $component) {

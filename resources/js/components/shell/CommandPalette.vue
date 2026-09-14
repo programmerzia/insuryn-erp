@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { Banknote, BookOpen, Calculator, ClipboardCheck, CornerDownLeft, FileClock, FileText, History, MousePointerClick, Search, ShieldAlert, User, UsersRound, Zap } from 'lucide-vue-next';
+import { Banknote, BookOpen, Calculator, ClipboardCheck, CornerDownLeft, FileClock, FileSpreadsheet, FileText, Handshake, History, MousePointerClick, Search, ShieldAlert, User, UsersRound, Zap } from 'lucide-vue-next';
 import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, VisuallyHidden } from 'reka-ui';
 import { type Component, computed, nextTick, onMounted, ref, watch } from 'vue';
 import Kbd from '@/components/ui/Kbd.vue';
@@ -44,9 +44,9 @@ let controller: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 const kindIcons: Record<string, Component> = { policy: FileText, claim: ShieldAlert, receipt: Banknote, customer: User, journal: BookOpen, action: Zap,
-    quotation: Calculator, proposal: ClipboardCheck, cover_note: FileClock, producer: UsersRound };
+    quotation: Calculator, proposal: ClipboardCheck, cover_note: FileClock, producer: UsersRound, treaty: Handshake, reinsurer_statement: FileSpreadsheet };
 const kindWords: Record<string, string> = { policy: 'Policy', claim: 'Claim', receipt: 'Receipt', customer: 'Customer', journal: 'Journal', action: 'Action',
-    quotation: 'Quotation', proposal: 'Proposal', cover_note: 'Cover note', producer: 'Producer' };
+    quotation: 'Quotation', proposal: 'Proposal', cover_note: 'Cover note', producer: 'Producer', treaty: 'Treaty', reinsurer_statement: 'Reinsurer statement' };
 
 const commands = computed(() => buildCommands(page.props.auth.permissions ?? []));
 

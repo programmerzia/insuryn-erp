@@ -28,6 +28,11 @@ const actions: (Omit<Command, 'group' | 'icon'> & { any: string[]; icon?: Compon
     { id: 'import-coa', label: 'Import chart of accounts or opening balances', href: '/accounting/imports', keywords: 'coa opening', any: ['accounting.view_journals'], icon: Upload },
     { id: 'start-close', label: 'Start month-end close', href: '/close', keywords: 'lock period close month', any: ['periods.soft_lock', 'periods.lock'] },
     { id: 'pay-commission', label: 'Approve or pay commission', href: '/distribution/statements', keywords: 'agent producer payout statement run', any: ['commission.approve', 'commission.pay'] },
+    // UX consistency pass: reinsurance and regulatory actions.
+    { id: 'new-treaty', label: 'New treaty', href: '/reinsurance/treaties/create', keywords: 'reinsurance quota share surplus sbc', any: ['ri.manage_treaties'] },
+    { id: 'prepare-ri-statement', label: 'Prepare a reinsurer statement', href: '/reinsurance/statements', keywords: 'reinsurance quarter account bordereau', any: ['ri.manage_treaties'] },
+    { id: 'generate-returns', label: 'Generate regulatory returns', href: '/regulatory/returns', keywords: 'idra return filing quarter', any: ['reports.regulatory'] },
+    { id: 'prepare-provisions', label: 'Prepare technical provisions', href: '/regulatory/provisions', keywords: 'ibnr upr chain ladder reserve quarter', any: ['provisions.run'] },
 ];
 
 const settings: Command[] = [

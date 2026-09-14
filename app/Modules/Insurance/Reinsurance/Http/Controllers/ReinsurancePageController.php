@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Reinsurance\Http\Controllers;
 
+use App\Http\Pages\ObjectHistory;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Reinsurance\Application\CessionEngine;
@@ -14,6 +15,7 @@ use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +23,18 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
-/** Reinsurance screens: treaties and reinsurers, the cessions queue, facultative placement from the policy page, and reinsurer statements. */
+/**
+ * Reinsurance screens: treaties and reinsurers, the treaty page, the cessions queue, facultative placement from the policy page, reinsurer statements and the
+ * statement page. The cessions and statements lists page on the server (PageSupport::listPageSize); cessions follow the user's branch reach.
+ */
 final class ReinsurancePageController
 {
     public const AREA = ['ri.view', 'ri.manage_treaties', 'ri.place_facultative'];
 
     private const KINDS = ['sbc' => 'SBC compulsory', 'quota_share' => 'Quota share', 'surplus' => 'Surplus', 'facultative' => 'Facultative'];
+
+    private const CESSION_COLUMNS = ['c.id', 'c.kind', 'c.movement', 'c.accounting_date', 'c.share_bp', 'c.ceded_sum_insured_minor', 'c.premium_minor', 'c.commission_minor', 'p.id as policy_id',
+        'p.number as policy_number', 'h.display_name as insured', 'r.code as reinsurer_code', 'rp.display_name as reinsurer', 't.id as treaty_id', 't.code as treaty_code'];
 
     public function __construct(
         private readonly PermissionChecker $permissions,
@@ -50,11 +58,45 @@ final class ReinsurancePageController
             'treaties' => DB::table('ri_treaties as t')->leftJoin('product_classes as c', 'c.code', '=', 't.class_code')->where('t.entity_id', $entity['id'])
                 ->orderByDesc('t.underwriting_year')->orderBy('t.class_code')->get(['t.*', 'c.name_en as class_name'])
                 ->map(fn (object $t): array => ['id' => (string) $t->id, 'code' => (string) $t->code, 'name' => (string) $t->name, 'class' => (string) ($t->class_name ?? $t->class_code),
-                    'year' => (int) $t->underwriting_year, 'period' => "{$t->period_from} to {$t->period_to}", 'type' => (string) $t->type, 'status' => (string) $t->status,
+                    'year' => (int) $t->underwriting_year, 'period_from' => (string) $t->period_from, 'period_to' => (string) $t->period_to, 'type' => (string) $t->type, 'status' => (string) $t->status,
                     'terms' => $t->type === 'quota_share' ? 'Cedes '.PageSupport::percent((int) $t->cession_bp).'%' : 'Retention '.$money((int) $t->retention_minor)." × {$t->lines} lines",
                     'commission' => PageSupport::percent((int) $t->commission_bp), 'sbc_share' => PageSupport::percent((int) $t->sbc_share_bp),
                     'participants' => ($participants[$t->id] ?? collect())->map(fn (object $p): string => "{$p->code} ".PageSupport::percent((int) $p->share_bp).'%')->implode(', ')])->values()->all(),
             'reinsurers' => $this->reinsurerRows(),
+        ]);
+    }
+
+    /** The treaty page (ObjectPage): terms, the reinsurers on it, the cessions written under it, timeline and audit. Opens for every reinsurance user. */
+    public function showTreaty(Request $request, string $treaty, ObjectHistory $history): Response
+    {
+        $actor = PageSupport::actor($request);
+        $reach = $this->permissions->authorizeArea($actor, self::AREA);
+        $entity = PageSupport::entity();
+        $t = DB::table('ri_treaties as t')->leftJoin('product_classes as c', 'c.code', '=', 't.class_code')->where('t.id', $treaty)->where('t.entity_id', $entity['id'])
+            ->first(['t.*', 'c.name_en as class_name']);
+        abort_if($t === null, 404);
+        $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
+        $cessions = $reach->constrain(self::cessionQuery($entity['id']), 'p.entity_id', 'p.branch_id')->where('c.treaty_id', $t->id);
+        $totals = (clone $cessions)->selectRaw('coalesce(sum(c.premium_minor), 0) as premium, coalesce(sum(c.commission_minor), 0) as commission')->first();
+        $page = $cessions->select(self::CESSION_COLUMNS)->orderByDesc('c.accounting_date')->orderByDesc('c.created_at')->paginate(PageSupport::listPageSize())->withQueryString();
+
+        return Inertia::render('reinsurance/treaties/Show', [
+            'currency' => $entity['currency'],
+            'canManage' => $this->permissions->has($actor, TreatyService::MANAGE),
+            'treaty' => ['id' => (string) $t->id, 'code' => (string) $t->code, 'name' => (string) $t->name, 'class' => (string) ($t->class_name ?? $t->class_code), 'year' => (int) $t->underwriting_year,
+                'period_from' => (string) $t->period_from, 'period_to' => (string) $t->period_to, 'type' => (string) $t->type, 'status' => (string) $t->status,
+                'cession' => $t->cession_bp === null ? null : PageSupport::percent((int) $t->cession_bp), 'retention' => $t->retention_minor === null ? null : $money((int) $t->retention_minor),
+                'lines' => $t->lines === null ? null : (int) $t->lines, 'capacity' => $t->retention_minor === null ? null : $money((int) $t->retention_minor * (int) $t->lines),
+                'commission' => PageSupport::percent((int) $t->commission_bp), 'sbc_share' => PageSupport::percent((int) $t->sbc_share_bp),
+                'ceded_premium' => $money((int) ($totals->premium ?? 0)), 'ceded_commission' => $money((int) ($totals->commission ?? 0))],
+            'participants' => DB::table('ri_treaty_participants as tp')->join('reinsurers as r', 'r.id', '=', 'tp.reinsurer_id')->join('parties as p', 'p.id', '=', 'r.party_id')
+                ->where('tp.treaty_id', $t->id)->orderByDesc('tp.share_bp')->get(['r.id', 'r.code', 'p.display_name', 'r.rating', 'r.rating_agency', 'r.country', 'r.status', 'tp.share_bp'])
+                ->map(fn (object $r): array => ['id' => (string) $r->id, 'code' => (string) $r->code, 'name' => (string) $r->display_name, 'share' => PageSupport::percent((int) $r->share_bp),
+                    'rating' => $r->rating === null ? null : trim("{$r->rating} ".($r->rating_agency === null ? '' : "({$r->rating_agency})")), 'country' => (string) $r->country,
+                    'status' => (string) $r->status])->values()->all(),
+            'cessions' => PageSupport::page($page, array_map(fn (\stdClass $c): array => self::cessionRow($c, $money), $page->items())),
+            'timeline' => $history->timeline([['ri_treaty', (string) $t->id]]),
+            'audit' => Inertia::defer(fn (): array => $history->audit([['ri_treaty', (string) $t->id]]), 'history'),
         ]);
     }
 
@@ -75,9 +117,9 @@ final class ReinsurancePageController
     public function storeTreaty(Request $request): RedirectResponse
     {
         [$terms, $participants] = $this->treatyInput($request);
-        $this->treaties->save(null, $terms, $participants, PageSupport::actor($request));
+        $id = $this->treaties->save(null, $terms, $participants, PageSupport::actor($request));
 
-        return redirect('/reinsurance/treaties')->with('status', "Treaty {$terms['code']} saved.");
+        return redirect("/reinsurance/treaties/{$id}")->with('status', "Treaty {$terms['code']} saved.");
     }
 
     public function updateTreaty(Request $request, string $treaty): RedirectResponse
@@ -85,7 +127,7 @@ final class ReinsurancePageController
         [$terms, $participants] = $this->treatyInput($request);
         $this->treaties->save($treaty, $terms, $participants, PageSupport::actor($request));
 
-        return redirect('/reinsurance/treaties')->with('status', "Treaty {$terms['code']} saved.");
+        return redirect("/reinsurance/treaties/{$treaty}")->with('status', "Treaty {$terms['code']} saved.");
     }
 
     public function storeReinsurer(Request $request): RedirectResponse
@@ -101,23 +143,19 @@ final class ReinsurancePageController
 
     public function cessions(Request $request): Response
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        // A branch-scoped reinsurance user lists only the cessions of their branches' policies.
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
+        $page = $reach->constrain(self::cessionQuery($entity['id']), 'p.entity_id', 'p.branch_id')->select(self::CESSION_COLUMNS)
+            ->orderByDesc('c.accounting_date')->orderByDesc('c.created_at')->paginate(PageSupport::listPageSize())->withQueryString();
 
         return Inertia::render('reinsurance/cessions/Index', [
             'currency' => $entity['currency'],
-            'cessions' => DB::table('ri_cessions as c')->join('reinsurers as r', 'r.id', '=', 'c.reinsurer_id')->join('parties as rp', 'rp.id', '=', 'r.party_id')
-                ->join('policies as p', 'p.id', '=', 'c.policy_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->leftJoin('ri_treaties as t', 't.id', '=', 'c.treaty_id')
-                ->where('c.entity_id', $entity['id'])->orderByDesc('c.accounting_date')->orderByDesc('c.created_at')->limit(PageSupport::LIST_PAGE_SIZE)
-                ->get(['c.id', 'c.kind', 'c.movement', 'c.accounting_date', 'c.share_bp', 'c.ceded_sum_insured_minor', 'c.premium_minor', 'c.commission_minor', 'p.id as policy_id',
-                    'p.number as policy_number', 'h.display_name as insured', 'r.code as reinsurer_code', 'rp.display_name as reinsurer', 't.code as treaty_code'])
-                ->map(fn (object $c): array => ['id' => (string) $c->id, 'kind' => self::KINDS[(string) $c->kind] ?? (string) $c->kind, 'movement' => ucfirst((string) $c->movement),
-                    'date' => (string) $c->accounting_date, 'share' => PageSupport::percent((int) $c->share_bp), 'ceded_sum_insured' => $money((int) $c->ceded_sum_insured_minor),
-                    'premium' => $money((int) $c->premium_minor), 'commission' => $money((int) $c->commission_minor), 'policy_id' => (string) $c->policy_id,
-                    'policy_number' => (string) $c->policy_number, 'insured' => (string) $c->insured, 'reinsurer' => "{$c->reinsurer_code} · {$c->reinsurer}", 'treaty' => $c->treaty_code])->values()->all(),
+            'reinsurers' => array_map(fn (array $r): string => "{$r['code']} · {$r['name']}", $this->reinsurerRows()),
+            'cessions' => PageSupport::page($page, array_map(fn (\stdClass $c): array => self::cessionRow($c, $money), $page->items())),
             // Policies with risk above treaty capacity not yet placed facultatively.
-            'aboveCapacity' => DB::table('ri_policy_positions as pos')->join('policies as p', 'p.id', '=', 'pos.policy_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
+            'aboveCapacity' => $reach->constrain(DB::table('ri_policy_positions as pos')->join('policies as p', 'p.id', '=', 'pos.policy_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id'), 'p.entity_id', 'p.branch_id')
                 ->where('p.entity_id', $entity['id'])->where('pos.above_capacity_minor', '>', 0)->whereIn('p.status', ['issued', 'active'])->orderByDesc('pos.above_capacity_minor')
                 ->get(['p.id', 'p.number', 'h.display_name', 'pos.sum_insured_minor', 'pos.above_capacity_minor'])
                 ->map(fn (object $p): array => ['policy_id' => (string) $p->id, 'policy_number' => (string) $p->number, 'insured' => (string) $p->display_name,
@@ -132,20 +170,37 @@ final class ReinsurancePageController
         $entity = PageSupport::entity();
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
         $today = app(BusinessClock::class)->today();
+        $page = self::statementQuery($entity['id'])->orderByDesc('s.year')->orderByDesc('s.quarter')->orderBy('r.code')->paginate(PageSupport::listPageSize())->withQueryString();
 
         return Inertia::render('reinsurance/statements/Index', [
             'currency' => $entity['currency'],
             'canPrepare' => $this->permissions->has($actor, TreatyService::MANAGE),
             'defaults' => ['year' => $today->year, 'quarter' => intdiv($today->month - 1, 3) + 1],
             'reinsurers' => array_map(fn (array $r): array => ['value' => $r['id'], 'label' => "{$r['code']} · {$r['name']}"], $this->reinsurerRows()),
-            'statements' => DB::table('ri_statements as s')->join('reinsurers as r', 'r.id', '=', 's.reinsurer_id')->join('parties as rp', 'rp.id', '=', 'r.party_id')
-                ->where('s.entity_id', $entity['id'])->orderByDesc('s.year')->orderByDesc('s.quarter')->orderBy('r.code')
-                ->get(['s.*', 'r.code as reinsurer_code', 'rp.display_name as reinsurer'])
-                ->map(fn (object $s): array => ['id' => (string) $s->id, 'number' => (string) $s->number, 'reinsurer' => "{$s->reinsurer_code} · {$s->reinsurer}", 'quarter' => "Q{$s->quarter} {$s->year}",
-                    'period_from' => (string) $s->period_from, 'period_to' => (string) $s->period_to, 'opening' => $money((int) $s->opening_balance_minor), 'premium' => $money((int) $s->premium_minor),
-                    'commission' => $money((int) $s->commission_minor), 'claims_recoverable' => $money((int) $s->claims_recoverable_minor), 'closing' => $money((int) $s->closing_balance_minor),
-                    'outstanding_claims_share' => $money((int) $s->outstanding_claims_share_minor), 'due_to_reinsurer' => (int) $s->closing_balance_minor >= 0,
-                    'bordereau' => '/reports/ri-premium-bordereau?'.http_build_query(['from' => $s->period_from, 'to' => $s->period_to])])->values()->all(),
+            'statements' => PageSupport::page($page, array_map(fn (\stdClass $s): array => self::statementRow($s, $money), $page->items())),
+        ]);
+    }
+
+    /** The reinsurer statement page (ObjectPage): the quarter's account, the bordereaux behind it, the reinsurer's cessions in the quarter, timeline and audit. */
+    public function showStatement(Request $request, string $statement, ObjectHistory $history): Response
+    {
+        $actor = PageSupport::actor($request);
+        $reach = $this->permissions->authorizeArea($actor, self::AREA);
+        $entity = PageSupport::entity();
+        $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
+        $s = self::statementQuery($entity['id'])->where('s.id', $statement)->first();
+        abort_if($s === null, 404);
+        $page = $reach->constrain(self::cessionQuery($entity['id']), 'p.entity_id', 'p.branch_id')->where('c.reinsurer_id', $s->reinsurer_id)
+            ->whereBetween('c.accounting_date', [(string) $s->period_from, (string) $s->period_to])->select(self::CESSION_COLUMNS)
+            ->orderByDesc('c.accounting_date')->orderByDesc('c.created_at')->paginate(PageSupport::listPageSize())->withQueryString();
+
+        return Inertia::render('reinsurance/statements/Show', [
+            'currency' => $entity['currency'],
+            'canPrepare' => $this->permissions->has($actor, TreatyService::MANAGE),
+            'statement' => self::statementRow($s, $money) + ['reinsurer_id' => (string) $s->reinsurer_id, 'year' => (int) $s->year, 'quarter_no' => (int) $s->quarter],
+            'cessions' => PageSupport::page($page, array_map(fn (\stdClass $c): array => self::cessionRow($c, $money), $page->items())),
+            'timeline' => $history->timeline([['ri_statement', (string) $s->id]]),
+            'audit' => Inertia::defer(fn (): array => $history->audit([['ri_statement', (string) $s->id]]), 'history'),
         ]);
     }
 
@@ -153,9 +208,9 @@ final class ReinsurancePageController
     {
         /** @var array{reinsurer_id: string, year: int|string, quarter: int|string} $data */
         $data = $request->validate(['reinsurer_id' => ['required', 'uuid'], 'year' => ['required', 'integer', 'between:2000,2100'], 'quarter' => ['required', 'integer', 'between:1,4']]);
-        $this->statements->prepare(PageSupport::entity()['id'], $data['reinsurer_id'], (int) $data['year'], (int) $data['quarter'], PageSupport::actor($request));
+        $id = $this->statements->prepare(PageSupport::entity()['id'], $data['reinsurer_id'], (int) $data['year'], (int) $data['quarter'], PageSupport::actor($request));
 
-        return redirect('/reinsurance/statements')->with('status', "Statement for Q{$data['quarter']} {$data['year']} prepared.");
+        return redirect("/reinsurance/statements/{$id}")->with('status', "Statement for Q{$data['quarter']} {$data['year']} prepared.");
     }
 
     public function placeFacultative(Request $request, string $policy): RedirectResponse
@@ -194,6 +249,7 @@ final class ReinsurancePageController
 
         return [
             'position' => $position === null ? null : ['treaty' => $position->treaty_code === null ? null : "{$position->treaty_code} · {$position->treaty_name}",
+                'treaty_id' => $position->treaty_id === null ? null : (string) $position->treaty_id,
                 'treaty_type' => $position->treaty_type === null ? null : (self::KINDS[(string) $position->treaty_type] ?? null),
                 'sum_insured' => $money((int) $position->sum_insured_minor), 'net_premium' => $money((int) $position->net_premium_minor), 'sbc' => $money((int) $position->sbc_sum_insured_minor),
                 'treaty_ceded' => $money((int) $position->treaty_sum_insured_minor), 'retained' => $money((int) $position->retained_sum_insured_minor),
@@ -268,6 +324,48 @@ final class ReinsurancePageController
             'retention_minor' => $quota ? null : PageSupport::minor('retention', $data['retention'] ?? '', $entity['currency']),
             'lines' => $quota ? null : (int) ($data['lines'] ?? 0), 'commission_bp' => PageSupport::basisPoints('commission_percent', $data['commission_percent']),
             'sbc_share_bp' => PageSupport::basisPoints('sbc_share_percent', $data['sbc_share_percent']), 'currency' => $entity['currency'], 'status' => $data['status']], $participants];
+    }
+
+    /** The cessions of an entity with the policy, policyholder, reinsurer and treaty they belong to (select CESSION_COLUMNS). */
+    private static function cessionQuery(string $entityId): Builder
+    {
+        return DB::table('ri_cessions as c')->join('reinsurers as r', 'r.id', '=', 'c.reinsurer_id')->join('parties as rp', 'rp.id', '=', 'r.party_id')
+            ->join('policies as p', 'p.id', '=', 'c.policy_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->leftJoin('ri_treaties as t', 't.id', '=', 'c.treaty_id')
+            ->where('c.entity_id', $entityId);
+    }
+
+    /**
+     * @param callable(int): string $money
+     * @return array<string, string|null>
+     */
+    private static function cessionRow(\stdClass $c, callable $money): array
+    {
+        return ['id' => (string) $c->id, 'kind' => self::KINDS[(string) $c->kind] ?? (string) $c->kind, 'movement' => ucfirst((string) $c->movement),
+            'date' => (string) $c->accounting_date, 'share' => PageSupport::percent((int) $c->share_bp), 'ceded_sum_insured' => $money((int) $c->ceded_sum_insured_minor),
+            'premium' => $money((int) $c->premium_minor), 'commission' => $money((int) $c->commission_minor), 'policy_id' => (string) $c->policy_id,
+            'policy_number' => (string) $c->policy_number, 'insured' => (string) $c->insured, 'reinsurer' => "{$c->reinsurer_code} · {$c->reinsurer}",
+            'treaty_id' => $c->treaty_id === null ? null : (string) $c->treaty_id, 'treaty' => $c->treaty_code === null ? null : (string) $c->treaty_code];
+    }
+
+    private static function statementQuery(string $entityId): Builder
+    {
+        return DB::table('ri_statements as s')->join('reinsurers as r', 'r.id', '=', 's.reinsurer_id')->join('parties as rp', 'rp.id', '=', 'r.party_id')
+            ->where('s.entity_id', $entityId)->select(['s.*', 'r.code as reinsurer_code', 'rp.display_name as reinsurer']);
+    }
+
+    /**
+     * @param callable(int): string $money
+     * @return array<string, string|bool>
+     */
+    private static function statementRow(\stdClass $s, callable $money): array
+    {
+        $range = http_build_query(['from' => (string) $s->period_from, 'to' => (string) $s->period_to]);
+
+        return ['id' => (string) $s->id, 'number' => (string) $s->number, 'reinsurer' => "{$s->reinsurer_code} · {$s->reinsurer}", 'quarter' => "Q{$s->quarter} {$s->year}",
+            'period_from' => (string) $s->period_from, 'period_to' => (string) $s->period_to, 'opening' => $money((int) $s->opening_balance_minor), 'premium' => $money((int) $s->premium_minor),
+            'commission' => $money((int) $s->commission_minor), 'claims_recoverable' => $money((int) $s->claims_recoverable_minor), 'closing' => $money((int) $s->closing_balance_minor),
+            'outstanding_claims_share' => $money((int) $s->outstanding_claims_share_minor), 'due_to_reinsurer' => (int) $s->closing_balance_minor >= 0,
+            'bordereau' => "/reports/ri-premium-bordereau?{$range}", 'claims_bordereau' => "/reports/ri-claims-bordereau?{$range}"];
     }
 
     /** @return list<array{id: string, code: string, name: string, rating: string|null, rating_agency: string|null, country: string, is_state_reinsurer: bool, status: string}> */

@@ -13,9 +13,12 @@ use InvalidArgumentException;
  */
 final class HelpContent
 {
-    /** Gap fixes W7 (GA-30): distribution, refunds, cheques, agent cash, tariffs, users and roles, approval and underwriting limits, the chart of accounts and accounting events. */
+    /**
+     * Gap fixes W7 (GA-30): distribution, refunds, cheques, agent cash, tariffs, users and roles, approval and underwriting limits, the chart of accounts and accounting events.
+     * UX consistency pass: reinsurance (treaties, cessions, reinsurer statements) and regulatory (dashboard, returns, technical provisions).
+     */
     public const MODULES = ['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports',
-        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events'];
+        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events', 'reinsurance', 'regulatory'];
 
     public const LOCALES = ['en', 'bn'];
 

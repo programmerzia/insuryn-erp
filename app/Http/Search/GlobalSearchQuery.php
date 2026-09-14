@@ -13,6 +13,7 @@ use App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
 use App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController;
+use App\Modules\Insurance\Reinsurance\Http\Controllers\ReinsurancePageController;
 use App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController;
 use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\PermissionChecker;
@@ -58,6 +59,7 @@ final class GlobalSearchQuery
             ...($may(CollectionsPageController::AREA) ? $this->receipts($like, $number, $reach(CollectionsPageController::AREA)) : []),
             ...($may(PartyPageController::AREA) || $may(PolicyPageController::AREA) ? $this->customers($like) : []),
             ...($may(ProducersPageController::AREA) ? $this->producers($like, $number) : []),
+            ...($may(ReinsurancePageController::AREA) ? $this->reinsurance($like) : []),
             ...(in_array('accounting.view_journals', $held, true) ? $this->journals($like, $number) : []),
         ];
     }
@@ -200,6 +202,29 @@ final class GlobalSearchQuery
         foreach ($rows as $row) {
             $detail = self::word((string) $row->kind).($row->tax_id !== null ? " · TIN {$row->tax_id}" : '');
             $results[] = ['kind' => 'customer', 'label' => (string) $row->display_name, 'detail' => $detail, 'href' => "/parties/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * UX consistency pass: treaties by code or name, reinsurer statements by number or reinsurer. Both belong to the entity, not a branch.
+     *
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function reinsurance(string $like): array
+    {
+        $results = [];
+        $treaties = DB::table('ri_treaties')->where(fn ($q) => $q->where('code', 'ilike', $like)->orWhere('name', 'ilike', $like))
+            ->orderByDesc('underwriting_year')->orderBy('code')->limit(self::PER_KIND)->get(['id', 'code', 'name', 'status']);
+        foreach ($treaties as $row) {
+            $results[] = ['kind' => 'treaty', 'label' => (string) $row->code, 'detail' => $row->name.' · '.self::word((string) $row->status), 'href' => "/reinsurance/treaties/{$row->id}"];
+        }
+        $statements = DB::table('ri_statements as s')->join('reinsurers as r', 'r.id', '=', 's.reinsurer_id')->join('parties as p', 'p.id', '=', 'r.party_id')
+            ->where(fn ($q) => $q->where('s.number', 'ilike', $like)->orWhere('r.code', 'ilike', $like)->orWhere('p.display_name', 'ilike', $like))
+            ->orderByDesc('s.year')->orderByDesc('s.quarter')->limit(self::PER_KIND)->get(['s.id', 's.number', 's.year', 's.quarter', 'r.code']);
+        foreach ($statements as $row) {
+            $results[] = ['kind' => 'reinsurer_statement', 'label' => (string) $row->number, 'detail' => "{$row->code} · Q{$row->quarter} {$row->year}", 'href' => "/reinsurance/statements/{$row->id}"];
         }
 
         return $results;

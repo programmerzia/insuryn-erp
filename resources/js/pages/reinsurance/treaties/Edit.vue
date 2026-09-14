@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import Breadcrumb from '@/components/Breadcrumb.vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
+import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 
 /** Reinsurance → Treaties → treaty editor: the treaty's class, year and period, its type and terms, commission, SBC share and the reinsurers that share it. */
@@ -30,7 +32,7 @@ const form = useForm({
 });
 const errors = computed(() => form.errors as Record<string, string>);
 const total = computed(() => form.participants.reduce((sum, p) => sum + (Number.parseFloat(p.share_percent) || 0), 0));
-const title = computed(() => (props.treaty ? `Treaty ${props.treaty.code}` : 'New treaty'));
+const title = computed(() => (props.treaty ? `Edit treaty ${props.treaty.code}` : 'New treaty'));
 function submit(): void {
     if (props.treaty) form.put(`/reinsurance/treaties/${props.treaty.id}`);
     else form.post('/reinsurance/treaties');
@@ -38,10 +40,10 @@ function submit(): void {
 </script>
 
 <template>
-    <AppLayout :title="title">
-        <h1 class="mb-1 text-title font-semibold">{{ title }}</h1>
-        <p class="mb-4 max-w-[760px] text-ui text-ink-2">SBC's compulsory share is ceded first; this treaty applies to the rest. Changes apply to policies ceded from now on; cessions already written stay.</p>
-        <FormLayout :submit-label="treaty ? 'Save treaty' : 'Create treaty'" cancel-href="/reinsurance/treaties" :dirty="form.isDirty" :processing="form.processing" :error="errors.form" wide @submit="submit">
+    <AppLayout help="reinsurance" :title="title">
+        <Breadcrumb :base="treaty ? [{ label: 'Treaties', href: '/reinsurance/treaties' }, { label: `Treaty ${treaty.code}`, href: `/reinsurance/treaties/${treaty.id}` }] : [{ label: 'Treaties', href: '/reinsurance/treaties' }]" />
+        <PageHeader :title="title" description="SBC's compulsory share is ceded first; this treaty applies to the rest. Changes apply to policies ceded from now on; cessions already written stay." />
+        <FormLayout :submit-label="treaty ? 'Save treaty' : 'Create treaty'" :cancel-href="treaty ? `/reinsurance/treaties/${treaty.id}` : '/reinsurance/treaties'" :dirty="form.isDirty" :processing="form.processing" :error="errors.form" wide @submit="submit">
             <div class="grid gap-4 sm:grid-cols-2">
                 <Field id="code" label="Code" :error="errors.code"><TextInput id="code" v-model="form.code" placeholder="FIRE-SP-2026" /></Field>
                 <Field id="name" label="Name" :error="errors.name"><TextInput id="name" v-model="form.name" placeholder="Fire surplus treaty 2026" /></Field>

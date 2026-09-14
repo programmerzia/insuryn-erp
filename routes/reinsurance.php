@@ -11,11 +11,13 @@ Route::middleware('auth')->group(function (): void {
     Route::get('reinsurance/treaties', [ReinsurancePageController::class, 'treaties']);
     Route::get('reinsurance/treaties/create', [ReinsurancePageController::class, 'createTreaty']);
     Route::post('reinsurance/treaties', [ReinsurancePageController::class, 'storeTreaty']);
-    Route::get('reinsurance/treaties/{treaty}', [ReinsurancePageController::class, 'editTreaty'])->whereUuid('treaty');
+    Route::get('reinsurance/treaties/{treaty}', [ReinsurancePageController::class, 'showTreaty'])->whereUuid('treaty');
+    Route::get('reinsurance/treaties/{treaty}/edit', [ReinsurancePageController::class, 'editTreaty'])->whereUuid('treaty');
     Route::put('reinsurance/treaties/{treaty}', [ReinsurancePageController::class, 'updateTreaty'])->whereUuid('treaty');
     Route::post('reinsurance/reinsurers', [ReinsurancePageController::class, 'storeReinsurer']);
     Route::get('reinsurance/cessions', [ReinsurancePageController::class, 'cessions']);
     Route::get('reinsurance/statements', [ReinsurancePageController::class, 'statements']);
+    Route::get('reinsurance/statements/{statement}', [ReinsurancePageController::class, 'showStatement'])->whereUuid('statement');
     Route::post('reinsurance/statements', [ReinsurancePageController::class, 'prepareStatement']);
     Route::post('policies/{policy}/facultative', [ReinsurancePageController::class, 'placeFacultative'])->whereUuid('policy')->middleware('moves-money');
 });

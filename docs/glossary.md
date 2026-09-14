@@ -35,6 +35,13 @@ Bangla terms follow the words Bangladeshi non-life insurers and IDRA commonly us
 | Tariff | Rating plan (on screens) | The rates and rules a quote is priced on. | ট্যারিফ |
 | Month-end close | Close | The checklist that earns premium, reconciles and locks a month. | মাস-শেষের ক্লোজ |
 | Bank accounts | Bank | The company's bank accounts, statements and matching. | ব্যাংক অ্যাকাউন্ট |
+| Treaty | Contract, programme (for a treaty) | The reinsurance agreement for a class and underwriting year: quota share or surplus, commission, the SBC share and its reinsurers. Numbered by its code. | ট্রিটি |
+| Cession | Ceding entry, RI transaction | A share of a policy's risk and premium passed to a reinsurer when the policy is issued, endorsed or cancelled. | সেশন |
+| Facultative placement | Fac, facultative cession (as a button) | A risk above the treaty's capacity placed with a reinsurer one policy at a time, from the policy's Reinsurance tab. | ফ্যাকাল্টেটিভ প্লেসমেন্ট |
+| Reinsurer statement | RI statement, account statement | The quarterly account with one reinsurer: premium ceded, commission, claims recoverable and the balance. | পুনর্বীমাকারীর স্টেটমেন্ট |
+| Bordereau | Bordereaux report (for one) | The premium or claims list sent to reinsurers for a period; a report. | বোর্ডেরো |
+| Regulatory returns | IDRA forms, returns set | The forms filed with IDRA for a quarter or year. | নিয়ন্ত্রক রিটার্ন |
+| Technical provisions | Provisions run (as a page name), reserving | The quarter's unearned premium and IBNR calculation, approved and posted by the CFO. | টেকনিক্যাল প্রভিশন |
 
 ## Accounting
 
