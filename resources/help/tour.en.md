@@ -2,19 +2,19 @@
 
 ## home
 ### Your work queues
-Home lists what needs you: unallocated receipts, unmatched bank lines, claims waiting for a reserve, the month-end close. The tour follows one week of work from here, the way the market cross-check describes it.
+Home lists what needs you: receipts in suspense, unmatched bank lines, claims waiting for a reserve, the month-end close. The tour follows one week of work from here, the way the market cross-check describes it.
 
 ## quote
 ### Quote, propose and issue the policy
-A customer wants motor insurance. Pick *Motor Comprehensive*, fill in the vehicle and the sum insured, and the premium is calculated from the tariff while you type; issue the quotation to hold the price. When the customer accepts, make the proposal, verify their identity and submit it, then issue the policy from the proposal page: the system records Premium receivable, Unearned premium, VAT and stamp duty.
+A customer wants motor insurance. Pick *Motor Comprehensive*, fill in the vehicle and the sum insured, and the premium is calculated from the tariff while you type; issue the quote to hold the price (the customer gets it printed as a quotation). When the customer accepts, make the proposal, verify their identity and submit it, then issue the policy from the proposal page: the system records Premium receivable, the Unearned premium reserve, VAT and stamp duty.
 
 ## referrals
 ### Decide referred proposals
-A proposal above the submitter's underwriting limit, with a risk flag, a vehicle already insured or an unlicensed agent comes here instead of being approved automatically. Someone other than the person who prepared it approves it, declines it, or approves it with a loading and a reason that the policy keeps as a special term.
+A proposal above the submitter's underwriting limit, with a risk flag, a vehicle already insured or an unlicensed producer comes here instead of being approved automatically. Someone other than the person who prepared it approves it, declines it, or approves it with a loading and a reason that the policy keeps as a special term.
 
 ## receive
 ### Receive the premium
-The customer pays by bank transfer. Record the receipt with its reference and allocate it to the policy's installment: the bank goes up and what the customer owes goes down. If the agent is on a commission scheme, commission is accrued now.
+The customer pays by bank transfer. Record the receipt with its reference and allocate it to the policy's installment: the bank goes up and what the customer owes goes down. If the producer is on a commission scheme, commission is accrued now.
 
 ## suspense
 ### Allocate money in suspense
@@ -30,7 +30,7 @@ A customer reports an accident. Register it against the policy with the date of 
 
 ## settle-claim
 ### Reserve, approve and pay the claim
-Open the claim and set the reserve when the surveyor estimates the loss: Claims expense and Outstanding claims go up. The claims manager approves the settlement, finance releases the payment (a different person), and closing the claim releases the reserve left over.
+Open the claim and set the reserve when the surveyor estimates the loss: Claims incurred and Outstanding claims go up. The claims manager approves the settlement, finance releases the payment (a different person), and closing the claim releases the reserve left over.
 
 ## close
 ### Run the month-end close

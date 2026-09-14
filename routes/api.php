@@ -99,7 +99,9 @@ Route::middleware('auth')->prefix('insurance')->group(function (): void {
     Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->whereUuid('refund');
     Route::post('commission-plans', [CommissionController::class, 'storePlan']);
     Route::get('agents/{agent}/commission-statement', [CommissionController::class, 'statement'])->whereUuid('agent');
-    Route::post('agents/{agent}/commission-statements', [CommissionController::class, 'approvePayout'])->whereUuid('agent');
+    // GA-10 (D-75): commission is approved only through the monthly statement run (prepare, approve), then paid by someone else.
+    Route::post('commission-statements/prepare', [CommissionController::class, 'prepare']);
+    Route::post('commission-statements/{statement}/approve', [CommissionController::class, 'approve'])->whereUuid('statement');
     Route::post('commission-statements/{statement}/pay', [CommissionController::class, 'pay'])->whereUuid('statement');
     Route::post('claims', [ClaimController::class, 'store']);
     Route::get('claims/{claim}', [ClaimController::class, 'show'])->whereUuid('claim');

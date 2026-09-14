@@ -72,18 +72,18 @@ const primaryLabel = (s: Statement): string | undefined =>
 </script>
 
 <template>
-    <AppLayout help="commission" title="Statement run" fill>
+    <AppLayout help="commission" title="Commission statements" fill>
         <QueueView
             id="distribution-statements"
             v-model:active="active"
-            title="Statements"
+            title="Commission statements"
             :columns="columns"
             :rows="statements"
             :row-key="(s) => s.id"
             currency="BDT"
             :url-sync="false"
             empty-text="No statements for this month yet."
-            :empty-action="can.approve ? { label: 'Prepare statements' } : { label: 'Open commission', href: '/commission' }"
+            :empty-action="can.approve ? { label: 'Prepare statements' } : { label: 'Open commission history', href: '/commission' }"
             @action="prepare"
             :inspector-title="(s) => `${s.producer_code} · ${s.number ?? 'Draft'}`"
             :inspector-subtitle="(s) => `${routeWords[s.paid_via]} · ${monthLabel(periodEnd)}`"
@@ -96,6 +96,7 @@ const primaryLabel = (s: Statement): string | undefined =>
                     <SelectInput id="period_end" :model-value="periodEnd" class="w-44" :options="periods.map((p) => ({ value: p, label: monthLabel(p) }))" @update:model-value="(v) => period(String(v))" />
                     <Button v-if="can.approve" variant="secondary" size="sm" @click="router.post('/distribution/statements/incentives', { period_end: periodEnd }, { preserveScroll: true })">Run incentives</Button>
                     <Button v-if="can.approve" size="sm" @click="prepare">Prepare statements</Button>
+                    <Link href="/commission" class="ml-2 text-ui text-accent-text hover:underline">History</Link>
                 </div>
             </template>
             <template #details="{ row }">

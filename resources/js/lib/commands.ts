@@ -19,14 +19,15 @@ export interface Command {
 }
 
 const actions: (Omit<Command, 'group' | 'icon'> & { any: string[]; icon?: Component })[] = [
-    { id: 'new-quote', label: 'New quote', href: '/policies/create', keywords: 'policy issue create', any: ['policy.create'] },
+    // GA-11: one quote path, the rated quote workbench (the typed-premium form stays on the Policies list while unrated products exist).
+    { id: 'new-quote', label: 'New quote', href: '/quotations/create', keywords: 'quotation policy issue create price', any: ['quotation.create'] },
     { id: 'new-receipt', label: 'Record a receipt', href: '/receipts/create', keywords: 'new receipt payment money received', any: ['receipt.create'] },
     { id: 'new-claim', label: 'Register a claim', href: '/claims/create', keywords: 'new claim loss', any: ['claim.register'] },
     { id: 'new-journal', label: 'New manual journal', href: '/accounting/journals/create', keywords: 'adjustment accrual', any: ['accounting.create_manual_journal'] },
     { id: 'import-statement', label: 'Import a bank statement', href: '/bank', keywords: 'bank csv match', any: ['bank.import'], icon: Upload },
     { id: 'import-coa', label: 'Import chart of accounts or opening balances', href: '/accounting/imports', keywords: 'coa opening', any: ['accounting.view_journals'], icon: Upload },
     { id: 'start-close', label: 'Start month-end close', href: '/close', keywords: 'lock period close month', any: ['periods.soft_lock', 'periods.lock'] },
-    { id: 'pay-commission', label: 'Approve or pay commission', href: '/commission', keywords: 'agent payout statement', any: ['commission.approve', 'commission.pay'] },
+    { id: 'pay-commission', label: 'Approve or pay commission', href: '/distribution/statements', keywords: 'agent producer payout statement run', any: ['commission.approve', 'commission.pay'] },
 ];
 
 const settings: Command[] = [

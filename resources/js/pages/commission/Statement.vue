@@ -27,11 +27,11 @@ void props;
 </script>
 
 <template>
-    <AppLayout help="commission" :title="`Agent ${agent.code} commission`" fill>
-        <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Commission', href: '/commission' }]" /></div>
-        <DataTable id="commission-entries" v-model:active="active" :label="`Commission for agent ${agent.code}`" :columns="columns" :rows="statement.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false" empty-text="No commission in this period.">
+    <AppLayout help="commission" :title="`Producer ${agent.code} commission`" fill>
+        <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Commission statements', href: '/distribution/statements' }, { label: 'History', href: '/commission' }]" /></div>
+        <DataTable id="commission-entries" v-model:active="active" :label="`Commission for producer ${agent.code}`" :columns="columns" :rows="statement.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false" empty-text="No commission in this period.">
             <template #toolbar>
-                <h1 class="mr-2 shrink-0 text-section font-semibold">Agent {{ agent.code }}</h1>
+                <h1 class="mr-2 shrink-0 text-section font-semibold">Producer {{ agent.code }}</h1>
                 <DateRangeFilter :url="`/commission/agents/${agent.id}`" :from="from" :to="to" />
                 <span class="ml-3 text-ui whitespace-normal text-ink-2">Payable at the start <span class="tabular-nums text-ink">{{ formatMoney(statement.opening_payable) }}</span> · at the end <span class="tabular-nums text-ink">{{ formatMoney(statement.closing_payable) }}</span> · clawed back <span class="tabular-nums text-ink">{{ formatMoney(statement.totals.clawback) }}</span></span>
             </template>

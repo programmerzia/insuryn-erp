@@ -12,6 +12,8 @@ use App\Modules\Accounting\Application\PostingEngine;
 use App\Modules\Accounting\Domain\Enums\JournalKind;
 use App\Modules\Accounting\Domain\Enums\Side;
 use App\Modules\Accounting\Infrastructure\Jobs\OutboxRelayJob;
+use App\Modules\Distribution\Application\Compensation\CompensationRuleRequest;
+use App\Modules\Distribution\Application\Compensation\CompensationSchemeService;
 use App\Modules\Distribution\Application\CreateProducer;
 use App\Modules\Distribution\Application\Licences\LicenceService;
 use App\Modules\Distribution\Application\Licences\RecordLicence;
@@ -25,13 +27,19 @@ use App\Modules\Insurance\Collections\Application\AllocationLine;
 use App\Modules\Insurance\Collections\Application\ReceiptService;
 use App\Modules\Insurance\Collections\Application\RecordReceiptRequest;
 use App\Modules\Insurance\Collections\Application\SuspenseService;
-use App\Modules\Insurance\Commission\Application\CommissionPlanService;
+use App\Modules\Insurance\CoverNote\Application\CoverNoteService;
 use App\Modules\Insurance\Party\Application\AgentService;
 use App\Modules\Insurance\Party\Application\PartyService;
 use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
 use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
 use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
+use App\Modules\Insurance\Quotation\Application\QuotationService;
+use App\Modules\Insurance\Quotation\Application\QuotationTerms;
+use App\Modules\Insurance\Renewal\Application\ExpiryRegister;
+use App\Modules\Insurance\Renewal\Application\RenewalQuotations;
+use App\Modules\Insurance\Underwriting\Application\ProposalService;
+use App\Modules\Insurance\Underwriting\Domain\Enums\ProposalStatus;
 use App\Modules\Platform\Approvals\ApprovalPolicyService;
 use App\Modules\Platform\Audit\Actor;
 use App\Modules\Platform\Audit\Audit;
@@ -51,13 +59,17 @@ use RuntimeException;
 /**
  * The market cross-check Part A story, "a week in a non-life insurer" (session S2), in its own tenant so it stays exactly that story:
  *
- * - Padma General Insurance, Head Office; 3 products (motor, fire, marine; rated by placeholder tariffs, earned 1/365 per day, issued on credit); 5 customers;
- *   2 producers — Jamal Uddin, an agent on 10% commission, and Nasima Akter, a salaried BDO with none (the zero-commission case).
+ * - Padma General Insurance, Head Office and a Chittagong branch (CTG) with its own branch-scoped officer; 4 products (motor, fire, marine and a one-month fire
+ *   short-period cover; rated by placeholder tariffs, earned 1/365 per day, issued on credit); 5 customers; 2 producers — Jamal Uddin, an agent on 10% commission
+ *   through the compensation scheme AGENCY-NL, and Nasima Akter, a salaried BDO with none (the zero-commission case). The bank balance brought forward is
+ *   the paid-up share capital.
  * - August: three policies issued and paid by bank transfer, one issued and later cancelled; a motor claim registered, reserved at
  *   200,000, approved at 180,000, paid by finance and closed (the 20,000 left released); the bank statement fully matched; the month closed and locked.
  * - September (open): a policy paid, a payment without a reference allocated from suspense, one still in suspense, a policy unpaid, an issued quotation
  *   to follow up, the cancellation, a marine claim reserved at 150,000; the September statement imported with three lines to match and two exceptions
  *   (bank charges and an unknown transfer), also written to storage/app/demo/city-bank-2026-09.csv.
+ * - GA-35 (ASSUMPTION: A-199, demo placeholders): a proposal covered by a cover note while the customer arranges payment; in Chittagong, a short-period fire policy expiring on 2 October with its
+ *   renewal quotation offered. Eight policies in all.
  *
  * Phase 3 R7: every policy is sold as a branch sells a rated product — quotation on the tariff, proposal with KYC, automatic underwriting approval, policy issued
  * from the proposal (DemoNewBusiness, with the clock on the story's day) — so premiums come from the placeholder tariffs and bank lines follow the receipts.
@@ -71,6 +83,11 @@ final class PartADemoSeeder extends Seeder
 
     private const ROLES = ['branch_officer', 'branch_manager', 'claims_officer', 'claims_manager', 'accountant', 'finance_manager', 'cfo', 'auditor'];
 
+    /** GA-35: the second branch and the email of its branch-scoped officer. */
+    public const SECOND_BRANCH = ['code' => 'CTG', 'name' => 'Chittagong Branch'];
+
+    public const SECOND_BRANCH_OFFICER = 'branch.officer.ctg';
+
     /** @var array<string, string> role code → user id */
     private array $users = [];
 
@@ -79,6 +96,8 @@ final class PartADemoSeeder extends Seeder
     private string $branchId = '';
 
     private string $bankAccountId = '';
+
+    private string $secondBranchId = '';
 
     /** @return bool whether the story was seeded (false: the tenant already had it) */
     public function run(string $slug = 'nonlife'): bool
@@ -134,28 +153,39 @@ final class PartADemoSeeder extends Seeder
         [$officer, $manager, $claimsOfficer, $claimsManager, $accountant, $finance] = [$this->users['branch_officer'], $this->users['branch_manager'],
             $this->users['claims_officer'], $this->users['claims_manager'], $this->users['accountant'], $this->users['finance_manager']];
 
-        // Configuration: VAT, three products, the bank account and the bank balance brought forward. The commission plan goes on the agent, not the
-        // products (a product's plan would pay every producer, A-7), so the salaried BDO earns none.
+        // Configuration: VAT, the commission scheme, four products, the bank account and the bank balance brought forward. GA-35: commission comes from a
+        // compensation scheme on the products (Distribution D4/D5), whose one rule pays agents 10% of premium received, so the salaried BDO earns none.
         app(TaxRateSetup::class)->ensure('BD', 'VAT', 1500, true, $day('2026-01-01'), $finance);
-        $plan = app(CommissionPlanService::class)->create('AGENT10', 'Agent commission 10%', 1000, null, null, $finance);
+        $schemes = app(CompensationSchemeService::class);
+        $scheme = $schemes->createScheme('AGENCY-NL', 'Agency commission (non-life)', 'commission', $day('2026-01-01'), null,
+            ['allowed_producer_types' => ['agent'], 'non_life_commission_allowed' => true], $finance); // A-18: non-life commission allowed for this scheme (verify)
+        $schemes->addRule($scheme, CompensationRuleRequest::fromArray(['basis' => 'premium_received', 'policy_year_from' => 1, 'policy_year_to' => 99,
+            'effective_from' => '2026-01-01', 'producer_type' => 'agent', 'rate_bp' => 1000]), $finance);
         $catalogue = app(ProductCatalogue::class);
-        $product = function (string $code, string $name, string $lob, string $class) use ($catalogue, $finance): string {
+        $product = function (string $code, string $name, string $lob, string $class, int $termMonths = 12) use ($catalogue, $finance, $scheme): string {
             $product = $catalogue->createProduct($code, $name, $lob, $finance, 'non_life');
             // Phase 3 R1 (class, risk schema, coverages); R7: the story's premiums are paid after issue, so the demo products issue on credit (A-117).
             // Gap audit GA-44 (D-71, A-182): premium is earned 1/365 per day on cover, so a policy starting mid-August earns its August days in August.
-            $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'daily_365',
-                'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true], ...DemoRatingCatalogue::versionTerms($class), 'allow_credit_issue' => true], $finance);
+            $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => $termMonths, 'earning_method' => 'daily_365',
+                'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true], ...DemoRatingCatalogue::versionTerms($class), 'allow_credit_issue' => true,
+                'compensation_scheme_id' => $scheme], $finance);
 
             return $product->id;
         };
         $products = ['MOTOR' => $product('MOTOR', 'Motor Comprehensive', 'motor', 'motor'), 'FIRE' => $product('FIRE', 'Fire and Allied Perils', 'fire', 'fire'),
-            'MARINE' => $product('MARINE', 'Marine Cargo', 'marine', 'marine_cargo')];
+            'MARINE' => $product('MARINE', 'Marine Cargo', 'marine', 'marine_cargo'),
+            // GA-35: a one-month short-period fire cover (seasonal stock), so the story has a policy near expiry to renew. Rated on the fire tariff (placeholder, verify).
+            'FIRE-SP' => $product('FIRE-SP', 'Fire Short Period (seasonal stock)', 'fire', 'fire', 1)];
         DemoRatingPlans::seed($finance, $this->users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify)
         $this->bankAccountId = app(BankAccountService::class)->create($this->entityId, $accounts['bank_main'], 'City Bank', '****4471', 'BDT', $finance)->id;
         $journals = app(ManualJournalService::class);
-        $opening = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Bank balance brought forward', JournalKind::Manual, 'Opening balance at City Bank', 'BDT', [
+        // GA-35: the balance brought forward is the paid-up share capital, not retained earnings (nothing has been earned yet).
+        $shareCapital = (string) Str::uuid7();
+        DB::table('accounts')->insert(['id' => $shareCapital, 'tenant_id' => TenantContext::id(), 'entity_id' => $this->entityId, 'code' => '3000', 'name' => 'Share Capital',
+            'type' => 'equity', 'normal_side' => 'credit', 'is_postable' => true, 'is_control' => false, 'control_subledger' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $opening = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Bank balance brought forward', JournalKind::Manual, 'Opening balance at City Bank: paid-up share capital', 'BDT', [
             new ManualJournalLine($accounts['bank_main'], Side::Debit, 2_000_000_00, ['branch' => $this->branchId], 'City Bank'),
-            new ManualJournalLine($accounts['retained_earnings'], Side::Credit, 2_000_000_00, ['branch' => $this->branchId], null),
+            new ManualJournalLine($shareCapital, Side::Credit, 2_000_000_00, ['branch' => $this->branchId], 'Paid-up share capital'),
         ]), $accountant);
         $journals->submit($opening->id, $accountant);
         $journals->approve($opening->id, $finance);
@@ -167,7 +197,7 @@ final class PartADemoSeeder extends Seeder
             'Meghna Traders' => PartyKind::Organization, 'Chittagong Shipping Co' => PartyKind::Organization] as $name => $kind) {
             $customer[$name] = $parties->create($kind, $name, null, [PartyRoleType::Customer, PartyRoleType::Policyholder], $officer)->id;
         }
-        $agent = app(AgentService::class)->create($parties->create(PartyKind::Individual, 'Jamal Uddin', null, [PartyRoleType::Agent], $manager)->id, 'AG-001', $this->branchId, null, $plan->id, $manager)->id;
+        $agent = app(AgentService::class)->create($parties->create(PartyKind::Individual, 'Jamal Uddin', null, [PartyRoleType::Agent], $manager)->id, 'AG-001', $this->branchId, null, null, $manager)->id;
         $bdo = app(ProducerService::class)->create(new CreateProducer($parties->create(PartyKind::Individual, 'Nasima Akter', null, [PartyRoleType::Agent], $manager)->id,
             'BDO-001', 'bdo', $this->branchId, employeeId: (string) Str::uuid7(), joinedOn: $day('2026-01-01')), $manager)->id;
         foreach ([$agent => 'AG-001', $bdo => 'BDO-001'] as $producer => $code) {
@@ -233,6 +263,8 @@ final class PartADemoSeeder extends Seeder
         DemoNewBusiness::sell($this->branchId, $products['MOTOR'], $customer['Karim Hossain'], $agent, '2026-09-12', $motor('DHA-METRO-TA-44-5504', 'PREMIO-0045504', 1_200_000_00, 1600, 2022, 45, 2),
             $officer, issue: false);
 
+        $this->coverNoteAndRenewal($products, $customer, $agent, $officer, $motor, $fire);
+
         $cargo = $claims->register($marine, $day('2026-09-07'), 'Cargo wetted in transit to Chattogram port', $claimsOfficer, $day('2026-09-09'));
         $claims->reserve($cargo->id, 150_000_00, 'Surveyor estimate', $claimsOfficer, $day('2026-09-10'));
 
@@ -242,6 +274,41 @@ final class PartADemoSeeder extends Seeder
         File::put(storage_path(self::STATEMENT_FILE), $september);
         $this->importStatement($september, basename(self::STATEMENT_FILE), matchAll: false);
         $this->postQueuedEvents();
+    }
+
+    /**
+     * GA-35: a cover note on an approved motor proposal while the customer arranges payment (Head Office, 11 September), and in the Chittagong branch a one-month fire
+     * cover sold by the branch-scoped officer on 3 September that expires on 2 October, with its renewal quotation offered from the expiry register on 12 September.
+     *
+     * @param array<string, string> $products
+     * @param array<string, string> $customer
+     * @param callable(string, string, int, int, int, int, int, string=): array<string, mixed> $motor
+     * @param callable(string, string, int): array<string, mixed> $fire
+     */
+    private function coverNoteAndRenewal(array $products, array $customer, string $agent, string $officer, callable $motor, callable $fire): void
+    {
+        DemoNewBusiness::on('2026-09-11', function () use ($products, $customer, $agent, $officer, $motor): void {
+            $today = CarbonImmutable::parse('2026-09-11');
+            $quotations = app(QuotationService::class);
+            $quotation = $quotations->issue($quotations->saveDraft(new QuotationTerms($this->branchId, $products['MOTOR'], $customer['Dhaka Garments Ltd'], $agent, $today->addDays(4),
+                $motor('DHA-METRO-GHA-15-6605', 'HIACE-0056605', 1_800_000_00, 2700, 2024, 41, 0, 'commercial')), null, $officer)->id, $today, $officer);
+            $proposals = app(ProposalService::class);
+            $proposal = $proposals->createFromQuotation($quotation->id, $officer);
+            $proposals->verifyKyc($proposal->id, 'trade_licence', 'TRAD-DSCC-2019-114455', $officer); // demo trade licence number
+            if ($proposals->submit($proposal->id, $officer)->status !== ProposalStatus::Approved) {
+                throw new RuntimeException('Demo cover note proposal was referred.');
+            }
+            app(CoverNoteService::class)->issue($proposal->id, $today, $today->addDays(29), $officer);
+        });
+
+        $ctgOfficer = $this->users[self::SECOND_BRANCH_OFFICER];
+        $ctg = $this->secondBranchId;
+        $shortPeriod = DemoNewBusiness::sell($ctg, $products['FIRE-SP'], $customer['Meghna Traders'], null, '2026-09-03',
+            $fire('Godown 9, Khatunganj, Chattogram', 'warehouse', 2_500_000_00), $ctgOfficer, 1);
+        DemoNewBusiness::on('2026-09-12', function () use ($shortPeriod, $ctgOfficer): void {
+            app(ExpiryRegister::class)->build(CarbonImmutable::parse('2026-09-12'));
+            app(RenewalQuotations::class)->offerNow((string) DB::table('expiry_register')->where('policy_id', $shortPeriod)->value('id'), $ctgOfficer);
+        });
     }
 
     /** Imports a statement as the accountant; `matchAll` matches every line to the ledger line of the same amount (August, before the close). */
@@ -310,6 +377,15 @@ final class PartADemoSeeder extends Seeder
                 'Part A demo', 'platform.manage_users', Actor::system());
             $users[$code] = $id;
         }
+        // GA-35: the Chittagong branch and its officer, whose branch officer role is scoped to that branch only (G2).
+        $this->secondBranchId = (string) Str::uuid7();
+        DB::table('branches')->insert(['id' => $this->secondBranchId, 'tenant_id' => $tenantId, 'entity_id' => $this->entityId, 'code' => self::SECOND_BRANCH['code'],
+            'name' => self::SECOND_BRANCH['name'], 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $id = (string) Str::uuid7();
+        DB::table('users')->insert(['id' => $id, 'tenant_id' => $tenantId, 'email' => self::SECOND_BRANCH_OFFICER."@{$slug}.local", 'name' => 'Branch officer (Chittagong)',
+            'password' => Hash::make((string) config('erp.seed.admin_password')), 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('user_roles')->insert(['tenant_id' => $tenantId, 'user_id' => $id, 'role_id' => DB::table('roles')->where('code', 'branch_officer')->value('id'), 'scope_type' => 'branch', 'scope_id' => $this->secondBranchId]);
+        $users[self::SECOND_BRANCH_OFFICER] = $id;
 
         return $users;
     }

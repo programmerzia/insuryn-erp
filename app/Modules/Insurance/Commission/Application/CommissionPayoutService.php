@@ -17,15 +17,13 @@ use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Authorization\SodGuard;
 use App\Modules\Platform\Exceptions\BusinessRuleViolation;
 use App\Modules\Platform\Messaging\Outbox;
-use App\Modules\Platform\Numbering\DocumentNumberer;
-use App\Modules\Platform\Numbering\DocumentNumberScope;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Commission payout (design §5.6 accrued ─▶ approved ─▶ paid, spec §4 "clawback netting"). `approve` gathers an agent's accrued entries earned up
- * to a date into a statement — clawbacks net against earnings — under commission.approve; `pay` is done by someone else (CONTEXT.md
- * non-negotiable #9, §7.3 commission.approve ✕ commission.pay) and posts COMMISSION_PAID: DR commission_payable / CR bank_main for the net.
+ * Commission payout (design §5.6 accrued ─▶ approved ─▶ paid, spec §4 "clawback netting"). Statements are prepared and approved only by the monthly
+ * statement run (CommissionStatementRun, GA-10 / D-75: the Phase 1 "approve up to a date" payout was removed); `pay` is done by someone else (CONTEXT.md
+ * non-negotiable #9, §7.3 commission.approve ✕ commission.pay) and posts COMMISSION_PAID for a bank route: DR commission_payable / CR bank_main for the net.
  * Withholding stays in commission_withholding_payable for remittance to the tax authority (not part of the payout). Statement-run statements (slice D6) are
  * paid by their route: `payroll` → COMMISSION_PAYOUT_TO_PAYROLL (to salary_payable), `ap` → COMMISSION_PAYOUT_TO_AP (to accounts_payable), each with an outbox message.
  */
@@ -34,40 +32,10 @@ final class CommissionPayoutService
     public function __construct(
         private readonly PermissionChecker $permissions,
         private readonly SodGuard $sod,
-        private readonly DocumentNumberer $numbers,
         private readonly SubmitAccountingEvent $submit,
         private readonly BankAccountQuery $bankAccounts,
         private readonly Audit $audit,
     ) {}
-
-    /** @throws BusinessRuleViolation NOTHING_TO_PAY when no accrued entries up to the date net to a positive amount */
-    public function approve(string $agentId, CarbonImmutable $upTo, string $actorUserId, CarbonImmutable $on): CommissionStatement
-    {
-        $agent = app(ProducerDirectory::class)->get($agentId);
-        $entityId = (string) DB::table('branches')->where('id', $agent->branchId)->value('entity_id');
-        $this->permissions->authorize($actorUserId, 'commission.approve', AuthorizationScope::branch($entityId, $agent->branchId));
-        $this->assertSomethingToPay($agent->id, $entityId, $upTo);
-        $number = $this->numbers->reserve(new DocumentNumberScope($entityId, null, 'commission_statement', 'CST', $on), $actorUserId);
-
-        return DB::transaction(function () use ($agent, $entityId, $upTo, $actorUserId, $on, $number): CommissionStatement {
-            $entries = $this->accruedEntries($agent->id, $entityId, $upTo)->lockForUpdate()->get();
-            $gross = (int) $entries->sum('amount_minor');
-            $withholding = (int) $entries->sum('withholding_minor');
-            if ($gross - $withholding <= 0) {
-                throw new BusinessRuleViolation('NOTHING_TO_PAY', "Agent {$agent->code} has nothing payable up to {$upTo->toDateString()}.");
-            }
-            $statement = CommissionStatement::query()->create(['entity_id' => $entityId, 'agent_id' => $agent->id, 'number' => $number->number, 'up_to' => $upTo->toDateString(),
-                'gross_minor' => $gross, 'withholding_minor' => $withholding, 'net_minor' => $gross - $withholding, 'currency' => (string) $entries->first()?->currency,
-                'status' => 'approved', 'paid_via' => 'bank', 'approved_by' => $actorUserId, 'approved_on' => $on->toDateString()]);
-            $this->numbers->markUsed($number->id, 'commission_statement', $statement->id);
-            CommissionEntry::query()->whereKey($entries->modelKeys())->update(['status' => 'approved', 'statement_id' => $statement->id]);
-            $this->audit->record('commission_statement.approved', AuditSubject::of('commission_statement', $statement->id), null,
-                ['agent_id' => $agent->id, 'up_to' => $upTo->toDateString(), 'net_minor' => $statement->net_minor, 'entries' => $entries->count()],
-                null, 'commission.approve', Actor::user($actorUserId));
-
-            return $statement;
-        });
-    }
 
     /** @throws BusinessRuleViolation STATEMENT_NOT_APPROVED | INVALID_BANK_ACCOUNT */
     public function pay(string $statementId, ?string $bankAccountId, string $actorUserId, CarbonImmutable $paidOn): CommissionStatement
@@ -112,20 +80,5 @@ final class CommissionPayoutService
 
             return $statement;
         });
-    }
-
-    private function assertSomethingToPay(string $agentId, string $entityId, CarbonImmutable $upTo): void
-    {
-        $net = (int) $this->accruedEntries($agentId, $entityId, $upTo)->sum(DB::raw('amount_minor - withholding_minor'));
-        if ($net <= 0) {
-            throw new BusinessRuleViolation('NOTHING_TO_PAY', "Agent {$agentId} has nothing payable up to {$upTo->toDateString()}.");
-        }
-    }
-
-    /** @return \Illuminate\Database\Eloquent\Builder<CommissionEntry> */
-    private function accruedEntries(string $agentId, string $entityId, CarbonImmutable $upTo): \Illuminate\Database\Eloquent\Builder
-    {
-        return CommissionEntry::query()->where('agent_id', $agentId)->where('entity_id', $entityId)->where('status', 'accrued')
-            ->whereNull('statement_id')->where('earned_on', '<=', $upTo->toDateString());
     }
 }

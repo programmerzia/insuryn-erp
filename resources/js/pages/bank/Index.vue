@@ -30,7 +30,7 @@ const columns: DataColumn<Account>[] = [
 </script>
 
 <template>
-    <AppLayout help="bank" title="Bank" fill>
+    <AppLayout help="bank" title="Bank accounts" fill>
         <QueueView data-tour="bank-accounts"
             id="bank-accounts"
             v-model:active="active"

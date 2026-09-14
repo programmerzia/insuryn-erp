@@ -38,6 +38,8 @@ const form = useForm({ reason: '', note: '' });
 const errors = computed(() => form.errors as Record<string, string>);
 const offering = useForm({});
 const statuses = ['upcoming', 'renewal_offered', 'renewed', 'lapsed', 'not_renewed'];
+/** GA-37: "lapsed" is kept for a policy lapsed for non-payment; a register row that expired with no renewal reads "Expired, not renewed". */
+const statusLabel = (s: string) => (s === 'lapsed' ? 'Expired, not renewed' : s === 'not_renewed' ? 'Not renewed' : s.replace('_', ' ').replace(/^./, (c) => c.toUpperCase()));
 const filtered = computed(() => Object.values(props.filters).some((v) => v !== null));
 const left = (e: Entry) => (e.days_left < 0 ? 'Expired' : e.days_left === 0 ? 'Expires today' : `${e.days_left} days`);
 
@@ -61,7 +63,7 @@ const columns: DataColumn<Entry>[] = [
     { id: 'left', header: 'Left', value: (e) => left(e), width: 100 },
     { id: 'premium', header: 'Premium', type: 'money', value: (e) => e.premium, width: 130 },
     { id: 'quotation', header: 'Renewal quotation', value: (e) => e.quotation?.number ?? '', href: (e) => (e.quotation ? `/quotations/${e.quotation.id}` : null), width: 180 },
-    { id: 'status', header: 'Status', type: 'status', value: (e) => e.status, filterOptions: statuses },
+    { id: 'status', header: 'Status', type: 'status', value: (e) => (e.status === 'lapsed' ? 'expired_not_renewed' : e.status), filterOptions: statuses.map((s) => (s === 'lapsed' ? 'expired_not_renewed' : s)) },
 ];
 </script>
 
@@ -70,7 +72,7 @@ const columns: DataColumn<Entry>[] = [
         <QueueView
             id="renewals"
             v-model:active="active"
-            title="Expiry register"
+            title="Renewals"
             :columns="columns"
             :rows="entries"
             :row-key="(e) => e.id"
@@ -88,7 +90,7 @@ const columns: DataColumn<Entry>[] = [
                 <label class="sr-only" for="renewals-status">Status</label>
                 <select id="renewals-status" class="ml-2 h-8 rounded-control border border-line-control bg-surface px-2 text-body text-ink" :value="filters.status ?? ''" @change="filter({ status: ($event.target as HTMLSelectElement).value || null })">
                     <option value="">Every status</option>
-                    <option v-for="s in statuses" :key="s" :value="s">{{ s.replace('_', ' ').replace(/^./, (c) => c.toUpperCase()) }}</option>
+                    <option v-for="s in statuses" :key="s" :value="s">{{ statusLabel(s) }}</option>
                 </select>
                 <label class="sr-only" for="renewals-branch">Branch</label>
                 <select id="renewals-branch" class="ml-2 h-8 rounded-control border border-line-control bg-surface px-2 text-body text-ink" :value="filters.branch ?? ''" @change="filter({ branch: ($event.target as HTMLSelectElement).value || null })">
@@ -117,7 +119,7 @@ const columns: DataColumn<Entry>[] = [
                         { label: 'Could not quote', value: row.quote_problem },
                     ]"
                 >
-                    <template #Status><StatusBadge :status="row.status" /></template>
+                    <template #Status><StatusBadge :status="row.status === 'lapsed' ? 'expired_not_renewed' : row.status" /></template>
                 </DetailList>
                 <p v-if="!row.rated && row.status === 'upcoming'" class="mt-3 text-ui text-ink-2">This product has no rating plan, so no renewal quotation is offered automatically. Renew it from the policy page.</p>
                 <p v-else-if="row.status === 'upcoming' && row.days_left > quoteDaysBefore" class="mt-3 text-ui text-ink-2">The renewal quotation is offered {{ quoteDaysBefore }} days before expiry.</p>

@@ -6,6 +6,7 @@ namespace App\Modules\Insurance\Commission\Http\Controllers;
 
 use App\Modules\Insurance\Commission\Application\CommissionPayoutService;
 use App\Modules\Insurance\Commission\Application\CommissionPlanService;
+use App\Modules\Insurance\Commission\Application\CommissionStatementRun;
 use App\Modules\Insurance\Commission\Domain\Models\CommissionStatement;
 use App\Modules\Insurance\Commission\Application\CommissionStatementQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
@@ -40,12 +41,25 @@ final class CommissionController
         return response()->json(['data' => $this->statements->statement($agent, CarbonImmutable::parse($data['from']), CarbonImmutable::parse($data['to']))]);
     }
 
-    public function approvePayout(Request $request, string $agent, CommissionPayoutService $payouts): JsonResponse
+    /**
+     * GA-10 (D-75): the monthly statement run is the only way to approve commission. Prepares the draft statements of a legal entity's month and returns them;
+     * each is approved with `approve`, then paid by someone else with `pay`.
+     */
+    public function prepare(Request $request, CommissionStatementRun $run): JsonResponse
     {
-        /** @var array{up_to: string, on: string} $data */
-        $data = $request->validate(['up_to' => ['required', 'date_format:Y-m-d'], 'on' => ['required', 'date_format:Y-m-d']]);
+        /** @var array{entity_id: string, period_end: string} $data */
+        $data = $request->validate(['entity_id' => ['required', 'uuid'], 'period_end' => ['required', 'date_format:Y-m-d']]);
+        $ids = $run->prepare($data['entity_id'], CarbonImmutable::parse($data['period_end'])->endOfMonth(), self::actor($request));
 
-        return response()->json(['data' => self::presentStatement($payouts->approve($agent, CarbonImmutable::parse($data['up_to']), self::actor($request), CarbonImmutable::parse($data['on'])))], 201);
+        return response()->json(['data' => CommissionStatement::query()->whereKey($ids)->orderBy('created_at')->get()->map(fn (CommissionStatement $s): array => self::presentStatement($s))->values()->all()], 201);
+    }
+
+    public function approve(Request $request, string $statement, CommissionStatementRun $run): JsonResponse
+    {
+        /** @var array{on: string} $data */
+        $data = $request->validate(['on' => ['required', 'date_format:Y-m-d']]);
+
+        return response()->json(['data' => self::presentStatement($run->approve($statement, self::actor($request), CarbonImmutable::parse($data['on'])))]);
     }
 
     public function pay(Request $request, string $statement, CommissionPayoutService $payouts): JsonResponse
@@ -61,7 +75,7 @@ final class CommissionController
     {
         return ['id' => $statement->id, 'number' => $statement->number, 'agent_id' => $statement->agent_id, 'up_to' => $statement->up_to->toDateString(),
             'gross_minor' => $statement->gross_minor, 'withholding_minor' => $statement->withholding_minor, 'net_minor' => $statement->net_minor,
-            'status' => $statement->status, 'paid_on' => $statement->paid_on?->toDateString()];
+            'status' => $statement->status, 'paid_via' => $statement->paid_via, 'paid_on' => $statement->paid_on?->toDateString()];
     }
 
     private static function actor(Request $request): string

@@ -101,7 +101,9 @@ function populateEveryTenantTable(array $ctx): void
             ->whereIn('j.source_id', DB::table('receipt_allocations')->where('receipt_id', $cheque->id)->pluck('id')->push($cheque->id))->pluck('l.id')->map(fn ($id): string => (string) $id)->all();
         app(BankMatcher::class)->match((string) DB::table('bank_statement_lines')->value('id'), $bankLines === [] ? [$bankLine] : array_values($bankLines), $world['admin']);
 
-        $statement = app(CommissionPayoutService::class)->approve($world['agent_id'], $d('2026-09-30'), $approver, $d('2026-10-01'));
+        // GA-10: statements come only from the monthly statement run.
+        $runIds = app(\App\Modules\Insurance\Commission\Application\CommissionStatementRun::class)->prepare($ctx['entity_id'], $d('2026-09-30'), $approver);
+        $statement = app(\App\Modules\Insurance\Commission\Application\CommissionStatementRun::class)->approve($runIds[0], $approver, $d('2026-10-01'));
         app(CommissionPayoutService::class)->pay($statement->id, null, $payer, $d('2026-10-02'));
 
         $claims = app(ClaimService::class);

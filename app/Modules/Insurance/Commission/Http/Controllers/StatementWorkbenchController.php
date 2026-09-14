@@ -33,7 +33,9 @@ final class StatementWorkbenchController
         $periodEnd = CarbonImmutable::parse((string) $request->query('period_end', app(BusinessClock::class)->today()->subMonthNoOverflow()->endOfMonth()->toDateString()))->endOfMonth();
         $money = fn (mixed $minor): string => PageSupport::money((int) $minor, $entity['currency']);
         $statements = DB::table('commission_statements as s')->join('producers as p', 'p.id', '=', 's.agent_id')->leftJoin('parties as pa', 'pa.id', '=', 'p.party_id')
-            ->where('s.entity_id', $entity['id'])->where('s.period_end', $periodEnd->toDateString())->orderBy('p.code')
+            // GA-10: a statement approved by the removed Phase 1 payout (no period) and not paid yet is paid here too, whichever month is open.
+            ->where('s.entity_id', $entity['id'])->where(fn ($q) => $q->where('s.period_end', $periodEnd->toDateString())->orWhere(fn ($legacy) => $legacy->whereNull('s.period_end')->where('s.status', 'approved')))
+            ->orderBy('p.code')
             ->get(['s.*', 'p.code', 'pa.display_name']);
 
         return Inertia::render('distribution/statements/Index', [

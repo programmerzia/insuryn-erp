@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Commission\Http\Controllers;
 
 use App\Http\Pages\PageSupport;
-use App\Modules\Insurance\Commission\Application\CommissionPayoutService;
-use App\Modules\Insurance\Commission\Application\CommissionPlanService;
 use App\Modules\Insurance\Commission\Application\CommissionStatementQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
-/** Commission screens: plans, payout statements (approve, then pay by someone else) and an agent's statement. */
+/**
+ * Commission history (GA-10, D-75): every commission statement ever approved or paid, whichever run made it, the Phase 1 commission plans (read-only; ASSUMPTION: A-192)
+ * and an agent's statement of entries. Approving and paying happen only in the monthly statement run (`/distribution/statements`).
+ */
 final class CommissionPageController
 {
     public const AREA = ['commission.manage_plans', 'commission.approve', 'commission.pay', 'reports.financial'];
@@ -34,45 +34,16 @@ final class CommissionPageController
             'plans' => DB::table('commission_plans')->orderBy('code')->get(['id', 'code', 'name', 'rate_bp', 'withholding_jurisdiction', 'withholding_tax_type', 'status'])
                 ->map(fn (object $p): array => ['id' => (string) $p->id, 'code' => (string) $p->code, 'name' => (string) $p->name, 'rate_percent' => self::percent((int) $p->rate_bp),
                     'withholding' => $p->withholding_tax_type === null ? null : "{$p->withholding_tax_type} ({$p->withholding_jurisdiction})", 'status' => (string) $p->status])->values()->all(),
-            'statements' => DB::table('commission_statements as s')->join('producers as a', 'a.id', '=', 's.agent_id')->where('s.entity_id', $entity['id'])->orderByDesc('s.approved_on')->limit(100)
-                ->get(['s.id', 's.number', 'a.code', 's.agent_id', 's.up_to', 's.gross_minor', 's.withholding_minor', 's.net_minor', 's.currency', 's.status', 's.paid_on'])
-                ->map(fn (object $s): array => ['id' => (string) $s->id, 'number' => (string) $s->number, 'agent_code' => (string) $s->code, 'agent_id' => (string) $s->agent_id, 'up_to' => (string) $s->up_to,
-                    'gross' => PageSupport::money((int) $s->gross_minor, (string) $s->currency), 'withholding' => PageSupport::money((int) $s->withholding_minor, (string) $s->currency),
-                    'net' => PageSupport::money((int) $s->net_minor, (string) $s->currency), 'status' => (string) $s->status, 'paid_on' => $s->paid_on])->values()->all(),
-            'agents' => DB::table('producers')->where('status', 'active')->orderBy('code')->get(['id', 'code'])->map(fn (object $a): array => (array) $a)->values()->all(),
-            'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
-            'can' => ['plans' => $this->permissions->has($actor, 'commission.manage_plans'), 'approve' => $this->permissions->has($actor, 'commission.approve'), 'pay' => $this->permissions->has($actor, 'commission.pay')],
+            'statements' => DB::table('commission_statements as s')->join('producers as a', 'a.id', '=', 's.agent_id')->leftJoin('parties as pa', 'pa.id', '=', 'a.party_id')
+                ->where('s.entity_id', $entity['id'])->where('s.status', '!=', 'draft')->orderByDesc('s.approved_on')->orderByDesc('s.number')->limit(500)
+                ->get(['s.id', 's.number', 'a.code', 'pa.display_name', 's.agent_id', 's.up_to', 's.period_end', 's.gross_minor', 's.withholding_minor', 's.advances_recovered_minor', 's.net_minor', 's.currency', 's.status', 's.paid_via', 's.approved_on', 's.paid_on'])
+                ->map(fn (object $s): array => ['id' => (string) $s->id, 'number' => (string) $s->number, 'agent_code' => (string) $s->code, 'agent_name' => (string) $s->display_name, 'agent_id' => (string) $s->agent_id,
+                    'up_to' => (string) $s->up_to, 'period_end' => $s->period_end, 'gross' => PageSupport::money((int) $s->gross_minor, (string) $s->currency),
+                    'withholding' => PageSupport::money((int) $s->withholding_minor, (string) $s->currency), 'advances' => PageSupport::money((int) $s->advances_recovered_minor, (string) $s->currency),
+                    'net' => PageSupport::money((int) $s->net_minor, (string) $s->currency), 'status' => (string) $s->status, 'paid_via' => (string) $s->paid_via,
+                    'approved_on' => $s->approved_on, 'paid_on' => $s->paid_on])->values()->all(),
+            'can' => ['run' => $this->permissions->has($actor, 'commission.approve') || $this->permissions->has($actor, 'commission.pay')],
         ]);
-    }
-
-    public function storePlan(Request $request, CommissionPlanService $plans): RedirectResponse
-    {
-        /** @var array{code: string, name: string, rate_percent: string, withholding_jurisdiction?: string|null, withholding_tax_type?: string|null} $data */
-        $data = $request->validate(['code' => ['required', 'string', 'max:64'], 'name' => ['required', 'string', 'max:255'], 'rate_percent' => ['required', 'regex:/^\d{1,3}(\.\d{1,2})?$/'],
-            'withholding_jurisdiction' => ['nullable', 'string', 'max:16'], 'withholding_tax_type' => ['nullable', 'string', 'max:64']]);
-        [$whole, $fraction] = array_pad(explode('.', $data['rate_percent'], 2), 2, '');
-        $plan = $plans->create($data['code'], $data['name'], (int) $whole * 100 + (int) str_pad($fraction, 2, '0'), ($data['withholding_jurisdiction'] ?? '') === '' ? null : $data['withholding_jurisdiction'],
-            ($data['withholding_tax_type'] ?? '') === '' ? null : $data['withholding_tax_type'], PageSupport::actor($request));
-
-        return redirect('/commission')->with('status', "Plan {$plan->code} created.");
-    }
-
-    public function approve(Request $request, CommissionPayoutService $payouts): RedirectResponse
-    {
-        /** @var array{agent_id: string, up_to: string, on: string} $data */
-        $data = $request->validate(['agent_id' => ['required', 'uuid'], 'up_to' => ['required', 'date_format:Y-m-d'], 'on' => ['required', 'date_format:Y-m-d']]);
-        $statement = $payouts->approve($data['agent_id'], CarbonImmutable::parse($data['up_to']), PageSupport::actor($request), CarbonImmutable::parse($data['on']));
-
-        return redirect('/commission')->with('status', "Statement {$statement->number} approved; someone else must pay it.");
-    }
-
-    public function pay(Request $request, string $statement, CommissionPayoutService $payouts): RedirectResponse
-    {
-        /** @var array{paid_on: string, bank_account_id?: string|null} $data */
-        $data = $request->validate(['paid_on' => ['required', 'date_format:Y-m-d'], 'bank_account_id' => ['nullable', 'uuid']]);
-        $paid = $payouts->pay($statement, ($data['bank_account_id'] ?? '') === '' ? null : $data['bank_account_id'], PageSupport::actor($request), CarbonImmutable::parse($data['paid_on']));
-
-        return redirect('/commission')->with('status', "Statement {$paid->number} paid.");
     }
 
     public function statement(Request $request, string $agent, CommissionStatementQuery $statements): Response

@@ -27,7 +27,8 @@ it('gives the demo products of the local demo and the Part A story their class, 
         $tenantId = (string) DB::table('tenants')->where('slug', $slug)->value('id');
         asTenant($tenantId, function () use ($slug): void {
             $classes = DB::table('product_versions as v')->join('products as p', 'p.id', '=', 'v.product_id')->orderBy('p.code')->pluck('v.class_code', 'p.code')->all();
-            expect($classes)->toBe(['FIRE' => 'fire', 'MARINE' => 'marine_cargo', 'MOTOR' => 'motor'], $slug);
+            // GA-35: the Part A story also sells a one-month fire short-period cover, so it has a policy to renew.
+            expect($classes)->toBe($slug === 'nonlife' ? ['FIRE' => 'fire', 'FIRE-SP' => 'fire', 'MARINE' => 'marine_cargo', 'MOTOR' => 'motor'] : ['FIRE' => 'fire', 'MARINE' => 'marine_cargo', 'MOTOR' => 'motor'], $slug);
             foreach (ProductVersion::query()->get() as $version) {
                 expect($version->riskSchema()->field('sum_insured')?->required)->toBeTrue()
                     ->and($version->coverageDefinitions()->where('mandatory', true)->count())->toBeGreaterThan(0);

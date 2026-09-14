@@ -70,4 +70,4 @@ Illuminate\Support\Facades\Artisan::command('erp:demo {--tenant=nonlife : slug o
     $this->line('September bank statement: '.storage_path(Database\Seeders\PartADemoSeeder::STATEMENT_FILE));
 
     return 0;
-})->purpose('Seed the Part A demo story (3 products, 8 policies, suspense, bank exceptions, 2 claims, August closed)');
+})->purpose('Seed the Part A demo story (2 branches, 4 products, 8 policies, a cover note, a renewal quote, suspense, bank exceptions, 2 claims, August closed)');

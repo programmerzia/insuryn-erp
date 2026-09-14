@@ -185,8 +185,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('parties', [PartyPageController::class, 'store']);
     Route::get('parties/{party}', [PartyPageController::class, 'show'])->whereUuid('party');
     Route::post('parties/{party}/bank-accounts', [PartyPageController::class, 'storeBankAccount'])->whereUuid('party');
-    Route::get('agents', [PartyPageController::class, 'agents']);
-    Route::post('agents', [PartyPageController::class, 'storeAgent']);
+    // GA-10: one producer register; the Phase 1 agents list opens the producers queue filtered to agents.
+    Route::redirect('agents', '/distribution/producers?f.type=agent');
     Route::get('products', [ProductPageController::class, 'index']);
     Route::post('products', [ProductPageController::class, 'store']);
     Route::post('products/{product}/versions', [ProductPageController::class, 'storeVersion'])->whereUuid('product');
@@ -282,10 +282,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('claim-payments/{payment}/request-release', [ClaimPageController::class, 'requestRelease'])->whereUuid('payment');
     Route::post('claim-payments/{payment}/release', [ClaimPageController::class, 'release'])->whereUuid('payment')->middleware('moves-money');
 
+    // GA-10 (D-75): commission history only; statements are approved and paid in the monthly statement run (/distribution/statements).
     Route::get('commission', [CommissionPageController::class, 'index']);
-    Route::post('commission/plans', [CommissionPageController::class, 'storePlan']);
-    Route::post('commission/statements', [CommissionPageController::class, 'approve']);
-    Route::post('commission/statements/{statement}/pay', [CommissionPageController::class, 'pay'])->whereUuid('statement')->middleware('moves-money');
     Route::get('commission/agents/{agent}', [CommissionPageController::class, 'statement'])->whereUuid('agent');
 
     Route::get('approvals', [ApprovalsPageController::class, 'index']);

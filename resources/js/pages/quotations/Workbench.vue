@@ -157,7 +157,7 @@ async function makeProposal(): Promise<void> {
         router.post(`/quotations/${q.id}/proposal`, {}, { preserveScroll: true });
     }
 }
-const title = computed(() => q?.number ?? (q ? 'Draft quotation' : 'New quote'));
+const title = computed(() => q?.number ?? (q ? 'Draft quote' : 'New quote'));
 const validUntil = computed(() => q?.valid_until ?? null);
 </script>
 

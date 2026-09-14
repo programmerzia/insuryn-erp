@@ -12,6 +12,7 @@ describe('status dot and word', () => {
 
     it('writes statuses in sentence case', () => {
         expect(statusWord('pending_approval')).toBe('Pending approval');
+        expect(statusWord('expired_not_renewed')).toBe('Expired, not renewed'); // GA-37: a renewal that ended without renewing is not a lapse
         expect(statusWord('release_requested')).toBe('Release requested');
     });
 });

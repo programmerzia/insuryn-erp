@@ -68,7 +68,15 @@ final class PolicyPageController
             'filters' => ['status' => $status, 'search' => $search],
             'statuses' => array_column(PolicyStatus::cases(), 'value'),
             'policies' => PageSupport::page($page, self::rows($page->items())),
+            // GA-11: "New quote" opens the rated quote workbench; the typed-premium form is offered only while a product has no rating plan.
+            'unratedProducts' => self::unratedProducts()->count(),
         ]);
+    }
+
+    /** Products none of whose versions has a product class, so they are priced by a typed premium (A-115). */
+    private static function unratedProducts(): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'));
     }
 
     public function create(Request $request): Response
@@ -81,8 +89,7 @@ final class PolicyPageController
             'lastProductId' => $this->defaults->remembered(PageSupport::actor($request), FormDefaults::LAST_PRODUCT),
             'branches' => $reach->constrain(DB::table('branches'), 'entity_id', 'id')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             // Slice R7: typing a premium stays only for products without a rating plan.
-            'products' => DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))
-                ->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
+            'products' => self::unratedProducts()->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'ratedProducts' => DB::table('products')->whereExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))->count(),
             'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'agents' => DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')->orderBy('a.code')

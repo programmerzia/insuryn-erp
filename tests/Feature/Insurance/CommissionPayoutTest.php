@@ -9,6 +9,8 @@ use App\Modules\Insurance\Collections\Application\ReceiptService;
 use App\Modules\Insurance\Collections\Application\RecordReceiptRequest;
 use App\Modules\Insurance\Commission\Application\CommissionPayoutService;
 use App\Modules\Insurance\Commission\Application\CommissionPlanService;
+use App\Modules\Insurance\Commission\Application\CommissionStatementRun;
+use App\Modules\Insurance\Commission\Domain\Models\CommissionStatement;
 use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Policy\Application\QuoteRequest;
 use App\Modules\Platform\Authorization\PermissionDenied;
@@ -20,8 +22,10 @@ use Illuminate\Support\Str;
 
 /**
  * Design §5.6 commission entry accrued ─▶ approved ─▶ paid; spec §4 "clawback netting", "payout via payroll or AP"; CONTEXT.md non-negotiable #9
- * maker ≠ checker on commission payouts (§7.3 commission.approve ✕ commission.pay). A payout statement nets an agent's accrued entries up to a
- * date (clawbacks included) and is paid by someone else, posting COMMISSION_PAID.
+ * maker ≠ checker on commission payouts (§7.3 commission.approve ✕ commission.pay). A payout statement nets an agent's accrued entries of the month
+ * (clawbacks included) and is paid by someone else, posting COMMISSION_PAID. GA-10 (D-75): the monthly statement run is the only way to prepare and
+ * approve a statement; these cases were ported from the removed Phase 1 "approve up to a date" payout and keep its money checks. A statement of commission
+ * earned only under a Phase 1 plan is paid from the bank (A-191).
  */
 beforeEach(function (): void {
     $this->ctx = seedDemoTenant();
@@ -48,47 +52,68 @@ beforeEach(function (): void {
     };
     $this->payableGl = fn (): int => (int) DB::table('journal_lines')->where('account_id', $this->ctx['accounts']['commission_payable'])->where('dim_agent', $this->world['agent_id'])
         ->selectRaw("coalesce(sum(case when side = 'credit' then amount_minor else -amount_minor end), 0) as b")->value('b');
+    // The statement run for September, then the approval of the agent's draft (null when the run prepared nothing for the agent).
+    $this->prepare = fn (string $by): array => app(CommissionStatementRun::class)->prepare($this->ctx['entity_id'], CarbonImmutable::parse('2026-09-30'), $by);
+    $this->approve = function (string $by, string $on): ?CommissionStatement {
+        ($this->prepare)($by);
+        $draft = CommissionStatement::query()->where('agent_id', $this->world['agent_id'])->where('status', 'draft')->value('id');
+
+        return $draft === null ? null : app(CommissionStatementRun::class)->approve((string) $draft, $by, CarbonImmutable::parse($on));
+    };
 });
 
-it('approves a netted statement up to a date and pays it by another user, posting COMMISSION_PAID', function (): void {
+it('approves a netted statement through the monthly statement run and pays it by another user, posting COMMISSION_PAID', function (): void {
     asTenant($this->ctx['tenant_id'], function (): void {
-        ($this->receive)(0, 4_000_000, '2026-09-10');                          // 347,826 commission (gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash), 17,391 withheld
-        ($this->receive)(1, 4_000_000, '2026-10-10');                          // after the statement date: not included
+        ($this->receive)(0, 4_000_000, '2026-09-10');                          // 347,826 commission (gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated, VAT excluded), 17,391 withheld
+        ($this->receive)(1, 4_000_000, '2026-10-10');                          // after the month: not included
         $payouts = app(CommissionPayoutService::class);
 
-        $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-02'));
-        expect([$statement->gross_minor, $statement->withholding_minor, $statement->net_minor, $statement->status])->toBe([347_826, 17_391, 330_435, 'approved'])
-            ->and($statement->number)->toStartWith('CST-2026-')
-            ->and(DB::table('commission_entries')->where('statement_id', $statement->id)->pluck('status')->all())->toBe(['approved'])
+        $statement = ($this->approve)($this->approver, '2026-10-02');
+        expect([$statement?->gross_minor, $statement?->withholding_minor, $statement?->net_minor, $statement?->status, $statement?->paid_via])->toBe([347_826, 17_391, 330_435, 'approved', 'bank'])
+            ->and($statement?->number)->toStartWith('CST-2026-')
+            ->and(DB::table('commission_entries')->where('statement_id', $statement?->id)->pluck('status')->all())->toBe(['approved'])
             ->and(DB::table('commission_entries')->whereNull('statement_id')->pluck('status')->all())->toBe(['accrued']);
 
-        $payouts->pay($statement->id, null, $this->payer, CarbonImmutable::parse('2026-10-05'));
+        $payouts->pay((string) $statement?->id, null, $this->payer, CarbonImmutable::parse('2026-10-05'));
 
         $event = DB::table('accounting_events')->where('event_type', 'COMMISSION_PAID')->first();
         $lines = DB::table('journal_lines')->where('journal_id', DB::table('journals')->where('description', 'COMMISSION_PAID')->value('id'))->orderBy('line_no')
             ->get(['role_code', 'side', 'amount_minor'])->map(fn (object $l): array => [(string) $l->role_code, (string) $l->side, (int) $l->amount_minor])->all();
-        expect(DB::table('commission_statements')->where('id', $statement->id)->value('status'))->toBe('paid')
-            ->and(DB::table('commission_entries')->where('statement_id', $statement->id)->get(['status', 'paid_on'])->map(fn (object $e): array => [(string) $e->status, (string) $e->paid_on])->all())->toBe([['paid', '2026-10-05']])
-            ->and([$event?->idempotency_key, $event?->transaction_date, $event?->status])->toBe(['COMMISSION_PAID:'.$statement->id, '2026-10-05', 'posted'])
+        expect(DB::table('commission_statements')->where('id', $statement?->id)->value('status'))->toBe('paid')
+            ->and(DB::table('commission_entries')->where('statement_id', $statement?->id)->get(['status', 'paid_on'])->map(fn (object $e): array => [(string) $e->status, (string) $e->paid_on])->all())->toBe([['paid', '2026-10-05']])
+            ->and([$event?->idempotency_key, $event?->transaction_date, $event?->status])->toBe(['COMMISSION_PAID:'.$statement?->id, '2026-10-05', 'posted'])
             ->and($lines)->toBe([['commission_payable', 'debit', 330_435], ['bank_main', 'credit', 330_435]])
             ->and(($this->payableGl)())->toBe(330_435); // only the October entry remains payable
     });
 });
 
-it('nets clawbacks into the statement and refuses when nothing is payable', function (): void {
+it('pays plan commission through the configured route instead of the bank (A-191)', function (): void {
+    config(['erp.distribution.plan_payout_route' => 'ap']);
     asTenant($this->ctx['tenant_id'], function (): void {
-        $payouts = app(CommissionPayoutService::class);
-        expect(thrownBy(fn () => $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-09-30')), BusinessRuleViolation::class)->reasonCode)->toBe('NOTHING_TO_PAY');
+        ($this->receive)(0, 4_000_000, '2026-09-10');
+        $statement = ($this->approve)($this->approver, '2026-10-02');
+        app(CommissionPayoutService::class)->pay((string) $statement?->id, null, $this->payer, CarbonImmutable::parse('2026-10-05'));
+
+        expect($statement?->paid_via)->toBe('ap')
+            ->and(DB::table('accounting_events')->where('event_type', 'like', 'COMMISSION_PA%')->pluck('event_type')->all())->toBe(['COMMISSION_PAYOUT_TO_AP']);
+    });
+});
+
+it('nets clawbacks into the statement and prepares nothing when nothing is payable', function (): void {
+    asTenant($this->ctx['tenant_id'], function (): void {
+        expect(($this->prepare)($this->approver))->toBe([])
+            ->and(DB::table('commission_statements')->count())->toBe(0);
 
         ($this->receive)(0, 4_000_000, '2026-09-10');
         app(PolicyLifecycle::class)->cancel($this->policyId, CarbonImmutable::parse('2026-09-20'), 'sold', $this->world['admin']);
         $clawback = DB::table('commission_entries')->where('kind', 'clawback')->first();
-        $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-01'));
+        $statement = ($this->approve)($this->approver, '2026-10-01');
 
-        expect($statement->gross_minor)->toBe(347_826 + (int) $clawback?->amount_minor) // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
-            ->and($statement->net_minor)->toBe(330_435 + (int) $clawback?->amount_minor - (int) $clawback?->withholding_minor)
-            ->and(DB::table('commission_entries')->where('statement_id', $statement->id)->count())->toBe(2)
-            ->and(thrownBy(fn () => $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-01')), BusinessRuleViolation::class)->reasonCode)->toBe('NOTHING_TO_PAY');
+        expect($statement?->gross_minor)->toBe(347_826 + (int) $clawback?->amount_minor)
+            ->and($statement?->net_minor)->toBe(330_435 + (int) $clawback?->amount_minor - (int) $clawback?->withholding_minor)
+            ->and(DB::table('commission_entries')->where('statement_id', $statement?->id)->count())->toBe(2)
+            ->and(($this->prepare)($this->approver))->toBe([])
+            ->and(thrownBy(fn () => app(CommissionStatementRun::class)->approve((string) $statement?->id, $this->approver, CarbonImmutable::parse('2026-10-01')), BusinessRuleViolation::class)->reasonCode)->toBe('STATEMENT_NOT_DRAFT');
     });
 });
 
@@ -99,8 +124,11 @@ it('never lets the approver pay, and pays a statement once', function (): void {
         ($this->receive)(0, 4_000_000, '2026-09-10');
         $payouts = app(CommissionPayoutService::class);
 
-        expect(fn () => $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->payer, CarbonImmutable::parse('2026-10-01')))->toThrow(PermissionDenied::class);
-        $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $both, CarbonImmutable::parse('2026-10-01'));
+        expect(fn () => ($this->prepare)($this->payer))->toThrow(PermissionDenied::class);
+        ($this->prepare)($both);
+        $draft = (string) DB::table('commission_statements')->value('id');
+        expect(fn () => app(CommissionStatementRun::class)->approve($draft, $this->payer, CarbonImmutable::parse('2026-10-01')))->toThrow(PermissionDenied::class);
+        $statement = app(CommissionStatementRun::class)->approve($draft, $both, CarbonImmutable::parse('2026-10-01'));
 
         expect(fn () => $payouts->pay($statement->id, null, $both, CarbonImmutable::parse('2026-10-05')))->toThrow(SodViolation::class)
             ->and(DB::table('accounting_events')->where('event_type', 'COMMISSION_PAID')->count())->toBe(0);
@@ -118,9 +146,8 @@ it('pays from a named bank account and keeps the commission subledger reconciled
             'type' => 'asset', 'normal_side' => 'debit', 'is_postable' => true, 'is_control' => false, 'status' => 'active']);
         $bankAccount = app(BankAccountService::class)->create($this->ctx['entity_id'], $gl, 'Payout Bank', '****9', 'BDT', $this->world['admin']);
         ($this->receive)(0, 4_000_000, '2026-09-10');
-        $payouts = app(CommissionPayoutService::class);
-        $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-01'));
-        $payouts->pay($statement->id, $bankAccount->id, $this->payer, CarbonImmutable::parse('2026-10-05'));
+        $statement = ($this->approve)($this->approver, '2026-10-01');
+        app(CommissionPayoutService::class)->pay((string) $statement?->id, $bankAccount->id, $this->payer, CarbonImmutable::parse('2026-10-05'));
 
         $service = app(ReconciliationService::class);
         foreach (['2026-09-30', '2026-10-31'] as $monthEnd) {
@@ -134,15 +161,19 @@ it('pays from a named bank account and keeps the commission subledger reconciled
     });
 });
 
-it('exposes approval and payment over the API with the commission permissions', function (): void {
+it('exposes the statement run and payment over the API with the commission permissions', function (): void {
     $headers = ['X-Tenant' => $this->ctx['tenant_id'], 'Accept' => 'application/json'];
     $approver = asTenant($this->ctx['tenant_id'], fn () => App\Models\User::query()->findOrFail((string) $this->approver));
     $payer = asTenant($this->ctx['tenant_id'], fn () => App\Models\User::query()->findOrFail((string) $this->payer));
     asTenant($this->ctx['tenant_id'], fn () => ($this->receive)(0, 4_000_000, '2026-09-10'));
+    $run = ['entity_id' => $this->ctx['entity_id'], 'period_end' => '2026-09-30'];
 
-    Pest\Laravel\actingAs($payer)->postJson("/api/insurance/agents/{$this->world['agent_id']}/commission-statements", ['up_to' => '2026-09-30', 'on' => '2026-10-01'], $headers)->assertForbidden();
-    $statementId = Pest\Laravel\actingAs($approver)->postJson("/api/insurance/agents/{$this->world['agent_id']}/commission-statements", ['up_to' => '2026-09-30', 'on' => '2026-10-01'], $headers)
-        ->assertCreated()->assertJsonPath('data.net_minor', 330_435)->json('data.id');
+    Pest\Laravel\actingAs($payer)->postJson('/api/insurance/commission-statements/prepare', $run, $headers)->assertForbidden();
+    Pest\Laravel\actingAs($approver)->postJson("/api/insurance/agents/{$this->world['agent_id']}/commission-statements", ['up_to' => '2026-09-30', 'on' => '2026-10-01'], $headers)->assertNotFound(); // the Phase 1 payout route is gone
+    $statementId = Pest\Laravel\actingAs($approver)->postJson('/api/insurance/commission-statements/prepare', $run, $headers)
+        ->assertCreated()->assertJsonCount(1, 'data')->assertJsonPath('data.0.net_minor', 330_435)->assertJsonPath('data.0.status', 'draft')->json('data.0.id');
+    Pest\Laravel\actingAs($payer)->postJson("/api/insurance/commission-statements/{$statementId}/approve", ['on' => '2026-10-01'], $headers)->assertForbidden();
+    Pest\Laravel\actingAs($approver)->postJson("/api/insurance/commission-statements/{$statementId}/approve", ['on' => '2026-10-01'], $headers)->assertOk()->assertJsonPath('data.status', 'approved');
     Pest\Laravel\actingAs($approver)->postJson("/api/insurance/commission-statements/{$statementId}/pay", ['paid_on' => '2026-10-05'], $headers)->assertForbidden();
     Pest\Laravel\actingAs($payer)->postJson("/api/insurance/commission-statements/{$statementId}/pay", ['paid_on' => '2026-10-05'], $headers)->assertOk()->assertJsonPath('data.status', 'paid');
 });
@@ -171,11 +202,11 @@ it('lets the shipped roles pay commission: the finance manager approves and the 
         ($this->receive)(0, 4_000_000, '2026-09-10');
         $payouts = app(CommissionPayoutService::class);
 
-        $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $finance, CarbonImmutable::parse('2026-10-02'));
-        expect(thrownBy(fn () => $payouts->pay($statement->id, null, $finance, CarbonImmutable::parse('2026-10-05')), PermissionDenied::class))->toBeInstanceOf(PermissionDenied::class);
-        $payouts->pay($statement->id, null, $accountant, CarbonImmutable::parse('2026-10-05'));
+        $statement = ($this->approve)($finance, '2026-10-02');
+        expect(thrownBy(fn () => $payouts->pay((string) $statement?->id, null, $finance, CarbonImmutable::parse('2026-10-05')), PermissionDenied::class))->toBeInstanceOf(PermissionDenied::class);
+        $payouts->pay((string) $statement?->id, null, $accountant, CarbonImmutable::parse('2026-10-05'));
 
-        expect(DB::table('commission_statements')->where('id', $statement->id)->value('status'))->toBe('paid')
+        expect(DB::table('commission_statements')->where('id', $statement?->id)->value('status'))->toBe('paid')
             ->and(DB::table('audit_events')->where('action', 'sod.warning')->count())->toBe(0);
     });
 });

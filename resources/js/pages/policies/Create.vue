@@ -89,8 +89,8 @@ function saveDraft(): void {
 </script>
 
 <template>
-    <AppLayout help="policies" title="New quote">
-        <h1 class="mb-4 text-title font-semibold">New quote</h1>
+    <AppLayout help="policies" title="New policy (unrated product)">
+        <h1 class="mb-4 text-title font-semibold">New policy (unrated product)</h1>
         <Stepper data-tour="policy-form" :steps="steps" :current="step" @go="step = $event">
             <FormLayout :submit-label="step < steps.length - 1 ? 'Continue' : 'Create quote'" cancel-href="/policies" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" drafts @submit="next" @save-draft="saveDraft">
                 <template v-if="step === 0">
@@ -101,7 +101,7 @@ function saveDraft(): void {
                     <p v-if="ratedProducts > 0" class="-mt-2 text-dense text-ink-2">
                         {{ ratedProducts === 1 ? 'One product is' : `${ratedProducts} products are` }} priced by a tariff and not listed here. <Link href="/quotations/create" class="text-accent-text hover:underline">Quote it in Quotes</Link>.
                     </p>
-                    <Field id="agent_id" label="Agent" optional :error="form.errors.agent_id" hint="Leave empty for direct business."><LookupInput v-model="form.agent_id" type="agent" :initial="agent" @selected="agent = $event" /></Field>
+                    <Field id="agent_id" label="Producer" optional :error="form.errors.agent_id" hint="Leave empty for direct business."><LookupInput v-model="form.agent_id" type="agent" :initial="agent" @selected="agent = $event" /></Field>
                     <Field id="branch_id" label="Branch" :error="form.errors.branch_id"><SelectInput id="branch_id" v-model="form.branch_id" :options="branches.map((b) => ({ value: b.id, label: b.name }))" /></Field>
                 </template>
                 <template v-else-if="step === 1">
@@ -129,7 +129,7 @@ function saveDraft(): void {
                 <dl class="grid gap-2 text-ui">
                     <div><dt class="text-dense text-ink-2">Policyholder</dt><dd>{{ holder?.label ?? 'Not chosen yet' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Product</dt><dd>{{ product ? `${product.code} · ${product.name}` : '—' }}</dd></div>
-                    <div><dt class="text-dense text-ink-2">Agent</dt><dd>{{ agent?.label ?? 'Direct business' }}</dd></div>
+                    <div><dt class="text-dense text-ink-2">Producer</dt><dd>{{ agent?.label ?? 'Direct business' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Cover starts</dt><dd>{{ formatDate(form.inception) || '—' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Gross premium ({{ entity.currency }})</dt><dd class="tabular-nums">{{ formatMoney(form.premium) || '—' }}</dd></div>
                     <div><dt class="text-dense text-ink-2">Installments</dt><dd class="tabular-nums">{{ form.installment_count }}<template v-if="perInstallment && form.installment_count > 1"> × about {{ perInstallment }}</template></dd></div>

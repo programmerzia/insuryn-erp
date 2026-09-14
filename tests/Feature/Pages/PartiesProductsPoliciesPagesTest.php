@@ -28,10 +28,13 @@ it('opens each area only to users holding one of its permissions', function (): 
     $branchOfficer = ($this->userWith)(['policy.create']);
 
     get('/policies', $this->headers)->assertRedirect('/login');
-    foreach (['/parties', '/agents', '/products', '/policies', '/policies/create'] as $page) {
+    foreach (['/parties', '/products', '/policies', '/policies/create'] as $page) {
         actingAs($claimsOfficer)->get($page, $this->headers)->assertForbidden();
         actingAs($branchOfficer)->get($page, $this->headers)->assertOk();
     }
+    // GA-10: one producer register; the Phase 1 agents list opens the producers queue filtered to agents, which keeps its own area permissions.
+    actingAs($branchOfficer)->get('/agents', $this->headers)->assertRedirect('/distribution/producers?f.type=agent');
+    actingAs($branchOfficer)->get('/distribution/producers', $this->headers)->assertForbidden();
     actingAs($branchOfficer)->get('/', $this->headers)->assertRedirect();
 });
 
@@ -47,8 +50,12 @@ it('lists, searches and creates parties, their bank accounts and agents', functi
     actingAs($this->admin)->get("/parties/{$partyId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('parties/Show')
         ->where('party.display_name', 'Acme Garments Ltd')->where('party.roles', ['customer', 'policyholder'])->has('bankAccounts', 1)->where('bankAccounts.0.account_no_masked', '******7890'));
 
-    actingAs($this->admin)->post('/agents', ['party_id' => $partyId, 'code' => 'AG-002', 'branch_id' => $this->ctx['branch_id']], $this->headers)->assertRedirect('/agents');
-    actingAs($this->admin)->get('/agents', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('agents/Index')->has('agents', 2));
+    // GA-10: agents are created in the producers register (the Phase 1 agents form is gone).
+    actingAs($this->admin)->post('/agents', ['party_id' => $partyId, 'code' => 'AG-002', 'branch_id' => $this->ctx['branch_id']], $this->headers)->assertRedirect('/distribution/producers?f.type=agent');
+    expect(asTenant($this->ctx['tenant_id'], fn () => DB::table('producers')->where('code', 'AG-002')->exists()))->toBeFalse();
+    actingAs($this->admin)->post('/distribution/producers', ['party_id' => $partyId, 'code' => 'AG-002', 'type' => 'agent', 'branch_id' => $this->ctx['branch_id']], $this->headers)->assertSessionHasNoErrors()->assertRedirect();
+    actingAs($this->admin)->get('/distribution/producers', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('distribution/producers/Index')
+        ->where('producers', fn (\Illuminate\Support\Collection $rows): bool => $rows->where('type', 'agent')->pluck('code')->sort()->values()->all() === ['AG-001', 'AG-002']));
 });
 
 it('lists products with their versions and creates a product and a version', function (): void {

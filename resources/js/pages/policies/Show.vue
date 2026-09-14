@@ -69,7 +69,7 @@ const facts = computed(() => [
 const outstanding = computed(() => props.installments.reduce((sum, i) => sum + Number(i.outstanding !== '0.00'), 0));
 
 async function renew(): Promise<void> {
-    if (await confirmAction({ title: `Renew ${title.value}?`, body: 'A renewal quote is created for the next term with the same product, customer, agent and payers.', confirmLabel: 'Create renewal quote' })) {
+    if (await confirmAction({ title: `Renew ${title.value}?`, body: 'A renewal quote is created for the next term with the same product, policyholder, producer and payers.', confirmLabel: 'Create renewal quote' })) {
         router.post(`${base}/renew`, {}, { preserveScroll: true });
     }
 }
@@ -79,7 +79,7 @@ async function renew(): Promise<void> {
     <AppLayout help="policies" :title="title">
         <ObjectPage
             :title="title"
-            :subtitle="`${policy.policyholder} · ${policy.product_code}${policy.agent_code ? ` · agent ${policy.agent_code}` : ' · direct'} · version ${policy.version}${policy.cancel_date ? ` · cancelled from ${formatDate(policy.cancel_date)}` : ''}`"
+            :subtitle="`${policy.policyholder} · ${policy.product_code}${policy.agent_code ? ` · producer ${policy.agent_code}` : ' · direct'} · version ${policy.version}${policy.cancel_date ? ` · cancelled from ${formatDate(policy.cancel_date)}` : ''}`"
             :status="policy.status"
             :facts="facts"
             :crumbs="[{ label: 'Policies', href: '/policies' }]"

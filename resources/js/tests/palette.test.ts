@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildCommands, rankCommands, rememberRecent } from '@/lib/commands';
 import { fuzzyScore } from '@/lib/fuzzy';
+import { navigation } from '@/lib/navigation';
 
 vi.mock('@inertiajs/vue3', () => ({ usePage: () => ({ props: {} }), router: { on: () => () => undefined, visit: () => undefined } }));
 
@@ -25,6 +26,29 @@ describe('commands', () => {
         expect(labels).not.toContain('Record a receipt');
         expect(labels).not.toContain('Go to journals');
         expect(commands.find((c) => c.label === 'Collapse or expand the sidebar')?.shortcut).toBe('app.sidebar');
+    });
+
+    it('opens the rated quote workbench for New quote, never the typed-premium form (GA-11)', () => {
+        const officer = buildCommands(['quotation.create', 'policy.create']);
+        expect(officer.find((c) => c.id === 'new-quote')?.href).toBe('/quotations/create');
+        expect(officer.some((c) => c.href === '/policies/create')).toBe(false);
+        expect(buildCommands(['policy.create']).some((c) => c.id === 'new-quote')).toBe(false);
+    });
+
+    it('approves and pays commission only in the commission statements run, with one producer register (GA-10)', () => {
+        const finance = buildCommands(['commission.approve', 'commission.pay', 'agent.manage', 'party.manage', 'policy.create', 'reports.financial']);
+        expect(finance.find((c) => c.id === 'pay-commission')?.href).toBe('/distribution/statements');
+        expect(finance.filter((c) => c.href === '/distribution/statements').map((c) => c.label)).toContain('Go to commission statements');
+        expect(finance.some((c) => c.href === '/commission' || c.href === '/agents')).toBe(false);
+        expect(finance.filter((c) => c.href === '/distribution/producers')).toHaveLength(1);
+    });
+
+    it('names sidebar items in the glossary\'s words, each with an icon of its own (GA-37)', () => {
+        const labels = navigation.map((item) => item.label);
+        expect(labels).toEqual(expect.arrayContaining(['Bank accounts', 'Month-end close', 'Compensation schemes', 'Cheque register', 'Payment reminders', 'Commission statements', 'Document templates']));
+        expect(labels).not.toEqual(expect.arrayContaining(['Agents']));
+        expect(new Set(navigation.map((item) => item.icon)).size).toBe(navigation.length);
+        expect(new Set(labels).size).toBe(labels.length);
     });
 
     it('ranks recent commands first when nothing is typed, then by match', () => {

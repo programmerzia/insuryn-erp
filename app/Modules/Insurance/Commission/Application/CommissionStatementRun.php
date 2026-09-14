@@ -67,11 +67,14 @@ final class CommissionStatementRun
                     continue;
                 }
                 $producer = $this->producers->get((string) $row->agent_id);
+                $unstated = DB::table('commission_entries')->where('entity_id', $entityId)->where('agent_id', $producer->id)->where('status', 'accrued')->whereNull('statement_id')
+                    ->where('earned_on', '<=', $day)->where('currency', (string) $row->currency);
+                $onPlanOnly = (clone $unstated)->whereNotNull('commission_plan_id')->exists() && ! (clone $unstated)->whereNotNull('scheme_id')->exists();
                 $recovery = $this->advances->proposedRecovery($producer->id, $netBefore);
                 $statement = CommissionStatement::query()->create(['entity_id' => $entityId, 'agent_id' => $producer->id, 'up_to' => $day, 'period_end' => $day,
                     'earned_minor' => (int) $row->earned, 'override_minor' => (int) $row->override, 'bonus_minor' => (int) $row->bonus, 'clawback_minor' => (int) $row->clawback,
                     'gross_minor' => (int) $row->gross, 'withholding_minor' => (int) $row->withholding, 'advances_recovered_minor' => $recovery, 'net_minor' => $netBefore - $recovery,
-                    'currency' => (string) $row->currency, 'status' => 'draft', 'paid_via' => self::route($producer), 'prepared_by' => $actorUserId]);
+                    'currency' => (string) $row->currency, 'status' => 'draft', 'paid_via' => self::route($producer, $onPlanOnly), 'prepared_by' => $actorUserId]);
                 CommissionEntry::query()->where('entity_id', $entityId)->where('agent_id', $producer->id)->where('status', 'accrued')->whereNull('statement_id')
                     ->where('earned_on', '<=', $day)->where('currency', (string) $row->currency)->update(['statement_id' => $statement->id]);
                 $ids[] = $statement->id;
@@ -126,12 +129,23 @@ final class CommissionStatementRun
         }
     }
 
-    /** ASSUMPTION A-22: producers on payroll (an employee record) are paid through payroll; everyone else through accounts payable. */
-    private static function route(ProducerSummary $producer): string
+    /**
+     * ASSUMPTION A-22: producers on payroll (an employee record) are paid through payroll; everyone else through accounts payable.
+     * ASSUMPTION: A-191 (GA-10) — commission earned only under Phase 1 commission plans (A-20, no compensation scheme) is paid from the bank as the Phase 1
+     * payout did, now that the statement run is the only payout path; `erp.distribution.plan_payout_route` changes it.
+     */
+    private static function route(ProducerSummary $producer, bool $onPlanOnly): string
     {
         /** @var array<string, string> $byType */
         $byType = config('erp.distribution.payout_route_by_type', []);
+        if ($producer->employeeId !== null) {
+            return 'payroll';
+        }
+        $planRoute = config('erp.distribution.plan_payout_route', 'bank');
+        if ($onPlanOnly && is_string($planRoute) && in_array($planRoute, ['bank', 'ap', 'payroll'], true)) {
+            return $planRoute;
+        }
 
-        return $producer->employeeId !== null ? 'payroll' : ($byType[$producer->type] ?? 'ap');
+        return $byType[$producer->type] ?? 'ap';
     }
 }

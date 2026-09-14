@@ -11,8 +11,9 @@ use function Pest\Laravel\travelTo;
 
 /**
  * Session S2: `php artisan erp:demo` seeds exactly the market cross-check Part A story ("a week in a non-life insurer") in its own tenant, through
- * the application services — 3 products, 5 customers, 2 producers (one on commission, one salaried with none), 7 policies at different stages sold through
- * quotation, proposal and policy on the placeholder tariffs (Phase 3 R7) and a quotation to follow up,
+ * the application services — 4 products, 5 customers, 2 producers (one on commission through a compensation scheme, one salaried with none), 8 policies at
+ * different stages sold through quotation, proposal and policy on the placeholder tariffs (Phase 3 R7), a quotation to follow up, a cover note, and (GA-35) a
+ * Chittagong branch whose branch-scoped officer sold a short-period policy expiring within 20 days that has its renewal quotation,
  * receipts including one still in suspense, a bank statement CSV with matches and 2 exceptions, 2 claims (one paid, one reserved), August
  * closed and locked, September open. Rerunning changes nothing; it runs in local and staging only.
  */
@@ -36,21 +37,41 @@ it('seeds the Part A story through the services', function (): void {
     expect(Artisan::call('erp:demo'))->toBe(0);
     $tenantId = (string) DB::table('tenants')->where('slug', 'nonlife')->value('id');
 
-    expect(($this->count)($tenantId))->toMatchArray(['products' => 3, 'customers' => 5, 'producers' => 2, 'policies' => 7, 'claims' => 2]);
+    expect(($this->count)($tenantId))->toMatchArray(['products' => 4, 'customers' => 5, 'producers' => 2, 'policies' => 8, 'claims' => 2]);
     asTenant($tenantId, function (): void {
         $policies = DB::table('policies')->pluck('status')->countBy()->all();
         expect(array_keys($policies))->toContain('cancelled')
-            ->and(($policies['issued'] ?? 0) + ($policies['active'] ?? 0))->toBe(6);
+            ->and(($policies['issued'] ?? 0) + ($policies['active'] ?? 0))->toBe(7);
         // Phase 3 R7: the products are rated, so the quote to follow up is an issued quotation (a typed-premium quote is refused), and every policy was issued
         // from its approved proposal on its frozen rating, with stamp duty on its own line.
-        expect(DB::table('quotations')->where('status', 'issued')->count())->toBe(1)->and(DB::table('policies')->where('status', 'quote')->count())->toBe(0)
+        expect(DB::table('quotations')->where('status', 'issued')->whereNull('renewal_of_policy_id')->count())->toBe(1)->and(DB::table('policies')->where('status', 'quote')->count())->toBe(0)
             ->and(DB::table('policies')->whereNull('rating_result')->orWhereNull('proposal_id')->count())->toBe(0)
-            ->and(DB::table('proposals')->where('status', 'issued')->count())->toBe(7)
-            ->and(DB::table('policies')->where('stamp_duty_minor', '>', 0)->count())->toBe(7)
+            ->and(DB::table('proposals')->where('status', 'issued')->count())->toBe(8)
+            ->and(DB::table('policies')->where('stamp_duty_minor', '>', 0)->count())->toBe(8)
             ->and((int) DB::table('policies')->sum(DB::raw('gross_premium_minor - net_premium_minor - tax_minor - stamp_duty_minor')))->toBe(0);
 
-        // One commission producer accrues commission on receipts; the salaried one has none.
-        expect(DB::table('commission_entries')->distinct()->count('agent_id'))->toBe(1);
+        // One commission producer accrues commission on receipts, through the compensation scheme (GA-35); the salaried one has none.
+        expect(DB::table('commission_entries')->distinct()->count('agent_id'))->toBe(1)
+            ->and(DB::table('commission_entries')->whereNull('scheme_id')->count())->toBe(0)
+            ->and(DB::table('compensation_schemes')->pluck('code')->all())->toBe(['AGENCY-NL'])
+            ->and(DB::table('commission_plans')->count())->toBe(0);
+
+        // GA-35: a second branch with a branch-scoped officer; a policy expiring within 20 days of the story's last day with its renewal quotation; a cover note.
+        $ctg = (string) DB::table('branches')->where('code', 'CTG')->value('id');
+        $officer = DB::table('users')->where('email', 'branch.officer.ctg@nonlife.local')->value('id');
+        expect(DB::table('user_roles')->where('user_id', $officer)->get(['scope_type', 'scope_id'])->map(fn (object $r): array => [$r->scope_type, $r->scope_id])->all())->toBe([['branch', $ctg]]);
+        $expiring = DB::table('policies')->where('branch_id', $ctg)->first(['id', 'number', 'expiry']);
+        expect($expiring?->number)->toStartWith('POL-CTG-2026-')
+            ->and($expiring?->expiry)->toBe('2026-10-02')
+            ->and(DB::table('expiry_register')->where('policy_id', $expiring?->id)->value('status'))->toBe('renewal_offered')
+            ->and(DB::table('quotations')->where('renewal_of_policy_id', $expiring?->id)->where('status', 'issued')->count())->toBe(1)
+            ->and(DB::table('cover_notes')->where('status', 'active')->count())->toBe(1)
+            ->and(DB::table('proposals')->where('status', 'approved')->count())->toBe(1);
+
+        // GA-35: the opening bank balance is paid-up share capital, not retained earnings.
+        $opening = DB::table('journal_lines as l')->join('accounts as a', 'a.id', '=', 'l.account_id')->join('journals as j', 'j.id', '=', 'l.journal_id')
+            ->where('j.description', 'Bank balance brought forward')->where('l.side', 'credit')->get(['a.code', 'a.name', 'l.amount_minor']);
+        expect($opening->map(fn (object $l): array => [$l->code, $l->name, (int) $l->amount_minor])->all())->toBe([['3000', 'Share Capital', 200_000_000]]);
 
         // Receipts: one still unallocated in suspense, one that came in without a reference and was allocated from suspense.
         expect(DB::table('suspense_items')->where('status', 'open')->count())->toBe(1)

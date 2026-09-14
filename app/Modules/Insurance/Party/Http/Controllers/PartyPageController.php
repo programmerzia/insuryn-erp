@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Party\Http\Controllers;
 
 use App\Http\Pages\PageSupport;
-use App\Modules\Distribution\Application\ProducerDirectory;
-use App\Modules\Distribution\Application\ProducerSummary;
-use App\Modules\Insurance\Party\Application\AgentService;
 use App\Modules\Insurance\Party\Application\PartyService;
 use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
 use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
@@ -21,7 +18,7 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
-/** Parties and agents screens (spec §3 party model): list, search, create, bank accounts, agents. */
+/** Parties screens (spec §3 party model): list, search, create, bank accounts. Producers (agents) have their own register (GA-10). */
 final class PartyPageController
 {
     /** Anyone who works with parties: maintains them, sells to them, or reads the books. */
@@ -29,7 +26,6 @@ final class PartyPageController
 
     public function __construct(
         private readonly PartyService $parties,
-        private readonly AgentService $agents,
         private readonly PermissionChecker $permissions,
     ) {}
 
@@ -82,31 +78,6 @@ final class PartyPageController
         $this->parties->addBankAccount($party, $data['bank_name'], $data['account_number'], (bool) ($data['is_default'] ?? false), PageSupport::actor($request));
 
         return redirect("/parties/{$party}")->with('status', 'Bank account added.');
-    }
-
-    public function agents(Request $request): Response
-    {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
-        $agents = collect(app(ProducerDirectory::class)->all('agent'));
-        $names = DB::table('parties')->whereIn('id', $agents->pluck('partyId'))->pluck('display_name', 'id');
-
-        return Inertia::render('agents/Index', [
-            'agents' => $agents->map(fn (ProducerSummary $a): array => ['id' => $a->id, 'code' => $a->code, 'name' => (string) ($names[$a->partyId] ?? ''), 'party_id' => $a->partyId,
-                'branch_id' => $a->branchId, 'parent_agent_id' => $a->parentProducerId, 'commission_plan_id' => $a->commissionPlanId, 'status' => $a->status])->values()->all(),
-            'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
-            'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
-            'commissionPlans' => DB::table('commission_plans')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
-        ]);
-    }
-
-    public function storeAgent(Request $request): RedirectResponse
-    {
-        /** @var array{party_id: string, code: string, branch_id: string, parent_agent_id?: string|null, commission_plan_id?: string|null} $data */
-        $data = $request->validate(['party_id' => ['required', 'uuid'], 'code' => ['required', 'string', 'max:32'], 'branch_id' => ['required', 'uuid'],
-            'parent_agent_id' => ['nullable', 'uuid'], 'commission_plan_id' => ['nullable', 'uuid']]);
-        $agent = $this->agents->create($data['party_id'], $data['code'], $data['branch_id'], $data['parent_agent_id'] ?? null, $data['commission_plan_id'] ?? null, PageSupport::actor($request));
-
-        return redirect('/agents')->with('status', "Agent {$agent->code} created.");
     }
 
     /** @return array{id: string, kind: string, display_name: string, tax_id: string|null, roles: array<int, string>} */

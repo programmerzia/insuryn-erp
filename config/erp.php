@@ -138,6 +138,9 @@ return [
         'licence_alert_days' => [60, 30, 7],
         // ASSUMPTION: A-22 — payout route: producers with an employee record are paid through payroll; others by type (default accounts payable).
         'payout_route_by_type' => ['agent' => 'ap', 'agency_org' => 'ap', 'broker' => 'ap', 'partner' => 'ap', 'bdo' => 'payroll'],
+        // ASSUMPTION: A-191 (GA-10) — commission earned only under Phase 1 commission plans (no compensation scheme) is paid from the bank, as the Phase 1 payout
+        // did, now that the monthly statement run is the only payout path (bank | ap | payroll; a producer on payroll is still paid through payroll).
+        'plan_payout_route' => env('ERP_PLAN_PAYOUT_ROUTE', 'bank'),
         // ASSUMPTION: A-16 — IDRA's register file format is not specified: CSV with these columns, in this order.
         // Flow fix X9: the prefix of the code suggested for a producer created inline from a quote (PREFIX-001, the next free number); the code can be changed.
         'producer_code_prefixes' => ['agent' => 'AG', 'agency_org' => 'AGY', 'bdo' => 'BDO', 'broker' => 'BRK', 'partner' => 'PTR'],

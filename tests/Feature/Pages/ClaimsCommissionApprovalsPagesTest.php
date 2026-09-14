@@ -122,23 +122,45 @@ it('lists pending approvals a user may decide and decides them from the inbox', 
     expect(asTenant($this->ctx['tenant_id'], fn () => DB::table('claim_payments')->value('status')))->toBe('approved');
 });
 
-it('manages commission plans and pays an approved statement by someone else', function (): void {
+it('pays plan commission only through the statement run, by someone else, and keeps plans and statements as read-only history (GA-10)', function (): void {
     $planner = ($this->userWith)(['commission.manage_plans']);
     $approver = ($this->userWith)(['commission.approve']);
     $payer = ($this->userWith)(['commission.pay']);
     asTenant($this->ctx['tenant_id'], fn () => app(ReceiptService::class)->record(new RecordReceiptRequest($this->ctx['entity_id'], $this->ctx['branch_id'], null, 'cash', 12_000_000, 'BDT',
         CarbonImmutable::parse('2026-09-10'), null, 'r', [new AllocationLine((string) DB::table('installments')->value('id'), 12_000_000)]), $this->world['admin']));
 
-    actingAs($planner)->post('/commission/plans', ['code' => 'P12', 'name' => 'Plan 12%', 'rate_percent' => '12.50'], $this->headers)->assertSessionHasNoErrors();
-    expect(asTenant($this->ctx['tenant_id'], fn () => (int) DB::table('commission_plans')->where('code', 'P12')->value('rate_bp')))->toBe(1250);
+    // The Phase 1 payout and plan forms are gone: one way to approve and pay.
+    actingAs($planner)->post('/commission/plans', ['code' => 'P12', 'name' => 'Plan 12%', 'rate_percent' => '12.50'], $this->headers)->assertNotFound();
+    actingAs($approver)->post('/commission/statements', ['agent_id' => $this->world['agent_id'], 'up_to' => '2026-09-30', 'on' => '2026-10-01'], $this->headers)->assertNotFound();
+    expect(asTenant($this->ctx['tenant_id'], fn () => [DB::table('commission_statements')->count(), DB::table('commission_plans')->count()]))->toBe([0, 1]);
 
-    actingAs($approver)->post('/commission/statements', ['agent_id' => $this->world['agent_id'], 'up_to' => '2026-09-30', 'on' => '2026-10-01'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($approver)->post('/distribution/statements/prepare', ['period_end' => '2026-09-30'], $this->headers)->assertSessionHasNoErrors();
     $statementId = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('commission_statements')->value('id'));
-    actingAs($approver)->post("/commission/statements/{$statementId}/pay", ['paid_on' => '2026-10-02'], $this->headers)->assertSessionHasErrors('form');
-    actingAs($payer)->post("/commission/statements/{$statementId}/pay", ['paid_on' => '2026-10-02'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($approver)->post("/distribution/statements/{$statementId}/approve", ['on' => '2026-10-01'], $this->headers)->assertSessionHasNoErrors();
+    actingAs($approver)->post("/distribution/statements/{$statementId}/pay", ['paid_on' => '2026-10-02'], $this->headers)->assertSessionHasErrors('form');
+    actingAs($payer)->post("/distribution/statements/{$statementId}/pay", ['paid_on' => '2026-10-02'], $this->headers)->assertSessionHasNoErrors();
+    expect(asTenant($this->ctx['tenant_id'], fn () => DB::table('accounting_events')->where('event_type', 'COMMISSION_PAID')->count()))->toBe(1); // plan commission is paid from the bank (A-191)
 
-    actingAs($approver)->get('/commission', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('commission/Index')
-        ->has('plans', 2)->has('statements', 1)->where('statements.0.status', 'paid')->where('statements.0.net', '10,434.78')); // gap audit GA-42: 10% of the 104,347.83 net premium in the 120,000.00 received (VAT excluded)
+    actingAs($planner)->get('/commission', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('commission/Index')
+        ->has('plans', 1)->has('statements', 1)->where('statements.0.status', 'paid')->where('statements.0.net', '10,434.78')->where('statements.0.paid_via', 'bank')->where('can.run', false));
+    actingAs($approver)->get('/commission', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('can.run', true)->missing('bankAccounts')->missing('agents'));
     actingAs($approver)->get("/commission/agents/{$this->world['agent_id']}?from=2026-09-01&to=2026-10-31", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->component('commission/Statement')->has('statement.entries', 1)->where('statement.totals.net', '10,434.78')->where('statement.closing_payable', '0.00'));
+});
+
+it('lists a statement approved by the Phase 1 payout and still unpaid in the statement run, so it can be paid (GA-10)', function (): void {
+    $approver = ($this->userWith)(['commission.approve']);
+    $payer = ($this->userWith)(['commission.pay']);
+    $legacy = asTenant($this->ctx['tenant_id'], function () use ($approver): string {
+        DB::table('commission_statements')->insert(['id' => $id = (string) Illuminate\Support\Str::uuid7(), 'tenant_id' => $this->ctx['tenant_id'], 'entity_id' => $this->ctx['entity_id'],
+            'agent_id' => $this->world['agent_id'], 'number' => 'CST-2026-000001', 'up_to' => '2026-08-31', 'gross_minor' => 10_000, 'withholding_minor' => 0, 'net_minor' => 10_000, 'currency' => 'BDT',
+            'status' => 'approved', 'paid_via' => 'bank', 'approved_by' => $approver->id, 'approved_on' => '2026-09-01', 'created_at' => now(), 'updated_at' => now()]);
+
+        return $id;
+    });
+
+    actingAs($payer)->get('/distribution/statements?period_end=2026-10-31', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('distribution/statements/Index')->has('statements', 1)->where('statements.0.id', $legacy)->where('statements.0.status', 'approved'));
+    actingAs($payer)->post("/distribution/statements/{$legacy}/pay", ['paid_on' => '2026-10-02'], $this->headers)->assertSessionHasNoErrors();
+    expect(asTenant($this->ctx['tenant_id'], fn () => DB::table('commission_statements')->where('id', $legacy)->value('status')))->toBe('paid');
 });

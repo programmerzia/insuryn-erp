@@ -111,3 +111,10 @@ it('lists only products without a rating plan on the quote form and points to Qu
     actingAs($this->admin)->get('/policies/create', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('policies/Create')
         ->where('products', fn ($products): bool => array_column((array) json_decode((string) json_encode($products), true), 'code') === ['MOTOR'])->where('ratedProducts', 2));
 });
+
+it('offers the typed-premium form on the policies list only while a product has no rating plan (GA-11)', function (): void {
+    actingAs($this->admin)->get('/policies', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('policies/Index')->where('unratedProducts', 1));
+    ($this->in)(fn () => DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))
+        ->get(['id'])->each(fn (object $p) => DB::table('product_versions')->where('product_id', $p->id)->update(['class_code' => 'motor'])));
+    actingAs($this->admin)->get('/policies', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('unratedProducts', 0));
+});

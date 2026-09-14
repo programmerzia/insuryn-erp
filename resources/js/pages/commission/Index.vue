@@ -1,41 +1,35 @@
 <script setup lang="ts">
-import { Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
-import DateInput from '@/components/forms/DateInput.vue';
-import Field from '@/components/forms/Field.vue';
-import FormLayout from '@/components/forms/FormLayout.vue';
-import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
-import SelectInput from '@/components/forms/SelectInput.vue';
-import TextInput from '@/components/forms/TextInput.vue';
+import { Link } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import DataTable from '@/components/table/DataTable.vue';
 import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
-import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
-import { useJournalConfirm } from '@/lib/journalConfirm';
 
+/**
+ * GA-10 (D-75): commission history, read-only. Every approved or paid commission statement, whichever run made it, and the Phase 1 commission plans that still
+ * pay producers of products without a compensation scheme (A-20, A-192). Statements are prepared, approved and paid only in Commission statements.
+ */
 interface Plan { id: string; code: string; name: string; rate_percent: string; withholding: string | null; status: string }
-interface Statement { id: string; number: string; agent_code: string; agent_id: string; up_to: string; gross: string; withholding: string; net: string; status: string; paid_on: string | null }
-const props = defineProps<{ plans: Plan[]; statements: Statement[]; agents: { id: string; code: string }[]; bankAccounts: { id: string; bank_name: string; account_no_masked: string }[]; can: { plans: boolean; approve: boolean; pay: boolean } }>();
+interface Statement { id: string; number: string; agent_code: string; agent_name: string; agent_id: string; up_to: string; period_end: string | null; gross: string; withholding: string; advances: string; net: string; status: string; paid_via: string; approved_on: string | null; paid_on: string | null }
+defineProps<{ plans: Plan[]; statements: Statement[]; can: { run: boolean } }>();
 
 const view = ref<'statements' | 'plans'>('statements');
 const active = ref<string | null>(null);
-const drawer = ref<'approve' | 'plan' | null>(null);
-const planForm = useForm({ code: '', name: '', rate_percent: '', withholding_jurisdiction: '', withholding_tax_type: '' });
-const approveForm = useForm({ agent_id: '', up_to: '', on: '' });
-const pay = ref({ paid_on: '', bank_account_id: '' });
-const confirm = useJournalConfirm();
-const payable = (s: Statement) => s.status === 'approved' && props.can.pay;
+const routeWords: Record<string, string> = { bank: 'Bank', payroll: 'Payroll', ap: 'Accounts payable' };
+const monthOf = (s: Statement) => s.period_end ?? s.up_to;
 const statementColumns: DataColumn<Statement>[] = [
     { id: 'number', header: 'Statement', value: (s) => s.number, width: 150 },
-    { id: 'agent', header: 'Agent', value: (s) => s.agent_code, href: (s) => `/commission/agents/${s.agent_id}`, width: 100 },
+    { id: 'producer', header: 'Producer', value: (s) => s.agent_code, href: (s) => `/distribution/producers/${s.agent_id}`, width: 100 },
+    { id: 'name', header: 'Name', value: (s) => s.agent_name, width: 160, muted: true },
     { id: 'up_to', header: 'Earned up to', type: 'date', value: (s) => s.up_to },
     { id: 'gross', header: 'Gross', type: 'money', value: (s) => s.gross, total: true },
     { id: 'withholding', header: 'Tax withheld', type: 'money', value: (s) => s.withholding, total: true },
     { id: 'net', header: 'Net', type: 'money', value: (s) => s.net, total: true },
+    { id: 'route', header: 'Paid through', value: (s) => routeWords[s.paid_via] ?? s.paid_via, width: 130 },
     { id: 'status', header: 'Status', type: 'status', value: (s) => s.status, filterOptions: ['approved', 'paid'] },
     { id: 'paid_on', header: 'Paid on', type: 'date', value: (s) => s.paid_on },
 ];
@@ -46,72 +40,48 @@ const planColumns: DataColumn<Plan>[] = [
     { id: 'withholding', header: 'Withholding', value: (p) => p.withholding ?? 'None', width: 160, muted: true },
     { id: 'status', header: 'Status', type: 'status', value: (p) => p.status },
 ];
-const action = computed(() => (view.value === 'statements' ? (props.can.approve ? { label: 'Approve a payout' } : null) : props.can.plans ? { label: 'New plan' } : null));
-
-function payStatement(s: Statement): void {
-    void confirm.request(`/commission/statements/${s.id}/pay`, pay.value, `Pay ${s.number} to agent ${s.agent_code}?`, `Pay ${formatMoney(s.net)} BDT`);
-}
 </script>
 
 <template>
-    <AppLayout help="commission" title="Commission" fill>
-        <div class="flex h-9 items-end gap-4 border-b border-line px-4" role="tablist" aria-label="Commission">
-            <button v-for="tab in [{ id: 'statements', label: 'Payout statements' }, { id: 'plans', label: 'Plans' }] as const" :key="tab.id" type="button" role="tab" :aria-selected="view === tab.id"
+    <AppLayout help="commission" title="Commission history" fill>
+        <div class="flex h-9 items-end gap-4 border-b border-line px-4" role="tablist" aria-label="Commission history">
+            <button v-for="tab in [{ id: 'statements', label: 'Statements' }, { id: 'plans', label: 'Plans (Phase 1)' }] as const" :key="tab.id" type="button" role="tab" :aria-selected="view === tab.id"
                 class="-mb-px h-8 border-b-2 text-ui" :class="view === tab.id ? 'border-accent text-ink' : 'border-transparent text-ink-2 hover:text-ink'" @click="view = tab.id; active = null">
                 {{ tab.label }}
             </button>
         </div>
         <QueueView
             v-if="view === 'statements'"
-            id="commission-statements"
+            id="commission-history"
             v-model:active="active"
-            title="Commission"
+            title="Commission history"
             :columns="statementColumns"
             :rows="statements"
             :row-key="(s) => s.id"
             currency="BDT"
-            empty-text="No payout statements yet."
-            :action="action"
+            empty-text="No commission statement has been approved yet."
+            :empty-action="{ label: 'Open commission statements', href: '/distribution/statements' }"
             :inspector-title="(s) => s.number"
-            :inspector-subtitle="(s) => `Agent ${s.agent_code} · earned up to ${formatDate(s.up_to)}`"
-            :primary-label="(s) => (payable(s) ? 'Pay the statement' : undefined)"
-            @action="drawer = 'approve'"
-            @primary="payStatement"
+            :inspector-subtitle="(s) => `${s.agent_code} · earned up to ${formatDate(s.up_to)}`"
         >
+            <template #toolbar>
+                <Link href="/distribution/statements" class="text-ui text-accent-text hover:underline">{{ can.run ? 'Approve or pay in Commission statements' : 'Open Commission statements' }}</Link>
+            </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Gross', value: `${formatMoney(row.gross)} BDT`, num: true }, { label: 'Tax withheld', value: `${formatMoney(row.withholding)} BDT`, num: true }, { label: 'Net to pay', value: `${formatMoney(row.net)} BDT`, num: true }, { label: 'Paid on', value: formatDate(row.paid_on) }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Gross', value: `${formatMoney(row.gross)} BDT`, num: true }, { label: 'Tax withheld', value: `${formatMoney(row.withholding)} BDT`, num: true }, { label: 'Advances recovered', value: `${formatMoney(row.advances)} BDT`, num: true }, { label: 'Net', value: `${formatMoney(row.net)} BDT`, num: true }, { label: 'Paid through', value: routeWords[row.paid_via] ?? row.paid_via }, { label: 'Approved on', value: formatDate(row.approved_on) }, { label: 'Paid on', value: formatDate(row.paid_on) }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
-                <div v-if="payable(row)" class="mt-4 grid gap-3 border-t border-line pt-4">
-                    <Field id="paid_on" label="Paid on" hint="The person who approved the statement cannot pay it."><DateInput v-model="pay.paid_on" /></Field>
-                    <Field id="bank_account_id" label="Pay from" optional><SelectInput id="bank_account_id" v-model="pay.bank_account_id" placeholder="Default bank account" :options="bankAccounts.map((b) => ({ value: b.id, label: `${b.bank_name} ${b.account_no_masked}` }))" /></Field>
+                <div class="mt-4 flex flex-col gap-2">
+                    <Link v-if="row.status === 'approved'" :href="`/distribution/statements?period_end=${monthOf(row)}`" class="text-ui text-accent-text hover:underline">Pay it in Commission statements</Link>
+                    <Link :href="`/commission/agents/${row.agent_id}`" class="text-ui text-accent-text hover:underline">Producer's commission entries</Link>
                 </div>
-                <Link :href="`/commission/agents/${row.agent_id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Agent statement</Link>
             </template>
         </QueueView>
-        <DataTable v-else id="commission-plans" label="Commission plans" :columns="planColumns" :rows="plans" :row-key="(p) => p.id" :url-sync="false" empty-text="No plans yet.">
+        <DataTable v-else id="commission-plans" label="Commission plans" :columns="planColumns" :rows="plans" :row-key="(p) => p.id" :url-sync="false" empty-text="No Phase 1 commission plans.">
             <template #toolbar>
                 <h1 class="mr-3 text-section font-semibold">Commission plans</h1>
-                <button v-if="action" type="button" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'plan'">{{ action.label }}</button>
+                <span class="text-ui text-ink-2">Read-only. New commission terms are set up as <Link href="/distribution/schemes" class="text-accent-text hover:underline">compensation schemes</Link>.</span>
             </template>
         </DataTable>
-
-        <Drawer :open="drawer === 'approve'" title="Approve a payout" @update:open="(open) => !open && (drawer = null)">
-            <FormLayout submit-label="Approve statement" :dirty="approveForm.isDirty" :processing="approveForm.processing" :error="(approveForm.errors as Record<string, string>).form" @submit="approveForm.post('/commission/statements', { onSuccess: () => (drawer = null) })" @cancel="drawer = null">
-                <Field id="agent_id" label="Agent" :error="approveForm.errors.agent_id"><SelectInput id="agent_id" v-model="approveForm.agent_id" placeholder="Choose an agent" :options="agents.map((a) => ({ value: a.id, label: a.code }))" /></Field>
-                <Field id="up_to" label="Commission earned up to" :error="approveForm.errors.up_to"><DateInput v-model="approveForm.up_to" /></Field>
-                <Field id="on" label="Approval date" :error="approveForm.errors.on"><DateInput v-model="approveForm.on" /></Field>
-            </FormLayout>
-        </Drawer>
-        <Drawer :open="drawer === 'plan'" title="New commission plan" @update:open="(open) => !open && (drawer = null)">
-            <FormLayout submit-label="Create plan" :dirty="planForm.isDirty" :processing="planForm.processing" :error="(planForm.errors as Record<string, string>).form" @submit="planForm.post('/commission/plans', { onSuccess: () => (drawer = null) })" @cancel="drawer = null">
-                <Field id="plan-code" label="Code" :error="planForm.errors.code"><TextInput v-model="planForm.code" /></Field>
-                <Field id="plan-name" label="Name" :error="planForm.errors.name"><TextInput v-model="planForm.name" /></Field>
-                <Field id="rate_percent" label="Rate (%)" :error="planForm.errors.rate_percent"><TextInput v-model="planForm.rate_percent" inputmode="decimal" placeholder="10.00" /></Field>
-                <Field id="withholding_tax_type" label="Withholding tax type" optional hint="Leave empty when no tax is withheld." :error="planForm.errors.withholding_tax_type"><TextInput v-model="planForm.withholding_tax_type" /></Field>
-                <Field id="withholding_jurisdiction" label="Withholding jurisdiction" optional :error="planForm.errors.withholding_jurisdiction"><TextInput v-model="planForm.withholding_jurisdiction" /></Field>
-            </FormLayout>
-        </Drawer>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>
