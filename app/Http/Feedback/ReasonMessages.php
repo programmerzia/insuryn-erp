@@ -57,6 +57,7 @@ final class ReasonMessages
         'INVALID_INSURANCE_CLASS' => 'Choose the insurance class: life or non-life.',
         'MIN_PREMIUM_INVALID' => 'Enter a minimum premium of zero or more.',
         'RECOGNISE_AT_INVALID' => 'Choose when the premium is recognised: at the policy or at the cover note.',
+        'JOB_FAILED' => 'The job did not finish; the error is in the application log. Try again, or ask your administrator if it fails again.',
         'EVENT_NOT_STUCK' => 'This accounting event has already been posted or is waiting its turn; only failed or long-queued events can be sent again. Refresh the list.',
         'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',
     ];

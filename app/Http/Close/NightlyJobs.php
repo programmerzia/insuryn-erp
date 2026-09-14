@@ -116,7 +116,9 @@ final class NightlyJobs
                 null, self::PERMISSION, Actor::user($actorUserId));
         }
         if ($failure !== null) {
-            throw new BusinessRuleViolation('JOB_FAILED', self::CATALOGUE[$key]['label'].' did not finish: '.$failure->getMessage());
+            report($failure);
+
+            throw new BusinessRuleViolation('JOB_FAILED', self::CATALOGUE[$key]['label'].' did not finish. The error is in the application log.');
         }
 
         return $summary;
