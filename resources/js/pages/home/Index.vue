@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { ArrowRight, Route } from 'lucide-vue-next';
+import { ArrowRight, Plus, Route } from 'lucide-vue-next';
 import { computed } from 'vue';
 import PinLink from '@/components/shell/PinLink.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -27,7 +27,8 @@ interface Queue {
     cash?: { balance: string; currency: string; days: { date: string; net: string }[] };
 }
 
-const props = defineProps<{ queues: Queue[] }>();
+/** Flow fix X4: work started from Home (New quote, Record a receipt, Register a claim, New manual journal), for the user's permissions. */
+const props = defineProps<{ queues: Queue[]; starts: { label: string; href: string }[] }>();
 const page = usePage<SharedProps>();
 const currency = computed(() => page.props.shell?.entity?.currency ?? 'BDT');
 const preferences = usePreferences();
@@ -70,6 +71,11 @@ function bars(days: { date: string; net: string }[]): { date: string; net: strin
                     <template v-else-if="waiting === 0">Nothing needs your action right now.</template>
                     <template v-else><span class="tabular-nums">{{ waiting }}</span> {{ waiting === 1 ? 'item needs' : 'items need' }} your action.</template>
                 </p>
+                <nav v-if="starts.length" aria-label="Start work" class="col-span-2 mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-ui">
+                    <Link v-for="start in starts" :key="start.href" :href="start.href" class="inline-flex items-center gap-1 text-accent-text hover:underline">
+                        <Plus :size="14" :stroke-width="1.5" aria-hidden="true" />{{ start.label }}
+                    </Link>
+                </nav>
             </header>
 
             <section v-if="onboarding.setupNeeded && onboarding.canSetup" class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-panel border border-line bg-surface-2 px-4 py-3 text-ui" aria-label="Setup">
