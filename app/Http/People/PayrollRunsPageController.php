@@ -36,13 +36,13 @@ final class PayrollRunsPageController
         $entity = PageSupport::entity();
         $money = fn (mixed $minor): string => PageSupport::money((int) $minor, $entity['currency']);
         $today = app(BusinessClock::class)->today();
-        $runs = DB::table('payroll_runs')->where('entity_id', $entity['id'])->orderByDesc('period_year')->orderByDesc('period_month')->paginate(PageSupport::listPageSize())->withQueryString();
+        [$page, $runs] = EmployeesPageController::paged(DB::table('payroll_runs')->where('entity_id', $entity['id'])->orderByDesc('period_year')->orderByDesc('period_month'), $request);
 
         return Inertia::render('people/payroll/Index', [
-            'runs' => PageSupport::page($runs, $runs->getCollection()
+            'runs' => $page + ['data' => $runs
                 ->map(fn (object $r): array => ['id' => (string) $r->id, 'number' => $r->number, 'period' => sprintf('%04d-%02d-01', $r->period_year, $r->period_month), 'status' => (string) $r->status,
                     'employees' => (int) $r->employee_count, 'gross' => $money($r->gross_minor), 'tax' => $money($r->tax_minor), 'pf' => $money((int) $r->pf_employee_minor + (int) $r->pf_employer_minor),
-                    'commission' => $money($r->commission_minor), 'net' => $money($r->net_minor), 'posted_on' => $r->posted_on, 'paid_on' => $r->paid_on])->values()->all()),
+                    'commission' => $money($r->commission_minor), 'net' => $money($r->net_minor), 'posted_on' => $r->posted_on, 'paid_on' => $r->paid_on])->values()->all()],
             // The months a run can be calculated for, and those that already have one (the picker starts at the first month without a run).
             'taken' => DB::table('payroll_runs')->where('entity_id', $entity['id'])->get(['period_year', 'period_month'])->map(fn (object $r): string => sprintf('%04d-%02d-01', $r->period_year, $r->period_month))->values()->all(),
             'months' => array_map(fn (int $i): string => $today->startOfMonth()->subMonthsNoOverflow($i - 1)->toDateString(), range(0, 6)),
@@ -150,20 +150,19 @@ final class PayrollRunsPageController
         $entity = PageSupport::entity();
         $money = fn (mixed $minor): string => PageSupport::money((int) $minor, $entity['currency']);
         $runId = is_string($request->query('run')) && \Illuminate\Support\Str::isUuid($request->query('run')) ? $request->query('run') : null;
-        $slips = DB::table('payslips as p')->join('payroll_runs as r', 'r.id', '=', 'p.run_id')->join('employees as e', 'e.id', '=', 'p.employee_id')
+        [$page, $slips] = EmployeesPageController::paged(DB::table('payslips as p')->join('payroll_runs as r', 'r.id', '=', 'p.run_id')->join('employees as e', 'e.id', '=', 'p.employee_id')
             ->where('r.entity_id', $entity['id'])->when($runId !== null, fn ($q) => $q->where('p.run_id', $runId))
             ->orderByDesc('r.period_year')->orderByDesc('r.period_month')->orderBy('e.code')
-            ->select(['p.id', 'p.number', 'p.run_id', 'r.period_year', 'r.period_month', 'r.status', 'e.id as employee_id', 'e.code', 'e.full_name', 'p.gross_minor', 'p.tax_minor', 'p.pf_employee_minor', 'p.net_minor'])
-            ->paginate(PageSupport::listPageSize())->withQueryString();
+            ->select(['p.id', 'p.number', 'p.run_id', 'r.period_year', 'r.period_month', 'r.status', 'e.id as employee_id', 'e.code', 'e.full_name', 'p.gross_minor', 'p.tax_minor', 'p.pf_employee_minor', 'p.net_minor']), $request);
 
         return Inertia::render('people/payslips/Index', [
             'runId' => $runId,
             'runs' => DB::table('payroll_runs')->where('entity_id', $entity['id'])->orderByDesc('period_year')->orderByDesc('period_month')->get(['id', 'number', 'period_year', 'period_month', 'status'])
                 ->map(fn (object $r): array => ['id' => (string) $r->id, 'label' => CarbonImmutable::parse(sprintf('%04d-%02d-01', (int) $r->period_year, (int) $r->period_month))->format('F Y').' · '.($r->number ?? 'preview')])->values()->all(),
-            'payslips' => PageSupport::page($slips, $slips->getCollection()
+            'payslips' => $page + ['data' => $slips
                 ->map(fn (object $p): array => ['id' => (string) $p->id, 'number' => $p->number, 'run_id' => (string) $p->run_id, 'period' => sprintf('%04d-%02d-01', $p->period_year, $p->period_month),
                     'status' => (string) $p->status, 'employee_id' => (string) $p->employee_id, 'code' => (string) $p->code, 'name' => (string) $p->full_name, 'gross' => $money($p->gross_minor),
-                    'tax' => $money($p->tax_minor), 'pf' => $money($p->pf_employee_minor), 'net' => $money($p->net_minor)])->values()->all()),
+                    'tax' => $money($p->tax_minor), 'pf' => $money($p->pf_employee_minor), 'net' => $money($p->net_minor)])->values()->all()],
         ]);
     }
 

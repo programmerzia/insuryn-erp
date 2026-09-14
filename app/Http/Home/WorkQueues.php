@@ -381,7 +381,7 @@ final class WorkQueues
         $first = DB::table('payroll_runs')->where('entity_id', $entityId)->where('kind', 'regular')->where('status', '<>', 'cancelled')
             ->orderBy('period_year')->orderBy('period_month')->first(['period_year', 'period_month']);
         $thisMonth = $today->startOfMonth();
-        $from = $first === null ? $thisMonth : CarbonImmutable::create((int) $first->period_year, (int) $first->period_month, 1);
+        $from = $first === null ? $thisMonth : CarbonImmutable::parse(sprintf('%04d-%02d-01', (int) $first->period_year, (int) $first->period_month));
         $from = $from < $thisMonth->subMonthsNoOverflow(2) ? $thisMonth->subMonthsNoOverflow(2) : $from;
 
         return DB::query()->fromRaw("generate_series(?::date, ?::date, interval '1 month') as g(month)", [$from->toDateString(), $thisMonth->toDateString()])
@@ -563,7 +563,7 @@ final class WorkQueues
                 fn (\stdClass $r): array => ['href' => $r->id === null ? '/people/payroll' : "/people/payroll/{$r->id}", 'cells' => ['month' => CarbonImmutable::parse((string) $r->month)->format('F Y'),
                     'status' => $r->status ?? 'not_calculated', 'employees' => $r->id === null ? null : (string) $r->employee_count, 'amount' => $r->id === null ? null : $money($r, 'net_minor')]]],
             'payroll_to_approve', 'payroll_to_release' => [[$col('month', 'Month'), $col('run', 'Payroll run'), $col('employees', 'Employees'), $col('amount', 'Net pay', 'money')],
-                fn (\stdClass $r): array => ['href' => "/people/payroll/{$r->id}", 'cells' => ['month' => CarbonImmutable::create((int) $r->period_year, (int) $r->period_month, 1)->format('F Y'),
+                fn (\stdClass $r): array => ['href' => "/people/payroll/{$r->id}", 'cells' => ['month' => CarbonImmutable::parse(sprintf('%04d-%02d-01', (int) $r->period_year, (int) $r->period_month))->format('F Y'),
                     'run' => $r->number ?? 'Preview', 'employees' => (string) $r->employee_count, 'amount' => $money($r, 'net_minor')]]],
             'employees_missing_bank', 'employees_missing_tin' => [[$col('employee', 'Employee'), $col('designation', 'Designation'), $col('branch', 'Branch'), $col('joined', 'Joined', 'date')],
                 fn (\stdClass $r): array => ['href' => "/people/employees/{$r->id}", 'cells' => ['employee' => "{$r->code} {$r->full_name}", 'designation' => $r->designation, 'branch' => $r->branch, 'joined' => $r->joined_on]]],

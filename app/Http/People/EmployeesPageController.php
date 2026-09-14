@@ -42,17 +42,15 @@ final class EmployeesPageController
         $currency = $entity['currency'];
         // Home queues link here with ?missing=bank (no salary account: payroll cannot be approved) or ?missing=tin.
         $missing = in_array($request->query('missing'), ['bank', 'tin'], true) ? (string) $request->query('missing') : '';
-        $page = $reach->constrain($this->current($today), 'e.entity_id', 'm.branch_id')
-            ->when($missing !== '', fn ($q) => $q->where('e.status', 'active')->whereNull($missing === 'bank' ? 'e.account_no_masked' : 'e.tin_masked'))
-            ->paginate(PageSupport::listPageSize())->withQueryString();
-        $items = $page->getCollection();
+        [$page, $items] = self::paged($reach->constrain($this->current($today), 'e.entity_id', 'm.branch_id')
+            ->when($missing !== '', fn ($q) => $q->where('e.status', 'active')->whereNull($missing === 'bank' ? 'e.account_no_masked' : 'e.tin_masked')), $request);
         $producers = DB::table('producers')->whereIn('employee_id', $items->pluck('id'))->pluck('code', 'employee_id');
 
         return Inertia::render('people/employees/Index', [
-            'employees' => PageSupport::page($page, $items->map(fn (object $e): array => ['id' => (string) $e->id, 'code' => (string) $e->code, 'name' => (string) $e->full_name, 'designation' => $e->designation,
+            'employees' => $page + ['data' => $items->map(fn (object $e): array => ['id' => (string) $e->id, 'code' => (string) $e->code, 'name' => (string) $e->full_name, 'designation' => $e->designation,
                 'department' => $e->department, 'branch' => $e->branch_code, 'grade' => $e->grade_code, 'type' => $e->employment_type, 'joined_on' => (string) $e->joined_on,
                 'basic' => $e->basic_minor === null ? null : PageSupport::money((int) $e->basic_minor, $currency), 'status' => (string) $e->status,
-                'bank' => $e->account_no_masked === null ? null : trim($e->bank_name.' '.$e->account_no_masked), 'tin' => $e->tin_masked, 'producer_code' => $producers[$e->id] ?? null])->values()->all()),
+                'bank' => $e->account_no_masked === null ? null : trim($e->bank_name.' '.$e->account_no_masked), 'tin' => $e->tin_masked, 'producer_code' => $producers[$e->id] ?? null])->values()->all()],
             'filters' => ['missing' => $missing],
             'options' => $this->options(),
             'defaultBranchId' => $defaults->branch($actor, $entity['id']),
@@ -135,6 +133,22 @@ final class EmployeesPageController
         $employees->changeEmployment($employee, $data['kind'], CarbonImmutable::parse($data['effective_from']), $changes + ['note' => $data['note'] ?? null], PageSupport::actor($request));
 
         return back()->with('status', 'Employment change recorded from '.CarbonImmutable::parse($data['effective_from'])->format('j M Y').'.');
+    }
+
+    /**
+     * GA-40 server paging for the People lists (`erp.ui.list_page_size`, `?page=`): the page numbers PageSupport::page shares and the rows of the requested page.
+     *
+     * @return array{0: array{current_page: int, last_page: int, total: int}, 1: \Illuminate\Support\Collection<int, \stdClass>}
+     */
+    public static function paged(\Illuminate\Database\Query\Builder $query, Request $request): array
+    {
+        $size = PageSupport::listPageSize();
+        $total = (clone $query)->getCountForPagination();
+        $last = max(1, (int) ceil($total / $size));
+        $asked = $request->query('page');
+        $current = is_numeric($asked) ? max(1, min((int) $asked, $last)) : 1;
+
+        return [['current_page' => $current, 'last_page' => $last, 'total' => $total], $query->forPage($current, $size)->get()];
     }
 
     /** @return \Illuminate\Database\Query\Builder employees with the employment in force on $day */
