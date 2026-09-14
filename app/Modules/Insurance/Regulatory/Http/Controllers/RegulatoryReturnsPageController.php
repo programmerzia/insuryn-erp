@@ -56,7 +56,7 @@ final class RegulatoryReturnsPageController
                 'minimum_capital' => $money($snapshot['minimum_capital_minor']), 'premium_basis' => $money($snapshot['premium_basis_minor']), 'premium_component' => $money($snapshot['premium_component_minor']),
                 'claims_basis' => $money($snapshot['claims_basis_minor']), 'claims_component' => $money($snapshot['claims_component_minor']),
                 'ratio' => intdiv($snapshot['ratio_bp'], 100).'.'.str_pad((string) (abs($snapshot['ratio_bp']) % 100), 2, '0', STR_PAD_LEFT).'%', 'meets' => $snapshot['meets'],
-                'premium_factor' => PageSupport::percent((int) config('erp.regulatory.solvency.premium_factor_bp')), 'claims_factor' => PageSupport::percent((int) config('erp.regulatory.solvency.claims_factor_bp'))],
+                'premium_factor' => PageSupport::percent((int) config('erp.regulatory.solvency.premium_factor_bp')).'%', 'claims_factor' => PageSupport::percent((int) config('erp.regulatory.solvency.claims_factor_bp')).'%'],
             'returns' => array_map(fn (array $f): array => ['code' => $f['code'], 'title' => $f['title'], 'status' => $f['status'], 'filed_on' => $f['filed_on'], 'filing_reference' => $f['filing_reference']], $forms),
             'provisions' => $run === null ? null : ['number' => $run->number, 'quarter' => (string) $run->quarter_key, 'status' => (string) $run->status, 'total_ibnr' => $money((int) $run->total_ibnr_minor)],
         ]);
@@ -76,7 +76,7 @@ final class RegulatoryReturnsPageController
 
         return Inertia::render('regulatory/Returns', [
             'period' => ['key' => $period->key, 'label' => $period->label(), 'start' => $period->start->toDateString(), 'end' => $period->end->toDateString()],
-            'periods' => array_map(fn (string $key): array => ['value' => $key, 'label' => RegulatoryPeriod::fromKey($key)->label()], RegulatoryPeriod::choices($this->clock->today($entity['id']))),
+            'periods' => array_map(fn (string $key): array => ['value' => $key, 'label' => RegulatoryPeriod::fromKey($key)->label()], RegulatoryPeriod::choices($this->clock->today($entity['id']), including: $period->key)),
             'forms' => array_map(function (array $f) use ($rows, $users): array {
                 $row = $rows[$f['code']] ?? null;
 

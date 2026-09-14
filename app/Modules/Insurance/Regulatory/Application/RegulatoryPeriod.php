@@ -61,11 +61,12 @@ final readonly class RegulatoryPeriod
     }
 
     /**
-     * Quarter keys to pick from: the $count quarters up to the one containing $today, newest first, then the last two years.
+     * Quarter keys to pick from: the $count quarters up to the one containing $today, newest first, then the last two years; $including (the period shown) first when
+     * it is not among them.
      *
      * @return list<string>
      */
-    public static function choices(CarbonImmutable $today, int $count = 6): array
+    public static function choices(CarbonImmutable $today, int $count = 6, ?string $including = null): array
     {
         $keys = [];
         $quarter = self::quarterOf($today);
@@ -74,7 +75,9 @@ final readonly class RegulatoryPeriod
             $quarter = $quarter->previousQuarter();
         }
 
-        return [...$keys, (string) $today->year, (string) ($today->year - 1)];
+        $keys = [...$keys, (string) $today->year, (string) ($today->year - 1)];
+
+        return $including === null || in_array($including, $keys, true) ? $keys : [$including, ...$keys];
     }
 
     private static function invalid(): BusinessRuleViolation

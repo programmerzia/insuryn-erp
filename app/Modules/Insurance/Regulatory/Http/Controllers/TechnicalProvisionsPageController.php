@@ -63,11 +63,11 @@ final class TechnicalProvisionsPageController
                 $journal[] = ['event' => 'IBNR_PROVISION', 'class' => (string) $line['label'], 'debit' => 'Claims incurred – IBNR', 'credit' => 'IBNR provision', 'amount' => $money((int) $line['ibnr_minor'])];
             }
         }
-        $percent = fn (int $bp): string => PageSupport::percent($bp);
+        $percent = fn (int $bp): string => PageSupport::percent($bp).'%';
 
         return Inertia::render('regulatory/Provisions', [
             'quarter' => ['key' => $quarter->key, 'label' => $quarter->label(), 'end' => $quarter->end->toDateString()],
-            'quarters' => array_map(fn (string $key): array => ['value' => $key, 'label' => RegulatoryPeriod::fromKey($key)->label()], array_slice(RegulatoryPeriod::choices($today, 8), 0, 8)),
+            'quarters' => array_map(fn (string $key): array => ['value' => $key, 'label' => RegulatoryPeriod::fromKey($key)->label()], array_values(array_filter(RegulatoryPeriod::choices($today, 8, $quarter->key), fn (string $key): bool => str_contains($key, 'Q')))),
             'run' => $run === null ? null : ['id' => (string) $run->id, 'number' => $run->number, 'status' => (string) $run->status,
                 'prepared' => ($names[$run->prepared_by] ?? '').' · '.CarbonImmutable::parse((string) $run->prepared_at)->format('j M Y H:i'),
                 'reviewed' => $run->reviewed_by === null ? null : ($names[$run->reviewed_by] ?? '').' · '.CarbonImmutable::parse((string) $run->reviewed_at)->format('j M Y H:i'),
