@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2, Truck, FileInput, Send, Armchair, TrendingDown, PiggyBank } from 'lucide-vue-next';
+import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2, Truck, FileInput, Send, Armchair, TrendingDown, PiggyBank, Coins } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). GA-37: each label is the title of the page it opens, in the words of docs/glossary.md, and no two items share an icon. Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -67,6 +67,8 @@ export const navigation: NavItem[] = [
     { id: 'depreciation', page: 'fixedAssets/Depreciation', label: 'Monthly depreciation', href: '/fixed-assets/depreciation', icon: TrendingDown, any: ['fa.manage', 'fa.post_depreciation', reader], group: 'Assets & budgets' },
     // Design addendum v2 §B.8.1: budgets and the variance report.
     { id: 'budgets', detail: 'budgets/Show', page: 'budgets/Index', label: 'Budgets', href: '/budgets', icon: PiggyBank, any: ['budget.prepare', 'budget.approve', reader], group: 'Assets & budgets' },
+    // Design addendum v2 §B.6: petty cash floats, vouchers, replenishment and counts.
+    { id: 'petty-cash', detail: 'pettyCash/Show', page: 'pettyCash/Index', label: 'Petty cash', href: '/petty-cash', icon: Coins, any: ['pettycash.spend', 'pettycash.replenish', 'pettycash.approve', reader], group: 'Assets & budgets' },
     { id: 'parties', label: 'Parties', href: '/parties', icon: Users, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
     { id: 'producers', detail: 'distribution/producers/Show', page: 'distribution/producers/Index', label: 'Producers', href: '/distribution/producers', icon: UsersRound, any: ['agent.manage', 'commission.approve', 'commission.pay', 'commission.manage_plans', reader, 'reports.regulatory'], secondary: true },
     { id: 'hierarchy', page: 'distribution/hierarchy/Index', label: 'Hierarchy', href: '/distribution/hierarchy', icon: Network, any: ['agent.manage', 'commission.manage_plans', 'commission.approve', reader], secondary: true },

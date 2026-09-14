@@ -72,6 +72,13 @@ final class ReasonMessages
         'BUDGET_ACCOUNT_INVALID' => 'Budget lines are for active income and expense accounts. Choose another account.',
         'BUDGET_EMPTY' => 'The budget has no amounts yet. Enter them before sending it for approval.',
         'BUDGET_NO_ACTUALS' => 'Last year has no posted income or expense by branch to copy. Enter the budget in the grid or paste it instead.',
+        // Design addendum v2 §B.6 petty cash.
+        'PETTY_CASH_ACCOUNT_INVALID' => 'Choose an active account of the right kind: an asset account for the float, an expense account for a voucher.',
+        'PETTY_CASH_INSUFFICIENT' => 'The float does not hold enough cash for this voucher. Ask for a replenishment first.',
+        'PETTY_CASH_NOTHING_TO_REPLENISH' => 'No vouchers have been paid since the last replenishment.',
+        'PETTY_CASH_REPLENISHMENT_PENDING' => 'A replenishment of this float is already waiting for approval.',
+        'PETTY_CASH_NOT_PENDING' => 'This replenishment has already been decided. Refresh the page.',
+        'PETTY_CASH_CUSTODIAN_COUNT' => 'The custodian cannot count their own float. Ask someone from accounts to count it.',
         'ASSET_DEPRECIATED_AFTER_DISPOSAL' => 'Depreciation is already posted for the month of this disposal or later. Date the disposal after the last depreciated month.',
         'EVENT_NOT_STUCK' => 'This accounting event has already been posted or is waiting its turn; only failed or long-queued events can be sent again. Refresh the list.',
         'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',

@@ -3,6 +3,7 @@ code,name,type,normal_side,is_control,control_subledger,role
 1020,Bank - Clearing,asset,debit,false,,bank_clearing
 1025,Cheques in Clearing,asset,debit,false,,cheques_in_clearing
 1030,Cash in Hand,asset,debit,false,,
+1040,Petty Cash,asset,debit,false,,petty_cash
 1100,Premium Receivable,asset,debit,true,premium,premium_receivable
 1150,Agent Collections Receivable,asset,debit,true,agent,agent_receivable
 1160,Producer Advances,asset,debit,false,,producer_advances
@@ -44,6 +45,8 @@ code,name,type,normal_side,is_control,control_subledger,role
 5400,Office Rent,expense,debit,false,,
 5450,Premium Written Off,expense,debit,false,,premium_written_off
 5410,Reinsurance Premium Ceded,expense,debit,false,,ri_premium_ceded
+5480,Sundry Office Expenses,expense,debit,false,,petty_cash_expense
+5490,Cash Shortage and Surplus,expense,debit,false,,petty_cash_over_short
 5500,Printing and Stationery,expense,debit,false,,
 5600,Bank Charges,expense,debit,false,,bank_charges
 5700,General and Administrative Expenses,expense,debit,false,,ap_expense

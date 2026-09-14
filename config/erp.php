@@ -21,7 +21,7 @@ return [
         'transient_retry_attempts' => 5,
         // Roles an event may point at a specific account through payload.account_overrides (design §4.2: a receipt's bank account).
         // D-100 (addendum v2 §B.2.1 PD-4): ap_expense lines take the account of each supplier bill line.
-        'overridable_roles' => ['bank_main', 'ap_expense', 'fixed_asset_cost', 'accumulated_depreciation', 'depreciation_expense', 'asset_disposal_gain_loss'], // + design addendum v2 PD-4: fixed assets post to their class's accounts
+        'overridable_roles' => ['bank_main', 'ap_expense', 'fixed_asset_cost', 'accumulated_depreciation', 'depreciation_expense', 'asset_disposal_gain_loss', 'petty_cash', 'petty_cash_expense'], // + design addendum v2 PD-4: fixed assets post to their class's accounts
         // ASSUMPTION A-173 (gap fix GA-08): a queued event not posted after this many minutes is listed as stuck on Accounting events (the worker was down).
         'stale_after_minutes' => (int) env('ERP_POSTING_STALE_AFTER_MINUTES', 15),
     ],
@@ -345,6 +345,8 @@ return [
                 'href' => '/fixed-assets/register', 'export' => '/fixed-assets/register/export'],
             ['title' => 'Budget variance', 'description' => 'Actual against the approved budget for a month and the year to date, by account group and branch.',
                 'href' => '/budgets/variance', 'export' => '/budgets/variance/export'],
+            ['title' => 'Petty cash book', 'description' => 'Cash received and paid per petty cash float, with the running balance.',
+                'href' => '/petty-cash/book', 'export' => '/petty-cash/book/export'],
         ],
     ],
     'fixed_assets' => [

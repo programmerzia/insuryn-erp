@@ -38,3 +38,18 @@ Route::middleware('auth')->prefix('budgets')->group(function (): void {
     Route::post('{budget}/copy-actuals', [$budgets, 'copyActuals'])->whereUuid('budget');
     Route::post('{budget}/{action}', [$budgets, 'transition'])->whereUuid('budget')->whereIn('action', ['submit', 'approve', 'return', 'revise']);
 });
+
+// Design addendum v2 §B.6 petty cash: floats, vouchers with receipts, replenishment (request ✕ approve), cash counts, the petty cash book.
+Route::middleware('auth')->prefix('petty-cash')->group(function (): void {
+    $pettyCash = \App\Modules\Finance\Expenses\Http\Controllers\PettyCashPageController::class;
+    Route::get('/', [$pettyCash, 'index']);
+    Route::post('/', [$pettyCash, 'store'])->middleware('moves-money');
+    Route::get('book', [$pettyCash, 'book']);
+    Route::get('book/export', [$pettyCash, 'exportBook']);
+    Route::get('{float}', [$pettyCash, 'show'])->whereUuid('float');
+    Route::post('{float}/vouchers', [$pettyCash, 'spend'])->whereUuid('float')->middleware('moves-money');
+    Route::post('{float}/replenishments', [$pettyCash, 'replenish'])->whereUuid('float');
+    Route::post('{float}/counts', [$pettyCash, 'count'])->whereUuid('float')->middleware('moves-money');
+    Route::post('replenishments/{replenishment}/{decision}', [$pettyCash, 'decide'])->whereUuid('replenishment')->whereIn('decision', ['approve', 'reject'])->middleware('moves-money');
+    Route::get('vouchers/{voucher}/documents/{document}', [$pettyCash, 'downloadDocument'])->whereUuid(['voucher', 'document']);
+});

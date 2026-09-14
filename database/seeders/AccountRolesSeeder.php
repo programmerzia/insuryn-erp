@@ -63,6 +63,10 @@ final class AccountRolesSeeder extends Seeder
         'accumulated_depreciation' => 'Accumulated depreciation on fixed assets (per asset class)',
         'depreciation_expense' => 'Depreciation charged to profit and loss (per asset class)',
         'asset_disposal_gain_loss' => 'Gain or loss on disposal of fixed assets',
+        // Design addendum v2 §B.6 petty cash (migration 2026_10_05_000273)
+        'petty_cash' => 'Petty cash floats held at branches',
+        'petty_cash_expense' => 'Expenses paid from petty cash (per voucher account)',
+        'petty_cash_over_short' => 'Petty cash shortages and surpluses found on counting',
     ];
 
     public function run(): void

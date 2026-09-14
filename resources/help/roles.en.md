@@ -54,6 +54,9 @@ account role (do not translate it); the others say what a debit or a credit to t
 | accumulated_depreciation | Depreciation taken off an asset that left the books | Part of the asset's cost used up so far |
 | depreciation_expense | This month's cost of using the company's assets | Depreciation cost reduced |
 | asset_disposal_gain_loss | Loss on selling or scrapping an asset | Gain on selling an asset for more than its book value |
+| petty_cash | Cash put into a branch petty cash float | Cash paid out of the petty cash float |
+| petty_cash_expense | A small expense paid from petty cash | Petty cash expense reduced |
+| petty_cash_over_short | Cash found short on counting the float | Cash found over on counting the float |
 
 ## When one event changes what a line means
 

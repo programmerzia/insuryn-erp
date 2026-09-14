@@ -20,6 +20,7 @@ final class PermissionCatalogue
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'budget' => 'Budgets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
+        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'budget' => 'Budgets', 'pettycash' => 'Petty cash', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
@@ -100,6 +101,10 @@ final class PermissionCatalogue
         // Design addendum v2 §B.8.1 budgets (A-277)
         'budget.prepare' => ['Prepare budgets', 'Enter, paste or copy budget amounts and send a budget version for approval.'],
         'budget.approve' => ['Approve budgets', 'Approve or return a budget version someone else prepared.'],
+        // Design addendum v2 §B.6 petty cash (A-278)
+        'pettycash.spend' => ['Pay petty cash vouchers', 'Pay small expenses from a branch petty cash float, with the receipt.'],
+        'pettycash.replenish' => ['Replenish and count petty cash', 'Ask for a float to be topped up and count a float held by someone else.'],
+        'pettycash.approve' => ['Approve petty cash', 'Set up floats and approve replenishments someone else asked for.'],
     ];
 
     public static function groupLabel(string $code): string

@@ -90,6 +90,10 @@ final class DemoTenantSeeder extends Seeder
                 '1690' => ['Accumulated Depreciation', 'asset', 'credit', 'accumulated_depreciation', false, null],
                 '5710' => ['Depreciation', 'expense', 'debit', 'depreciation_expense', false, null],
                 '4800' => ['Gain/Loss on Disposal of Assets', 'income', 'credit', 'asset_disposal_gain_loss', false, null],
+                // Design addendum v2 §B.6 petty cash.
+                '1040' => ['Petty Cash', 'asset', 'debit', 'petty_cash', false, null],
+                '5480' => ['Sundry Office Expenses', 'expense', 'debit', 'petty_cash_expense', false, null],
+                '5490' => ['Cash Shortage and Surplus', 'expense', 'debit', 'petty_cash_over_short', false, null],
             ];
             $accounts = [];
             foreach ($coa as $code => [$name, $type, $side, $role, $control, $sub]) {

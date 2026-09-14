@@ -51,6 +51,8 @@ final class PermissionsSeeder extends Seeder
         'fa.manage','fa.post_depreciation',
         // Design addendum v2 §B.8.1 budgets (A-277)
         'budget.prepare','budget.approve',
+        // Design addendum v2 §B.6 petty cash (A-278)
+        'pettycash.spend','pettycash.replenish','pettycash.approve',
     ];
 
     /**
@@ -74,6 +76,8 @@ final class PermissionsSeeder extends Seeder
         ['ap.prepare_payments', 'ap.approve_payments', 'object'],
         ['ap.approve_payments', 'ap.release_payments', 'object'],
         ['ap.prepare_payments', 'ap.release_payments', 'object'],
+        ['pettycash.replenish', 'pettycash.approve', 'object'], // design addendum v2 §B.6: whoever asks for a replenishment does not approve it
+        ['pettycash.spend', 'pettycash.approve', 'user'], // §B.6: the custodian does not approve their own cash
         ['budget.prepare', 'budget.approve', 'object'], // design addendum v2 §B.8.1: whoever prepared a budget version does not approve it
     ];
 

@@ -63,7 +63,7 @@ final class RoleTemplates
         // ASSUMPTION A-242 (slices 2.3/2.4): the finance manager (and CFO) approve supplier bills and payment runs the accountant prepared, and keep suppliers.
         'ap.manage_suppliers', 'ap.approve_bills', 'ap.approve_payments',
         // ASSUMPTION A-276 (design addendum v2 §B.7): the finance manager (and CFO) post the monthly depreciation the accountant previews.
-        'fa.post_depreciation', 'budget.approve'];
+        'fa.post_depreciation', 'budget.approve', 'pettycash.approve'];
     // ASSUMPTION A-268 (market gap G5): the CFO approves and posts the technical provisions run, never one they prepared (SoD object rule).
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control', 'provisions.approve',
         // ASSUMPTION A-242 (slice 2.4): the CFO releases supplier payment runs the finance manager approved (never one they approved: SoD object rule).
@@ -90,7 +90,9 @@ final class RoleTemplates
                 // finance approves it (receipt.write_off_approve), never the same person (the approval engine's maker ≠ checker).
                 'receipt.write_off_request',
                 // ASSUMPTION A-257 (reinsurance MVP): the branch manager who decides underwriting places a large risk facultatively and sees its reinsurance.
-                'ri.place_facultative', 'ri.view']],
+                'ri.place_facultative', 'ri.view',
+                // ASSUMPTION A-278 (design addendum v2 §B.6): the branch manager is the custodian of the branch petty cash float.
+                'pettycash.spend']],
             'claims_officer' => ['name' => 'Claims Officer', 'permissions' => self::CLAIMS_OFFICER],
             'claims_manager' => ['name' => 'Claims Manager', 'permissions' => [...self::CLAIMS_OFFICER, 'claim.approve', 'claim.pay_request', 'claim.close']],
             'accountant' => ['name' => 'Accountant', 'permissions' => [...self::ACCOUNTANT,
@@ -110,7 +112,9 @@ final class RoleTemplates
                 // ASSUMPTION A-276 (design addendum v2 §B.7): the accountant keeps the fixed asset register.
                 'fa.manage',
                 // ASSUMPTION A-277 (design addendum v2 §B.8.1): the accountant prepares the budget; the finance manager (and CFO) approve it.
-                'budget.prepare']],
+                'budget.prepare',
+                // ASSUMPTION A-278 (design addendum v2 §B.6): the accountant asks for petty cash replenishment and counts the floats.
+                'pettycash.replenish']],
             'finance_manager' => ['name' => 'Finance Manager', 'permissions' => $financeManager],
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
             // ASSUMPTION A-287 (People/Payroll MVP): HR keeps the employee records and the payroll rules and calculates the monthly payroll; finance approves it.

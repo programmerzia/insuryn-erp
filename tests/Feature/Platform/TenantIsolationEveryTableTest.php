@@ -223,6 +223,15 @@ function populateEveryTenantTable(array $ctx): void
             'version' => 1, 'status' => 'draft', 'prepared_by' => $world['admin']]);
         DB::table('budget_lines')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'budget_id' => $budgetId, 'account_id' => $ctx['accounts']['salary_expense'], 'branch_id' => $ctx['branch_id'],
             'period_no' => 3, 'amount_minor' => 100]);
+        // Design addendum v2 §B.6 petty cash.
+        DB::table('petty_cash_floats')->insert(['id' => $floatId = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], 'code' => 'PC-HO', 'name' => 'Float',
+            'custodian_user_id' => $world['admin'], 'imprest_minor' => 100, 'gl_account_id' => $ctx['accounts']['petty_cash'], 'currency' => 'BDT', 'issued_on' => '2026-09-01', 'bank_account_id' => (string) Str::uuid7()]);
+        DB::table('petty_cash_replenishments')->insert(['id' => $replenishmentId = (string) Str::uuid7(), 'tenant_id' => $t, 'float_id' => $floatId, 'number' => 'PCR-ISOLATION-'.$t, 'amount_minor' => 10,
+            'bank_account_id' => (string) Str::uuid7(), 'status' => 'pending_approval', 'requested_by' => $world['admin'], 'requested_at' => now()]);
+        DB::table('petty_cash_vouchers')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'float_id' => $floatId, 'number' => 'PCV-ISOLATION-'.$t, 'voucher_date' => '2026-09-02', 'payee' => 'Shop',
+            'description' => 'Tea', 'account_id' => $ctx['accounts']['petty_cash_expense'], 'amount_minor' => 10, 'replenishment_id' => $replenishmentId, 'created_by' => $world['admin']]);
+        DB::table('petty_cash_counts')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'float_id' => $floatId, 'counted_on' => '2026-09-03', 'counted_minor' => 90, 'expected_minor' => 90,
+            'difference_minor' => 0, 'counted_by' => $world['admin']]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
         // Reinsurance MVP (G4): every reinsurance table.
         $t = $ctx['tenant_id'];

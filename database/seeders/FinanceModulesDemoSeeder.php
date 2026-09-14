@@ -24,6 +24,7 @@ use Illuminate\Support\Str;
  *   old desktop batch sold in August. August's depreciation is posted by the close; September's is left to preview and post.
  * - Budgets: operating expense accounts; July–September salaries, rent, utilities, marketing and IT posted per branch (accrued to payables); the FY2026
  *   operating budget per account × branch × month prepared by the accountant and approved by the finance manager, so September shows its variances.
+ * - Petty cash: Head Office (20,000) and Chattogram (10,000) floats held by the branch manager, twelve September vouchers, the Head Office float replenished.
  */
 final class FinanceModulesDemoSeeder
 {
@@ -80,6 +81,51 @@ final class FinanceModulesDemoSeeder
         $this->branches = ['HO' => $headOfficeId, 'CTG' => $chattogramId];
         $this->fixedAssets($entityId, $bankAccountId, $users);
         $this->budgets($entityId, $users);
+        $this->pettyCash($entityId, $bankAccountId, $users);
+    }
+
+    /** September vouchers: [float, date, paid to, for, account code, BDT] */
+    private const VOUCHERS = [
+        ['HO', '2026-09-01', 'Nahar Stationery, Gulshan-1', 'A4 paper and toner for the accounts section', '5440', 1_850],
+        ['HO', '2026-09-02', 'Pathao courier', 'Policy documents to Motijheel customers', '5450', 640],
+        ['HO', '2026-09-03', 'Rahman Tea Stall', 'Tea and snacks for the underwriting meeting', '5460', 920],
+        ['HO', '2026-09-06', 'CNG auto-rickshaw', 'Surveyor visit to Tejgaon claim site', '5450', 450],
+        ['HO', '2026-09-08', 'Bismillah Electric, Gulshan', 'Tube lights and switch repair, 3rd floor', '5470', 2_300],
+        ['HO', '2026-09-09', 'Nahar Stationery, Gulshan-1', 'Receipt books and envelopes', '5440', 1_420],
+        ['HO', '2026-09-12', 'Uber', 'Cheque deposit run to City Bank Gulshan', '5450', 380],
+        ['CTG', '2026-09-02', 'Agrabad Photocopy Centre', 'Photocopies of claim files', '5440', 560],
+        ['CTG', '2026-09-04', 'CNG auto-rickshaw', 'Branch officer visit to Khatunganj warehouse', '5450', 700],
+        ['CTG', '2026-09-07', 'Mezban House, Agrabad', 'Lunch for visiting surveyor', '5460', 1_250],
+        ['CTG', '2026-09-09', 'Chittagong Sanitary Store', 'Washroom tap repair', '5470', 980],
+        ['CTG', '2026-09-11', 'Sundarban Courier', 'Documents to head office', '5450', 320],
+    ];
+
+    /**
+     * Petty cash: Head Office and Chattogram floats (20,000 and 10,000) held by the branch manager from 1 September, a dozen September vouchers, and the
+     * Head Office float replenished — asked for by the accountant, approved and paid by the finance manager.
+     *
+     * @param array<string, string> $users
+     */
+    private function pettyCash(string $entityId, string $bankAccountId, array $users): void
+    {
+        $pettyCash = app(\App\Modules\Finance\Expenses\Application\PettyCashService::class);
+        $gl = $this->account($entityId, '1040');
+        $floats = [];
+        foreach (['HO' => ['PC-HO', 'Head office petty cash', 20_000], 'CTG' => ['PC-CTG', 'Chattogram branch petty cash', 10_000]] as $branch => [$code, $name, $limit]) {
+            $floats[$branch] = $pettyCash->createFloat($entityId, $this->branches[$branch], $code, $name, $users['branch_manager'], $limit * 100, $gl, $bankAccountId,
+                CarbonImmutable::parse('2026-09-01'), $users['finance_manager']);
+        }
+        foreach ([true, false] as $beforeReplenishment) {
+            foreach (self::VOUCHERS as [$branch, $date, $payee, $description, $code, $amount]) {
+                if (($date <= '2026-09-10') === $beforeReplenishment) {
+                    $pettyCash->spend($floats[$branch] ?? '', CarbonImmutable::parse($date), $payee, $description, $this->account($entityId, (string) $code), $amount * 100, $users['branch_manager']);
+                }
+            }
+            if ($beforeReplenishment) {
+                $replenishment = $pettyCash->requestReplenishment($floats['HO'] ?? '', $bankAccountId, $users['accountant'], CarbonImmutable::parse('2026-09-10'));
+                $pettyCash->approveReplenishment($replenishment, CarbonImmutable::parse('2026-09-11'), $users['finance_manager']);
+            }
+        }
     }
 
     /** Operating expense accounts the budget and petty cash use: code => name (5300 Salaries exists in the chart). */
@@ -88,7 +134,7 @@ final class FinanceModulesDemoSeeder
 
     /** Monthly budget per branch (BDT): account code => [HO, CTG]. Salaries double in March (Eid-ul-Fitr festival bonus). */
     private const BUDGET = ['5300' => [1_850_000, 720_000], '5400' => [650_000, 220_000], '5410' => [120_000, 55_000], '5420' => [250_000, 90_000], '5430' => [180_000, 45_000],
-        '5440' => [40_000, 15_000], '5450' => [60_000, 30_000], '5460' => [30_000, 12_000], '5470' => [35_000, 12_000]];
+        '5440' => [4_000, 1_500], '5450' => [2_500, 1_200], '5460' => [1_500, 1_000], '5470' => [3_000, 1_000]];
 
     /** Posted expense by month (BDT), billed on credit: month => branch => account code => amount. September shows the variances. */
     private const ACTUALS = [
