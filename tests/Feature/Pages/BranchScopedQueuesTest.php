@@ -101,7 +101,7 @@ beforeEach(function (): void {
         $approved = $proposals->createFromQuotation($quote('motor', $motor())->id, $admin);
         $proposals->verifyKyc($approved->id, 'nid', '1990123456789', $admin);
         $approved = $proposals->submit($approved->id, $admin);
-        $note = app(CoverNoteService::class)->issue($approved->id, $d('2026-09-15'), $d('2026-10-10'), $admin);
+        $note = app(CoverNoteService::class)->issue($approved->id, $d('2026-09-15'), $d('2026-10-10'), $admin, 'TRF-CN-'.$code); // GA-28: the premium was received
 
         return ['agent' => $agent->id, 'policy' => $policy->id, 'number' => (string) $policy->number, 'paid' => $paid->id, 'receipt' => $receipt->id, 'receipt_number' => $receipt->number,
             'cheque' => $cheque->id, 'claim' => $claim->id, 'claim_number' => $claim->number, 'quotation' => $quotation->id, 'referred' => $referred->id,

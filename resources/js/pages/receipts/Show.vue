@@ -77,6 +77,7 @@ const facts = computed(() => [
                 <p v-if="receipt.for_policy && suspense && suspense.status === 'open'" class="mb-3 text-ui text-ink-2">
                     Taken for <Link :href="`/policies/${receipt.for_policy.id}`" class="text-accent-text hover:underline">{{ receipt.for_policy.number }}</Link>.
                     {{ actions.allocate ? 'Allocate it to the policy\'s installments.' : 'It is held in suspense until your branch manager allocates it.' }}
+                </p>
                 <p v-if="receipt.payer || receipt.collected_by" class="mb-3 text-ui text-ink-2">
                     <template v-if="receipt.payer">Received from <Link :href="`/parties/${receipt.payer.id}`" class="text-accent-text hover:underline">{{ receipt.payer.name }}</Link></template>
                     <template v-if="receipt.payer && receipt.collected_by"> · </template>

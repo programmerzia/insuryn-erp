@@ -34,7 +34,7 @@ final readonly class PartyContact
         $text = fn (string $key): ?string => isset($input[$key]) && trim((string) $input[$key]) !== '' ? trim((string) $input[$key]) : null;
         $email = $text('email');
         if ($email !== null && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            throw new BusinessRuleViolation('PARTY_EMAIL_INVALID', 'Enter an email address like name@example.com.');
+            throw new BusinessRuleViolation('PARTY_EMAIL_INVALID', 'Enter a whole email address, with an @ and the part after it.');
         }
         $born = $text('date_of_birth');
         $dateOfBirth = null;
