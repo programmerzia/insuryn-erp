@@ -10,6 +10,7 @@ code,name,type,normal_side,is_control,control_subledger,role
 2010,Suspense - Unallocated Receipts,liability,credit,true,suspense,suspense_receipts
 2100,Unearned Premium Reserve,liability,credit,false,,unearned_premium
 2150,Premium Tax Payable (VAT),liability,credit,false,,premium_tax_payable
+2155,Stamp Duty Payable,liability,credit,false,,stamp_duty_payable
 2160,Customer Refunds Payable,liability,credit,false,,customer_refund_payable
 2200,Outstanding Claims Reserve,liability,credit,true,claims,claims_outstanding
 2210,Claims Payable,liability,credit,true,claims,claims_payable

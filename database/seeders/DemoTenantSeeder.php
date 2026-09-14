@@ -49,6 +49,7 @@ final class DemoTenantSeeder extends Seeder
                 '2010' => ['Suspense - Unallocated Receipts', 'liability', 'credit', 'suspense_receipts', true, 'suspense'],
                 '2100' => ['Unearned Premium Reserve', 'liability', 'credit', 'unearned_premium', false, null],
                 '2150' => ['Premium Tax Payable', 'liability', 'credit', 'premium_tax_payable', false, null],
+                '2155' => ['Stamp Duty Payable', 'liability', 'credit', 'stamp_duty_payable', false, null],
                 '2160' => ['Customer Refunds Payable', 'liability', 'credit', 'customer_refund_payable', false, null],
                 '2200' => ['Outstanding Claims Reserve', 'liability', 'credit', 'claims_outstanding', true, 'claims'],
                 '2210' => ['Claims Payable', 'liability', 'credit', 'claims_payable', true, 'claims'],

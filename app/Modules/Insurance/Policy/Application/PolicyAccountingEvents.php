@@ -18,11 +18,12 @@ final class PolicyAccountingEvents
 {
     public function __construct(private readonly SubmitAccountingEvent $submit) {}
 
-    /** Design §4.1. */
+    /** Design §4.1; stamp duty of a rated policy on its own line (slice R7, D-37, rule version 2). */
     public function issued(Policy $policy, PolicyTransaction $transaction, CarbonImmutable $transactionDate): void
     {
         $this->submitFor($policy, $transaction, 'POLICY_ISSUED', $transactionDate, $policy->inception, [
             'gross_premium' => $transaction->premium_delta_minor, 'net_premium' => $transaction->net_delta_minor, 'tax' => $transaction->tax_delta_minor,
+            'stamp_duty' => (int) $transaction->stamp_duty_delta_minor,
         ]);
     }
 
@@ -31,6 +32,7 @@ final class PolicyAccountingEvents
     {
         $this->submitFor($policy, $transaction, 'POLICY_ENDORSED', $transaction->effective_date, $transaction->effective_date, [
             'gross_premium_delta' => $transaction->premium_delta_minor, 'net_premium_delta' => $transaction->net_delta_minor, 'tax_delta' => $transaction->tax_delta_minor,
+            'stamp_duty_delta' => (int) $transaction->stamp_duty_delta_minor,
         ]);
     }
 

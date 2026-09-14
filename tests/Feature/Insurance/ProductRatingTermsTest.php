@@ -99,8 +99,13 @@ it('configures rating fields and adds coverages only while no policy uses the ve
                 BusinessRuleViolation::class)->reasonCode)->toBe('COVERAGE_DUPLICATE')
             ->and(DB::table('audit_events')->where('action', 'product_version.rating_configured')->count())->toBe(1);
 
-        app(PolicyLifecycle::class)->quote(new QuoteRequest($this->ctx['entity_id'], $this->ctx['branch_id'], $world['product_id'], $world['policyholder_id'], null,
-            CarbonImmutable::parse('2026-07-01'), 1_000_000, 'BDT', 1), $world['admin']);
+        // Slice R7: a rated version refuses a typed premium, so the policy that puts the version in use is written directly (as an in-force policy would be).
+        expect(thrownBy(fn () => app(PolicyLifecycle::class)->quote(new QuoteRequest($this->ctx['entity_id'], $this->ctx['branch_id'], $world['product_id'], $world['policyholder_id'], null,
+            CarbonImmutable::parse('2026-07-01'), 1_000_000, 'BDT', 1), $world['admin']), BusinessRuleViolation::class)->reasonCode)->toBe('PRODUCT_RATED');
+        App\Modules\Insurance\Policy\Domain\Models\Policy::query()->create(['entity_id' => $this->ctx['entity_id'], 'branch_id' => $this->ctx['branch_id'], 'product_id' => $world['product_id'],
+            'product_version_id' => $world['product_version_id'], 'policyholder_party_id' => $world['policyholder_id'], 'channel' => 'direct', 'status' => 'quote',
+            'inception' => '2026-07-01', 'expiry' => '2027-06-30', 'currency' => 'BDT', 'gross_premium_minor' => 1_000_000, 'tax_minor' => 0, 'net_premium_minor' => 1_000_000,
+            'installment_count' => 1, 'version' => 1, 'created_by' => $world['admin']]);
         expect(thrownBy(fn () => $this->catalogue->configureRating($world['product_version_id'], ['min_premium_minor' => 1], $world['admin']), BusinessRuleViolation::class)->reasonCode)
             ->toBe('PRODUCT_VERSION_IN_USE')
             ->and(thrownBy(fn () => $this->catalogue->addCoverage($world['product_version_id'], ['code' => 'tp', 'name_en' => 'TP', 'name_bn' => 'টিপি', 'basis' => 'flat'], $world['admin']),

@@ -11,7 +11,8 @@ use function Pest\Laravel\travelTo;
 
 /**
  * Session S2: `php artisan erp:demo` seeds exactly the market cross-check Part A story ("a week in a non-life insurer") in its own tenant, through
- * the application services — 3 products, 5 customers, 2 producers (one on commission, one salaried with none), 8 policies at different stages,
+ * the application services — 3 products, 5 customers, 2 producers (one on commission, one salaried with none), 7 policies at different stages sold through
+ * quotation, proposal and policy on the placeholder tariffs (Phase 3 R7) and a quotation to follow up,
  * receipts including one still in suspense, a bank statement CSV with matches and 2 exceptions, 2 claims (one paid, one reserved), August
  * closed and locked, September open. Rerunning changes nothing; it runs in local and staging only.
  */
@@ -35,11 +36,18 @@ it('seeds the Part A story through the services', function (): void {
     expect(Artisan::call('erp:demo'))->toBe(0);
     $tenantId = (string) DB::table('tenants')->where('slug', 'nonlife')->value('id');
 
-    expect(($this->count)($tenantId))->toMatchArray(['products' => 3, 'customers' => 5, 'producers' => 2, 'policies' => 8, 'claims' => 2]);
+    expect(($this->count)($tenantId))->toMatchArray(['products' => 3, 'customers' => 5, 'producers' => 2, 'policies' => 7, 'claims' => 2]);
     asTenant($tenantId, function (): void {
         $policies = DB::table('policies')->pluck('status')->countBy()->all();
-        expect(array_keys($policies))->toContain('quote', 'cancelled')
+        expect(array_keys($policies))->toContain('cancelled')
             ->and(($policies['issued'] ?? 0) + ($policies['active'] ?? 0))->toBe(6);
+        // Phase 3 R7: the products are rated, so the quote to follow up is an issued quotation (a typed-premium quote is refused), and every policy was issued
+        // from its approved proposal on its frozen rating, with stamp duty on its own line.
+        expect(DB::table('quotations')->where('status', 'issued')->count())->toBe(1)->and(DB::table('policies')->where('status', 'quote')->count())->toBe(0)
+            ->and(DB::table('policies')->whereNull('rating_result')->orWhereNull('proposal_id')->count())->toBe(0)
+            ->and(DB::table('proposals')->where('status', 'issued')->count())->toBe(7)
+            ->and(DB::table('policies')->where('stamp_duty_minor', '>', 0)->count())->toBe(7)
+            ->and((int) DB::table('policies')->sum(DB::raw('gross_premium_minor - net_premium_minor - tax_minor - stamp_duty_minor')))->toBe(0);
 
         // One commission producer accrues commission on receipts; the salaried one has none.
         expect(DB::table('commission_entries')->distinct()->count('agent_id'))->toBe(1);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import { Plus, X } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -22,6 +22,8 @@ const props = defineProps<{
     products: { id: string; code: string; name: string }[];
     parties: { id: string; display_name: string }[];
     agents: { id: string; code: string; display_name: string }[];
+    /** Slice R7: products priced by a tariff are not listed here; they are quoted in the quote workbench. */
+    ratedProducts: number;
 }>();
 
 const DRAFT = 'quote-create';
@@ -93,6 +95,9 @@ function saveDraft(): void {
                         <LookupInput v-model="form.policyholder_party_id" type="customer" creatable :initial="holder" @selected="holder = $event" />
                     </Field>
                     <Field id="product_id" label="Product" :error="form.errors.product_id"><SelectInput id="product_id" v-model="form.product_id" placeholder="Choose a product" :options="products.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))" /></Field>
+                    <p v-if="ratedProducts > 0" class="-mt-2 text-dense text-ink-2">
+                        {{ ratedProducts === 1 ? 'One product is' : `${ratedProducts} products are` }} priced by a tariff and not listed here. <Link href="/quotations/create" class="text-accent-text hover:underline">Quote it in Quotes</Link>.
+                    </p>
                     <Field id="agent_id" label="Agent" optional :error="form.errors.agent_id" hint="Leave empty for direct business."><LookupInput v-model="form.agent_id" type="agent" :initial="agent" @selected="agent = $event" /></Field>
                     <Field id="branch_id" label="Branch" :error="form.errors.branch_id"><SelectInput id="branch_id" v-model="form.branch_id" :options="branches.map((b) => ({ value: b.id, label: b.name }))" /></Field>
                 </template>

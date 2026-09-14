@@ -49,6 +49,8 @@ watch(tab, (value) => {
 const tabs = [
     { value: 'overview', label: 'Overview' },
     { value: 'transactions', label: props.transactionsLabel ?? 'Transactions' },
+    // Slice R7: the policy page's Rating tab (frozen breakdown and endorsement re-ratings), shown when the page fills the slot.
+    { value: 'rating', label: 'Rating' },
     { value: 'timeline', label: 'Timeline' },
     { value: 'accounting', label: 'Accounting' },
     { value: 'documents', label: 'Documents' },
@@ -85,7 +87,7 @@ const tabs = [
         <TabsRoot v-model="tab" class="flex flex-1 flex-col">
             <TabsList class="flex gap-5 border-b border-line px-6" aria-label="Sections">
                 <template v-for="item in tabs" :key="item.value">
-                    <TabsTrigger v-if="item.value !== 'transactions' || $slots.transactions" :value="item.value" class="-mb-px h-9 border-b-2 border-transparent text-ui text-ink-2 hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink">
+                    <TabsTrigger v-if="(item.value !== 'transactions' || $slots.transactions) && (item.value !== 'rating' || $slots.rating)" :value="item.value" class="-mb-px h-9 border-b-2 border-transparent text-ui text-ink-2 hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink">
                         {{ item.label }}
                     </TabsTrigger>
                 </template>
@@ -93,6 +95,7 @@ const tabs = [
             <div class="flex-1 px-6 py-4">
                 <TabsContent value="overview" class="outline-none"><slot name="overview" /></TabsContent>
                 <TabsContent v-if="$slots.transactions" value="transactions" class="outline-none"><slot name="transactions" /></TabsContent>
+                <TabsContent v-if="$slots.rating" value="rating" class="outline-none"><slot name="rating" /></TabsContent>
                 <TabsContent value="timeline" class="outline-none"><Timeline :entries="timeline ?? []" /></TabsContent>
                 <TabsContent value="accounting" class="max-w-[900px] outline-none">
                     <Deferred data="accounting"><template #fallback><SkeletonRows /></template><AccountingList :journals="accounting ?? []" :currency="currency" :from="title" /></Deferred>

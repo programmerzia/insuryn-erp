@@ -12,6 +12,7 @@ account role (do not translate it); the others say what a debit or a credit to t
 | unearned_premium | Cover has been provided, so this premium is no longer owed to the customer | Cover not yet provided — a liability until time passes |
 | premium_income | Premium income reduced | Premium earned as time passed |
 | premium_tax_payable | VAT no longer owed to the government | VAT we collect for the government |
+| stamp_duty_payable | Stamp duty no longer owed to the government | Stamp duty on the policy, owed to the government |
 | customer_refund_payable | Refund paid to the customer | We owe the customer a refund |
 | agent_receivable | An agent holds customer cash not yet deposited | The agent deposited the cash they collected |
 | commission_expense | Commission cost of selling the policy | Commission cost reduced |

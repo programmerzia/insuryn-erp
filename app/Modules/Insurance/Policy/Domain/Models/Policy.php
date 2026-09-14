@@ -38,6 +38,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $version
  * @property string|null $renewal_of_policy_id
  * @property CarbonImmutable|null $reinstated_on
+ * @property int $stamp_duty_minor stamp duty of the premium (slice R7; 0 for products without a rating plan)
+ * @property string|null $quotation_id slice R7: issued from this quotation's proposal
+ * @property string|null $proposal_id
+ * @property string|null $cover_note_id the cover note the policy superseded
+ * @property array<string, int|string|bool|null>|null $risk_inputs frozen at issue (INVARIANT)
+ * @property list<string>|null $risk_keys duplicate-risk keys of the current risk (A-88)
+ * @property array<string, mixed>|null $rating_result RatingResult::toArray(), frozen at issue (INVARIANT)
+ * @property string|null $rating_plan_code
+ * @property int|null $rating_plan_version
+ * @property list<array{code: string, text: string, loading_bp?: int, reason?: string}>|null $special_terms special terms shown on the schedule (a manual loading and its reason)
+ * @property string|null $issue_basis credit | premium_received (A-117)
+ * @property string|null $premium_received_reference
  */
 final class Policy extends Model
 {
@@ -50,7 +62,14 @@ final class Policy extends Model
         'status' => PolicyStatus::class, 'inception' => 'immutable_date', 'expiry' => 'immutable_date', 'cancel_date' => 'immutable_date', 'reinstated_on' => 'immutable_date',
         'issued_at' => 'immutable_datetime', 'cancelled_at' => 'immutable_datetime',
         'gross_premium_minor' => 'int', 'tax_minor' => 'int', 'net_premium_minor' => 'int', 'installment_count' => 'int', 'version' => 'int',
+        'stamp_duty_minor' => 'int', 'risk_inputs' => 'array', 'risk_keys' => 'array', 'rating_result' => 'array', 'rating_plan_version' => 'int', 'special_terms' => 'array',
     ];
+
+    /** The frozen rating result of a policy issued from a proposal; null for products without a rating plan. */
+    public function ratingResult(): ?\App\Modules\Insurance\Rating\Domain\RatingResult
+    {
+        return $this->rating_result === null ? null : \App\Modules\Insurance\Rating\Domain\RatingResult::fromArray($this->rating_result);
+    }
 
     /** @return HasMany<PolicyTransaction, $this> */
     public function transactions(): HasMany

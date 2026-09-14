@@ -39,7 +39,6 @@ beforeEach(function (): void {
     $this->officer = userWithPermissions($this->ctx['tenant_id'], ['policy.create', 'policy.issue', 'receipt.create', 'document.generate']);
     [$this->policyId, $this->receiptId, $this->endorsementId, $this->quoteId] = ($this->in)(function (): array {
         $admin = $this->world['admin'];
-        DB::table('product_versions')->where('id', $this->world['product_version_id'])->update(['class_code' => 'motor']);
         $lifecycle = app(PolicyLifecycle::class);
         $policy = $lifecycle->quote(new QuoteRequest($this->ctx['entity_id'], $this->ctx['branch_id'], $this->world['product_id'], $this->world['policyholder_id'],
             $this->world['agent_id'], CarbonImmutable::parse('2026-09-01'), 12_000_000, 'BDT', 2), $admin);
@@ -50,6 +49,9 @@ beforeEach(function (): void {
             CarbonImmutable::parse('2026-09-05'), null, 'TT 88231', [new AllocationLine($installment, 6_000_000)]), $admin);
         $quote = $lifecycle->quote(new QuoteRequest($this->ctx['entity_id'], $this->ctx['branch_id'], $this->world['product_id'], $this->world['policyholder_id'],
             null, CarbonImmutable::parse('2026-09-01'), 5_000_000, 'BDT'), $admin);
+
+        // The product gets its class after its typed-premium policies exist (slice R7: a version with a class is rated and refuses typed premiums).
+        DB::table('product_versions')->where('id', $this->world['product_version_id'])->update(['class_code' => 'motor']);
 
         return [$policy->id, $receipt->id, (string) DB::table('policy_transactions')->where('policy_id', $policy->id)->where('type', 'endorsement')->value('id'), $quote->id];
     });

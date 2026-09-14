@@ -25,9 +25,7 @@ use App\Modules\Insurance\Party\Application\AgentService;
 use App\Modules\Insurance\Party\Application\PartyService;
 use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
 use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
-use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Policy\Application\PremiumEarning\PremiumEarningRun;
-use App\Modules\Insurance\Policy\Application\QuoteRequest;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -85,13 +83,15 @@ final class DemoBusinessSeeder extends Seeder
             $product = $catalogue->createProduct($code, $name, $lob, $admin);
             $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'daily_365',
                 'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true, 'refund_tax_on_cancellation' => true],
-                'commission_plan_id' => $plan->id, 'posting_rule_set' => 'default', 'coverages' => [], ...DemoRatingCatalogue::versionTerms($class)], $admin); // Phase 3 R1: class, risk schema, coverages
+                'commission_plan_id' => $plan->id, 'posting_rule_set' => 'default', 'coverages' => [], ...DemoRatingCatalogue::versionTerms($class), // Phase 3 R1: class, risk schema, coverages
+                'allow_credit_issue' => true], $admin); // Phase 3 R7: the demo's premiums are collected after issue (some never), so the demo products issue on credit (A-117)
             $products[] = $product->id;
         }
 
         DemoRatingPlans::seed($users['finance_manager'], $users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify), drafted by finance, approved by the CFO
         // Phase 3 R5: placeholder underwriting limits (A-90, flagged verify), set by the tenant admin.
-        app(\App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->acceptDefaults($day('2026-01-01')->max(CarbonImmutable::today()), $admin);
+        // Phase 3 R7: from the start of the year, so the story's proposals (July to September) are approved within the branch officer's limits.
+        DemoNewBusiness::on('2026-01-01', fn (): int => app(\App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->acceptDefaults($day('2026-01-01'), $admin));
 
         $parties = app(PartyService::class);
         $holders = [];
@@ -107,19 +107,26 @@ final class DemoBusinessSeeder extends Seeder
             $agents[] = $agent->id;
         }
 
-        $lifecycle = app(PolicyLifecycle::class);
-        $premiums = [4_500_000, 12_000_000, 8_750_000, 23_000_000, 6_200_000, 15_500_000, 3_900_000, 9_800_000, 31_000_000, 5_400_000, 18_250_000, 7_300_000];
+        // Phase 3 R7: sold as rated products — quotation on the placeholder tariff, proposal, policy issued from it — on each sale's day (DemoNewBusiness).
+        $sumsInsured = [600_000_00, 1_200_000_00, 900_000_00, 1_800_000_00, 450_000_00, 1_500_000_00]; // within the branch officer's placeholder limits (A-90)
+        $occupancies = ['shop', 'warehouse', 'factory', 'dwelling'];
         $issued = [];
         for ($i = 0; $i < 36; $i++) {
-            $inception = $day('2026-07-01')->addDays($i * 2);
-            $request = new QuoteRequest($entityId, $branchId, $products[$i % 3], $holders[$i % count($holders)], $i % 4 === 3 ? null : $agents[$i % 3],
-                $inception, $premiums[$i % count($premiums)], 'BDT', [1, 2, 4][$i % 3]);
-            $policy = $lifecycle->quote($request, $users['branch_officer']);
-            if ($i >= 32) {
-                continue; // quotes still to follow up
+            $inception = $day('2026-07-01')->addDays($i * 2)->toDateString();
+            $sumInsured = $sumsInsured[$i % count($sumsInsured)];
+            $risk = match ($i % 3) {
+                0 => ['vehicle_type' => $i % 2 === 0 ? 'private' : 'commercial', 'registration_no' => sprintf('DHA-METRO-GA-%02d-%04d', 10 + $i, 1000 + $i), 'chassis_no' => sprintf('CHS-DEMO-%05d', $i),
+                    'engine_cc' => [1200, 1500, 2000][intdiv($i, 3) % 3], 'seats' => 5, 'year_of_manufacture' => 2018 + $i % 6, 'driver_age' => 30 + $i, 'sum_insured' => $sumInsured,
+                    'ncb_years' => $i % 4],
+                1 => ['occupancy' => $occupancies[$i % 4], 'construction_class' => 'class_1', 'address' => sprintf('Plot %d, Road %d, Mirpur DOHS, Dhaka', 10 + $i, 1 + $i % 9), 'sum_insured' => $sumInsured * 2],
+                default => ['voyage_type' => ['import', 'export', 'inland'][intdiv($i, 3) % 3], 'conveyance' => 'sea', 'commodity' => 'Garments and fabric',
+                    'from_port' => 'Chattogram', 'to_port' => 'Hamburg', 'sum_insured' => $sumInsured],
+            };
+            $sold = DemoNewBusiness::sell($branchId, $products[$i % 3], $holders[$i % count($holders)], $i % 4 === 3 ? null : $agents[$i % 3], $inception, $risk,
+                $users['branch_officer'], [1, 2, 4][$i % 3], issue: $i < 32); // the last four stay issued quotations to follow up
+            if ($i < 32) {
+                $issued[] = $sold;
             }
-            $lifecycle->issue($policy->id, $inception, $users['branch_manager']);
-            $issued[] = $policy->id;
         }
 
         $receipts = app(ReceiptService::class);

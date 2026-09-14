@@ -18,6 +18,7 @@ final class AccountRolesSeeder extends Seeder
         'unearned_premium' => 'Unearned premium reserve',
         'premium_income' => 'Earned premium income',
         'premium_tax_payable' => 'VAT/levies on premium',
+        'stamp_duty_payable' => 'Stamp duty on policies, owed to the government', // Phase 3 R7 (D-37)
         'customer_refund_payable' => 'Refunds due to customers',
         'agent_receivable' => 'Agent cash collections not yet deposited',
         'commission_expense' => 'Commission expense',

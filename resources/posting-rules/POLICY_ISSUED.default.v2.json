@@ -1,0 +1,21 @@
+{
+  "code": "POLICY_ISSUED.default",
+  "version": 2,
+  "event_type": "POLICY_ISSUED",
+  "_comment": "Phase 3 R7 (D-37): stamp duty from the frozen rating result is owed to the government on its own account role; version 1 stays on record. An event without payload.stamp_duty posts exactly as version 1 (the zero line is dropped).",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch","product","policy","customer"], "inherit_from_event": true },
+  "lines": [
+    { "role": "premium_receivable",  "side": "debit",  "amount": "payload.gross_premium" },
+    { "role": "unearned_premium",    "side": "credit", "amount": "payload.net_premium" },
+    { "role": "premium_tax_payable", "side": "credit", "amount": "payload.tax" },
+    { "role": "stamp_duty_payable",  "side": "credit", "amount": "payload.stamp_duty ?? 0" }
+  ],
+  "validation": ["amount > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "POLICY_ISSUED:{policy_transaction_id}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}

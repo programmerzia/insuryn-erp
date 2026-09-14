@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property PremiumRecognition $recognise_at OPEN 3, A-65
  * @property bool $allow_credit_issue OPEN 4, A-65
  * @property string|null $rating_plan_id the rating plan this version is pinned to; null = the active plan for its class (slice R2)
+ * @property bool $endorsement_uses_current_tariff endorsements re-rate on the tariff in force on their date instead of the policy's original plan version (slice R7)
  */
 final class ProductVersion extends Model
 {
@@ -50,7 +51,7 @@ final class ProductVersion extends Model
         'effective_from' => 'immutable_date', 'effective_to' => 'immutable_date', 'term_months' => 'int', 'version' => 'int',
         'earning_method' => EarningMethod::class, 'short_rate_table' => 'array', 'tax_profile' => 'array', 'coverages' => 'array',
         'risk_schema' => 'array', 'duty_profile' => 'array', 'allow_short_period' => 'bool', 'min_premium_minor' => 'int', 'recognise_at' => PremiumRecognition::class,
-        'allow_credit_issue' => 'bool',
+        'allow_credit_issue' => 'bool', 'endorsement_uses_current_tariff' => 'bool',
     ];
 
     /** @return BelongsTo<Product, $this> */

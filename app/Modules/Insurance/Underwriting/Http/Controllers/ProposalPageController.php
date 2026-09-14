@@ -7,6 +7,7 @@ namespace App\Modules\Insurance\Underwriting\Http\Controllers;
 use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\ObjectHistory;
 use App\Http\Pages\PageSupport;
+use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Product\Domain\Enums\RiskFieldType;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
@@ -72,6 +73,13 @@ final class ProposalPageController
                 // Slice R6: a cover note for an approved proposal without an active one.
                 'issue_cover_note' => $model->status === ProposalStatus::Approved && $can(\App\Modules\Insurance\CoverNote\Application\CoverNoteService::ISSUE)
                     && ! DB::table('cover_notes')->where('proposal_id', $model->id)->where('status', 'active')->exists(),
+                // Slice R7: the policy of an approved proposal.
+                'issue_policy' => $model->status === ProposalStatus::Approved && $can('policy.issue'),
+            ],
+            'policyIssue' => [
+                'allow_credit' => (bool) DB::table('product_versions')->where('id', $model->product_version_id)->value('allow_credit_issue'),
+                'valid_until' => ($until = DB::table('quotations')->where('id', $model->quotation_id)->value('valid_until')) === null ? null : (string) $until,
+                'policy' => $model->policy_id === null ? null : ['id' => $model->policy_id, 'number' => (string) DB::table('policies')->where('id', $model->policy_id)->value('number')],
             ],
             'today' => \Carbon\CarbonImmutable::today()->toDateString(),
             'coverNoteMaxDays' => \App\Modules\Insurance\CoverNote\Application\CoverNoteService::maxDays($model->class_code),
@@ -105,6 +113,18 @@ final class ProposalPageController
         $submitted = $this->proposals->submit($proposal, PageSupport::actor($request));
 
         return redirect("/proposals/{$proposal}")->with('status', $submitted->status === ProposalStatus::Approved ? 'Proposal approved: no referral needed.' : 'Proposal referred to underwriting.');
+    }
+
+    /** Slice R7 (design §2 step 4): issue the policy of an approved proposal and open it. Premium received with a reference unless the product issues on credit (A-117). */
+    public function issuePolicy(Request $request, string $proposal, PolicyLifecycle $lifecycle): RedirectResponse
+    {
+        /** @var array{on: string, installment_count: int|string, premium_received?: bool|null, premium_reference?: string|null} $data */
+        $data = $request->validate(['on' => ['required', 'date_format:Y-m-d'], 'installment_count' => ['required', 'integer', 'min:1', 'max:12'], 'premium_received' => ['nullable', 'boolean'],
+            'premium_reference' => ['nullable', 'string', 'max:128']]);
+        $reference = ($data['premium_received'] ?? false) ? trim((string) ($data['premium_reference'] ?? '')) : null;
+        $policy = $lifecycle->issueFromProposal($proposal, \Carbon\CarbonImmutable::parse($data['on']), PageSupport::actor($request), (int) $data['installment_count'], $reference);
+
+        return redirect("/policies/{$policy->id}")->with('status', "Policy {$policy->number} issued.");
     }
 
     public function attachDocument(Request $request, string $proposal, ObjectDocuments $documents): RedirectResponse

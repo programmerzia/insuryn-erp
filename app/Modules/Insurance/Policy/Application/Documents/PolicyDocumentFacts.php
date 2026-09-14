@@ -77,4 +77,30 @@ final class PolicyDocumentFacts
 
         return is_array($decoded) ? $decoded : null;
     }
+
+    /**
+     * Slice R7: the rating the policy's premium stands on now — the latest re-rated endorsement's result, else the frozen issue result; null without a rating.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function currentRating(\stdClass $policy): ?array
+    {
+        $latest = DB::table('policy_transactions')->where('policy_id', $policy->id)->whereNotNull('rating_result')->orderByDesc('created_at')->orderByDesc('id')->value('rating_result');
+        $decoded = is_string($latest) ? json_decode($latest, true) : null;
+
+        return is_array($decoded) ? $decoded : $this->ratingResult($policy);
+    }
+
+    /**
+     * Slice R7: the policy's special terms as printed (a manual loading with its reason).
+     *
+     * @return list<string>
+     */
+    public function specialTerms(\stdClass $policy): array
+    {
+        $decoded = property_exists($policy, 'special_terms') && is_string($policy->special_terms) ? json_decode($policy->special_terms, true) : null;
+
+        return array_values(array_filter(array_map(fn (mixed $t): string => is_array($t) && is_string($t['text'] ?? null) ? $t['text'] : '', is_array($decoded) ? $decoded : []),
+            fn (string $t): bool => trim($t) !== ''));
+    }
 }

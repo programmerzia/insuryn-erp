@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
@@ -15,6 +16,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate, formatMoney } from '@/lib/format';
+import { useMoneyForm } from '@/lib/moneyForm';
 import { usePreferences } from '@/lib/preferences';
 import type { ProposalData } from '@/lib/proposals';
 
@@ -24,7 +26,9 @@ import type { ProposalData } from '@/lib/proposals';
  */
 const props = defineProps<{
     proposal: ProposalData; risk: { label_en: string; label_bn: string; value: string }[]; kycIdTypes: { value: string; label: string }[];
-    can: { verify_kyc: boolean; waive_kyc: boolean; submit: boolean; decide: boolean; issue_cover_note: boolean };
+    can: { verify_kyc: boolean; waive_kyc: boolean; submit: boolean; decide: boolean; issue_cover_note: boolean; issue_policy: boolean };
+    /** Slice R7: issuing the policy — whether the product issues on credit, until when the quotation's premium holds, the policy once issued. */
+    policyIssue: { allow_credit: boolean; valid_until: string | null; policy: { id: string; number: string } | null };
     today: string; coverNoteMaxDays: number; coverNotes: { id: string; number: string; status: string; valid_from: string; valid_to: string; cancel_reason: string | null }[];
     documentUpload: string | null; timeline?: TimelineEntry[]; accounting?: AccountingJournal[]; audit?: AuditRow[]; documents?: StoredDocumentRow[];
 }>();
@@ -52,6 +56,9 @@ const cover = useForm({ valid_from: coverStart, valid_to: addDays(coverStart, pr
 function issueCoverNote(): void {
     cover.post(`${base}/cover-notes`, { preserveScroll: true, onSuccess: () => (coverOpen.value = false) });
 }
+// Slice R7: issue the policy (design §2 step 4) — premium received with its reference unless the product issues on credit; the journal is shown before posting.
+const issueOpen = ref(false);
+const issue = useMoneyForm(() => `${base}/issue-policy`, { on: props.today, installment_count: 1, premium_received: !props.policyIssue.allow_credit, premium_reference: '' }, () => (issueOpen.value = false));
 const words = (v: string) => v.toLowerCase().replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 const facts = computed(() => [
     { label: `Gross premium (${p.value.currency})`, value: formatMoney(p.value.gross_premium), num: true },
@@ -81,6 +88,8 @@ const facts = computed(() => [
                 <button v-if="can.waive_kyc" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="kycOpen = 'waive'">Waive KYC</button>
                 <Link v-if="can.decide" href="/underwriting/referrals" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Open referrals</Link>
                 <button v-if="can.issue_cover_note" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="coverOpen = true">Issue cover note</button>
+                <Link v-if="policyIssue.policy" :href="`/policies/${policyIssue.policy.id}`" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Open policy {{ policyIssue.policy.number }}</Link>
+                <button v-if="can.issue_policy" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="issueOpen = true">Issue policy</button>
                 <button v-if="can.submit" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="submit">Submit to underwriting</button>
             </template>
             <template #overview>
@@ -136,6 +145,24 @@ const facts = computed(() => [
             </template>
         </ObjectPage>
 
+        <Drawer v-model:open="issueOpen" :title="`Issue the policy for ${proposal.number}`">
+            <p class="mb-4 text-ui text-ink-2">
+                The policy is issued on this proposal's premium, {{ proposal.currency }} {{ formatMoney(proposal.gross_premium) }}, frozen from its rating<template v-if="policyIssue.valid_until"> (the quotation holds it until {{ formatDate(policyIssue.valid_until) }})</template>. Any cover note is superseded.
+            </p>
+            <FormLayout submit-label="Review and issue" :dirty="issue.form.isDirty" :processing="issue.form.processing" :error="(issue.form.errors as Record<string, string>).form" @submit="issue.review" @cancel="issueOpen = false">
+                <Field id="issue_on" label="Issue date" :error="issue.form.errors.on"><DateInput id="issue_on" v-model="issue.form.on" /></Field>
+                <Field id="installment_count" label="Installments" :error="issue.form.errors.installment_count">
+                    <SelectInput id="installment_count" :model-value="String(issue.form.installment_count)" :options="['1', '2', '3', '4', '6', '12'].map((n) => ({ value: n, label: n === '1' ? 'Paid at once' : `${n} installments` }))" @update:model-value="(v) => (issue.form.installment_count = Number(v))" />
+                </Field>
+                <Field id="premium_received" :label="policyIssue.allow_credit ? 'Premium' : 'Premium received'" :optional="policyIssue.allow_credit" :hint="policyIssue.allow_credit ? 'This product may be issued on credit.' : 'This product is not issued on credit: confirm the premium was received.'">
+                    <label class="flex items-center gap-2 text-ui"><input id="premium_received" v-model="issue.form.premium_received" type="checkbox" class="size-3.5 accent-accent" />The premium was received</label>
+                </Field>
+                <Field v-if="issue.form.premium_received" id="premium_reference" label="Reference" hint="Receipt, bank transfer or cheque reference." :error="issue.form.errors.premium_reference">
+                    <TextInput id="premium_reference" v-model="issue.form.premium_reference" :maxlength="128" />
+                </Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-model:open="issue.previewOpen.value" :result="issue.preview.value" :title="`Issue the policy for ${proposal.number}?`" confirm-label="Issue and post" :currency="proposal.currency" :processing="issue.form.processing" @confirm="issue.post" />
         <Drawer v-model:open="coverOpen" :title="`Issue a cover note for ${proposal.number}`">
             <p class="mb-4 text-ui text-ink-2">Temporary evidence of cover until the policy is issued, for at most {{ coverNoteMaxDays }} days. Nothing is posted to the accounts.</p>
             <FormLayout submit-label="Issue cover note" :dirty="cover.isDirty" :processing="cover.processing" :error="(cover.errors as Record<string, string>).form" @submit="issueCoverNote" @cancel="coverOpen = false">

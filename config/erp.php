@@ -44,6 +44,16 @@ return [
     'quotations' => [
         'valid_days' => (int) env('ERP_QUOTATION_VALID_DAYS', 15),
     ],
+    // Phase 3 slice R7: policies issued from approved proposals, endorsement re-rating.
+    'policies' => [
+        // ASSUMPTION: A-116 — a policy is issued only while its quotation's premium is still guaranteed (the issue date is on or before the quotation's
+        // valid_until); after that the customer is quoted again. false lets an approved proposal issue at any time on its frozen premium.
+        'issue_within_quotation_validity' => (bool) env('ERP_POLICY_ISSUE_WITHIN_QUOTATION_VALIDITY', true),
+        // ASSUMPTION: A-119 — how an endorsement's re-rated premium change is charged is not specified and no endorsement pro-rata convention exists:
+        // 'full' charges the whole annual difference (new rating − rating in force); 'pro_rata' charges net premium and VAT/levies for the days left
+        // (effective date to expiry, both included, over the policy's days), stamp duty in full.
+        'endorsement_premium' => env('ERP_ENDORSEMENT_PREMIUM', 'full'),
+    ],
     // Phase 3 slice R6 cover notes. ASSUMPTION: A-93 — design OPEN 2: the longest cover note per product class in days, both ends included (default 30, verify).
     'cover_notes' => [
         'max_days' => ['default' => 30, 'motor' => 30, 'fire' => 30, 'marine_cargo' => 30, 'misc' => 30],

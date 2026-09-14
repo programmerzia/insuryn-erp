@@ -238,6 +238,8 @@ final class ProductCatalogue
             'min_premium_minor' => $minPremium,
             'recognise_at' => $recogniseAt->value,
             'allow_credit_issue' => (bool) ($terms['allow_credit_issue'] ?? false),
+            // Slice R7 (design §2 step 5): endorsements re-rate on the policy's original plan version unless the version says otherwise.
+            'endorsement_uses_current_tariff' => (bool) ($terms['endorsement_uses_current_tariff'] ?? false),
             'rating_plan_id' => is_string($planId) ? $planId : null,
         ];
     }

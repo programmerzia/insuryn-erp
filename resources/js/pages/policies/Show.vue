@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
@@ -8,21 +8,35 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
+import EndorseRiskDrawer from '@/components/rating/EndorseRiskDrawer.vue';
+import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
+import DetailList from '@/components/table/DetailList.vue';
 import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate, formatMoney } from '@/lib/format';
+import { basisSentence, changeRows, type EndorsementRatingData } from '@/lib/endorsement';
 import { useMoneyForm } from '@/lib/moneyForm';
+import { usePreferences } from '@/lib/preferences';
+import type { RatingResultData, RiskFieldDefinition } from '@/lib/riskForm';
 
 const props = defineProps<{
     policy: { id: string; number: string | null; status: string; version: number; inception: string; expiry: string; channel: string; currency: string; policyholder: string;
-        product_code: string; agent_code: string | null; gross_premium: string; net_premium: string; tax: string; cancel_date: string | null };
+        product_code: string; agent_code: string | null; gross_premium: string; net_premium: string; tax: string; stamp_duty: string; cancel_date: string | null };
     transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null }[];
     installments: { id: string; no: number; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
-    actions: { issue: boolean; endorse: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
+    actions: { issue: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
+    /** Slice R7: the frozen rating of a policy issued from a proposal; null for products without a rating plan. */
+    rating: {
+        result: RatingResultData; risk: { label_en: string; label_bn: string; value: string }[]; special_terms: string[]; issue_basis: string | null; premium_received_reference: string | null;
+        proposal: { id: string; number: string } | null; quotation: { id: string; number: string } | null; uses_current_tariff: boolean;
+        endorsements: { id: string; effective_date: string; reason: string | null; rating: EndorsementRatingData }[];
+        schema: RiskFieldDefinition[]; current_inputs: Record<string, unknown>; coverages: { code: string; name_en: string; name_bn: string; mandatory: boolean }[]; chosen_coverages: string[];
+    } | null;
+    today: string;
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
     audit?: AuditRow[];
@@ -33,6 +47,9 @@ const props = defineProps<{
 
 const base = `/policies/${props.policy.id}`;
 const drawer = ref<'issue' | 'endorse' | 'cancel' | 'lapse' | 'reinstate' | null>(null);
+const endorseRiskOpen = ref(false);
+const preferences = usePreferences();
+const issuedOn = (basis: string | null, reference: string | null) => (basis === 'credit' ? 'Issued on credit' : basis === 'premium_received' ? `Premium received, reference ${reference}` : null);
 const close = () => (drawer.value = null);
 const title = computed(() => props.policy.number ?? 'Quote');
 const issue = useMoneyForm(() => `${base}/issue`, { on: props.policy.inception }, close);
@@ -45,6 +62,7 @@ const facts = computed(() => [
     { label: `Gross premium (${props.policy.currency})`, value: formatMoney(props.policy.gross_premium), num: true },
     { label: 'Net premium', value: formatMoney(props.policy.net_premium), num: true },
     { label: 'Tax', value: formatMoney(props.policy.tax), num: true },
+    ...(props.rating ? [{ label: 'Stamp duty', value: formatMoney(props.policy.stamp_duty), num: true }] : []),
     { label: 'Cover', value: `${formatDate(props.policy.inception)} to ${formatDate(props.policy.expiry)}` },
 ]);
 const outstanding = computed(() => props.installments.reduce((sum, i) => sum + Number(i.outstanding !== '0.00'), 0));
@@ -74,6 +92,7 @@ async function renew(): Promise<void> {
         >
             <template #actions>
                 <button v-if="actions.endorse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'endorse'">Endorse</button>
+                <button v-if="actions.endorse_risk" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="endorseRiskOpen = true">Endorse</button>
                 <button v-if="actions.lapse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'lapse'">Lapse</button>
                 <button v-if="actions.reinstate" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reinstate'">Reinstate</button>
                 <button v-if="actions.renew" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="renew">Renew</button>
@@ -106,6 +125,51 @@ async function renew(): Promise<void> {
                         <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="border-b border-line px-3 text-left font-medium">Payer</th><th class="w-24 border-b border-line px-3 text-right font-medium">Share (%)</th><th class="w-32 border-b border-line px-3 text-right font-medium">Billed</th><th class="w-32 border-b border-line px-3 text-right font-medium">Paid</th><th class="w-32 border-b border-line px-3 text-right font-medium">Outstanding</th></tr></thead>
                         <tbody><tr v-for="p in payers" :key="p.name" class="h-(--row-h)"><td class="border-b border-line px-3">{{ p.name }}</td><td class="num border-b border-line px-3">{{ p.share_percent }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.billed) }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.paid) }}</td><td class="num border-b border-line px-3">{{ formatMoney(p.outstanding) }}</td></tr></tbody>
                     </table>
+                </div>
+            </template>
+            <template v-if="rating" #rating>
+                <div class="grid max-w-[1100px] gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+                    <div class="grid content-start gap-6">
+                        <section>
+                            <h2 class="mb-2 text-ui font-medium">Issued on</h2>
+                            <DetailList
+                                :items="[
+                                    { label: 'Tariff', value: `${rating.result.plan.code} version ${rating.result.plan.version}, rated for ${formatDate(rating.result.as_of)}` },
+                                    { label: 'Proposal' },
+                                    { label: 'Quotation' },
+                                    { label: 'Premium', value: issuedOn(rating.issue_basis, rating.premium_received_reference) },
+                                    { label: 'Endorsements re-rate on', value: rating.uses_current_tariff ? 'The tariff in force on their date' : 'This tariff version' },
+                                ]"
+                            >
+                                <template #Proposal><Link v-if="rating.proposal" :href="`/proposals/${rating.proposal.id}`" class="text-accent-text hover:underline">{{ rating.proposal.number }}</Link></template>
+                                <template #Quotation><Link v-if="rating.quotation" :href="`/quotations/${rating.quotation.id}`" class="text-accent-text hover:underline">{{ rating.quotation.number }}</Link></template>
+                            </DetailList>
+                        </section>
+                        <section v-if="rating.special_terms.length">
+                            <h2 class="mb-2 text-ui font-medium">Special terms</h2>
+                            <ul class="grid gap-1 text-ui"><li v-for="term in rating.special_terms" :key="term" class="border-l-2 border-warn pl-3">{{ term }}</li></ul>
+                        </section>
+                        <section>
+                            <h2 class="mb-2 text-ui font-medium">Risk at issue</h2>
+                            <DetailList :items="rating.risk.map((r) => ({ label: preferences.locale === 'bn' ? r.label_bn : r.label_en, value: r.value }))" />
+                        </section>
+                        <section>
+                            <h2 class="mb-2 text-ui font-medium">Endorsement re-ratings</h2>
+                            <p v-if="rating.endorsements.length === 0" class="text-ui text-ink-2">No endorsement has changed the risk.</p>
+                            <div v-for="e in rating.endorsements" :key="e.id" class="mb-4 border border-line">
+                                <p class="border-b border-line bg-surface-2 px-3 py-1.5 text-ui"><span class="font-medium">From {{ formatDate(e.effective_date) }}</span><template v-if="e.reason"> · {{ e.reason }}</template></p>
+                                <table class="w-full text-dense">
+                                    <thead class="text-ink-2"><tr><th class="px-3 py-1 text-left font-medium" /><th class="px-3 py-1 text-right font-medium">Before</th><th class="px-3 py-1 text-right font-medium">Re-rated</th><th class="px-3 py-1 text-right font-medium">Charged ({{ policy.currency }})</th></tr></thead>
+                                    <tbody><tr v-for="row in changeRows(e.rating)" :key="row.label" class="border-t border-line"><td class="px-3 py-1">{{ row.label }}</td><td class="num px-3 py-1">{{ row.before }}</td><td class="num px-3 py-1">{{ row.after }}</td><td class="num px-3 py-1 font-medium">{{ row.change }}</td></tr></tbody>
+                                </table>
+                                <p class="px-3 py-1.5 text-dense text-ink-2">{{ basisSentence(e.rating) }}</p>
+                            </div>
+                        </section>
+                    </div>
+                    <aside class="h-fit rounded-panel border border-line bg-surface-2 p-4" aria-label="Premium at issue">
+                        <h2 class="mb-2 text-ui font-medium">Premium at issue <span class="font-normal text-ink-2">· frozen</span></h2>
+                        <RatingBreakdown :result="rating.result" :locale="preferences.locale" />
+                    </aside>
                 </div>
             </template>
             <template #transactions>
@@ -141,6 +205,21 @@ async function renew(): Promise<void> {
                 <Field id="transition_reason" label="Reason" :error="transition.errors.reason"><TextInput v-model="transition.reason" /></Field>
             </FormLayout>
         </Drawer>
+        <EndorseRiskDrawer
+            v-if="rating && actions.endorse_risk"
+            v-model:open="endorseRiskOpen"
+            :policy-id="policy.id"
+            :title="title"
+            :currency="policy.currency"
+            :locale="preferences.locale"
+            :inception="policy.inception"
+            :expiry="policy.expiry"
+            :today="today"
+            :schema="rating.schema"
+            :inputs="rating.current_inputs"
+            :coverages="rating.coverages"
+            :chosen="rating.chosen_coverages"
+        />
         <JournalPreviewDialog v-if="active" v-model:open="active.previewOpen.value" :result="active.preview.value" :title="drawer === 'issue' ? `Issue ${title}?` : drawer === 'endorse' ? `Post the endorsement of ${title}?` : `Cancel ${title}?`"
             :confirm-label="drawer === 'issue' ? 'Issue and post' : drawer === 'endorse' ? 'Post endorsement' : 'Cancel and post'" :currency="policy.currency" :processing="active.form.processing" @confirm="active.post" />
     </AppLayout>

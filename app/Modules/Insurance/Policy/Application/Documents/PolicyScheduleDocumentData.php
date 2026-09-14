@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * The policy schedule (slice R8): the policy as it stands — parties, product and class, period, premium (net, VAT and duties, gross), installments
  * — with its special terms: every endorsement's reason and, once policies carry a frozen rating result (R7), the manual rating adjustments and
- * any special terms it records, plus the rating breakdown. A quote has no schedule (DOCUMENT_OBJECT_NOT_READY). ASSUMPTION: A-104.
+ * any special terms it records, plus the rating breakdown. Slice R7: the rating printed is the policy's current one (the frozen issue rating, or the latest re-rated
+ * endorsement's), with its tariff, and the policy's special terms (a manual loading and its reason). A quote has no schedule (DOCUMENT_OBJECT_NOT_READY). ASSUMPTION: A-104.
  */
 final class PolicyScheduleDocumentData implements DocumentDataProvider
 {
@@ -46,7 +47,7 @@ final class PolicyScheduleDocumentData implements DocumentDataProvider
         $l = fn (string $en, string $bn): string => DocumentValues::label($locale, $en, $bn);
         $currency = (string) $policy->currency;
         $money = fn (int $minor): string => DocumentValues::money($minor, $currency);
-        $rating = $this->facts->ratingResult($policy);
+        $rating = $this->facts->currentRating($policy);
 
         $details = [['label' => $l('Status', 'অবস্থা'), 'value' => self::status((string) $policy->status, $locale)]];
         if ($policy->issued_at !== null) {
@@ -54,6 +55,10 @@ final class PolicyScheduleDocumentData implements DocumentDataProvider
         }
         $details[] = ['label' => $l('Policy version', 'পলিসি সংস্করণ'), 'value' => (string) $policy->version];
         $details[] = ['label' => $l('Installments', 'কিস্তি'), 'value' => (string) $policy->installment_count];
+        if (is_array($rating['plan'] ?? null)) {
+            // Slice R7: the tariff the premium was worked on (the frozen issue rating, or the latest re-rated endorsement).
+            $details[] = ['label' => $l('Tariff', 'ট্যারিফ'), 'value' => (string) ($rating['plan']['code'] ?? '').' v'.(string) ($rating['plan']['version'] ?? '')];
+        }
         if ($policy->cancel_date !== null) {
             $details[] = ['label' => $l('Cancelled from', 'বাতিলের তারিখ'), 'value' => DocumentValues::date((string) $policy->cancel_date)];
         }
@@ -64,6 +69,10 @@ final class PolicyScheduleDocumentData implements DocumentDataProvider
             foreach ($duties as $duty) {
                 $rows[] = ['label' => (string) ($locale === 'bn' ? ($duty['label_bn'] ?? '') : ($duty['label_en'] ?? '')), 'amount' => $money((int) ($duty['amount_minor'] ?? 0))];
             }
+        } elseif ((int) ($policy->stamp_duty_minor ?? 0) !== 0) {
+            // Slice R7: a rated policy whose premium moved pro rata — VAT and levies, and stamp duty, as the policy holds them.
+            $rows[] = ['label' => $l('VAT and levies', 'মূসক ও লেভি'), 'amount' => $money((int) $policy->tax_minor)];
+            $rows[] = ['label' => $l('Stamp duty', 'স্ট্যাম্প শুল্ক'), 'amount' => $money((int) $policy->stamp_duty_minor)];
         } else {
             $rows[] = ['label' => $l('VAT and duties', 'মূসক ও শুল্ক'), 'amount' => $money((int) $policy->tax_minor)];
         }
@@ -79,7 +88,7 @@ final class PolicyScheduleDocumentData implements DocumentDataProvider
                 $terms[] = (string) ($locale === 'bn' ? ($line['label_bn'] ?? '') : ($line['label_en'] ?? '')).': '.$money((int) ($line['amount_minor'] ?? 0));
             }
         }
-        foreach (is_array($rating['special_terms'] ?? null) ? $rating['special_terms'] : [] as $term) {
+        foreach ([...(is_array($rating['special_terms'] ?? null) ? $rating['special_terms'] : []), ...$this->facts->specialTerms($policy)] as $term) {
             if (is_string($term) && trim($term) !== '') {
                 $terms[] = trim($term);
             }

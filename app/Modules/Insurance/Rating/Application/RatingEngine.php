@@ -37,7 +37,7 @@ final class RatingEngine
      * @throws RatingFailed PRODUCT_NOT_RATED, RATING_PLAN_NOT_FOUND, RATING_PLAN_NOT_ACTIVE, RATING_PLAN_NOT_EFFECTIVE and every calculation failure
      * @throws \App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid
      */
-    public function rate(ProductVersion|string $productVersion, array $riskInputs, CarbonImmutable $asOf, array $coverages = []): RatingResult
+    public function rate(ProductVersion|string $productVersion, array $riskInputs, CarbonImmutable $asOf, array $coverages = [], ?ManualLoading $manualLoading = null): RatingResult
     {
         $version = $productVersion instanceof ProductVersion ? $productVersion : ProductVersion::query()->whereKey($productVersion)->firstOrFail();
         if ($version->class_code === null) {
@@ -58,6 +58,7 @@ final class RatingEngine
             dutyProfile: $version->dutyProfile(),
             productMinimumMinor: $version->min_premium_minor,
             productVersionId: $version->id,
+            manualLoading: $manualLoading,
         ));
     }
 
@@ -70,6 +71,21 @@ final class RatingEngine
      */
     public function rerate(RatingResult $original, ?ManualLoading $manualLoading = null): RatingResult
     {
+        return $this->rerateWith($original, $original->riskInputs, $manualLoading);
+    }
+
+    /**
+     * Slice R7: rates NEW risk inputs (and optionally a new choice of optional coverages) on the plan version, product version and date of a stored result — the
+     * endorsement re-rating on the original tariff (design §2 step 5). With the stored inputs and coverages it is `rerate`.
+     *
+     * @param array<mixed> $riskInputs field key → value, validated against the product version's risk schema
+     * @param list<string>|null $coverages optional coverages chosen; null keeps the stored result's
+     *
+     * @throws RatingFailed RATING_PLAN_NOT_FOUND and every calculation failure
+     * @throws \App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid
+     */
+    public function rerateWith(RatingResult $original, array $riskInputs, ?ManualLoading $manualLoading = null, ?array $coverages = null): RatingResult
+    {
         $plan = $original->plan['id'] === null ? null : RatingPlan::query()->whereKey($original->plan['id'])->first();
         if ($plan === null || $plan->status === RatingPlanStatus::Draft) {
             throw new RatingFailed('RATING_PLAN_NOT_FOUND', "The rating plan {$original->plan['code']} v{$original->plan['version']} of this result is not on record.");
@@ -80,10 +96,10 @@ final class RatingEngine
         return $this->calculator->calculate(new RatingRequest(
             plan: $this->plans->definition($plan),
             schema: $version->riskSchema(),
-            riskInputs: $original->riskInputs,
+            riskInputs: $riskInputs,
             asOf: $original->asOf,
             coverages: $this->coverages($version),
-            chosenCoverages: $original->coverages,
+            chosenCoverages: $coverages ?? $original->coverages,
             duties: $this->duties->inForce($plan->class_code, $asOf),
             dutyProfile: $version->dutyProfile(),
             productMinimumMinor: $version->min_premium_minor,

@@ -189,6 +189,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('proposals/{proposal}', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'show'])->whereUuid('proposal');
     Route::post('proposals/{proposal}/kyc', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'kyc'])->whereUuid('proposal');
     Route::post('proposals/{proposal}/submit', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'submit'])->whereUuid('proposal');
+    // Phase 3 R7: issue the policy of an approved proposal (journal preview through moves-money).
+    Route::post('proposals/{proposal}/issue-policy', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'issuePolicy'])->whereUuid('proposal')->middleware('moves-money');
     Route::post('proposals/{proposal}/documents', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'attachDocument'])->whereUuid('proposal');
     Route::get('proposals/{proposal}/documents/{document}', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'downloadDocument'])->whereUuid(['proposal', 'document']);
     // Phase 3 R6: cover notes.
@@ -207,6 +209,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('policies/{policy}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'policy'])->whereUuid('policy'); // slice R8
     Route::post('policies/{policy}/issue', [PolicyPageController::class, 'issue'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/endorse', [PolicyPageController::class, 'endorse'])->whereUuid('policy')->middleware('moves-money');
+    // Phase 3 R7: re-rated endorsements of rated policies (live re-rating, then the endorsement with its journal preview).
+    Route::post('policies/{policy}/endorsement-rating', [PolicyPageController::class, 'endorsementRating'])->whereUuid('policy');
+    Route::post('policies/{policy}/endorse-risk', [PolicyPageController::class, 'endorseRisk'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/{action}', [PolicyPageController::class, 'transition'])->whereUuid('policy')->whereIn('action', ['lapse', 'reinstate', 'renew']);
 

@@ -51,11 +51,28 @@ final class EndorsementDocumentData implements DocumentDataProvider
             'details' => [['label' => $l('Policy', 'পলিসি'), 'value' => (string) $policy->number], ['label' => $l('Effective from', 'কার্যকর তারিখ'), 'value' => DocumentValues::date((string) $transaction->effective_date)],
                 ['label' => $l('Reason', 'কারণ'), 'value' => $reason], ['label' => $l('Policy version', 'পলিসি সংস্করণ'), 'value' => (string) $transaction->policy_version]],
             'money' => [['label' => $l('Net premium change', 'নিট প্রিমিয়াম পরিবর্তন'), 'amount' => $money((int) $transaction->net_delta_minor)],
-                ['label' => $l('VAT and duties change', 'মূসক ও শুল্ক পরিবর্তন'), 'amount' => $money((int) $transaction->tax_delta_minor)]],
+                ['label' => $l('VAT and duties change', 'মূসক ও শুল্ক পরিবর্তন'), 'amount' => $money((int) $transaction->tax_delta_minor)],
+                // Slice R7: a re-rated endorsement's stamp duty change.
+                ...((int) ($transaction->stamp_duty_delta_minor ?? 0) === 0 ? [] : [['label' => $l('Stamp duty change', 'স্ট্যাম্প শুল্ক পরিবর্তন'), 'amount' => $money((int) $transaction->stamp_duty_delta_minor)]])],
+            // Slice R7: the re-rating of the new risk, line by line.
+            'rating' => $this->rating($transaction, $locale, $money),
             'total' => ['label' => $l('Total premium change', 'মোট প্রিমিয়াম পরিবর্তন'), 'amount' => $money((int) $transaction->premium_delta_minor)],
             'special_terms' => [$l('From ', '').DocumentValues::date((string) $transaction->effective_date).$l(' the policy is endorsed', ' তারিখ থেকে পলিসিটি এনডোর্স করা হলো')
                 .($reason === '' ? '' : ': '.$reason).$l('. All other terms remain unchanged.', '। অন্যান্য সকল শর্ত অপরিবর্তিত থাকবে।')],
         ];
+    }
+
+    /**
+     * @param callable(int): string $money
+     * @return list<array{label: string, amount: string}>
+     */
+    private function rating(\stdClass $transaction, string $locale, callable $money): array
+    {
+        $decoded = is_string($transaction->rating_result ?? null) ? json_decode($transaction->rating_result, true) : null;
+        $lines = is_array($decoded) && is_array($decoded['explanation'] ?? null) ? $decoded['explanation'] : [];
+
+        return array_values(array_map(fn (mixed $line): array => ['label' => is_array($line) ? (string) ($locale === 'bn' ? ($line['label_bn'] ?? '') : ($line['label_en'] ?? '')) : '',
+            'amount' => $money(is_array($line) ? (int) ($line['amount_minor'] ?? 0) : 0)], $lines));
     }
 
     /** @throws BusinessRuleViolation DOCUMENT_OBJECT_UNKNOWN */

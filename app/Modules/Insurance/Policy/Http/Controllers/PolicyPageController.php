@@ -16,6 +16,10 @@ use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Policy\Domain\Models\PolicyTransaction;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
+use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
+use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
+use App\Modules\Insurance\Rating\Domain\RatingFailed;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +28,11 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/** Policies screens (design §5.4): list and filter, quote (with payers), detail with transactions, installments and the lifecycle actions. */
+/**
+ * Policies screens (design §5.4): list and filter, quote (with payers), detail with transactions, installments and the lifecycle actions.
+ * Slice R7: the quote form lists only products without a rating plan (rated products are quoted in the quote workbench); a rated policy's page has a Rating tab
+ * (the frozen breakdown, risk, special terms and every endorsement's re-rating) and its Endorse changes the risk, re-rated live, instead of typing a premium.
+ */
 final class PolicyPageController
 {
     public const AREA = ['policy.create', 'policy.issue', 'policy.endorse', 'policy.cancel', 'receipt.create', 'receipt.allocate', 'reports.financial'];
@@ -64,7 +72,10 @@ final class PolicyPageController
         return Inertia::render('policies/Create', [
             'entity' => PageSupport::entity(),
             'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
-            'products' => DB::table('products')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
+            // Slice R7: typing a premium stays only for products without a rating plan.
+            'products' => DB::table('products')->whereNotExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))
+                ->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $p): array => (array) $p)->values()->all(),
+            'ratedProducts' => DB::table('products')->whereExists(fn ($q) => $q->from('product_versions as v')->whereColumn('v.product_id', 'products.id')->whereNotNull('v.class_code'))->count(),
             'parties' => DB::table('parties')->orderBy('display_name')->get(['id', 'display_name'])->map(fn (object $p): array => (array) $p)->values()->all(),
             'agents' => DB::table('producers as a')->join('parties as p', 'p.id', '=', 'a.party_id')->where('a.status', 'active')->orderBy('a.code')
                 ->get(['a.id', 'a.code', 'p.display_name'])->map(fn (object $a): array => (array) $a)->values()->all(),
@@ -101,7 +112,7 @@ final class PolicyPageController
             'policy' => ['id' => $model->id, 'number' => $model->number, 'status' => $status->value, 'version' => $model->version, 'inception' => $model->inception->toDateString(),
                 'expiry' => $model->expiry->toDateString(), 'channel' => $model->channel, 'currency' => $model->currency, 'policyholder' => (string) ($names[$model->policyholder_party_id] ?? ''),
                 'product_code' => (string) DB::table('products')->where('id', $model->product_id)->value('code'), 'agent_code' => $model->agent_id === null ? null : (string) DB::table('producers')->where('id', $model->agent_id)->value('code'),
-                'gross_premium' => $money($model->gross_premium_minor), 'net_premium' => $money($model->net_premium_minor), 'tax' => $money($model->tax_minor),
+                'gross_premium' => $money($model->gross_premium_minor), 'net_premium' => $money($model->net_premium_minor), 'tax' => $money($model->tax_minor), 'stamp_duty' => $money($model->stamp_duty_minor),
                 'cancel_date' => $model->cancel_date?->toDateString()],
             'transactions' => $model->transactions()->get()->map(fn (PolicyTransaction $t): array => ['id' => $t->id, 'type' => $t->type->value, 'effective_date' => $t->effective_date->toDateString(),
                 'premium_delta' => $money($t->premium_delta_minor), 'reason' => $t->reason])->values()->all(),
@@ -111,9 +122,12 @@ final class PolicyPageController
             'payers' => array_map(fn (array $p): array => ['name' => $p['name'], 'share_percent' => sprintf('%d.%02d', intdiv($p['share_bp'], 100), $p['share_bp'] % 100), 'billed' => $money($p['billed_minor']),
                 'paid' => $money($p['paid_minor']), 'outstanding' => $money($p['outstanding_minor'])], $this->payers->forPolicy($model->id)['payers']),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/policies/{$model->id}/documents" : null,
+            'rating' => $this->rating($model),
+            'today' => CarbonImmutable::today()->toDateString(),
             'actions' => [
                 'issue' => $status === PolicyStatus::Quote && $can('policy.issue'),
-                'endorse' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
+                'endorse' => $model->rating_result === null && in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
+                'endorse_risk' => $model->rating_result !== null && in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
                 'cancel' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.cancel'),
                 'lapse' => $status === PolicyStatus::Active && $can('policy.cancel'),
                 'reinstate' => $status === PolicyStatus::Lapsed && $can('policy.issue'),
@@ -139,6 +153,95 @@ final class PolicyPageController
         $this->lifecycle->endorse($policy, CarbonImmutable::parse($data['effective_date']), PageSupport::minor('premium_delta', $data['premium_delta'], $currency, true), $data['reason'], PageSupport::actor($request));
 
         return redirect("/policies/{$policy}")->with('status', 'Endorsement recorded.');
+    }
+
+    /** Slice R7: the re-rating of a risk change, nothing written (JSON for the endorse drawer): {rating} or 422 {reason, message, errors}. */
+    public function endorsementRating(Request $request, string $policy): JsonResponse
+    {
+        [$date, $inputs, $coverages] = self::riskChange($request);
+        try {
+            $rating = $this->lifecycle->rateEndorsement($policy, $date, $inputs, PageSupport::actor($request), $coverages);
+        } catch (RiskInputsInvalid $invalid) {
+            return response()->json(['reason' => $invalid->reasonCode, 'message' => $invalid->getMessage(), 'errors' => $invalid->errors], 422);
+        } catch (RatingFailed $failed) {
+            return response()->json(['reason' => $failed->reasonCode, 'message' => $failed->getMessage(), 'errors' => (object) []], 422);
+        }
+
+        return response()->json(['rating' => $rating->toArray()]);
+    }
+
+    /** Slice R7: endorse a rated policy's risk (re-rated, POLICY_ENDORSED for the change; journal preview through moves-money). */
+    public function endorseRisk(Request $request, string $policy): RedirectResponse
+    {
+        [$date, $inputs, $coverages] = self::riskChange($request);
+        /** @var array{reason: string} $data */
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+        $this->lifecycle->endorseRisk($policy, $date, $inputs, $data['reason'], PageSupport::actor($request), $coverages);
+
+        return redirect("/policies/{$policy}?tab=rating")->with('status', 'Endorsement recorded.');
+    }
+
+    /** @return array{0: CarbonImmutable, 1: array<string, mixed>, 2: list<string>|null} */
+    private static function riskChange(Request $request): array
+    {
+        /** @var array{effective_date: string, risk_inputs?: array<string, mixed>|null, coverages?: list<string>|null} $data */
+        $data = $request->validate(['effective_date' => ['required', 'date_format:Y-m-d'], 'risk_inputs' => ['present', 'array'], 'coverages' => ['nullable', 'array', 'max:50'],
+            'coverages.*' => ['string', 'max:64']]);
+
+        return [CarbonImmutable::parse($data['effective_date']), $data['risk_inputs'] ?? [], $data['coverages'] ?? null];
+    }
+
+    /**
+     * Slice R7: the Rating tab of a policy issued from a proposal — null for products without a rating plan.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function rating(Policy $policy): ?array
+    {
+        $result = $policy->ratingResult();
+        if ($result === null) {
+            return null;
+        }
+        $version = ProductVersion::query()->whereKey($policy->product_version_id)->firstOrFail();
+        $endorsements = PolicyTransaction::query()->where('policy_id', $policy->id)->whereNotNull('rating_result')->orderBy('created_at')->orderBy('id')->get();
+        $before = $result;
+        $rows = [];
+        foreach ($endorsements as $endorsement) {
+            $after = \App\Modules\Insurance\Rating\Domain\RatingResult::fromArray($endorsement->rating_result ?? []);
+            $rows[] = ['id' => $endorsement->id, 'effective_date' => $endorsement->effective_date->toDateString(), 'reason' => $endorsement->reason, 'rating' => [
+                'basis' => (string) $endorsement->rating_basis, 'before' => $before->toArray(), 'after' => $after->toArray(),
+                'change' => ['net_minor' => $endorsement->net_delta_minor, 'tax_minor' => $endorsement->tax_delta_minor, 'stamp_duty_minor' => $endorsement->stamp_duty_delta_minor,
+                    'gross_minor' => $endorsement->premium_delta_minor],
+                // Charged pro rata when the change is not the whole difference of the two ratings (erp.policies.endorsement_premium at the time, A-119).
+                'pro_rata' => $endorsement->net_delta_minor !== $after->netPremiumMinor - $before->netPremiumMinor,
+                'days_charged' => (int) $endorsement->effective_date->diffInDays($policy->expiry) + 1, 'days_in_term' => (int) $policy->inception->diffInDays($policy->expiry) + 1,
+            ]];
+            $before = $after;
+        }
+        $number = fn (string $table, ?string $id): ?array => $id === null ? null : ['id' => $id, 'number' => (string) DB::table($table)->where('id', $id)->value('number')];
+        $risk = [];
+        foreach ($version->riskSchema()->fields as $field) {
+            $value = $result->riskInputs[$field->key] ?? null;
+            $risk[] = ['label_en' => $field->labelEn, 'label_bn' => $field->labelBn, 'value' => match (true) {
+                $value === null => '—',
+                $field->type === \App\Modules\Insurance\Product\Domain\Enums\RiskFieldType::Money && is_int($value) => PageSupport::money($value, $policy->currency),
+                $field->type === \App\Modules\Insurance\Product\Domain\Enums\RiskFieldType::Select => (string) (array_column($field->options, 'label_en', 'value')[(string) $value] ?? $value),
+                $field->type === \App\Modules\Insurance\Product\Domain\Enums\RiskFieldType::Boolean => $value === true ? 'Yes' : 'No',
+                default => (string) $value,
+            }];
+        }
+
+        return [
+            'result' => $result->toArray(), 'risk' => $risk,
+            'special_terms' => array_map(fn (array $t): string => $t['text'], $policy->special_terms ?? []),
+            'issue_basis' => $policy->issue_basis, 'premium_received_reference' => $policy->premium_received_reference,
+            'proposal' => $number('proposals', $policy->proposal_id), 'quotation' => $number('quotations', $policy->quotation_id),
+            'uses_current_tariff' => $version->endorsement_uses_current_tariff,
+            'endorsements' => $rows,
+            'schema' => $version->risk_schema ?? [], 'current_inputs' => $before->riskInputs,
+            'coverages' => array_values($version->coverageDefinitions()->get()->map(fn ($c): array => ['code' => $c->code, 'name_en' => $c->name_en, 'name_bn' => $c->name_bn, 'mandatory' => $c->mandatory])->all()),
+            'chosen_coverages' => $before->coverages,
+        ];
     }
 
     public function cancel(Request $request, string $policy): RedirectResponse

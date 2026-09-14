@@ -98,7 +98,8 @@ final class DistributionDemoSeeder extends Seeder
         $versionTerms = ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'daily_365', 'posting_rule_set' => 'default', 'coverages' => [],
             'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true, 'refund_tax_on_cancellation' => true]];
         $catalogue->addVersion($life->id, [...$versionTerms, 'tax_profile' => ['inclusive' => true], 'compensation_scheme_id' => $lifeScheme], $admin);
-        $catalogue->addVersion($fire->id, [...$versionTerms, 'compensation_scheme_id' => $nonLifeScheme, ...DemoRatingCatalogue::versionTerms('fire')], $admin); // Phase 3 R1 (life is a LATER class)
+        // Phase 3 R1 (life is a LATER class); R7: the fire policies are paid on issue day or later, so the demo product issues on credit (A-117).
+        $catalogue->addVersion($fire->id, [...$versionTerms, 'compensation_scheme_id' => $nonLifeScheme, ...DemoRatingCatalogue::versionTerms('fire'), 'allow_credit_issue' => true], $admin);
 
         $parties = app(PartyService::class);
         $producers = app(ProducerService::class);
@@ -126,12 +127,18 @@ final class DistributionDemoSeeder extends Seeder
         $holders = DB::table('parties as p')->join('party_roles as r', 'r.party_id', '=', 'p.id')->where('r.role', 'policyholder')->orderBy('p.display_name')->pluck('p.id')->map(fn ($id): string => (string) $id)->all();
         $lifecycle = app(PolicyLifecycle::class);
         $receipts = app(ReceiptService::class);
-        $sell = function (string $productId, string $producerId, int $premium, string $issued, ?string $received, int $holder) use ($lifecycle, $receipts, $entityId, $branchId, $manager, $holders, $day): void {
-            $policy = $lifecycle->quote(new QuoteRequest($entityId, $branchId, $productId, $holders[$holder % count($holders)], $producerId, $day($issued), $premium, 'BDT', 1), $manager);
-            $lifecycle->issue($policy->id, $day($issued), $manager);
+        /** @param int|array<string, mixed> $premiumOrRisk the typed premium of the (unrated) life product, or the risk of the rated fire product (Phase 3 R7) */
+        $sell = function (string $productId, string $producerId, int|array $premiumOrRisk, string $issued, ?string $received, int $holder) use ($lifecycle, $receipts, $entityId, $branchId, $manager, $holders, $day): void {
+            if (is_array($premiumOrRisk)) {
+                $policyId = DemoNewBusiness::sell($branchId, $productId, $holders[$holder % count($holders)], $producerId, $issued, $premiumOrRisk, $manager);
+            } else {
+                $policyId = $lifecycle->quote(new QuoteRequest($entityId, $branchId, $productId, $holders[$holder % count($holders)], $producerId, $day($issued), $premiumOrRisk, 'BDT', 1), $manager)->id;
+                $lifecycle->issue($policyId, $day($issued), $manager);
+            }
             if ($received !== null) {
-                $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, 'bank_transfer', $premium, 'BDT', $day($received), null, 'DIST-'.substr($policy->id, -6),
-                    [new AllocationLine((string) DB::table('installments')->where('policy_id', $policy->id)->value('id'), $premium)]), $manager);
+                $premium = (int) DB::table('policies')->where('id', $policyId)->value('gross_premium_minor');
+                $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, 'bank_transfer', $premium, 'BDT', $day($received), null, 'DIST-'.substr($policyId, -6),
+                    [new AllocationLine((string) DB::table('installments')->where('policy_id', $policyId)->value('id'), $premium)]), $manager);
             }
         };
         $i = 0;
@@ -139,12 +146,18 @@ final class DistributionDemoSeeder extends Seeder
             ['FA-01', 9_000_000, '2026-09-02', '2026-09-05'], ['FA-02', 3_600_000, '2026-09-04', '2026-09-08'], ['FA-03', 5_400_000, '2026-09-06', null], ['UM-01', 12_000_000, '2026-09-07', '2026-09-10']] as [$code, $premium, $issued, $received]) {
             $sell($life->id, $agents[$code], $premium, $issued, $received, $i++);
         }
-        foreach ([['BDO-01', 26_000_000, '2026-08-08'], ['BDO-02', 14_000_000, '2026-08-14'], ['BDO-03', 21_000_000, '2026-08-21'], ['BDO-01', 18_000_000, '2026-09-03'], ['BDO-03', 9_500_000, '2026-09-09']] as [$code, $premium, $issued]) {
-            $sell($fire->id, $bdos[$code], $premium, $issued, $issued, $i++);
+        // Phase 3 R7: rated on the placeholder fire tariff, within the branch manager's placeholder limit (A-90): factory 25,000,000.00 → gross 72,375.00; factory
+        // 24,000,000.00 → 69,500.00; shop 20,000,000.00 → 34,700.00; warehouse 20,000,000.00 → 46,500.00; dwelling 25,000,000.00 → 23,500.00 (verify).
+        $fireRisk = fn (string $occupancy, int $sumInsuredMinor, string $address): array => ['occupancy' => $occupancy, 'construction_class' => 'class_1', 'address' => $address, 'sum_insured' => $sumInsuredMinor];
+        foreach ([['BDO-01', $fireRisk('factory', 2_500_000_000, 'Plot 7, BSCIC Industrial Estate, Tongi'), '2026-08-08'], ['BDO-02', $fireRisk('shop', 2_000_000_000, 'Shop 41, Bashundhara City, Dhaka'), '2026-08-14'],
+            ['BDO-03', $fireRisk('factory', 2_400_000_000, 'Plot 22, Savar EPZ, Dhaka'), '2026-08-21'], ['BDO-01', $fireRisk('warehouse', 2_000_000_000, 'Godown 3, Kanchpur, Narayanganj'), '2026-09-03'],
+            ['BDO-03', $fireRisk('dwelling', 2_500_000_000, 'House 9, Road 11, Gulshan 2, Dhaka'), '2026-09-09']] as [$code, $risk, $issued]) {
+            $sell($fire->id, $bdos[$code], $risk, $issued, $issued, $i++);
         }
 
         $targets = app(TargetService::class);
-        foreach (['BDO-01' => 20_000_000, 'BDO-02' => 20_000_000, 'BDO-03' => 20_000_000] as $code => $target) {
+        // Phase 3 R7: monthly targets sized to the rated fire premiums above (60,000.00), so BDO-01 and BDO-03 earn the August bonus and BDO-02 does not.
+        foreach (['BDO-01' => 6_000_000, 'BDO-02' => 6_000_000, 'BDO-03' => 6_000_000] as $code => $target) {
             $targets->set('producer', $bdos[$code], 'monthly', $day('2026-08-01'), 'premium', $target, $manager);
             $targets->set('producer', $bdos[$code], 'monthly', $day('2026-09-01'), 'premium', $target, $manager);
         }

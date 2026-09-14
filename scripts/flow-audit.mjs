@@ -84,65 +84,83 @@ async function step(no, title, role, run) {
 
 // ── Day 1: branch officer ───────────────────────────────────────────────────────────────────────────────
 await step(1, 'New motor policy: product, customer, vehicle, sum insured, premium, VAT and stamp duty', 'branch.officer', async (page, notes) => {
-    let outcome = 'pass';
-    await page.goto(`${base}/policies/create`);
+    // Phase 3 R7: a rated product is quoted in the quote workbench (risk form, live premium), accepted as a proposal and approved by the underwriting rules.
+    await page.goto(`${base}/quotations/create`);
     await settle(page);
-    await lookup(page, page.locator('#policyholder_party_id'), 'Karim');
     const product = page.locator('#product_id');
     await product.selectOption({ label: await product.locator('option', { hasText: 'Motor' }).first().innerText() });
-    await lookup(page, page.locator('#agent_id'), 'AG-001');
-    const riskFields = await page.getByLabel(/vehicle|registration|sum insured|engine|cc/i).count();
-    if (riskFields === 0) {
-        notes.push('No vehicle details or sum insured on the form; the premium is typed in, not calculated (G1).');
-        outcome = 'partial';
-    }
-    await page.getByRole('button', { name: /^Continue/ }).click();
     await page.locator('#inception input, input#inception').first().fill('t').catch(async () => page.getByLabel('Cover starts').fill('t'));
-    await page.getByLabel(/Gross premium/).fill('12,000.00');
-    await page.getByRole('button', { name: /^Continue/ }).click();
-    await page.getByRole('button', { name: /^Continue/ }).click();
-    await Promise.all([page.waitForURL(/\/policies\/[0-9a-f-]{36}/), page.getByRole('button', { name: /^Create quote/ }).click()]);
-    state.policyUrl = page.url();
-    notes.push(`Quote created at ${state.policyUrl.replace(base, '')}.`);
-    return outcome;
+    await lookup(page, page.locator('#customer_party_id'), 'Karim');
+    await lookup(page, page.locator('#producer_id'), 'AG-001');
+    await page.locator('#risk_vehicle_type').selectOption('private');
+    const stamp = Date.now().toString().slice(-4);
+    await page.locator('#risk_registration_no').fill(`DHA-METRO-GA-19-${stamp}`);
+    await page.locator('#risk_chassis_no').fill(`AUDIT-${stamp}`);
+    await page.locator('#risk_engine_cc').fill('1500');
+    await page.locator('#risk_seats').fill('5');
+    await page.locator('#risk_year_of_manufacture').fill('2020');
+    await page.locator('#risk_driver_age').fill('40');
+    await page.locator('#risk_sum_insured').fill('450,000.00');
+    await page.getByText(/Gross premium/).first().waitFor();
+    const rail = (await page.getByRole('complementary', { name: 'Premium' }).innerText()).replace(/\s+/g, ' ');
+    notes.push(`Premium worked out from the tariff: ${rail.slice(0, 240)}`);
+    await Promise.all([page.waitForURL(/\/quotations\/[0-9a-f-]{36}/), page.getByRole('button', { name: 'Issue quotation' }).click()]);
+    await settle(page);
+    await page.getByRole('button', { name: /make proposal/ }).click();
+    await Promise.all([page.waitForURL(/\/proposals\/[0-9a-f-]{36}/), page.getByRole('button', { name: 'Make proposal', exact: true }).click()]);
+    await settle(page);
+    await page.getByRole('button', { name: 'Verify identity' }).click();
+    await page.locator('#id_number').fill('1990123456789');
+    await page.getByRole('button', { name: 'Record verification' }).click();
+    await settle(page);
+    await page.getByRole('button', { name: 'Submit to underwriting' }).click();
+    await page.getByRole('button', { name: 'Submit proposal', exact: true }).click();
+    await settle(page);
+    state.proposalUrl = page.url();
+    const approved = await page.getByText('Approved automatically').count();
+    notes.push(`Quotation issued and proposal ${approved ? 'approved automatically' : 'referred'} at ${state.proposalUrl.replace(base, '')}.`);
+    return approved ? 'pass' : 'partial';
 });
 
 await step(2, 'Issue: policy number allocated, accounting written behind the scenes', 'branch.officer', async (page, notes) => {
     let outcome = 'pass';
-    await page.goto(state.policyUrl);
+    await page.goto(state.proposalUrl);
     await settle(page);
     await page.getByRole('button', { name: 'Issue policy' }).click();
     await page.getByLabel('Issue date').fill('t');
     await page.getByRole('button', { name: /^Review and issue/ }).click();
     const lines = await confirmJournal(page);
     notes.push(`Journal preview: ${lines.join(' | ')}`);
-    await page.waitForFunction(() => document.querySelector('h1')?.textContent?.trim() !== 'Quote');
+    await page.waitForURL(/\/policies\/[0-9a-f-]{36}/);
+    await settle(page);
+    state.policyUrl = page.url().split('?')[0];
     const heading = (await page.locator('h1').first().innerText()).trim();
     state.policyNumber = heading;
-    notes.push(`Issued as ${heading}.`);
+    state.gross = (await page.locator('dt', { hasText: /Gross premium/ }).locator('xpath=following-sibling::dd').first().innerText()).trim();
+    notes.push(`Issued as ${heading}, gross premium ${state.gross}.`);
     if (!/^POL-[A-Z0-9]+-\d{4}-\d{6}$/.test(heading)) {
         notes.push('Number does not follow POL-<BRANCH>-<FY>-<seq>.');
         outcome = 'partial';
     }
     if (!lines.some((l) => /Stamp/i.test(l))) {
-        notes.push('No stamp duty line: only VAT is split from the premium.');
+        notes.push('No stamp duty line in the journal.');
         outcome = 'partial';
     }
     return outcome;
 });
 
-await step(3, 'Receive 12,000 by bank transfer and allocate to the installment; receipt number for the customer', 'branch.manager', async (page, notes) => {
+await step(3, 'Receive the premium by bank transfer and allocate to the installment; receipt number for the customer', 'branch.manager', async (page, notes) => {
     let outcome = 'pass';
     notes.push('Done as the branch manager: a branch officer may record receipts but not allocate them (segregation of duties).');
     await page.goto(`${base}/receipts/create`);
     await settle(page);
-    await page.getByLabel(/Amount received/).fill('12,000.00');
+    await page.getByLabel(/Amount received/).fill(state.gross);
     await page.getByLabel('Value date').fill('t');
     await page.locator('#channel').selectOption('bank_transfer');
     await page.getByLabel('Reference').fill('TRF KARIM MOTOR 2');
     if ((await page.locator('#allocation-0').count()) === 0) await page.getByRole('button', { name: 'Add an installment' }).click();
     await lookup(page, page.locator('#allocation-0'), state.policyNumber, state.policyNumber);
-    await page.locator('#allocation-amount-0').fill('12,000.00');
+    await page.locator('#allocation-amount-0').fill(state.gross);
     await page.getByRole('button', { name: /^Review and post/ }).click();
     const lines = await confirmJournal(page);
     notes.push(`Journal preview: ${lines.join(' | ')}`);
@@ -168,7 +186,7 @@ await step(4, 'Commission accrued on the receipt for an agent on a commission sc
         notes.push('No commission journal on the policy after the receipt.');
         return 'fail';
     }
-    notes.push('The policy\'s accounting shows commission expense and commission payable (10% of 12,000) posted with the allocation.');
+    notes.push(`The policy's accounting shows commission expense and commission payable (10% of ${state.gross}) posted with the allocation.`);
     return 'pass';
 });
 

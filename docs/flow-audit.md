@@ -13,6 +13,7 @@ composer worker &                             # posts accounting events; without
 node scripts/flow-audit.mjs                   # --base http://nonlife.localhost:8765
 ```
 
+- Since Phase 3 R7, steps 1–3 quote in the quote workbench, make and submit the proposal, issue the policy from the proposal page and receive its rated gross premium (the Part A products are rated); the latest run below predates that change.
 - Output goes to `storage/flow-audit/results.json` and one screenshot per step, `storage/flow-audit/step-NN.png`.
 - Rerunning needs a fresh demo, because step 13 locks September.
 - Users: `<role>@nonlife.local` with the admin password.

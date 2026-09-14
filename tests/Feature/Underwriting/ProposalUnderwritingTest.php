@@ -287,7 +287,7 @@ it('serves the proposal page, the referral queue and the underwriting limits scr
         ->where('proposal.number', 'PRP-HO-2026-000001')->where('proposal.kyc_status', 'verified')->where('proposal.kyc_id_type', 'National ID')->where('proposal.quotation.number', 'QUO-HO-2026-000001')
         ->where('proposal.gross_premium', fn ($v): bool => is_string($v))->where('risk.0', ['label_en' => 'Vehicle type', 'label_bn' => 'যানবাহনের ধরন', 'value' => 'Private car'])
         ->where('risk.7.value', '3,000,000.00')->where('documentUpload', "/proposals/{$id}/documents")
-        ->where('can', ['verify_kyc' => true, 'waive_kyc' => false, 'submit' => true, 'decide' => false, 'issue_cover_note' => false])
+        ->where('can', ['verify_kyc' => true, 'waive_kyc' => false, 'submit' => true, 'decide' => false, 'issue_cover_note' => false, 'issue_policy' => false])
         ->loadDeferredProps('history', fn (AssertableInertia $reload) => $reload->where('documents.0.name', 'nid-scan.pdf')));
     actingAs($this->officer)->post("/proposals/{$id}/submit", [], $this->headers)->assertSessionHas('status', 'Proposal referred to underwriting.');
 

@@ -85,8 +85,9 @@ final class UnderwritingRules
     }
 
     /**
-     * Numbers of the other documents holding one of the risk keys: issued quotations (not this proposal's), draft, submitted or approved proposals, and issued
-     * proposals whose policy is issued or active and not yet expired. R7/R9 hook: policies issued without a proposal must carry risk keys to be found here.
+     * Numbers of the other documents holding one of the risk keys: issued quotations (not this proposal's), draft, submitted or approved proposals, and policies
+     * issued or active and not yet expired (slice R7: a policy carries the keys of its current risk — set at issue, moved by re-rated endorsements — whether it
+     * came from a proposal or not; its own proposal is not a duplicate of it).
      *
      * @param list<string> $keys
      * @return list<string>
@@ -99,13 +100,12 @@ final class UnderwritingRules
         $literal = '{'.implode(',', array_map(fn (string $k): string => '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $k).'"', $keys)).'}';
         $quotations = DB::table('quotations')->where('status', 'issued')->when($quotationId !== null, fn ($q) => $q->where('id', '<>', $quotationId))
             ->whereRaw('jsonb_exists_any(risk_keys, ?::text[])', [$literal])->orderBy('number')->pluck('number');
-        $proposals = DB::table('proposals as p')->leftJoin('policies as pol', 'pol.id', '=', 'p.policy_id')
-            ->when($proposalId !== null, fn ($q) => $q->where('p.id', '<>', $proposalId))
-            ->where(fn ($q) => $q->whereIn('p.status', ['draft', 'submitted', 'approved'])
-                ->orWhere(fn ($w) => $w->where('p.status', 'issued')->whereIn('pol.status', ['issued', 'active'])->where('pol.expiry', '>=', $on->toDateString())))
-            ->whereRaw('jsonb_exists_any(p.risk_keys, ?::text[])', [$literal])->orderBy('p.number')->get(['p.number', 'pol.number as policy_number']);
+        $proposals = DB::table('proposals')->when($proposalId !== null, fn ($q) => $q->where('id', '<>', $proposalId))->whereIn('status', ['draft', 'submitted', 'approved'])
+            ->whereRaw('jsonb_exists_any(risk_keys, ?::text[])', [$literal])->orderBy('number')->pluck('number');
+        $policies = DB::table('policies')->whereIn('status', ['issued', 'active'])->where('expiry', '>=', $on->toDateString())->whereNotNull('number')
+            ->when($proposalId !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('proposal_id')->orWhere('proposal_id', '<>', $proposalId)))
+            ->whereRaw('jsonb_exists_any(risk_keys, ?::text[])', [$literal])->orderBy('number')->pluck('number');
 
-        return array_values(array_unique([...$quotations->map(fn (mixed $n): string => (string) $n)->all(),
-            ...$proposals->map(fn (object $p): string => $p->policy_number !== null ? (string) $p->policy_number : (string) $p->number)->all()]));
+        return array_values(array_unique(array_map(fn (mixed $n): string => (string) $n, [...$quotations->all(), ...$proposals->all(), ...$policies->all()])));
     }
 }
