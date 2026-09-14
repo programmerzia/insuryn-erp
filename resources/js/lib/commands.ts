@@ -28,11 +28,19 @@ const actions: (Omit<Command, 'group' | 'icon'> & { any: string[]; icon?: Compon
     { id: 'import-coa', label: 'Import chart of accounts or opening balances', href: '/accounting/imports', keywords: 'coa opening', any: ['accounting.view_journals'], icon: Upload },
     { id: 'start-close', label: 'Start month-end close', href: '/close', keywords: 'lock period close month', any: ['periods.soft_lock', 'periods.lock'] },
     { id: 'pay-commission', label: 'Approve or pay commission', href: '/distribution/statements', keywords: 'agent producer payout statement run', any: ['commission.approve', 'commission.pay'] },
-    // UX consistency pass: reinsurance and regulatory actions.
-    { id: 'new-treaty', label: 'New treaty', href: '/reinsurance/treaties/create', keywords: 'reinsurance quota share surplus sbc', any: ['ri.manage_treaties'] },
+    // Consistency pass: the main actions of payables, reinsurance, regulatory, people, fixed assets, budgets and petty cash, gated like the pages.
+    { id: 'new-bill', label: 'Enter a supplier bill', href: '/payables/bills/create', keywords: 'new bill invoice vendor supplier payable expense', any: ['ap.enter_bills'] },
+    { id: 'new-payment-run', label: 'New payment run', href: '/payables/payment-runs/create', keywords: 'pay suppliers bills bank transfer', any: ['ap.prepare_payments'] },
+    { id: 'new-treaty', label: 'New treaty', href: '/reinsurance/treaties/create', keywords: 'reinsurance quota share surplus excess of loss', any: ['ri.manage_treaties'] },
+    { id: 'run-provisions', label: 'Run technical provisions', href: '/regulatory/provisions', keywords: 'ibnr upr outstanding claims reserve quarter regulatory', any: ['provisions.run'] },
+    { id: 'generate-returns', label: 'Generate regulatory returns', href: '/regulatory/returns', keywords: 'idra return filing regulator', any: ['reports.regulatory'] },
+    { id: 'hire-employee', label: 'Hire employee', href: '/people/employees', keywords: 'new employee staff hr joiner', any: ['hr.manage_employees'] },
+    { id: 'calculate-payroll', label: 'Calculate payroll', href: '/people/payroll', keywords: 'salary payroll run month payslips', any: ['payroll.prepare'] },
+    { id: 'post-depreciation', label: 'Post monthly depreciation', href: '/fixed-assets/depreciation', keywords: 'fixed assets depreciation month', any: ['fa.post_depreciation'] },
+    { id: 'new-asset', label: 'Capitalise an asset', href: '/fixed-assets', keywords: 'new fixed asset add capitalize', any: ['fa.manage'] },
+    { id: 'new-budget', label: 'New budget', href: '/budgets', keywords: 'budget version year plan', any: ['budget.prepare'] },
+    { id: 'petty-cash-voucher', label: 'Record a petty cash voucher', href: '/petty-cash', keywords: 'petty cash spend expense float voucher', any: ['pettycash.spend'] },
     { id: 'prepare-ri-statement', label: 'Prepare a reinsurer statement', href: '/reinsurance/statements', keywords: 'reinsurance quarter account bordereau', any: ['ri.manage_treaties'] },
-    { id: 'generate-returns', label: 'Generate regulatory returns', href: '/regulatory/returns', keywords: 'idra return filing quarter', any: ['reports.regulatory'] },
-    { id: 'prepare-provisions', label: 'Prepare technical provisions', href: '/regulatory/provisions', keywords: 'ibnr upr chain ladder reserve quarter', any: ['provisions.run'] },
 ];
 
 const settings: Command[] = [

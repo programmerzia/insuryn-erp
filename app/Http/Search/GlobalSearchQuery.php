@@ -6,7 +6,11 @@ namespace App\Http\Search;
 
 use App\Http\Pages\PageSupport;
 use App\Http\Distribution\ProducersPageController;
+use App\Http\People\EmployeesPageController;
 use App\Modules\Accounting\Http\Controllers\ClosePageController;
+use App\Modules\Finance\FixedAssets\Http\Controllers\FixedAssetsPageController;
+use App\Modules\Finance\Payables\Http\Controllers\PayablesArea;
+use App\Modules\Insurance\Reinsurance\Http\Controllers\ReinsurancePageController;
 use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
 use App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController;
@@ -61,7 +65,96 @@ final class GlobalSearchQuery
             ...($may(ProducersPageController::AREA) ? $this->producers($like, $number) : []),
             ...($may(ReinsurancePageController::AREA) ? $this->reinsurance($like) : []),
             ...(in_array('accounting.view_journals', $held, true) ? $this->journals($like, $number) : []),
+            // Consistency pass: the finance, reinsurance and people modules' main documents.
+            ...($may(PayablesArea::AREA) ? $this->payables($like, $number, $reach(PayablesArea::AREA)) : []),
+            ...($may(ReinsurancePageController::AREA) ? $this->treaties($like) : []),
+            ...($may(FixedAssetsPageController::AREA) ? $this->assets($like, $number, $reach(FixedAssetsPageController::AREA)) : []),
+            ...($may(EmployeesPageController::AREA) ? $this->employees($like, $number, $reach(EmployeesPageController::AREA)) : []),
         ];
+    }
+
+    /**
+     * Supplier bills by number, the supplier's own reference or the supplier's name; payment runs by number; suppliers by code or name.
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function payables(string $like, ?array $number, AreaReach $reach): array
+    {
+        $results = [];
+        $bills = $reach->constrain(DB::table('ap_bills as b'), 'b.entity_id', 'b.branch_id')->join('suppliers as s', 's.id', '=', 'b.supplier_id')->leftJoin('parties as sp', 'sp.id', '=', 's.party_id')
+            ->whereNotNull('b.number')->where(fn ($q) => self::numberOr($q->where('b.number', 'ilike', $like)->orWhere('b.supplier_reference', 'ilike', $like)->orWhere('sp.display_name', 'ilike', $like), 'b.number', $number))
+            ->orderByDesc('b.bill_date')->limit(self::PER_KIND)->get(['b.id', 'b.number', 'b.status', 'b.supplier_reference', 'b.payable_minor', 'b.currency', 'sp.display_name']);
+        foreach ($bills as $row) {
+            $results[] = ['kind' => 'supplier_bill', 'label' => (string) $row->number, 'detail' => ($row->display_name ?? '').' · '.$row->supplier_reference.' · '.PageSupport::money((int) $row->payable_minor, (string) $row->currency).' · '.self::word((string) $row->status),
+                'href' => "/payables/bills/{$row->id}"];
+        }
+        $runs = $reach->tenantWide || $reach->entityIds !== [] ? DB::table('payment_runs')->when(! $reach->tenantWide, fn ($q) => $q->whereIn('entity_id', $reach->entityIds))
+            ->where(fn ($q) => self::numberOr($q->where('number', 'ilike', $like), 'number', $number))->orderByDesc('pay_date')->limit(self::PER_KIND)->get(['id', 'number', 'status', 'pay_date', 'total_minor', 'currency']) : collect();
+        foreach ($runs as $row) {
+            $results[] = ['kind' => 'payment_run', 'label' => (string) $row->number, 'detail' => 'Pay on '.CarbonImmutable::parse((string) $row->pay_date)->format('j M Y').' · '.PageSupport::money((int) $row->total_minor, (string) $row->currency).' · '.self::word((string) $row->status),
+                'href' => "/payables/payment-runs/{$row->id}"];
+        }
+        $suppliers = DB::table('suppliers as s')->leftJoin('parties as sp', 'sp.id', '=', 's.party_id')->where(fn ($q) => $q->where('s.code', 'ilike', $like)->orWhere('sp.display_name', 'ilike', $like))
+            ->orderBy('s.code')->limit(self::PER_KIND)->get(['s.id', 's.code', 's.status', 'sp.display_name']);
+        foreach ($suppliers as $row) {
+            $results[] = ['kind' => 'supplier', 'label' => (string) ($row->display_name ?? $row->code), 'detail' => $row->code.' · '.self::word((string) $row->status), 'href' => "/payables/suppliers/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /** @return list<array{kind: string, label: string, detail: string, href: string}> */
+    private function treaties(string $like): array
+    {
+        $rows = DB::table('ri_treaties')->where(fn ($q) => $q->where('code', 'ilike', $like)->orWhere('name', 'ilike', $like))->orderByDesc('period_from')->limit(self::PER_KIND)
+            ->get(['id', 'code', 'name', 'type', 'status']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'treaty', 'label' => (string) $row->code, 'detail' => $row->name.' · '.self::word((string) $row->type).' · '.self::word((string) $row->status), 'href' => "/reinsurance/treaties/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Fixed assets by number, serial number (tag) or description.
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function assets(string $like, ?array $number, AreaReach $reach): array
+    {
+        $rows = $reach->constrain(DB::table('fixed_assets'), 'entity_id', 'branch_id')
+            ->where(fn ($q) => self::numberOr($q->where('number', 'ilike', $like)->orWhere('serial_no', 'ilike', $like)->orWhere('description', 'ilike', $like), 'number', $number))
+            ->orderBy('number')->limit(self::PER_KIND)->get(['id', 'number', 'description', 'serial_no', 'status']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'fixed_asset', 'label' => (string) $row->number, 'detail' => $row->description.($row->serial_no !== null ? " · serial {$row->serial_no}" : '').' · '.self::word((string) $row->status),
+                'href' => "/fixed-assets/{$row->id}"];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Employees by code or name, within the branches of their current employment the user may see.
+     *
+     * @param array{0: string, 1: string}|null $number
+     * @return list<array{kind: string, label: string, detail: string, href: string}>
+     */
+    private function employees(string $like, ?array $number, AreaReach $reach): array
+    {
+        $rows = $reach->constrain(DB::table('employees as e'), 'e.entity_id', 'm.branch_id')
+            ->leftJoin('employments as m', fn ($j) => $j->on('m.employee_id', '=', 'e.id')->whereNull('m.effective_to'))->leftJoin('designations as d', 'd.id', '=', 'm.designation_id')
+            ->where(fn ($q) => self::numberOr($q->where('e.code', 'ilike', $like)->orWhere('e.full_name', 'ilike', $like), 'e.code', $number))
+            ->orderBy('e.code')->limit(self::PER_KIND)->get(['e.id', 'e.code', 'e.full_name', 'e.status', 'd.name as designation']);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = ['kind' => 'employee', 'label' => "{$row->code} · {$row->full_name}", 'detail' => ($row->designation ?? 'Employee').' · '.self::word((string) $row->status), 'href' => "/people/employees/{$row->id}"];
+        }
+
+        return $results;
     }
 
     /**

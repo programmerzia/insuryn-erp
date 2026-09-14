@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { Banknote, BookOpen, Calculator, ClipboardCheck, CornerDownLeft, FileClock, FileSpreadsheet, FileText, Handshake, History, MousePointerClick, Search, ShieldAlert, User, UsersRound, Zap } from 'lucide-vue-next';
+import { Armchair, Banknote, BookOpen, Calculator, ClipboardCheck, CornerDownLeft, FileClock, FileInput, FileSpreadsheet, FileText, Handshake, History, IdCard, MousePointerClick, Search, Send, ShieldAlert, Truck, User, UsersRound, Zap } from 'lucide-vue-next';
 import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, VisuallyHidden } from 'reka-ui';
 import { type Component, computed, nextTick, onMounted, ref, watch } from 'vue';
 import Kbd from '@/components/ui/Kbd.vue';
@@ -44,9 +44,11 @@ let controller: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 const kindIcons: Record<string, Component> = { policy: FileText, claim: ShieldAlert, receipt: Banknote, customer: User, journal: BookOpen, action: Zap,
-    quotation: Calculator, proposal: ClipboardCheck, cover_note: FileClock, producer: UsersRound, treaty: Handshake, reinsurer_statement: FileSpreadsheet };
+    quotation: Calculator, proposal: ClipboardCheck, cover_note: FileClock, producer: UsersRound,
+    supplier_bill: FileInput, payment_run: Send, supplier: Truck, treaty: Handshake, fixed_asset: Armchair, employee: IdCard, reinsurer_statement: FileSpreadsheet };
 const kindWords: Record<string, string> = { policy: 'Policy', claim: 'Claim', receipt: 'Receipt', customer: 'Customer', journal: 'Journal', action: 'Action',
-    quotation: 'Quotation', proposal: 'Proposal', cover_note: 'Cover note', producer: 'Producer', treaty: 'Treaty', reinsurer_statement: 'Reinsurer statement' };
+    quotation: 'Quotation', proposal: 'Proposal', cover_note: 'Cover note', producer: 'Producer',
+    supplier_bill: 'Supplier bill', payment_run: 'Payment run', supplier: 'Supplier', treaty: 'Treaty', fixed_asset: 'Fixed asset', employee: 'Employee', reinsurer_statement: 'Reinsurer statement' };
 
 const commands = computed(() => buildCommands(page.props.auth.permissions ?? []));
 
@@ -106,7 +108,7 @@ watch(query, (value) => {
     controller?.abort();
     const typed = value.trim();
     // "cheque 88231" searches for the reference itself
-    const term = typed.replace(/^(cheque|chq|receipt|policy|claim|journal|quotation|quote|proposal|cover note|producer|agent)\s+/i, '');
+    const term = typed.replace(/^(cheque|chq|receipt|policy|claim|journal|quotation|quote|proposal|cover note|producer|agent|bill|supplier|payment run|treaty|asset|employee)\s+/i, '');
     if (term.length < 2) {
         results.value = [];
         searching.value = false;
