@@ -57,6 +57,7 @@ final class ReasonMessages
         'INVALID_INSURANCE_CLASS' => 'Choose the insurance class: life or non-life.',
         'MIN_PREMIUM_INVALID' => 'Enter a minimum premium of zero or more.',
         'RECOGNISE_AT_INVALID' => 'Choose when the premium is recognised: at the policy or at the cover note.',
+        'EVENT_NOT_STUCK' => 'This accounting event has already been posted or is waiting its turn; only failed or long-queued events can be sent again. Refresh the list.',
         'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',
     ];
 
@@ -70,7 +71,9 @@ final class ReasonMessages
      *     conflict) but names keys or permissions by code: kept, with keys in words and permissions as "Context: action".
      */
     private const REWORDED = ['RATING_PLAN_INVALID', 'RISK_SCHEMA_INVALID', 'RATE_TABLE_TYPE', 'STATEMENT_UNREADABLE', 'TARGET_INVALID', 'INCENTIVE_PLAN_INVALID', 'COMPLIANCE_PROFILE_INVALID',
-        'ROLE_CONFLICT', 'AUDITOR_WRITE_PERMISSION'];
+        'ROLE_CONFLICT', 'AUDITOR_WRITE_PERMISSION',
+        // UX U2: the context that uses the account (a bank account, …) writes the sentence naming what to change first.
+        'ACCOUNT_IN_USE'];
 
     /** Whether the reason is worded here rather than by its domain message. */
     public static function covers(string $reason): bool
