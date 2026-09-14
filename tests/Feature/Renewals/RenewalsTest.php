@@ -329,7 +329,7 @@ it('reports the expiry register as at a date and renewal conversion by branch an
         ->where('title', 'Expiry register')->where('filter', 'as_of')
         ->where('rows', fn (Collection $rows): bool => $rows->map(fn ($r): array => [$r['cells']['policy_number'], $r['cells']['days_left'], $r['cells']['bucket'], $r['cells']['status'], $r['link']])
             ->sortBy(fn (array $r): string => $r[0])->values()->all() === collect([
-                [$numbers[$renewed], 25, 30, 'renewed', "/policies/{$renewed}"], [$numbers[$lost], 25, 30, 'not renewed', "/policies/{$lost}"], [$numbers[$open], 41, 60, 'upcoming', "/policies/{$open}"],   // not in the register yet on 31 Jul (61 days)
+                [$numbers[$renewed], 25, 30, 'Renewed', "/policies/{$renewed}"], [$numbers[$lost], 25, 30, 'Not renewed', "/policies/{$lost}"], [$numbers[$open], 41, 60, 'Upcoming', "/policies/{$open}"],   // not in the register yet on 31 Jul (61 days)
             ])->sortBy(fn (array $r): string => $r[0])->values()->all())
         ->where('totals.policies', '3 policies')->where('totals.gross', \App\Modules\Platform\Money\MinorUnits::format(3 * $gross, 'BDT'))
         ->where('summaries.0.rows', fn (Collection $rows): bool => $rows->map(fn ($r): array => [$r['cells']['group'], $r['cells']['policies']])->all() === [['30 days', 2], ['60 days', 1]])

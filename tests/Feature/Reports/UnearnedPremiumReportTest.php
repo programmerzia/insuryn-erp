@@ -146,7 +146,8 @@ it('totals the premium register by class and by branch', function (): void {
         $sum = function (string $key, string $value) use ($report): array {
             $rows = array_values(array_filter($report['rows'], fn (array $r): bool => $r[$key] === $value));
 
-            return ['gross_minor' => array_sum(array_column($rows, 'gross_minor')), 'net_minor' => array_sum(array_column($rows, 'net_minor')), 'tax_minor' => array_sum(array_column($rows, 'tax_minor'))];
+            return ['gross_minor' => array_sum(array_column($rows, 'gross_minor')), 'net_minor' => array_sum(array_column($rows, 'net_minor')), 'tax_minor' => array_sum(array_column($rows, 'tax_minor')),
+                'stamp_duty_minor' => array_sum(array_column($rows, 'stamp_duty_minor'))]; // gap audit GA-34: stamp duty totalled too
         };
 
         expect($report['by_class'])->toBe([['group' => 'fire'] + $sum('class', 'fire'), ['group' => 'motor'] + $sum('class', 'motor')])
@@ -175,7 +176,7 @@ it('serves both reports to reports.financial only, drilling policy numbers to th
 
     actingAs($reader)->get('/reports/unearned-premium?as_of=2026-09-30', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->component('reports/Show')->where('filter', 'as_of')->has('rows', 3)
-        ->where('rows.0.link', "/policies/{$c}")->where('rows.0.cells.class', 'fire')
+        ->where('rows.0.link', "/policies/{$c}")->where('rows.0.cells.class', 'Fire') // gap audit GA-34: the class name, not its code
         ->where('summaries.0.title', 'Totals by class')->has('summaries.0.rows', 2)
         ->where('summaries.1.title', 'Totals by product')
         ->where('summaries.2.rows.2.cells.item', 'Variance')->where('summaries.2.rows.2.cells.amount', $zero)
@@ -184,6 +185,6 @@ it('serves both reports to reports.financial only, drilling policy numbers to th
     actingAs($reader)->get('/reports/premium-register?from=2026-07-01&to=2026-11-30', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->component('reports/Show')->where('rows.0.links.policy_number', "/policies/{$a}")
         ->where('rows.0.link', fn (string $link): bool => str_starts_with($link, '/accounting/journals/'))
-        ->where('summaries.0.title', 'Totals by class')->where('summaries.0.rows.0.cells.group', 'fire')
+        ->where('summaries.0.title', 'Totals by class')->where('summaries.0.rows.0.cells.group', 'Fire')
         ->where('summaries.1.title', 'Totals by branch')->where('summaries.1.rows.0.cells.group', 'CTG'));
 });

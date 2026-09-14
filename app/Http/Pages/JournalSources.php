@@ -50,7 +50,9 @@ final class JournalSources
 
         return match ($type) {
             'policy_transaction' => $record('policies', $parent('policy_transactions', 'policy_id'), '/policies', 'Policy'),
-            'premium_earning_ledger' => $record('policies', $parent('premium_earning_ledger', 'policy_id'), '/policies', 'Policy'),
+            // Gap audit GA-45: the ledger row's policy; journals posted before the fix carry the policy id itself as the source id.
+            'premium_earning_ledger' => $record('policies', $parent('premium_earning_ledger', 'policy_id')
+                ?? (DB::table('policies')->where('id', $id)->exists() ? $id : null), '/policies', 'Policy'),
             'receipt' => $record('receipts', $id, '/receipts', 'Receipt'),
             'receipt_allocation' => $record('receipts', $parent('receipt_allocations', 'receipt_id'), '/receipts', 'Receipt'),
             'claim' => $record('claims', $id, '/claims', 'Claim'),

@@ -86,16 +86,18 @@ final class PremiumEarningRun
     public function earn(Policy $policy, FiscalPeriodView $period, int $amount, string $kind, ?string $runId, CarbonImmutable $postingDate): bool
     {
         return DB::transaction(function () use ($policy, $period, $amount, $kind, $runId, $postingDate): bool {
+            $ledgerId = (string) Str::uuid7();
             $inserted = DB::table('premium_earning_ledger')->insertOrIgnore([
-                'id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(), 'policy_id' => $policy->id, 'period_id' => $period->id,
+                'id' => $ledgerId, 'tenant_id' => TenantContext::id(), 'policy_id' => $policy->id, 'period_id' => $period->id,
                 'kind' => $kind, 'earned_minor' => $amount, 'run_id' => $runId, 'created_at' => now(),
             ]);
             if ($inserted === 0) {
                 return false;
             }
             $key = 'PREMIUM_EARNED:'.$policy->id.':'.$period->id.($kind === 'scheduled' ? '' : ':'.$kind);
+            // Gap audit GA-45: the source is the ledger row just written (source type premium_earning_ledger), so the journal links back through it to the policy.
             ($this->submit)(
-                entityId: $policy->entity_id, eventType: 'PREMIUM_EARNED', sourceType: 'premium_earning_ledger', sourceId: $policy->id,
+                entityId: $policy->entity_id, eventType: 'PREMIUM_EARNED', sourceType: 'premium_earning_ledger', sourceId: $ledgerId,
                 idempotencyKey: $key, transactionDate: $postingDate, effectiveDate: $postingDate, currency: $policy->currency,
                 payload: ['earned' => $amount, 'period_id' => $period->id], dimensions: PolicyAccountingEvents::dimensions($policy),
             );

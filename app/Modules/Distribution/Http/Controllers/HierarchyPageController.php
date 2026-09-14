@@ -36,6 +36,10 @@ final class HierarchyPageController
         $on = CarbonImmutable::parse((string) $request->query('on', app(BusinessClock::class)->today()->toDateString()));
         $schemes = DB::table('compensation_schemes')->orderBy('code')->get(['id', 'code', 'name']);
         $schemeId = (string) $request->query('scheme', (string) ($schemes->first()->id ?? ''));
+        // Gap audit GA-02: no scheme (or a scheme parameter that is not one of them) means no levels, never a uuid comparison with ''.
+        if (! $schemes->contains(fn (object $s): bool => (string) $s->id === $schemeId)) {
+            $schemeId = '';
+        }
         $names = DB::table('parties')->pluck('display_name', 'id');
 
         $nodes = [];
@@ -52,7 +56,7 @@ final class HierarchyPageController
             'on' => $on->toDateString(),
             'schemes' => $schemes->map(fn (object $s): array => (array) $s)->values()->all(),
             'scheme' => $schemeId === '' ? null : $schemeId,
-            'levels' => DB::table('hierarchy_levels')->where('scheme_id', $schemeId)->orderBy('rank')->get(['level_code', 'rank', 'label'])->map(fn (object $l): array => (array) $l)->values()->all(),
+            'levels' => $schemeId === '' ? [] : DB::table('hierarchy_levels')->where('scheme_id', $schemeId)->orderBy('rank')->get(['level_code', 'rank', 'label'])->map(fn (object $l): array => (array) $l)->values()->all(),
             'nodes' => $nodes,
             'can' => ['move' => $this->permissions->has($actor, 'agent.manage')],
         ]);

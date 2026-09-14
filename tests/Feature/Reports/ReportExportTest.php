@@ -37,7 +37,11 @@ beforeEach(function (): void {
 it('lists an export for every report with a table on the index', function (): void {
     actingAs($this->auditor)->get('/reports', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('reports/Index')
         ->where('reports.0.key', 'premium-register')->where('reports.0.exports', ['csv' => '/reports/premium-register/export?format=csv', 'xlsx' => '/reports/premium-register/export?format=xlsx'])
-        ->where('reports', fn (Collection $reports): bool => $reports->whereNull('key')->every(fn (array $r): bool => ! isset($r['exports']))));
+        // Gap audit GA-34: the four registers kept on their own screens also export, through the same path.
+        ->where('reports', fn (Collection $reports): bool => $reports->whereNull('key')->mapWithKeys(fn (array $r): array => [$r['title'] => $r['exports']['csv'] ?? null])->all() === [
+            'Suspense ageing' => '/reports/suspense-ageing/export?format=csv', 'Agent cash' => '/reports/agent-cash/export?format=csv',
+            'Commission statements' => '/reports/commission-statements/export?format=csv', 'Trial balance' => '/reports/trial-balance/export?format=csv',
+        ]));
 });
 
 it('downloads the premium register for this month as CSV, the table the report page shows', function (): void {
@@ -45,7 +49,7 @@ it('downloads the premium register for this month as CSV, the table the report p
         ->assertHeader('Content-Type', 'text/csv; charset=UTF-8')->assertDownload('premium-register-2026-09-01-to-2026-09-20.csv');
     $lines = array_values(array_filter(explode("\n", $response->streamedContent())));
 
-    expect($lines[0])->toBe('Date,Policy,Transaction,Product,Class,Branch,Gross,Net,Tax')
+    expect($lines[0])->toBe('Date,Policy,Transaction,Product,Class,Branch,Gross,Net,VAT,"Stamp duty"') // gap audit GA-34: stamp duty column, VAT named
         ->and($lines)->toHaveCount(2)
         ->and($lines[1])->toContain($this->policyNumber)->toContain('"120,000.00"');
 });
@@ -57,6 +61,20 @@ it('downloads outstanding claims and unearned premium as of today, as CSV or XLS
     expect(substr($xlsx->streamedContent(), 0, 2))->toBe('PK');
     // A filter given explicitly is used, as on the report page.
     actingAs($this->auditor)->get('/reports/premium-register/export?format=csv&from=2026-08-01&to=2026-08-31', $this->headers)->assertDownload('premium-register-2026-08-01-to-2026-08-31.csv');
+});
+
+it('downloads suspense ageing, agent cash, commission statements and the trial balance through the same export path', function (): void {
+    // Gap audit GA-34: the premium issued in beforeEach posts receivable, VAT and unearned premium, so the trial balance has rows and balances.
+    $trialBalance = actingAs($this->auditor)->get('/reports/trial-balance/export?format=csv', $this->headers)->assertOk()->assertDownload('trial-balance-2026-09-20.csv');
+    $lines = array_values(array_filter(explode("\n", $trialBalance->streamedContent())));
+    expect($lines[0])->toBe('Account,Name,Type,Debit,Credit,Balance')->and(count($lines))->toBeGreaterThan(2);
+
+    foreach (['suspense-ageing' => 'suspense-ageing-2026-09-20', 'agent-cash' => 'agent-cash-2026-09-20', 'commission-statements' => 'commission-statements-2026-09-01-to-2026-09-20'] as $key => $file) {
+        actingAs($this->auditor)->get("/reports/{$key}/export?format=xlsx", $this->headers)->assertOk()->assertDownload("{$file}.xlsx");
+    }
+    expect(array_values(array_filter(explode("\n", actingAs($this->auditor)->get('/reports/agent-cash/export?format=csv', $this->headers)->streamedContent())))[0])
+        ->toBe('Agent,Collected,Deposited,"Not deposited",Ledger,Difference,"Oldest not deposited","Days held"');
+    actingAs(($this->userWith)(['policy.create']))->get('/reports/trial-balance/export?format=csv', $this->headers)->assertForbidden();
 });
 
 it('exports to reports.financial only, and only known reports and formats', function (): void {

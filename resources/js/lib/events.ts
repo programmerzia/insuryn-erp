@@ -9,6 +9,11 @@ const LABELS: Record<string, string> = {
     CLAIM_PAID: 'Claim paid', CLAIM_RECOVERED: 'Recovery received', CLAIM_CLOSED: 'Claim closed', PAYROLL_POSTED: 'Payroll posted', MANUAL_JOURNAL: 'Manual journal', REVERSAL: 'Reversal',
 };
 
+/** Gap audit GA-34: whether a code is a known event type, so a report cell like the branch code "HO" is not turned into "Ho". */
+export function isEventType(value: string): boolean {
+    return Object.hasOwn(LABELS, value);
+}
+
 export function eventLabel(type: string): string {
     return LABELS[type] ?? type.toLowerCase().replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 }

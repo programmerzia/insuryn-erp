@@ -7,8 +7,9 @@ import DataTable from '@/components/table/DataTable.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { drillFrom } from '@/lib/drill';
-import { eventLabel } from '@/lib/events';
+import { eventLabel, isEventType } from '@/lib/events';
 import { formatMoney } from '@/lib/format';
+import { reportColumnWidth } from '@/lib/reportColumns';
 
 /**
  * One report on the shared table: period filter, drill links on rows and on cells such as a policy number (brief §6.6), totals under the table,
@@ -38,7 +39,10 @@ const columns = computed<DataColumn<Row>[]>(() =>
     props.columns.map((column, index) => {
         const sample = props.rows.find((r) => r.cells[column.key] !== null)?.cells[column.key];
         const type = column.align === 'right' ? (isMoney(sample) ? 'money' : 'number') : /date|as_of|on$/.test(column.key) ? 'date' : 'text';
-        return { id: column.key, header: column.label, type, value: (row: Row) => { const v = row.cells[column.key]; return typeof v === 'string' && /^[A-Z][A-Z_]+$/.test(v) ? eventLabel(v) : v; }, href: index === 0 ? (row: Row) => row.link : row => row.links?.[column.key] ?? null, width: type === 'text' ? 220 : 140 };
+        // Gap audit GA-34: only event types become words ("HO" stays HO); columns are sized to their header and values (GA-06: no cut-off headers).
+        const header = type === 'money' ? `${column.label} (BDT)` : column.label;
+        const width = reportColumnWidth(header, props.rows.map((r) => r.cells[column.key]), type);
+        return { id: column.key, header: column.label, type, value: (row: Row) => { const v = row.cells[column.key]; return typeof v === 'string' && isEventType(v) ? eventLabel(v) : v; }, href: index === 0 ? (row: Row) => row.link : row => row.links?.[column.key] ?? null, width };
     }),
 );
 
@@ -62,7 +66,7 @@ function open(row: Row): void {
         <div class="flex min-h-0 flex-1 flex-col" @click.capture="(e) => (e.target as HTMLElement).closest('tbody a[href]') && drillFrom(title)">
         <DataTable id="report" v-model:active="active" :label="title" :columns="columns" :rows="rows" :row-key="(r) => r.__key" currency="BDT" :url-sync="false" empty-text="Nothing in this period." @open="open">
             <template #toolbar>
-                <h1 class="mr-2 text-section font-semibold">{{ title }}</h1>
+                <h1 class="mr-2 shrink-0 text-section font-semibold">{{ title }}</h1>
                 <form class="flex items-center gap-1.5 text-ui text-ink-2" @submit.prevent="apply">
                     <template v-if="filter === 'as_of'"><label for="report-as-of">As of</label><DateInput id="report-as-of" v-model="filters.as_of" class="w-32" @update:model-value="apply" /></template>
                     <template v-else>

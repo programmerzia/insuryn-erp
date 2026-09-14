@@ -17,6 +17,7 @@ use App\Modules\Insurance\Reports\Application\ReceivableAgeingQuery;
 use App\Modules\Insurance\Reports\Application\UnearnedPremiumQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Exports\XlsxWriter;
+use App\Modules\Platform\Money\MinorUnits;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -55,12 +56,14 @@ final class ReportsPageController
 
         $exports = array_map(fn (array $r): array => $r + ['exports' => ['csv' => "/reports/{$r['key']}/export?format=csv", 'xlsx' => "/reports/{$r['key']}/export?format=xlsx"]], self::CATALOGUE);
 
-        return Inertia::render('reports/Index', ['reports' => array_merge($exports, [
-            ['key' => null, 'title' => 'Suspense ageing', 'description' => 'Unidentified receipts by age.', 'filter' => null, 'href' => '/suspense'],
-            ['key' => null, 'title' => 'Agent cash', 'description' => 'Collections, deposits and the ledger per agent.', 'filter' => null, 'href' => '/agent-cash'],
-            ['key' => null, 'title' => 'Commission statements', 'description' => 'Per agent, with payouts.', 'filter' => null, 'href' => '/commission'],
-            ['key' => null, 'title' => 'Trial balance', 'description' => 'Debits and credits per account.', 'filter' => null, 'href' => '/accounting/trial-balance'],
-        ])]);
+        // Gap audit GA-34: the registers on their own screens open there, and export through the same path as the reports above.
+        $screens = [];
+        foreach (OperationalReportTables::REPORTS as $key => [$title, $description, , $href]) {
+            $screens[] = ['key' => null, 'title' => $title, 'description' => $description, 'filter' => null, 'href' => $href,
+                'exports' => ['csv' => "/reports/{$key}/export?format=csv", 'xlsx' => "/reports/{$key}/export?format=xlsx"]];
+        }
+
+        return Inertia::render('reports/Index', ['reports' => array_merge($exports, $screens)]);
     }
 
     public function show(Request $request, string $report): Response
@@ -77,7 +80,7 @@ final class ReportsPageController
         $this->authorize($request);
         /** @var array{format: string} $data */
         $data = $request->validate(['format' => ['required', Rule::in(['csv', 'xlsx'])]]);
-        abort_unless(in_array($report, array_column(self::CATALOGUE, 'key'), true), 404);
+        abort_unless(in_array($report, array_column(self::CATALOGUE, 'key'), true) || isset(OperationalReportTables::REPORTS[$report]), 404);
         [$page, $filters] = $this->page($request, $report);
         /** @var list<array{key: string, label: string, align: string}> $columns */
         $columns = $page['columns'];
@@ -144,6 +147,7 @@ final class ReportsPageController
             'profit-and-loss' => $this->profitAndLoss($entity['id'], $from, $to, $money),
             'balance-sheet' => $this->balanceSheet($entity['id'], $asOf, $money),
             'account-activity' => $this->accountActivity($entity['id'], $request, $from, $to, $money),
+            'suspense-ageing', 'agent-cash', 'commission-statements', 'trial-balance' => OperationalReportTables::table($report, $entity['id'], $from, $to, $asOf, $money), // gap audit GA-34
             default => abort(404),
         };
 
@@ -158,16 +162,20 @@ final class ReportsPageController
     {
         $result = app(PremiumRegisterQuery::class)->register($entityId, $from, $to);
 
-        $summary = fn (string $title, string $label, array $groups): array => self::summary($title, [['group', $label], ['gross', 'Gross'], ['net', 'Net'], ['tax', 'Tax']],
-            array_map(fn (array $g): array => ['cells' => ['group' => $g['group'], 'gross' => $money($g['gross_minor']), 'net' => $money($g['net_minor']), 'tax' => $money($g['tax_minor'])], 'link' => null], $groups));
+        // Gap audit GA-34: labels instead of codes (Motor, New business), and stamp duty in its own column (gross = net + VAT + stamp duty).
+        $classes = ReportLabels::classes();
+        $summary = fn (string $title, string $label, array $groups, bool $classLabels): array => self::summary($title, [['group', $label], ['gross', 'Gross'], ['net', 'Net'], ['tax', 'VAT'], ['stamp_duty', 'Stamp duty']],
+            array_map(fn (array $g): array => ['cells' => ['group' => $classLabels ? ReportLabels::productClass($g['group'], $classes) : $g['group'], 'gross' => $money($g['gross_minor']), 'net' => $money($g['net_minor']),
+                'tax' => $money($g['tax_minor']), 'stamp_duty' => $money($g['stamp_duty_minor'])], 'link' => null], $groups));
 
         return self::table('Premium register', 'range', [['accounting_date', 'Date'], ['policy_number', 'Policy'], ['type', 'Transaction'], ['product_code', 'Product'], ['class', 'Class'], ['branch_code', 'Branch'],
-            ['gross', 'Gross', 'right'], ['net', 'Net', 'right'], ['tax', 'Tax', 'right']],
-            array_map(fn (array $r): array => ['cells' => ['accounting_date' => $r['accounting_date'], 'policy_number' => $r['policy_number'], 'type' => $r['type'], 'product_code' => $r['product_code'],
-                'class' => $r['class'], 'branch_code' => $r['branch_code'], 'gross' => $money($r['gross_minor']), 'net' => $money($r['net_minor']), 'tax' => $money($r['tax_minor'])],
+            ['gross', 'Gross', 'right'], ['net', 'Net', 'right'], ['tax', 'VAT', 'right'], ['stamp_duty', 'Stamp duty', 'right']],
+            array_map(fn (array $r): array => ['cells' => ['accounting_date' => $r['accounting_date'], 'policy_number' => $r['policy_number'], 'type' => ReportLabels::transaction($r['type']), 'product_code' => $r['product_code'],
+                'class' => ReportLabels::productClass($r['class'], $classes), 'branch_code' => $r['branch_code'], 'gross' => $money($r['gross_minor']), 'net' => $money($r['net_minor']), 'tax' => $money($r['tax_minor']),
+                'stamp_duty' => $money($r['stamp_duty_minor'])],
                 'link' => $r['journals'][0]['url'] ?? null, 'links' => ['policy_number' => "/policies/{$r['policy_id']}"]], $result['rows']),
-            ['gross' => $money($result['totals']['gross_minor']), 'net' => $money($result['totals']['net_minor']), 'tax' => $money($result['totals']['tax_minor'])],
-            [$summary('Totals by class', 'Class', $result['by_class']), $summary('Totals by branch', 'Branch', $result['by_branch'])]);
+            ['gross' => $money($result['totals']['gross_minor']), 'net' => $money($result['totals']['net_minor']), 'tax' => $money($result['totals']['tax_minor']), 'stamp_duty' => $money($result['totals']['stamp_duty_minor'])],
+            [$summary('Totals by class', 'Class', $result['by_class'], true), $summary('Totals by branch', 'Branch', $result['by_branch'], false)]);
     }
 
     /**
@@ -177,6 +185,7 @@ final class ReportsPageController
     private function unearnedPremium(string $entityId, CarbonImmutable $asOf, callable $money): array
     {
         $result = app(UnearnedPremiumQuery::class)->unearned($entityId, $asOf);
+        $classes = ReportLabels::classes(); // gap audit GA-34
         $summary = fn (string $title, string $label, array $groups): array => self::summary($title, [['group', $label], ['policies', 'Policies'], ['net', 'Net premium'], ['earned', 'Earned to date'], ['unearned', 'Unearned']],
             array_map(fn (array $g): array => ['cells' => ['group' => $g['group'], 'policies' => $g['policies'], 'net' => $money($g['net_premium_minor']),
                 'earned' => $money($g['earned_minor']), 'unearned' => $money($g['unearned_minor'])], 'link' => null], $groups));
@@ -185,10 +194,10 @@ final class ReportsPageController
 
         return self::table('Unearned premium', 'as_of', [['policy_number', 'Policy'], ['product_code', 'Product'], ['class', 'Class'], ['branch_code', 'Branch'],
             ['net', 'Net premium', 'right'], ['earned', 'Earned to date', 'right'], ['unearned', 'Unearned', 'right']],
-            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'product_code' => $r['product_code'], 'class' => $r['class'], 'branch_code' => $r['branch_code'],
+            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'product_code' => $r['product_code'], 'class' => ReportLabels::productClass((string) $r['class'], $classes), 'branch_code' => $r['branch_code'],
                 'net' => $money($r['net_premium_minor']), 'earned' => $money($r['earned_minor']), 'unearned' => $money($r['unearned_minor'])], 'link' => "/policies/{$r['policy_id']}"], $result['rows']),
             ['net' => $money($result['totals']['net_premium_minor']), 'earned' => $money($result['totals']['earned_minor']), 'unearned' => $money($result['totals']['unearned_minor'])],
-            [$summary('Totals by class', 'Class', $result['by_class']), $summary('Totals by product', 'Product', $result['by_product']),
+            [$summary('Totals by class', 'Class', array_map(fn (array $g): array => ['group' => ReportLabels::productClass((string) $g['group'], $classes)] + $g, $result['by_class'])), $summary('Totals by product', 'Product', $result['by_product']),
                 self::summary('Reconciliation to the unearned premium control', [['item', 'Item'], ['amount', 'Amount']], [
                     ['cells' => ['item' => 'Unearned premium in this register', 'amount' => $money($recon['register_minor'])], 'link' => null],
                     ['cells' => ['item' => 'Unearned premium reserve in the ledger', 'amount' => $money($recon['gl_minor'])], 'link' => $glLink],
@@ -219,7 +228,7 @@ final class ReportsPageController
         $result = app(OutstandingClaimsQuery::class)->outstanding($entityId, $asOf);
 
         return self::table('Outstanding claims', 'as_of', [['claim_number', 'Claim'], ['policy_number', 'Policy'], ['loss_date', 'Loss'], ['status', 'Status'], ['reserve', 'Open reserve', 'right'], ['unpaid', 'Approved unpaid', 'right']],
-            array_map(fn (array $r): array => ['cells' => ['claim_number' => $r['claim_number'], 'policy_number' => $r['policy_number'], 'loss_date' => $r['loss_date'], 'status' => $r['status'],
+            array_map(fn (array $r): array => ['cells' => ['claim_number' => $r['claim_number'], 'policy_number' => $r['policy_number'], 'loss_date' => $r['loss_date'], 'status' => ReportLabels::words((string) $r['status']),
                 'reserve' => $money($r['outstanding_reserve_minor']), 'unpaid' => $money($r['approved_unpaid_minor'])], 'link' => "/claims/{$r['claim_id']}"], $result['rows']),
             ['reserve' => $money($result['totals']['outstanding_reserve_minor']), 'unpaid' => $money($result['totals']['approved_unpaid_minor'])]);
     }
@@ -246,13 +255,18 @@ final class ReportsPageController
     {
         $result = app(LossRatioQuery::class)->lossRatio($entityId, $from, $to, $by);
         $labels = \Illuminate\Support\Facades\DB::table(match ($by) { 'agent' => 'producers', 'branch' => 'branches', default => 'products' })->pluck('code', 'id');
-        $ratio = fn (?int $bp): string => $bp === null ? '—' : sprintf('%d.%02d%%', intdiv($bp, 100), $bp % 100);
+        $ratio = fn (?int $bp): string => self::percentText($bp);
 
-        return self::table("Loss ratio by {$by}", 'range_by', [['group', ucfirst($by)], ['earned', 'Earned premium', 'right'], ['incurred', 'Incurred claims', 'right'], ['ratio', 'Loss ratio', 'right']],
+        // Gap audit GA-06: gross incurred, recoveries (dated when received) and net incurred side by side; the ratio is on net incurred.
+        return self::table("Loss ratio by {$by}", 'range_by', [['group', ucfirst($by)], ['earned', 'Earned premium', 'right'], ['claims', 'Claims incurred', 'right'], ['recoveries', 'Recoveries', 'right'],
+            ['incurred', 'Net incurred', 'right'], ['ratio', 'Loss ratio', 'right']],
             array_map(fn (array $r): array => ['cells' => ['group' => $r['dimension_value'] === null ? 'None' : (string) ($labels[$r['dimension_value']] ?? $r['dimension_value']),
-                'earned' => $money($r['earned_premium_minor']), 'incurred' => $money($r['incurred_claims_minor']), 'ratio' => $ratio($r['loss_ratio_bp'])],
-                'link' => isset($r['drill']['claims_expense']) ? self::activityLink($r['drill']['claims_expense']) : null], $result['rows']),
-            ['earned' => $money($result['totals']['earned_premium_minor']), 'incurred' => $money($result['totals']['incurred_claims_minor']), 'ratio' => $ratio($result['totals']['loss_ratio_bp'])]);
+                'earned' => $money($r['earned_premium_minor']), 'claims' => $money($r['claims_expense_minor']), 'recoveries' => $money($r['recoveries_minor']),
+                'incurred' => $money($r['incurred_claims_minor']), 'ratio' => $ratio($r['loss_ratio_bp'])],
+                'link' => isset($r['drill']['claims_expense']) ? self::activityLink($r['drill']['claims_expense']) : null,
+                'links' => isset($r['drill']['claims_recovery_income']) ? ['recoveries' => self::activityLink($r['drill']['claims_recovery_income'])] : []], $result['rows']),
+            ['earned' => $money($result['totals']['earned_premium_minor']), 'claims' => $money($result['totals']['claims_expense_minor']), 'recoveries' => $money($result['totals']['recoveries_minor']),
+                'incurred' => $money($result['totals']['incurred_claims_minor']), 'ratio' => $ratio($result['totals']['loss_ratio_bp'])]);
     }
 
     /**
@@ -270,7 +284,7 @@ final class ReportsPageController
         return self::table('Expiry register', 'as_of', [['policy_number', 'Policy'], ['customer', 'Customer'], ['product_code', 'Product'], ['branch_code', 'Branch'], ['producer_code', 'Producer'],
             ['expiry', 'Expires on'], ['days_left', 'Days left', 'right'], ['bucket', 'Bucket', 'right'], ['status', 'Renewal'], ['renewal_quotation', 'Renewal quotation'], ['gross', 'Gross premium', 'right']],
             array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'customer' => $r['customer'], 'product_code' => $r['product_code'], 'branch_code' => $r['branch_code'],
-                'producer_code' => $r['producer_code'] ?? 'Direct', 'expiry' => $r['expiry'], 'days_left' => $r['days_left'], 'bucket' => $r['bucket'], 'status' => str_replace('_', ' ', $r['status']),
+                'producer_code' => $r['producer_code'] ?? 'Direct', 'expiry' => $r['expiry'], 'days_left' => $r['days_left'], 'bucket' => $r['bucket'], 'status' => ReportLabels::words((string) $r['status']),
                 'renewal_quotation' => $r['renewal_quotation'], 'gross' => $money($r['gross_minor'])], 'link' => "/policies/{$r['policy_id']}"], $result['rows']),
             ['policies' => $result['totals']['policies'].' policies', 'gross' => $money($result['totals']['gross_minor'])],
             [$summary('By bucket', 'Bucket', $result['by_bucket']), $summary('By branch', 'Branch', $result['by_branch']), $summary('By producer', 'Producer', $result['by_producer'])]);
@@ -284,11 +298,11 @@ final class ReportsPageController
     private function renewalConversion(string $entityId, CarbonImmutable $from, CarbonImmutable $to, string $by): array
     {
         $result = app(RenewalConversionQuery::class)->conversion($entityId, $from, $to, $by, app(BusinessClock::class)->today());
-        $percent = fn (?int $bp): string => $bp === null ? '—' : sprintf('%d.%02d%%', intdiv($bp, 100), $bp % 100);
+        $percent = fn (?int $bp): string => self::percentText($bp);
         $label = ['branch' => 'Branch', 'agent' => 'Producer', 'product' => 'Product'][$by] ?? 'Branch';
 
         return self::table("Renewal conversion by {$by}", 'range_by', [['policy_number', 'Expiring policy'], ['group', $label], ['expiry', 'Expires on'], ['outcome', 'Outcome'], ['reason', 'Reason'], ['renewal_policy_number', 'Renewal policy']],
-            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'group' => $r['group'], 'expiry' => $r['expiry'], 'outcome' => str_replace('_', ' ', $r['outcome']),
+            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'group' => $r['group'], 'expiry' => $r['expiry'], 'outcome' => ReportLabels::words((string) $r['outcome']),
                 'reason' => \App\Modules\Insurance\Renewal\Domain\RenewalReasons::label($r['reason']), 'renewal_policy_number' => $r['renewal_policy_number']], 'link' => "/policies/{$r['policy_id']}",
                 'links' => $r['renewal_policy_id'] === null ? [] : ['renewal_policy_number' => "/policies/{$r['renewal_policy_id']}"]], $result['rows']),
             ['expiring' => $result['totals']['expiring'].' policies', 'renewed' => $result['totals']['renewed'].' policies', 'not_renewed' => $result['totals']['not_renewed'].' policies',
@@ -401,6 +415,21 @@ final class ReportsPageController
         unset($links[$current]);
 
         return array_values($links);
+    }
+
+    /**
+     * Gap audit GA-06: signed basis points as people read a percentage — 123,077 → "1,230.77%", −123,077 → "(1,230.77)%" (negatives in parentheses,
+     * UX brief §1.7), null → "—". The sign and the absolute value are formatted apart, so a negative never prints as "-1230.-77%".
+     */
+    public static function percentText(?int $basisPoints): string
+    {
+        if ($basisPoints === null) {
+            return '—';
+        }
+        $abs = abs($basisPoints);
+        $text = MinorUnits::format($abs, 'BDT');
+
+        return $basisPoints < 0 ? "({$text})%" : "{$text}%";
     }
 
     /** API drill URL → the account activity report page with the same filters. */

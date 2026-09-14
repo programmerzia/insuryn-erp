@@ -12,6 +12,9 @@ use Carbon\CarbonImmutable;
  * Loss ratio by product, branch or agent for a date range, from the GL (spec §4 "loss ratio by any dimension"): incurred claims = claims_expense
  * movement (reserves set less released) − claims_recovery_income; earned premium = premium_income movement; ratio in basis points, half-even,
  * null when nothing was earned. Interpretation: incurred is net of recoveries. Each row drills to the three accounts' activity for its value.
+ * Gap audit GA-06: a recovery counts in the period its recovery journal is dated (when it was received), not in the period of the loss or of the
+ * claim's closing: the ledger is locked month by month, so a recovery received in September cannot change August's closed figures. The totals
+ * carry claims expense and recoveries separately, so the report shows gross incurred, recoveries and net incurred side by side.
  */
 final class LossRatioQuery
 {
@@ -20,7 +23,7 @@ final class LossRatioQuery
     public function __construct(private readonly FinancialStatementsQuery $statements) {}
 
     /**
-     * @return array{entity_id: string, from: string, to: string, by: string, totals: array{earned_premium_minor: int, incurred_claims_minor: int, loss_ratio_bp: int|null},
+     * @return array{entity_id: string, from: string, to: string, by: string, totals: array{earned_premium_minor: int, claims_expense_minor: int, recoveries_minor: int, incurred_claims_minor: int, loss_ratio_bp: int|null},
      *     rows: list<array{dimension_value: string|null, earned_premium_minor: int, claims_expense_minor: int, recoveries_minor: int, incurred_claims_minor: int,
      *     loss_ratio_bp: int|null, drill: array<string, string>}>}
      *
@@ -52,7 +55,8 @@ final class LossRatioQuery
         $incurredTotal = array_sum(array_column($rows, 'incurred_claims_minor'));
 
         return ['entity_id' => $entityId, 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'by' => $by,
-            'totals' => ['earned_premium_minor' => $earnedTotal, 'incurred_claims_minor' => $incurredTotal, 'loss_ratio_bp' => self::ratio($incurredTotal, $earnedTotal)], 'rows' => $rows];
+            'totals' => ['earned_premium_minor' => $earnedTotal, 'claims_expense_minor' => array_sum(array_column($rows, 'claims_expense_minor')),
+                'recoveries_minor' => array_sum(array_column($rows, 'recoveries_minor')), 'incurred_claims_minor' => $incurredTotal, 'loss_ratio_bp' => self::ratio($incurredTotal, $earnedTotal)], 'rows' => $rows];
     }
 
     private static function ratio(int $incurred, int $earned): ?int
