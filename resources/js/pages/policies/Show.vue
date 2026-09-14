@@ -8,6 +8,7 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
+import EndorseDetailsDrawer, { type InsuredDetails } from '@/components/policies/EndorseDetailsDrawer.vue';
 import WriteOffDrawer, { type WriteOffOutlook } from '@/components/policies/WriteOffDrawer.vue';
 import EndorseRiskDrawer from '@/components/rating/EndorseRiskDrawer.vue';
 import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
@@ -30,10 +31,12 @@ import type { RatingResultData, RiskFieldDefinition } from '@/lib/riskForm';
 const props = defineProps<{
     policy: { id: string; number: string | null; status: string; version: number; inception: string; expiry: string; channel: string; currency: string; policyholder: string;
         product_code: string; agent_code: string | null; gross_premium: string; net_premium: string; tax: string; stamp_duty: string; cancel_date: string | null };
-    transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null }[];
+    transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null; endorsement_kind?: string | null }[];
+    /** Gap fixes W7 (GA-25): the name, address, mortgagee and contact details the policy carries now. */
+    insuredDetails?: InsuredDetails;
     installments: { id: string; no: number; label: string; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
-    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean; refund: boolean; write_off?: boolean };
+    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean; refund: boolean; write_off?: boolean; endorse_details?: boolean };
     /** Gap fixes W7 (GA-24): a cancelled policy's unpaid premium and the write-off waiting for approval; null otherwise. */
     writeOff?: WriteOffOutlook | null;
     /** Slice R7: the frozen rating of a policy issued from a proposal; null for products without a rating plan. */
@@ -58,6 +61,8 @@ const base = `/policies/${props.policy.id}`;
 const drawer = ref<'issue' | 'endorse' | 'cancel' | 'lapse' | 'reinstate' | null>(null);
 const endorseRiskOpen = ref(false);
 const writeOffOpen = ref(false);
+const detailsOpen = ref(false);
+const detailWords: Record<string, string> = { name: 'name', address: 'address', mortgagee: 'mortgagee', contact: 'contact details' };
 const preferences = usePreferences();
 const issuedOn = (basis: string | null, reference: string | null) => (basis === 'credit' ? 'Issued on credit' : basis === 'premium_received' ? `Premium received, reference ${reference}` : null);
 const close = () => (drawer.value = null);
@@ -120,6 +125,7 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
             <template #actions>
                 <button v-if="actions.endorse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'endorse'">Endorse</button>
                 <button v-if="actions.endorse_risk" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="endorseRiskOpen = true">Endorse</button>
+                <button v-if="actions.endorse_details && insuredDetails" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="detailsOpen = true">Change details</button>
                 <button v-if="actions.lapse" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'lapse'">Lapse</button>
                 <button v-if="actions.reinstate" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="drawer = 'reinstate'">Reinstate</button>
                 <button v-if="actions.renew" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="renew">Renew</button>
@@ -206,7 +212,7 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
                 <div class="max-w-[900px] overflow-x-auto border border-line">
                     <table class="w-full table-fixed border-separate border-spacing-0 text-dense max-sm:min-w-[36rem]">
                         <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th class="w-40 border-b border-line px-3 text-left font-medium">Transaction</th><th class="w-32 border-b border-line px-3 text-left font-medium">Effective</th><th class="w-40 border-b border-line px-3 text-right font-medium">Premium change ({{ policy.currency }})</th><th class="border-b border-line px-3 text-left font-medium">Reason</th></tr></thead>
-                        <tbody><tr v-for="t in transactions" :key="t.id" class="h-(--row-h)"><td class="border-b border-line px-3">{{ words(t.type) }}</td><td class="border-b border-line px-3">{{ formatDate(t.effective_date) }}</td><td class="num border-b border-line px-3">{{ formatMoney(t.premium_delta) }}</td><td class="truncate border-b border-line px-3 text-ink-2">{{ t.reason }}</td></tr></tbody>
+                        <tbody><tr v-for="t in transactions" :key="t.id" class="h-(--row-h)"><td class="border-b border-line px-3">{{ words(t.type) }}<span v-if="t.endorsement_kind" class="text-ink-2"> · {{ detailWords[t.endorsement_kind] ?? t.endorsement_kind }}</span></td><td class="border-b border-line px-3">{{ formatDate(t.effective_date) }}</td><td class="num border-b border-line px-3">{{ formatMoney(t.premium_delta) }}</td><td class="truncate border-b border-line px-3 text-ink-2">{{ t.reason }}</td></tr></tbody>
                     </table>
                 </div>
             </template>
@@ -235,6 +241,7 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
                 <Field id="transition_reason" label="Reason" :error="transition.errors.reason"><TextInput v-model="transition.reason" /></Field>
             </FormLayout>
         </Drawer>
+        <EndorseDetailsDrawer v-if="actions.endorse_details && insuredDetails" v-model:open="detailsOpen" :policy-id="policy.id" :title="title" :today="today" :details="insuredDetails" />
         <WriteOffDrawer v-if="actions.write_off && writeOff" v-model:open="writeOffOpen" :policy-id="policy.id" :title="title" :currency="policy.currency" :outlook="writeOff" />
         <EndorseRiskDrawer
             v-if="rating && actions.endorse_risk"

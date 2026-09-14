@@ -127,12 +127,16 @@ final class PolicyPageController
 
         return Inertia::render('policies/Show', [
             'policy' => ['id' => $model->id, 'number' => $model->number, 'status' => $status->value, 'version' => $model->version, 'inception' => $model->inception->toDateString(),
-                'expiry' => $model->expiry->toDateString(), 'channel' => $model->channel, 'currency' => $model->currency, 'policyholder' => (string) ($names[$model->policyholder_party_id] ?? ''),
+                'expiry' => $model->expiry->toDateString(), 'channel' => $model->channel, 'currency' => $model->currency,
+                'policyholder' => (string) ($model->insured_details['insured_name'] ?? $names[$model->policyholder_party_id] ?? ''), // gap fixes W7 (GA-25): the endorsed name
                 'product_code' => (string) DB::table('products')->where('id', $model->product_id)->value('code'), 'agent_code' => $model->agent_id === null ? null : (string) DB::table('producers')->where('id', $model->agent_id)->value('code'),
                 'gross_premium' => $money($model->gross_premium_minor), 'net_premium' => $money($model->net_premium_minor), 'tax' => $money($model->tax_minor), 'stamp_duty' => $money($model->stamp_duty_minor),
                 'cancel_date' => $model->cancel_date?->toDateString()],
             'transactions' => $model->transactions()->get()->map(fn (PolicyTransaction $t): array => ['id' => $t->id, 'type' => $t->type->value, 'effective_date' => $t->effective_date->toDateString(),
-                'premium_delta' => $money($t->premium_delta_minor), 'reason' => $t->reason])->values()->all(),
+                'premium_delta' => $money($t->premium_delta_minor), 'reason' => $t->reason,
+                // Gap fixes W7 (GA-25): what a premium-free endorsement changed (name, address, mortgagee, contact); null otherwise.
+                'endorsement_kind' => $t->endorsement_kind])->values()->all(),
+            'insuredDetails' => \App\Modules\Insurance\Policy\Application\PolicyDetailsEndorsement::current($model),
             'installments' => Installment::query()->where('policy_id', $model->id)->orderBy('no')->orderBy('id')->get()->map(fn (Installment $i): array => ['id' => $i->id, 'no' => $i->no,
                 'label' => \App\Modules\Insurance\Policy\Domain\InstallmentLabel::short($i->no, $i->endorsement_no),
                 'payer' => (string) ($names[$i->payer_party_id] ?? ''), 'due_date' => $i->due_date->toDateString(), 'amount' => $money($i->amount_minor), 'paid' => $money($i->paid_minor),
@@ -152,6 +156,8 @@ final class PolicyPageController
                 'record_receipt' => $this->nextSteps->canRecordReceipt($actor, $model->id),
                 'endorse' => $model->rating_result === null && in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
                 'endorse_risk' => $model->rating_result !== null && in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
+                // Gap fixes W7 (GA-25): name, address, mortgagee and contact changes, with no premium change.
+                'endorse_details' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
                 'cancel' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.cancel'),
                 'lapse' => $status === PolicyStatus::Active && $can('policy.cancel'),
                 'reinstate' => $status === PolicyStatus::Lapsed && $can('policy.issue'),
@@ -213,6 +219,24 @@ final class PolicyPageController
         $endorsed = $this->lifecycle->endorseRisk($policy, $date, $inputs, $data['reason'], PageSupport::actor($request), $coverages);
 
         return $this->endorsed($request, $endorsed, "/policies/{$policy}?tab=rating", $endorsed->gross_premium_minor > $before);
+    }
+
+    /** Gap fixes W7 (GA-25): an endorsement that changes the name, address, mortgagee or contact details and no premium; nothing is posted. */
+    public function endorseDetails(Request $request, string $policy): RedirectResponse
+    {
+        /** @var array{kind: string, effective_date: string, reason: string, insured_name?: string|null, address?: string|null, mortgagee?: string|null, mobile?: string|null, email?: string|null} $data */
+        $data = $request->validate(['kind' => ['required', Rule::in(array_keys(\App\Modules\Insurance\Policy\Application\PolicyDetailsEndorsement::KINDS))],
+            'effective_date' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000'],
+            'insured_name' => ['nullable', 'string', 'max:255'], 'address' => ['nullable', 'string', 'max:500'], 'mortgagee' => ['nullable', 'string', 'max:255'],
+            'mobile' => ['nullable', 'string', 'max:32'], 'email' => ['nullable', 'string', 'max:254']]);
+        $actor = PageSupport::actor($request);
+        $transaction = app(\App\Modules\Insurance\Policy\Application\PolicyDetailsEndorsement::class)->endorse($policy, $data['kind'], CarbonImmutable::parse($data['effective_date']),
+            $data, $data['reason'], $actor);
+        $model = Policy::query()->findOrFail($policy);
+        $n = PolicyLifecycle::endorsementNo($model);
+
+        return redirect("/policies/{$policy}")->with('status', "Endorsement {$model->number}/E{$n} recorded. The premium is unchanged; nothing is posted.")
+            ->with('next', $this->nextSteps->afterEndorsement($actor, $policy, $transaction->id, false));
     }
 
     /** GA-25: the endorsement's number in the confirmation, and the next steps — collect an increase, print the endorsement. */

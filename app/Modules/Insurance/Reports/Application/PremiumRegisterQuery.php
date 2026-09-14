@@ -28,6 +28,7 @@ final class PremiumRegisterQuery
     {
         $transactions = DB::table('policy_transactions as t')->join('policies as p', 'p.id', '=', 't.policy_id')->join('products as pr', 'pr.id', '=', 'p.product_id')
             ->join('branches as b', 'b.id', '=', 'p.branch_id')->where('p.entity_id', $entityId)->whereBetween('t.accounting_date', [$from->toDateString(), $to->toDateString()])->where('t.type', '<>', 'renewal')
+            ->whereNull('t.endorsement_kind') // gap fixes W7 (GA-25): an endorsement of the name, address, mortgagee or contact details is not premium
             ->orderBy('t.accounting_date')->orderBy('p.number')->orderBy('t.created_at')
             ->get(['t.id', 't.accounting_date', 't.type', 't.premium_delta_minor', 't.net_delta_minor', 't.tax_delta_minor', 't.stamp_duty_delta_minor', 't.amounts',
                 'p.id as policy_id', 'p.number', 'pr.code', 'pr.lob', 'p.branch_id', 'b.code as branch_code', 'p.agent_id', 'p.policyholder_party_id', 'p.currency']);

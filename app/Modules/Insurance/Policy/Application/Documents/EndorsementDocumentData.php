@@ -44,6 +44,9 @@ final class EndorsementDocumentData implements DocumentDataProvider
         $l = fn (string $en, string $bn): string => DocumentValues::label($locale, $en, $bn);
         $money = fn (int $minor): string => DocumentValues::money($minor, (string) $policy->currency);
         $reason = trim((string) $transaction->reason);
+        if (is_string($transaction->endorsement_kind ?? null)) {
+            return $this->detailsVariables($transaction, $policy, $code, $locale);
+        }
 
         return [
             ...$this->facts->common($policy, $locale),
@@ -59,6 +62,46 @@ final class EndorsementDocumentData implements DocumentDataProvider
             'total' => ['label' => $l('Total premium change', 'মোট প্রিমিয়াম পরিবর্তন'), 'amount' => $money((int) $transaction->premium_delta_minor)],
             'special_terms' => [$l('From ', '').DocumentValues::date((string) $transaction->effective_date).$l(' the policy is endorsed', ' তারিখ থেকে পলিসিটি এনডোর্স করা হলো')
                 .($reason === '' ? '' : ': '.$reason).$l('. All other terms remain unchanged.', '। অন্যান্য সকল শর্ত অপরিবর্তিত থাকবে।')],
+        ];
+    }
+
+    /**
+     * Gap fixes W7 (GA-25): an endorsement that changes no premium — what changed, from what to what, and the wording; no premium rows.
+     *
+     * @return array<string, mixed>
+     */
+    private function detailsVariables(\stdClass $transaction, \stdClass $policy, DocumentTemplateCode $code, string $locale): array
+    {
+        $l = fn (string $en, string $bn): string => DocumentValues::label($locale, $en, $bn);
+        $change = is_string($transaction->details_change) ? (array) json_decode($transaction->details_change, true) : [];
+        $labels = ['insured_name' => $l('Name of the insured', 'বীমাগ্রহীতার নাম'), 'address' => $l('Address', 'ঠিকানা'), 'mortgagee' => $l('Mortgagee', 'বন্ধকগ্রহীতা'),
+            'mobile' => $l('Mobile', 'মোবাইল'), 'email' => $l('Email', 'ইমেইল')];
+        $kinds = ['name' => $l('Name of the insured', 'বীমাগ্রহীতার নাম'), 'address' => $l('Address', 'ঠিকানা'), 'mortgagee' => $l('Mortgagee', 'বন্ধকগ্রহীতা'), 'contact' => $l('Contact details', 'যোগাযোগের তথ্য')];
+        $none = $l('None', 'নেই');
+        $rows = [];
+        $wording = [];
+        foreach ((array) ($change['after'] ?? []) as $key => $after) {
+            $before = ((array) ($change['before'] ?? []))[$key] ?? null;
+            $label = $labels[$key] ?? (string) $key;
+            $rows[] = ['label' => $label.$l(' before', ' (আগে)'), 'value' => $before === null || $before === '' ? $none : (string) $before];
+            $rows[] = ['label' => $label.$l(' now', ' (এখন)'), 'value' => $after === null || $after === '' ? $none : (string) $after];
+            $wording[] = $after === null || $after === ''
+                ? $l("{$label} is removed", "{$label} বাদ দেওয়া হলো")
+                : $l("{$label} reads: {$after}", "{$label}: {$after}");
+        }
+        $reason = trim((string) $transaction->reason);
+        $from = DocumentValues::date((string) $transaction->effective_date);
+
+        return [
+            ...$this->facts->common($policy, $locale),
+            'document' => ['title' => $code->title($locale), 'number' => $this->number($transaction), 'date' => DocumentValues::date(substr((string) $transaction->created_at, 0, 10))],
+            'details' => [['label' => $l('Policy', 'পলিসি'), 'value' => (string) $policy->number], ['label' => $l('Effective from', 'কার্যকর তারিখ'), 'value' => $from],
+                ['label' => $l('Change', 'পরিবর্তন'), 'value' => $kinds[(string) $transaction->endorsement_kind] ?? (string) $transaction->endorsement_kind], ...$rows,
+                ['label' => $l('Reason', 'কারণ'), 'value' => $reason], ['label' => $l('Policy version', 'পলিসি সংস্করণ'), 'value' => (string) $transaction->policy_version]],
+            'money' => [],
+            'rating' => [],
+            'total' => ['label' => $l('Total premium change', 'মোট প্রিমিয়াম পরিবর্তন'), 'amount' => ''],
+            'special_terms' => [$l("From {$from} ", "{$from} তারিখ থেকে ").implode('; ', $wording).$l('. The premium is unchanged. All other terms remain unchanged.', '। প্রিমিয়াম অপরিবর্তিত। অন্যান্য সকল শর্ত অপরিবর্তিত থাকবে।')],
         ];
     }
 

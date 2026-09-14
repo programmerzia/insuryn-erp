@@ -39,7 +39,17 @@ final class PolicyDocumentFacts
     public function common(\stdClass $policy, string $locale): array
     {
         $l = fn (string $en, string $bn): string => DocumentValues::label($locale, $en, $bn);
-        $parties = [['role' => $l('Policyholder', 'পলিসিগ্রহীতা'), 'name' => (string) DB::table('parties')->where('id', $policy->policyholder_party_id)->value('display_name')]];
+        // Gap fixes W7 (GA-25): what premium-free endorsements set on the policy — the insured's name, the address, the mortgagee — prints on every policy document.
+        $endorsed = property_exists($policy, 'insured_details') && is_string($policy->insured_details) ? (array) json_decode($policy->insured_details, true) : [];
+        $name = array_key_exists('insured_name', $endorsed) && is_string($endorsed['insured_name']) ? $endorsed['insured_name']
+            : (string) DB::table('parties')->where('id', $policy->policyholder_party_id)->value('display_name');
+        $parties = [['role' => $l('Policyholder', 'পলিসিগ্রহীতা'), 'name' => $name]];
+        if (is_string($endorsed['address'] ?? null)) {
+            $parties[] = ['role' => $l('Address', 'ঠিকানা'), 'name' => $endorsed['address']];
+        }
+        if (is_string($endorsed['mortgagee'] ?? null)) {
+            $parties[] = ['role' => $l('Mortgagee', 'বন্ধকগ্রহীতা'), 'name' => $endorsed['mortgagee']];
+        }
         $payers = DB::table('policy_payers as pp')->join('parties as pa', 'pa.id', '=', 'pp.party_id')->where('pp.policy_id', $policy->id)->where('pp.party_id', '<>', $policy->policyholder_party_id)
             ->orderBy('pa.display_name')->pluck('pa.display_name');
         foreach ($payers as $payer) {

@@ -27,6 +27,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $stamp_duty_delta_minor slice R7
  * @property array<string, mixed>|null $rating_result an endorsement's re-rating (RatingResult::toArray()), frozen
  * @property string|null $rating_basis original_plan | current_tariff
+ * @property string|null $endorsement_kind gap fixes W7 (GA-25): name | address | mortgagee | contact for an endorsement that changes no premium
+ * @property array{before: array<string, string|null>, after: array<string, string|null>}|null $details_change
  */
 final class PolicyTransaction extends Model
 {
@@ -40,6 +42,6 @@ final class PolicyTransaction extends Model
     protected $casts = [
         'type' => PolicyTransactionType::class, 'effective_date' => 'immutable_date', 'amounts' => 'array',
         'premium_delta_minor' => 'int', 'net_delta_minor' => 'int', 'tax_delta_minor' => 'int', 'policy_version' => 'int',
-        'stamp_duty_delta_minor' => 'int', 'rating_result' => 'array',
+        'stamp_duty_delta_minor' => 'int', 'rating_result' => 'array', 'details_change' => 'array',
     ];
 }

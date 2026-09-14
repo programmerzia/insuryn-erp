@@ -50,6 +50,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property list<array{code: string, text: string, loading_bp?: int, reason?: string}>|null $special_terms special terms shown on the schedule (a manual loading and its reason)
  * @property string|null $issue_basis credit | premium_received (A-117)
  * @property string|null $premium_received_reference
+ * @property array<string, string|null>|null $insured_details gap fixes W7 (GA-25): the name, address, mortgagee and contact details endorsements set
  */
 final class Policy extends Model
 {
@@ -63,6 +64,7 @@ final class Policy extends Model
         'issued_at' => 'immutable_datetime', 'cancelled_at' => 'immutable_datetime',
         'gross_premium_minor' => 'int', 'tax_minor' => 'int', 'net_premium_minor' => 'int', 'installment_count' => 'int', 'version' => 'int',
         'stamp_duty_minor' => 'int', 'risk_inputs' => 'array', 'risk_keys' => 'array', 'rating_result' => 'array', 'rating_plan_version' => 'int', 'special_terms' => 'array',
+        'insured_details' => 'array',
     ];
 
     /** The frozen rating result of a policy issued from a proposal; null for products without a rating plan. */
