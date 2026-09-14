@@ -91,6 +91,11 @@ function clear(): void {
     }
 }
 
+/** Focus opens the list only while nothing is picked: focus coming back to a filled field (e.g. after an inline create) must not cover the fields below. Typing or ↓ opens it. */
+function onFocus(): void {
+    if (model.value === '' || query.value !== selectedLabel.value) open.value = true;
+}
+
 function onBlur(): void {
     setTimeout(() => (open.value = false), 120);
     clear();
@@ -168,7 +173,7 @@ async function create(): Promise<void> {
                 :aria-controls="`${field.id}-options`"
                 :placeholder="placeholder ?? 'Type a number or name'"
                 class="h-8 w-full rounded-control border border-line-control bg-surface pr-2 pl-7 text-body text-ink placeholder:text-ink-2 aria-[invalid=true]:border-danger"
-                @focus="open = true"
+                @focus="onFocus"
                 @blur="onBlur"
                 @keydown="onKeydown"
             />
