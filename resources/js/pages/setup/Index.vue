@@ -98,7 +98,7 @@ const skipLabel = computed(() => (step.value?.done ? 'Continue' : 'Skip for now'
 </script>
 
 <template>
-    <AppLayout title="Set up your company">
+    <AppLayout title="Setup">
         <div class="mb-4 flex items-baseline gap-3">
             <h1 class="text-title font-semibold">Set up your company</h1>
             <p class="text-ui text-ink-2">Each step saves on its own. You can come back to any of them from Admin → Setup.</p>

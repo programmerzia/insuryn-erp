@@ -38,7 +38,7 @@ async function send(mode: ImportResult['mode']): Promise<void> {
 </script>
 
 <template>
-    <AppLayout title="Imports">
+    <AppLayout help="accounting" title="Imports">
         <h1 class="mb-4 text-title font-semibold">Import chart of accounts or opening balances</h1>
         <Stepper :steps="steps" :current="current">
             <form class="grid max-w-[560px] gap-4" @submit.prevent="send('dry_run')">

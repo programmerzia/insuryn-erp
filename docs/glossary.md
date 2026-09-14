@@ -60,6 +60,46 @@ Bangla terms follow the words Bangladeshi non-life insurers and IDRA commonly us
 | Approve | Authorise, sign (for approvals) | The second person's decision. | অনুমোদন |
 | Share capital | Retained earnings (for money the owners put in) | Paid-up capital; the demo's bank balance brought forward. | শেয়ার মূলধন |
 
+## Payables, reinsurance and regulatory
+
+| Use | Not | Meaning | Bangla |
+|---|---|---|---|
+| Supplier | Vendor, creditor | A person or organisation the company buys goods or services from (surveyors, garages, utilities, landlords). | সরবরাহকারী |
+| Supplier bill | Invoice (for a bill received), vendor bill | A bill a supplier sends; entered, approved by someone else, then posted as owed. "Bill" alone is fine where the screen is about supplier bills. | সরবরাহকারীর বিল |
+| Payment run | Payment batch, payout | A set of supplier bills paid together from one bank account on one date; prepared, approved and released by different people. | পেমেন্ট রান |
+| Treaty | Reinsurance contract (on screens) | A reinsurance agreement covering a whole class of business for a period (quota share, surplus, excess of loss). | ট্রিটি (পুনর্বীমা চুক্তি) |
+| Cession | Ceded share (as a record) | The part of a policy's sum insured and premium passed to reinsurers under a treaty or a facultative placement. | সেশন (হস্তান্তরিত অংশ) |
+| Facultative | Fac (in sentences) | Reinsurance placed for one risk on its own, usually above the treaty limits. | ফ্যাকাল্টেটিভ (একক ঝুঁকির পুনর্বীমা) |
+| Bordereau | Bordereaux list, cession list (as a document) | The list of risks, premium and claims ceded to a reinsurer for a period. | বোর্ডেরো (সেশন তালিকা) |
+| Reinsurer statement | Reinsurance account (as a document) | The periodic account with a reinsurer: premium ceded, commission, claims recovered and the balance. | পুনর্বীমাকারীর স্টেটমেন্ট |
+| Technical provisions | Reserves (alone), actuarial reserves | The insurer's liabilities for future claims and unearned cover: unearned premium reserve, outstanding claims and IBNR, run each quarter. | টেকনিক্যাল প্রভিশন |
+| IBNR | Incurred but not reported (after first use) | Claims that have happened but have not been reported yet, estimated in the technical provisions run. | আইবিএনআর (সংঘটিত কিন্তু অপ্রতিবেদিত দাবি) |
+| Regulatory returns | IDRA reports, filings | The returns sent to IDRA each period; generated, reviewed and marked filed. | নিয়ন্ত্রক রিটার্ন |
+
+## People and payroll
+
+| Use | Not | Meaning | Bangla |
+|---|---|---|---|
+| Employee | Staff (as a record), worker | A person the company employs, with a code, an employment history and a salary account. | কর্মচারী |
+| Payroll run | Salary sheet, pay run | One month's payroll: calculated as a preview, approved and posted by finance, then released to the bank. | পেরোল রান |
+| Payslip | Pay slip, salary slip | One employee's earnings, deductions and net pay in a payroll run, printable in English and Bangla. | বেতন স্লিপ |
+| Payroll settings | Salary structures and tax slabs (as a page name) | The provident fund, festival bonus, tax rules, salary structure per grade and tax slabs the payroll is calculated from. | পেরোল সেটিংস |
+| Salary account | Bank details (for an employee) | The employee's bank account the salary is transferred to; payroll cannot be approved without one. | বেতন হিসাব |
+
+## Assets, budgets and petty cash
+
+| Use | Not | Meaning | Bangla |
+|---|---|---|---|
+| Fixed asset | Asset (alone, on register screens), capital item | Furniture, equipment, vehicles and fit-out the company owns and uses for more than a year; numbered `FA-<year>-<n>`. | স্থায়ী সম্পদ |
+| Capitalise | Add, register (for a new asset) | Record a purchase as a fixed asset instead of an expense. | মূলধনীকরণ |
+| Depreciation | Amortisation (for fixed assets), write-down | The share of an asset's cost charged as expense each month over its useful life. | অবচয় |
+| Budget | Plan, forecast (as a record) | The expected income and expense per account and month for a fiscal year. | বাজেট |
+| Budget version | Revision, copy | One numbered version of a year's budget (draft, submitted, approved, superseded); only the approved version is compared with actuals. | বাজেট সংস্করণ |
+| Budget variance | Budget vs actual (as a page name) | Actual income and expense compared with the approved budget. | বাজেট বিচ্যুতি |
+| Float | Imprest, petty cash fund | The fixed amount of petty cash a branch custodian holds, up to its limit. | ফ্লোট (খুচরা নগদ তহবিল) |
+| Voucher | Petty cash slip, chit | A record of one petty cash payment, with its receipt. | ভাউচার |
+| Replenishment | Top-up, refill | Paying the float back up to its limit for the vouchers spent, approved by someone other than the one who asks. | পুনঃপূরণ |
+
 ## Where the words live
 
 - Sidebar and palette: `resources/js/lib/navigation.ts` (labels = page titles).

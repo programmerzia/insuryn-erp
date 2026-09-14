@@ -97,7 +97,7 @@ const words = (k: string) => k.replace(/^./, (c) => c.toUpperCase());
 </script>
 
 <template>
-    <AppLayout title="New manual journal">
+    <AppLayout help="accounting" title="New manual journal">
         <h1 class="text-title font-semibold">New manual journal</h1>
         <p class="mb-5 text-ui text-ink-2">Saved journals go for approval; someone other than you approves and posts them.</p>
         <FormLayout submit-label="Save and submit" cancel-href="/accounting/journals" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" wide @submit="form.post('/accounting/journals')">

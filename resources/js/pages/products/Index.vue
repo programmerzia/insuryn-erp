@@ -40,7 +40,7 @@ const columns: DataColumn<Product>[] = [
 </script>
 
 <template>
-    <AppLayout title="Products" fill>
+    <AppLayout help="tariffs" title="Products" fill>
         <QueueView
             id="products"
             v-model:active="active"

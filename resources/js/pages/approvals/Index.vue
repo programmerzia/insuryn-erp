@@ -51,7 +51,7 @@ void props;
 </script>
 
 <template>
-    <AppLayout title="Approvals" fill>
+    <AppLayout help="limits" title="Approvals" fill>
         <QueueView
             id="approvals"
             v-model:active="active"
