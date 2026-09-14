@@ -109,7 +109,7 @@ it('runs the nightly lifecycle once, so the demo shows active policies, payment 
     asTenant($tenantId, function (): void {
         // Every policy whose cover has started (all of the story's, dated August–September) is Active, none left Issued; the cancelled one stays cancelled.
         expect(DB::table('policies')->where('status', 'issued')->where('inception', '<=', '2026-09-13')->count())->toBe(0)
-            ->and(DB::table('policies')->where('status', 'active')->count())->toBe(6)
+            ->and(DB::table('policies')->where('status', 'active')->count())->toBe(7) // the story's six plus the CTG short-period fire policy (GA-35)
             // POL-2's second installment has been overdue since 5 September: its first reminder is out.
             ->and(DB::table('dunning_notices')->count())->toBeGreaterThan(0);
         $runs = DB::table('job_runs')->orderBy('job')->get(['job', 'status', 'triggered_by']);
