@@ -100,6 +100,7 @@ final class JournalSources
             'claim_payment' => $record('claims', $parent('claim_payments', 'claim_id'), '/claims', 'Claim'),
             'claim_recovery' => $record('claims', $parent('claim_recoveries', 'claim_id'), '/claims', 'Claim'),
             'refund' => ['url' => '/refunds', 'label' => 'Refunds'],
+            'premium_write_off' => $record('policies', $parent('premium_write_offs', 'policy_id'), '/policies', 'Policy'), // gap fixes W7 (GA-24)
             'agent_deposit' => ['url' => '/agent-cash', 'label' => 'Agent cash'],
             'commission_entry', 'commission_statement' => ['url' => '/commission', 'label' => 'Commission'],
             default => ['url' => null, 'label' => ''],

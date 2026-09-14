@@ -42,6 +42,7 @@ final class AccountRolesSeeder extends Seeder
         'employee_tax_payable' => 'Employee income tax withheld',
         'pf_payable' => 'Provident fund payable',
         'retained_earnings' => 'Retained earnings',
+        'premium_written_off' => 'Unpaid premium written off as too small to collect', // gap fixes W7 (GA-24, A-234)
     ];
 
     public function run(): void

@@ -36,10 +36,12 @@ final class ApprovalsPageController
 
     public function decide(Request $request, string $approval, ApprovalService $approvals): RedirectResponse
     {
-        /** @var array{decision: string, reason?: string|null} $data */
-        $data = $request->validate(['decision' => ['required', Rule::enum(Decision::class)], 'reason' => ['nullable', 'string', 'max:1000']]);
+        /** @var array{decision: string, reason?: string|null, return_to?: string|null} $data */
+        $data = $request->validate(['decision' => ['required', Rule::enum(Decision::class)], 'reason' => ['nullable', 'string', 'max:1000'],
+            // Gap fixes W7 (GA-04 remainder): decided on the object's own page (a manual journal), the user goes back there.
+            'return_to' => ['nullable', 'string', 'regex:#^/accounting/journals/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$#']]);
         $status = $approvals->decide($approval, PageSupport::actor($request), Decision::from($data['decision']), $data['reason'] ?? null);
 
-        return redirect('/approvals')->with('status', "Decision recorded; the approval is now {$status->value}.");
+        return redirect($data['return_to'] ?? '/approvals')->with('status', "Decision recorded; the approval is now {$status->value}.");
     }
 }

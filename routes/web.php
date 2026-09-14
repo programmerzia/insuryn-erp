@@ -246,6 +246,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('policies/{policy}/endorsement-rating', [PolicyPageController::class, 'endorsementRating'])->whereUuid('policy');
     Route::post('policies/{policy}/endorse-risk', [PolicyPageController::class, 'endorseRisk'])->whereUuid('policy')->middleware('moves-money');
     Route::post('policies/{policy}/cancel', [PolicyPageController::class, 'cancel'])->whereUuid('policy')->middleware('moves-money');
+    Route::post('policies/{policy}/write-off', [PolicyPageController::class, 'requestWriteOff'])->whereUuid('policy'); // gap fixes W7 (GA-24): goes for approval, posts nothing
     Route::post('policies/{policy}/{action}', [PolicyPageController::class, 'transition'])->whereUuid('policy')->whereIn('action', ['lapse', 'reinstate', 'renew']);
 
     Route::get('receipts', [CollectionsPageController::class, 'index']);

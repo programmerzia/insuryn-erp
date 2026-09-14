@@ -276,7 +276,7 @@ final class LookupController
     private function installments(string $like, AreaReach $reach): array
     {
         $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
-            ->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
+            ->whereIn('p.status', \App\Http\Pages\NextSteps::COLLECTABLE_STATUSES) // gap fixes W7 (GA-24): a cancelled policy's unpaid earned premium is collected too->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->where(fn ($q) => $q->where('p.number', 'ilike', $like)->orWhere('payer.display_name', 'ilike', $like))
             ->orderBy('p.number')->orderBy('i.no')->limit(self::LIMIT)
             ->get(['i.id', 'p.number', 'i.no', 'i.endorsement_no', 'i.due_date', 'p.currency', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);

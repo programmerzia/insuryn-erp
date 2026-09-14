@@ -37,16 +37,46 @@ final class ClaimAccountingEvents
     /** Design §4.7: DR claims_outstanding / CR claims_payable. */
     public function approved(Claim $claim, ClaimPayment $payment): void
     {
-        $this->submitFor($claim, 'CLAIM_APPROVED', 'claim_payment', $payment->id, 'CLAIM_APPROVED:'.$payment->id, $payment->approved_on,
-            ['amount' => $payment->amount_minor, 'claim_payment_id' => $payment->id]);
+        $this->submitFor($claim, 'CLAIM_APPROVED', 'claim_payment', $payment->id, 'CLAIM_APPROVED:'.$payment->id, $payment->approved_on, $this->approvedPayload($payment));
     }
 
-    /** Design §4.7: DR claims_payable / CR bank_main (the payment's bank account's GL account when given). */
+    /**
+     * Design §4.7: DR claims_payable / CR bank_main (the payment's bank account's GL account when given).
+     */
     public function paid(Claim $claim, ClaimPayment $payment, CarbonImmutable $paidOn): void
     {
-        $this->submitFor($claim, 'CLAIM_PAID', 'claim_payment', $payment->id, 'CLAIM_PAID:'.$payment->id, $paidOn,
-            ['amount' => $payment->amount_minor, 'claim_payment_id' => $payment->id, 'bank_account_id' => $payment->bank_account_id]
-            + $this->bankOverride($payment->bank_account_id, $claim));
+        $this->submitFor($claim, 'CLAIM_PAID', 'claim_payment', $payment->id, 'CLAIM_PAID:'.$payment->id, $paidOn, $this->paidPayload($claim, $payment));
+    }
+
+    /**
+     * Gap fixes W7 (GA-04): the CLAIM_APPROVED payload, also for the approver's preview of the lines.
+     *
+     * @return array<string, mixed>
+     */
+    public function approvedPayload(ClaimPayment $payment): array
+    {
+        return ['amount' => $payment->amount_minor, 'claim_payment_id' => $payment->id];
+    }
+
+    /**
+     * Gap fixes W7 (GA-04): the CLAIM_PAID payload, also for the approver's preview of the lines.
+     *
+     * @return array<string, mixed>
+     */
+    public function paidPayload(Claim $claim, ClaimPayment $payment): array
+    {
+        return ['amount' => $payment->amount_minor, 'claim_payment_id' => $payment->id, 'bank_account_id' => $payment->bank_account_id]
+            + $this->bankOverride($payment->bank_account_id, $claim);
+    }
+
+    /**
+     * Gap fixes W7 (GA-04): the dimensions every claim event carries — the policy's plus the claim.
+     *
+     * @return array<string, string>
+     */
+    public static function dimensions(Claim $claim): array
+    {
+        return PolicyAccountingEvents::dimensions(Policy::query()->findOrFail($claim->policy_id)) + ['claim' => $claim->id];
     }
 
     /** Design §4.8: DR bank_main / CR claims_recovery_income. */
@@ -70,7 +100,7 @@ final class ClaimAccountingEvents
         ($this->submit)(
             entityId: $claim->entity_id, eventType: $eventType, sourceType: $sourceType, sourceId: $sourceId, idempotencyKey: $key,
             transactionDate: $date, effectiveDate: $date, currency: $claim->currency, payload: $payload,
-            dimensions: PolicyAccountingEvents::dimensions(Policy::query()->findOrFail($claim->policy_id)) + ['claim' => $claim->id],
+            dimensions: self::dimensions($claim),
         );
     }
 }

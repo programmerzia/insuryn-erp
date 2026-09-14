@@ -159,7 +159,10 @@ final class PolicyPageController
                 'renew' => $model->rating_result === null && in_array($status, [PolicyStatus::Active, PolicyStatus::Expired], true) && $can('policy.create'),
                 // GA-29: money still refundable on the policy (a cancellation) and the user requests refunds in its branch — the page and the palette offer it.
                 'refund' => $can('receipt.refund_request') && app(\App\Modules\Insurance\Collections\Application\RefundableQuery::class)->availableMinor($model->id) > 0,
+                // Gap fixes W7 (GA-24): a cancelled policy's small unpaid premium, written off behind an approval.
+                'write_off' => $can('receipt.write_off_request'),
             ],
+            'writeOff' => $this->writeOffOutlook($model),
         ]);
     }
 
@@ -283,6 +286,31 @@ final class PolicyPageController
             'coverages' => array_values($version->coverageDefinitions()->get()->map(fn ($c): array => ['code' => $c->code, 'name_en' => $c->name_en, 'name_bn' => $c->name_bn, 'mandatory' => $c->mandatory])->all()),
             'chosen_coverages' => $before->coverages,
         ];
+    }
+
+    /**
+     * Gap fixes W7 (GA-24): what "Write off small balance" would write off, formatted; null when the policy is not cancelled or owes nothing.
+     *
+     * @return array{owed: string, limit: string, within_limit: bool, pending: array{requested: string, requested_at: string}|null}|null
+     */
+    private function writeOffOutlook(Policy $policy): ?array
+    {
+        $outlook = app(\App\Modules\Insurance\Collections\Application\PremiumWriteOffService::class)->outlook($policy);
+
+        return $outlook === null ? null : ['owed' => PageSupport::money($outlook['owed_minor'], $policy->currency), 'limit' => PageSupport::money($outlook['limit_minor'], $policy->currency),
+            'within_limit' => $outlook['owed_minor'] > 0 && $outlook['owed_minor'] <= $outlook['limit_minor'],
+            'pending' => $outlook['pending'] === null ? null : ['requested' => PageSupport::money($outlook['pending']['requested_minor'], $policy->currency), 'requested_at' => $outlook['pending']['requested_at']]];
+    }
+
+    /** Gap fixes W7 (GA-24): asks to write off the small premium a cancelled policy still owes; finance approves it in the approvals inbox. */
+    public function requestWriteOff(Request $request, string $policy): RedirectResponse
+    {
+        /** @var array{reason: string} $data */
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+        $writeOff = app(\App\Modules\Insurance\Collections\Application\PremiumWriteOffService::class)->request($policy, $data['reason'], PageSupport::actor($request));
+        $amount = PageSupport::money($writeOff->requested_minor, $writeOff->currency);
+
+        return redirect("/policies/{$policy}")->with('status', "Write-off of {$amount} sent for approval. Nothing is posted until finance approves it.");
     }
 
     public function cancel(Request $request, string $policy): RedirectResponse

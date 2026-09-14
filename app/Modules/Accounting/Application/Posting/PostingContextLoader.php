@@ -48,6 +48,16 @@ final class PostingContextLoader
     }
 
     /**
+     * Gap fixes W7: the role mappings alone, without the period check, for a preview of the lines an event would post (EventLinesPreview).
+     *
+     * @return array<string, string> role code → account id
+     */
+    public function accountsOn(string $entityId, string $bookId, CarbonImmutable $on): array
+    {
+        return $this->accountsByRole($entityId, $bookId, $on);
+    }
+
+    /**
      * Every mapping effective on the date, in one query; when a role has several the latest
      * effective_from wins (ascending order, later rows overwrite).
      *

@@ -164,6 +164,35 @@ final class ApprovalService
         $this->assertMayDecide($approvalId, (string) $approval->requested_by, $deciderId, $step, AuditSubject::of((string) $approval->object_type, (string) $approval->object_id));
     }
 
+    /**
+     * Gap fixes W7 (GA-04 remainder): the pending approval of an object as its own page shows it — its id, the current step of how many, and whether the user
+     * may decide that step now (the same checks as decide, nothing written). Null when nothing is pending. The decision itself still goes through decide().
+     *
+     * @return array{id: string, step: int, steps_total: int, may_decide: bool}|null
+     */
+    public function pendingOutlook(string $objectType, string $objectId, string $userId): ?array
+    {
+        /** @var object{id: string, policy_id: string|null, steps: string|null, current_step: int}|null $approval */
+        $approval = DB::table('approvals')->where('object_type', $objectType)->where('object_id', $objectId)->where('status', ApprovalStatus::Pending->value)
+            ->first(['id', 'policy_id', 'steps', 'current_step']);
+        if ($approval === null) {
+            return null;
+        }
+        try {
+            $steps = $approval->steps !== null ? $this->parseSteps((string) $approval->steps, "on approval {$approval->id}") : $this->steps((string) $approval->policy_id);
+        } catch (ApprovalException) {
+            $steps = [];
+        }
+        try {
+            $this->assertMayDecideCurrentStep((string) $approval->id, $userId);
+            $mayDecide = true;
+        } catch (ApprovalException|PermissionDenied|SodViolation) {
+            $mayDecide = false;
+        }
+
+        return ['id' => (string) $approval->id, 'step' => (int) $approval->current_step, 'steps_total' => max(count($steps), (int) $approval->current_step), 'may_decide' => $mayDecide];
+    }
+
     /** @param array{permission: string, role: string|null} $step */
     private function assertMayDecide(string $approvalId, string $requestedBy, string $deciderId, array $step, AuditSubject $subject): void
     {

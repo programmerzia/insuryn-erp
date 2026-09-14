@@ -47,7 +47,7 @@ beforeEach(function (): void {
 it('opens for journal readers and chart managers only, and says who may change it', function (): void {
     actingAs($this->outsider)->get('/accounting/chart-of-accounts', $this->headers)->assertForbidden();
     actingAs($this->accountant)->get('/accounting/chart-of-accounts', $this->headers)->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->component('accounting/ChartOfAccounts')->where('canManage', false)->has('accounts', 30)); // GA-14: the demo chart gains 1025 Cheques in Clearing and 5600 Bank Charges (was 28)
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('accounting/ChartOfAccounts')->where('canManage', false)->has('accounts', 31)); // GA-14: the demo chart gains 1025 Cheques in Clearing and 5600 Bank Charges; W7: 5450 Premium Written Off (was 28)
     actingAs($this->finance)->get('/accounting/chart-of-accounts', $this->headers)->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('canManage', true)->where('types', ['asset', 'liability', 'equity', 'income', 'expense']));
 });

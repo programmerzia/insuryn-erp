@@ -36,6 +36,7 @@ account role (do not translate it); the others say what a debit or a credit to t
 | employee_tax_payable | Employee tax paid to the government | Tax withheld from salaries, owed to the government |
 | pf_payable | Provident fund paid over | Provident fund we owe |
 | retained_earnings | Retained earnings reduced | Profit kept in the company, or a balance brought forward |
+| premium_written_off | Premium the customer still owed, written off as too small to collect | Written-off premium reduced |
 
 ## When one event changes what a line means
 

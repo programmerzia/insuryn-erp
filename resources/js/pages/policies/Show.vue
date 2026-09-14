@@ -8,6 +8,7 @@ import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
 import MoneyInput from '@/components/forms/MoneyInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
+import WriteOffDrawer, { type WriteOffOutlook } from '@/components/policies/WriteOffDrawer.vue';
 import EndorseRiskDrawer from '@/components/rating/EndorseRiskDrawer.vue';
 import RatingBreakdown from '@/components/rating/RatingBreakdown.vue';
 import DataTable from '@/components/table/DataTable.vue';
@@ -32,7 +33,9 @@ const props = defineProps<{
     transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null }[];
     installments: { id: string; no: number; label: string; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
-    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean; refund: boolean };
+    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean; refund: boolean; write_off?: boolean };
+    /** Gap fixes W7 (GA-24): a cancelled policy's unpaid premium and the write-off waiting for approval; null otherwise. */
+    writeOff?: WriteOffOutlook | null;
     /** Slice R7: the frozen rating of a policy issued from a proposal; null for products without a rating plan. */
     rating: {
         result: RatingResultData; risk: { label_en: string; label_bn: string; value: string }[]; special_terms: string[]; issue_basis: string | null; premium_received_reference: string | null;
@@ -54,6 +57,7 @@ const props = defineProps<{
 const base = `/policies/${props.policy.id}`;
 const drawer = ref<'issue' | 'endorse' | 'cancel' | 'lapse' | 'reinstate' | null>(null);
 const endorseRiskOpen = ref(false);
+const writeOffOpen = ref(false);
 const preferences = usePreferences();
 const issuedOn = (basis: string | null, reference: string | null) => (basis === 'credit' ? 'Issued on credit' : basis === 'premium_received' ? `Premium received, reference ${reference}` : null);
 const close = () => (drawer.value = null);
@@ -122,6 +126,7 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
                 <Link v-if="actions.refund" :href="`/refunds?policy=${policy.id}`" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Request refund</Link>
                 <button v-if="actions.cancel" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'cancel'">Cancel policy</button>
                 <button v-if="actions.issue" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'issue'">Issue policy</button>
+                <button v-if="actions.write_off && writeOff?.within_limit && !writeOff.pending" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="writeOffOpen = true">Write off small balance</button>
                 <Link v-if="actions.record_receipt" :href="`/receipts/create?policy=${policy.id}`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Record receipt</Link>
             </template>
             <template #overview>
@@ -136,6 +141,9 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
                     </ul>
                     <p class="mt-1 text-ink-2">The first payment reminder went out when it bounced. Take the premium again, or cancel the policy if the customer does not pay.</p>
                 </div>
+                <p v-if="writeOff?.pending" class="mb-4 max-w-[1000px] border-l-2 border-warn pl-3 text-ui" role="status">
+                    A write-off of {{ formatMoney(writeOff.pending.requested) }} {{ policy.currency }} is waiting for approval in the approvals inbox. Nothing is posted until it is approved.
+                </p>
                 <h2 class="mb-2 text-ui font-medium">Installments <span class="font-normal text-ink-2">· {{ outstanding }} with money outstanding</span></h2>
                 <div class="mb-6 max-w-[1000px] border border-line" data-testid="policy-installments">
                     <DataTable :id="`policy-installments`" label="Installments" :columns="installmentColumns" :rows="installments" :row-key="(i) => i.id" :currency="policy.currency" :url-sync="false"
@@ -227,6 +235,7 @@ usePageActions(() => ({ group: `This policy`, actions: policyPageActions(title.v
                 <Field id="transition_reason" label="Reason" :error="transition.errors.reason"><TextInput v-model="transition.reason" /></Field>
             </FormLayout>
         </Drawer>
+        <WriteOffDrawer v-if="actions.write_off && writeOff" v-model:open="writeOffOpen" :policy-id="policy.id" :title="title" :currency="policy.currency" :outlook="writeOff" />
         <EndorseRiskDrawer
             v-if="rating && actions.endorse_risk"
             v-model:open="endorseRiskOpen"

@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Claims\Application;
 
+use App\Modules\Accounting\Application\Queries\EventLinesPreview;
+use App\Modules\Insurance\Claims\Domain\Models\Claim;
+use App\Modules\Insurance\Claims\Domain\Models\ClaimPayment;
 use App\Modules\Platform\Approvals\ApprovalHandler;
 use App\Modules\Platform\Approvals\DescribesApprovalSubject;
+use App\Modules\Platform\Approvals\PreviewsApprovalSubject;
 use Illuminate\Support\Facades\DB;
 
 /** Completes a claim payment approval (object type `claim_payment`). */
-final class ClaimPaymentApprovalHandler implements ApprovalHandler, DescribesApprovalSubject
+final class ClaimPaymentApprovalHandler implements ApprovalHandler, DescribesApprovalSubject, PreviewsApprovalSubject
 {
-    public function __construct(private readonly ClaimPaymentService $payments) {}
+    public function __construct(private readonly ClaimPaymentService $payments, private readonly ClaimAccountingEvents $events, private readonly EventLinesPreview $lines) {}
 
     public function approved(string $objectId, string $finalApproverId, array $context): void
     {
@@ -30,5 +34,22 @@ final class ClaimPaymentApprovalHandler implements ApprovalHandler, DescribesApp
 
         return ['title' => 'Claim payment '.($row->number ?? ''), 'amount_minor' => $row === null ? null : (int) $row->amount_minor,
             'currency' => $row === null ? null : (string) $row->currency, 'link' => $row === null ? null : "/claims/{$row->id}"];
+    }
+
+    /** Gap fixes W7 (GA-04 remainder): the claim, the payee, the date and the journal lines the final approval posts (CLAIM_APPROVED). */
+    public function preview(string $objectId): array
+    {
+        $payment = ClaimPayment::query()->find($objectId);
+        $claim = $payment === null ? null : Claim::query()->find($payment->claim_id);
+        if ($payment === null || $claim === null) {
+            return ['link_label' => 'Open the claim', 'details' => [], 'lines' => [], 'posts_on_final_step' => true];
+        }
+        $on = $payment->approved_on;
+
+        return ['link_label' => 'Open the claim', 'details' => [
+            ['label' => 'Claim', 'value' => $claim->number],
+            ['label' => 'Payee', 'value' => (string) DB::table('parties')->where('id', $payment->payee_party_id)->value('display_name')],
+            ['label' => 'Approval date', 'value' => $on->toDateString(), 'date' => true],
+        ], 'lines' => $this->lines->lines($claim->entity_id, 'CLAIM_APPROVED', $on, $claim->currency, $this->events->approvedPayload($payment), ClaimAccountingEvents::dimensions($claim)), 'posts_on_final_step' => true];
     }
 }

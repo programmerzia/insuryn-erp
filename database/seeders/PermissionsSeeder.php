@@ -37,6 +37,8 @@ final class PermissionsSeeder extends Seeder
         'renewal.manage',
         // Gap fix GA-12 (A-175): the claims reports for the claims desk
         'reports.claims',
+        // Gap fixes W7 (GA-24, A-232): writing off a cancelled policy's small unpaid premium, requested by one person and approved by another
+        'receipt.write_off_request', 'receipt.write_off_approve',
     ];
 
     /**

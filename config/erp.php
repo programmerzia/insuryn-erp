@@ -53,7 +53,14 @@ return [
             'fiscal_period_reopen' => ['label' => 'Period reopening', 'permission' => 'periods.reopen'],
             // Slice R5: underwriting referrals by sum insured. Without a policy, the referral goes to the role whose underwriting limit covers it (D-31).
             'proposal_referral' => ['label' => 'Underwriting referral', 'permission' => 'underwriting.decide'],
+            // Gap fixes W7 (GA-24): writing off a cancelled policy's small unpaid premium. Without a policy, any other holder of receipt.write_off_approve (A-233).
+            'premium_write_off' => ['label' => 'Premium write-off', 'permission' => 'receipt.write_off_approve'],
         ],
+    ],
+    // Gap fixes W7 (GA-24): "Write off small balance" on a cancelled policy.
+    'premium_write_off' => [
+        // ASSUMPTION: A-231 — the largest unpaid premium (minor units, the policy's currency) a cancelled policy may have written off instead of collected: 1,000.00.
+        'max_minor' => (int) env('ERP_PREMIUM_WRITE_OFF_MAX_MINOR', 100_000),
     ],
     // Phase 3 slice R4 quotations. ASSUMPTION: A-80 — "valid 15 days": the issue day and the 14 days after it; the quotation expires the day after.
     'quotations' => [

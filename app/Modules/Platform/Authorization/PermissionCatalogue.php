@@ -40,6 +40,8 @@ final class PermissionCatalogue
         'receipt.allocate' => ['Allocate receipts', 'Allocate received money to installments, and mark cheques bounced.'],
         'receipt.refund_request' => ['Request refunds', 'Ask for the refund of money owed after a cancellation; someone else pays it.'],
         'receipt.refund_release' => ['Pay refunds', 'Pay or reject a refund someone else requested.'],
+        'receipt.write_off_request' => ['Request premium write-offs', 'Ask to write off the small premium a cancelled policy still owes; someone else approves it.'],
+        'receipt.write_off_approve' => ['Approve premium write-offs', 'Approve or reject the write-off of a cancelled policy\'s small unpaid premium someone else requested.'],
         'claim.register' => ['Register claims', 'Register a claim against a policy.'],
         'claim.reserve' => ['Set claim reserves', 'Set and change what a claim is expected to cost.'],
         'claim.approve' => ['Approve claim payments', 'Approve a payment on a claim someone else reserved, within limits.'],

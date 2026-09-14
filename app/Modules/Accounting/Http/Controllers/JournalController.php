@@ -54,6 +54,11 @@ final class JournalController
         $reversalRequest = \Illuminate\Support\Facades\DB::table('journal_reversal_requests')->where('journal_id', $j['id'])->orderByDesc('created_at')->first(['id', 'status', 'on_date', 'reason', 'requested_by', 'approval_id']);
         $scope = \App\Modules\Platform\Authorization\AuthorizationScope::entity((string) ($row->entity_id ?? ''));
         $pendingApproval = \Illuminate\Support\Facades\DB::table('approvals')->where('object_type', 'journal')->where('object_id', $j['id'])->where('status', 'pending')->exists();
+        // Gap fixes W7 (GA-04 remainder): under an approval policy the journal page offers the decision to whoever holds the current step, through the engine.
+        $approvals = app(\App\Modules\Platform\Approvals\ApprovalService::class);
+        $approval = $pendingApproval ? $approvals->pendingOutlook('journal', (string) $j['id'], $actor) : null;
+        $reversalApproval = $reversalRequest !== null && $reversalRequest->status === 'pending' && $reversalRequest->approval_id !== null
+            ? $approvals->pendingOutlook('journal_reversal', (string) $reversalRequest->id, $actor) : null;
 
         return Inertia::render('accounting/journals/Show', [
             'today' => app(BusinessClock::class)->today()->toDateString(), // flow fix X2: "reverse on" starts at today
@@ -63,6 +68,8 @@ final class JournalController
                 'decideReversal' => $reversalRequest !== null && $reversalRequest->status === 'pending' && $reversalRequest->approval_id === null && $reversalRequest->requested_by !== $actor
                     && $permissions->has($actor, 'accounting.approve_journal', $scope),
             ],
+            'approval' => $approval,
+            'reversalApproval' => $reversalApproval,
             'reversalRequest' => $reversalRequest === null ? null : ['id' => (string) $reversalRequest->id, 'status' => (string) $reversalRequest->status, 'on' => (string) $reversalRequest->on_date,
                 'reason' => (string) $reversalRequest->reason, 'viaApproval' => $reversalRequest->approval_id !== null],
             'journal' => [

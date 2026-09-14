@@ -92,6 +92,22 @@ final class CollectionsAccountingEvents
         );
     }
 
+    /** Gap fixes W7 (GA-24): DR premium_written_off / CR premium_receivable for the small premium a cancelled policy still owed. */
+    public function premiumWrittenOff(\App\Modules\Insurance\Collections\Domain\Models\PremiumWriteOff $writeOff, Policy $policy, CarbonImmutable $on): void
+    {
+        ($this->submit)(
+            entityId: $policy->entity_id, eventType: 'PREMIUM_WRITTEN_OFF', sourceType: 'premium_write_off', sourceId: $writeOff->id,
+            idempotencyKey: 'PREMIUM_WRITTEN_OFF:'.$writeOff->id, transactionDate: $on, effectiveDate: $on, currency: $policy->currency,
+            payload: self::writeOffPayload($writeOff), dimensions: PolicyAccountingEvents::dimensions($policy),
+        );
+    }
+
+    /** @return array{amount: int, write_off_id: string} the event payload, also for the approver's preview of the lines */
+    public static function writeOffPayload(\App\Modules\Insurance\Collections\Domain\Models\PremiumWriteOff $writeOff): array
+    {
+        return ['amount' => (int) ($writeOff->written_off_minor ?? $writeOff->requested_minor), 'write_off_id' => $writeOff->id];
+    }
+
     /** Design §4.4 event B: DR customer_refund_payable / CR bank_main. */
     public function refundIssued(Refund $refund, Policy $policy, CarbonImmutable $paidOn): void
     {

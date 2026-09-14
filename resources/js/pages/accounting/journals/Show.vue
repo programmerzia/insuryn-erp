@@ -13,6 +13,7 @@ import type { StoredDocumentRow } from '@/components/object/types';
 import DetailList from '@/components/table/DetailList.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { stepLabel } from '@/lib/approvals';
 import { captionFor, useLineCaptions } from '@/lib/captions';
 import { drillFrom } from '@/lib/drill';
 import { eventLabel } from '@/lib/events';
@@ -21,6 +22,13 @@ import { useJournalConfirm } from '@/lib/journalConfirm';
 import type { PreviewResult } from '@/lib/preview';
 import { formatMinor, sumMoney } from '@/lib/money';
 import type { JournalDetail, JournalRef } from '@/types/accounting';
+
+interface PendingApproval {
+    id: string;
+    step: number;
+    steps_total: number;
+    may_decide: boolean;
+}
 
 /**
  * UX brief §6.7 journal viewer: header strip (number, status, total, the action you can take), lines with account codes and dimensions as
@@ -31,6 +39,9 @@ const props = defineProps<{
     journal: JournalDetail;
     actions?: { approve: boolean; requestReversal: boolean; decideReversal: boolean };
     reversalRequest?: { id: string; status: string; on: string; reason: string; viaApproval: boolean } | null;
+    /** Gap fixes W7 (GA-04 remainder): the pending approval of this journal (or of its reversal) and whether the reader holds its current step. */
+    approval?: PendingApproval | null;
+    reversalApproval?: PendingApproval | null;
     dimensions?: Record<number, { name: string; value: string }[]>;
     sourceLink?: string | null;
     today?: string;
@@ -74,6 +85,14 @@ function approve(): void {
 function reject(): void {
     router.post(`/accounting/journals/${props.journal.id}/reject`, { reason: rejectReason.value }, { preserveScroll: true });
 }
+/** Decided through the approval engine (the same route as the approvals inbox): the server previews what this step posts, then the user confirms. */
+function approveStep(approval: PendingApproval, what: string): void {
+    const last = approval.step >= approval.steps_total;
+    void confirm.request(`/approvals/${approval.id}/decide`, { decision: 'approved', return_to: `/accounting/journals/${props.journal.id}` }, `Approve ${what}?`, last ? 'Approve and post' : 'Approve');
+}
+function rejectStep(approval: PendingApproval): void {
+    router.post(`/approvals/${approval.id}/decide`, { decision: 'rejected', reason: rejectReason.value, return_to: `/accounting/journals/${props.journal.id}` }, { preserveScroll: true });
+}
 function requestReversal(): void {
     router.post(`/accounting/journals/${props.journal.id}/reversal-requests`, reversal.value, { preserveScroll: true, onSuccess: () => (reversing.value = false) });
 }
@@ -107,13 +126,29 @@ function rejectReversal(): void {
                         <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="rejectReason.trim() === ''" @click="reject">Reject</button>
                         <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="approve">Approve and post</button>
                     </template>
+                    <template v-if="approval?.may_decide">
+                        <input v-model="rejectReason" class="h-8 w-44 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="Reason to reject" aria-label="Reason to reject" />
+                        <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="rejectReason.trim() === ''" @click="rejectStep(approval)">Reject</button>
+                        <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="approveStep(approval, title)">Review and approve</button>
+                    </template>
                     <button v-if="actions.requestReversal" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="reversing = true">Request a reversal</button>
                 </div>
             </header>
 
+            <p v-if="approval" class="border-l-2 border-warn pl-3 text-ui" role="status">
+                Waiting for approval · {{ stepLabel(approval.step, approval.steps_total).toLowerCase() }}.
+                <template v-if="approval.may_decide">{{ approval.step >= approval.steps_total ? 'Yours is the last approval: approving posts these lines.' : 'Approving passes it to the next approver; nothing is posted yet.' }}</template>
+                <template v-else>It is decided in the approvals inbox by whoever holds this step.</template>
+            </p>
             <p v-if="reversalRequest" class="flex flex-wrap items-center gap-2 border-l-2 border-warn pl-3 text-ui" role="status">
                 Reversal requested for {{ formatDate(reversalRequest.on) }}: {{ reversalRequest.reason }} · <StatusBadge :status="reversalRequest.status" />
-                <span v-if="reversalRequest.viaApproval && reversalRequest.status === 'pending'" class="text-ink-2">Decided in the approvals inbox.</span>
+                <span v-if="reversalRequest.viaApproval && reversalRequest.status === 'pending' && !reversalApproval?.may_decide" class="text-ink-2">Decided in the approvals inbox.</span>
+                <template v-if="reversalApproval?.may_decide">
+                    <span class="text-ink-2">{{ stepLabel(reversalApproval.step, reversalApproval.steps_total) }}</span>
+                    <input v-model="rejectReason" class="h-8 w-44 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="Reason to reject" aria-label="Reason to reject the reversal" />
+                    <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="rejectReason.trim() === ''" @click="rejectStep(reversalApproval)">Reject</button>
+                    <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="approveStep(reversalApproval, `the reversal of ${title}`)">Review and approve</button>
+                </template>
                 <template v-if="actions.decideReversal">
                     <input v-model="rejectReason" class="h-8 w-44 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="Reason to reject" aria-label="Reason to reject the reversal" />
                     <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="rejectReason.trim() === ''" @click="rejectReversal">Reject</button>

@@ -31,6 +31,7 @@ code,name,type,normal_side,is_control,control_subledger,role
 5300,Salaries,expense,debit,false,,salary_expense
 5310,Employer PF Contribution,expense,debit,false,,employer_pf_expense
 5400,Office Rent,expense,debit,false,,
+5450,Premium Written Off,expense,debit,false,,premium_written_off
 5500,Printing and Stationery,expense,debit,false,,
 5600,Bank Charges,expense,debit,false,,bank_charges
 5900,Rounding Differences,expense,debit,false,,rounding_difference

@@ -225,7 +225,7 @@ final class CollectionsPageController
         $candidates = [];
         // H1: candidate installments only on the user's branches' policies.
         $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
-            ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
+            ->where('p.entity_id', $entity['id'])->whereIn('p.status', NextSteps::COLLECTABLE_STATUSES)->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             // GA-03: the policy the money was taken for comes first, then the payer's own installments.
             ->orderByRaw('case when p.id = ? then 0 when i.payer_party_id = ? then 1 else 2 end', [$r->for_policy_id, $r->party_id])->orderBy('i.due_date')->orderBy('p.number');
         $candidatesTotal = (clone $rows)->count(); // GA-40: the workbench says when it lists only the first of them
@@ -459,7 +459,7 @@ final class CollectionsPageController
     private function outstandingInstallments(array $entity, AreaReach $reach): array
     {
         $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
-            ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
+            ->where('p.entity_id', $entity['id'])->whereIn('p.status', NextSteps::COLLECTABLE_STATUSES)->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->orderBy('i.due_date')->orderBy('p.number')->limit(500)
             ->get(['i.id', 'p.number', 'i.no', 'i.endorsement_no', 'i.due_date', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
         $options = [];

@@ -49,7 +49,9 @@ final class RoleTemplates
         'reports.regulatory',
         // ASSUMPTION A-174 (gap fix GA-08): design §5.1 names accounting.requeue_event but gives it to no role, so a failed posting could never be retried; the
         // finance manager (and CFO) fix the cause and requeue from Accounting events. No SoD rule involves it.
-        'accounting.requeue_event'];
+        'accounting.requeue_event',
+        // ASSUMPTION A-232 (gap fixes W7, GA-24): the finance manager (and CFO) approve writing off a cancelled policy's small unpaid premium.
+        'receipt.write_off_approve'];
     private const CFO_EXTRA = ['periods.reopen', 'accounting.post_to_control'];
 
     /** @return array<string, array{name: string, permissions: list<string>}> */
@@ -68,7 +70,10 @@ final class RoleTemplates
                 'policy.endorse',
                 // ASSUMPTION A-171 (gap fix GA-01): §7.2 gives no role receipt.refund_request, so money from cancelled policies could not be refunded; the branch
                 // manager who cancels asks for the refund and finance releases it (§7.3 receipt.refund_request ✕ receipt.refund_release; no template holds both).
-                'receipt.refund_request']],
+                'receipt.refund_request',
+                // ASSUMPTION A-232 (gap fixes W7, GA-24): the branch manager who cancels and collects asks to write off a small balance the customer will not pay;
+                // finance approves it (receipt.write_off_approve), never the same person (the approval engine's maker ≠ checker).
+                'receipt.write_off_request']],
             'claims_officer' => ['name' => 'Claims Officer', 'permissions' => self::CLAIMS_OFFICER],
             'claims_manager' => ['name' => 'Claims Manager', 'permissions' => [...self::CLAIMS_OFFICER, 'claim.approve', 'claim.pay_request', 'claim.close']],
             'accountant' => ['name' => 'Accountant', 'permissions' => [...self::ACCOUNTANT,

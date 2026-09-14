@@ -134,6 +134,8 @@ function populateEveryTenantTable(array $ctx): void
         if ($due > 0) {
             app(RefundService::class)->request($policy->id, $due, 'cancellation', $officer);
         }
+        DB::table('premium_write_offs')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // gap fixes W7 (GA-24)
+            'policy_id' => $policy->id, 'requested_minor' => 100, 'currency' => 'BDT', 'status' => 'rejected', 'reason' => 'isolation', 'requested_by' => $officer, 'requested_at' => now()]);
         app(LicenceExpiryAlerts::class)->run($d('2030-12-01')); // the world agent's licence expires 2030-12-31 (slice D2)
         $scheme = app(CompensationSchemeService::class)->createScheme('LIFE', 'Life agency', 'commission', $d('2026-01-01'), null, [], $world['admin']); // slice D4
         app(HierarchyService::class)->defineLevels($scheme, [['code' => 'FA', 'rank' => 1, 'label' => 'Financial associate']], $world['admin']); // slice D3
