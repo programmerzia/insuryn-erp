@@ -2961,6 +2961,7 @@ Findings from docs/gap-audit.md, two commits (`fix(onboarding)`, `fix(collection
 - **Tests changed to the new rules:** SetupWizardTest (step indices, redirects), ChequeBounceTest, HomeQueuesTest, ChartOfAccountsScreenTest, RoleAdministrationTest, TenantIsolationEveryTableTest, ClaimsCommissionApprovalsPagesTest, MoneyDrawerDefaultsTest, BankReconciliationActionsTest (both through the statement run) — see the commit bodies.
 - **Found, not changed:** existing tenants see `cheques_in_clearing` and `bank_charges` as unmapped roles in Accounting → Account roles until they map them (nothing posts to them before). A template tariff drafted by a tenant admin who also holds the finance manager role still needs a second person. `ClaimService::recover` remains callable by claims staff from code (no screen or API uses it).
 - **Ported onto main after H1–H3, W1–W3 (2026-09-14):** commits `b9188eb`, `409a114` plus `b9ae55f` (three main failures found on the way: receipts/Show.vue missing a `</p>` so `vite build` failed; PARTY_EMAIL_INVALID worded in ReasonMessages; BranchScopedQueuesTest gives its cover note a premium reference per A-196). HomeStartActionsTest: the accountant is offered Record a receipt (A-219). Resolutions: `/commission` stays history (no approve/pay/plan routes); refund request amount default coexists with GA-01's `?policy=` prefill; the bounced premium Home queue and the bank screen's branch list follow the user's reach (H1); `ClaimRecoveryReceipts` uses `ClaimService::recoverable` (H3 reopened claims); receipt page keeps GA-03's `for_policy` and GA-38's payer; the prefilled bank charge journal keeps GA-31's voucher and account lookup; accountant template = A-172 `reports.financial` + A-219 `receipt.create`; `BankMatcher` undo offset message no longer carries a key literal (H2 coverage). Gate: Pest 1490 passed (81,618 assertions), PHPStan 0, vue-tsc, Vitest 414, `scripts/e2e.sh` passed.
+
 ### Gap fixes W6 — Home queues, search, tables and paging, phone layout — done
 Findings from `docs/gap-audit.md`, in the order given: GA-26, GA-29, GA-40, GA-16. Assumptions A-221–A-227, decisions D-90–D-93.
 
@@ -2987,6 +2988,7 @@ Findings from `docs/gap-audit.md`, in the order given: GA-26, GA-29, GA-40, GA-1
   - Approval steps are decided with the permission held tenant-wide (`ApprovalService::assertMayDecide`, `ApprovalInboxQuery`), so a branch-scoped manager can never decide a referral; the referrals queue shows none for them.
   - `claims/Create` still loads every claimable policy into its picker; the suspense installment picker stops at 500.
   - The sidebar has no badges for the new queues (each badge is a count query on every page).
+
 ### Gap fixes W7 — write-off, premium-free endorsements, approval previews, help, Bangla validation, flow audit script — done
 Leftovers of earlier waves (L1–L6). Assumptions A-231–A-236, decisions D-95–D-98.
 
