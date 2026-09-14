@@ -25,7 +25,7 @@ const columns: DataColumn<RoleRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Roles" fill>
+    <AppLayout help="users" title="Roles" fill>
         <QueueView
             id="admin-roles"
             v-model:active="active"

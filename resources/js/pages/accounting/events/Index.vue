@@ -33,7 +33,7 @@ function requeue(row: EventRow): void {
 </script>
 
 <template>
-    <AppLayout help="accounting" title="Accounting events" fill>
+    <AppLayout help="events" title="Accounting events" fill>
         <QueueView
             id="accounting-events"
             v-model:active="active"

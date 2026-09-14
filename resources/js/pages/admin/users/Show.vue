@@ -47,7 +47,7 @@ async function deactivate(): Promise<void> {
 </script>
 
 <template>
-    <AppLayout :title="user.name">
+    <AppLayout help="users" :title="user.name">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div class="min-w-0">
                 <Link href="/admin/users" class="text-dense text-accent-text hover:underline">Users</Link>

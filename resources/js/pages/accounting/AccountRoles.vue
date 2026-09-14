@@ -62,7 +62,7 @@ const columns: DataColumn<RoleRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Account roles" fill>
+    <AppLayout help="chart" title="Account roles" fill>
         <div v-if="unmapped.length" class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-warn bg-surface-2 px-3 py-2 text-ui" role="status">
             <p class="min-w-0 flex-1">
                 {{ unmapped.length }} account {{ unmapped.length === 1 ? 'role' : 'roles' }} used by the posting rules {{ unmapped.length === 1 ? 'has' : 'have' }} no account:

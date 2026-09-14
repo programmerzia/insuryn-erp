@@ -48,7 +48,7 @@ function openVersion(): void {
 </script>
 
 <template>
-    <AppLayout title="Tariffs" fill>
+    <AppLayout help="tariffs" title="Tariffs" fill>
         <QueueView
             id="rating-plans"
             v-model:active="active"

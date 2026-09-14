@@ -27,7 +27,7 @@ const columns: DataColumn<UserRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Users" fill>
+    <AppLayout help="users" title="Users" fill>
         <QueueView
             id="admin-users"
             v-model:active="active"

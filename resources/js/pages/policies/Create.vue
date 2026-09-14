@@ -15,6 +15,7 @@ import { startingProduct } from '@/lib/lastProduct';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { toast } from '@/lib/toasts';
+import { formMessages } from '@/lib/validationMessages';
 
 /** Brief §4 long flow: a quote in four steps (who and what · premium · payers · review) with a summary rail and drafts. Issuing happens on the policy. */
 const props = defineProps<{
@@ -65,16 +66,18 @@ function fail(field: 'product_id' | 'policyholder_party_id' | 'inception' | 'pre
 
 function next(): void {
     form.clearErrors();
+    // Gap fixes W7 (L5): in the user's language.
+    const l = preferences.locale;
     if (step.value === 0) {
-        if (!form.policyholder_party_id) return fail('policyholder_party_id', 'Choose the policyholder, or press Ctrl+N to add a new customer.');
-        if (!form.product_id) return fail('product_id', 'Choose the product to quote.');
+        if (!form.policyholder_party_id) return fail('policyholder_party_id', formMessages.choosePolicyholder(l));
+        if (!form.product_id) return fail('product_id', formMessages.chooseProduct(l));
     }
     if (step.value === 1) {
-        if (!form.inception) return fail('inception', 'Enter the date the cover starts.');
-        if ((parseMoney(form.premium) ?? 0n) <= 0n) return fail('premium', `Enter the gross premium in ${props.entity.currency}, like 120,000.00.`);
+        if (!form.inception) return fail('inception', formMessages.enterCoverStart(l));
+        if ((parseMoney(form.premium) ?? 0n) <= 0n) return fail('premium', formMessages.enterGrossPremium(l, props.entity.currency));
     }
     if (step.value === 2 && form.payers.length > 0 && shareTotal.value !== 10000n) {
-        return fail('payers', `Payer shares add up to ${formatMinor(shareTotal.value)}%; they must add up to 100%.`);
+        return fail('payers', formMessages.payerShares(l, formatMinor(shareTotal.value)));
     }
     if (step.value < steps.length - 1) {
         step.value++;

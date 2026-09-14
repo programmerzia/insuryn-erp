@@ -19,7 +19,10 @@ describe('risk form generated from the risk schema (slice R4)', () => {
         expect(english[0]).toEqual({ key: 'vehicle_type', label: 'Vehicle type', type: 'select', required: true, options: [{ value: 'private', label: 'Private car' }], hint: null, maxLength: null });
         expect(english[2]?.hint).toBe('50 to 10,000');
         expect(english[3]?.hint).toBe('1950 to 2100');
-        expect(english[4]?.hint).toBe('At least 0.01');
+        // Gap fixes W7 (GA-25): a sum insured of "at least 0.01" only means a positive amount, so no hint; a real minimum still shows.
+        expect(english[4]?.hint).toBeNull();
+        expect(boundsHint({ ...schema[4]!, min: 100_000 })).toBe('At least 1,000.00');
+        expect(boundsHint({ ...schema[4]!, min: 1, max: 500_000_000 })).toBe('Up to 5,000,000.00');
         expect(english[7]?.hint).toBe('Up to 50');
         expect(english[1]?.maxLength).toBe(8);
         const bangla = formFields(schema, 'bn');

@@ -81,7 +81,7 @@ const columns: DataColumn<PolicyRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Approval limits" fill>
+    <AppLayout help="limits" title="Approval limits" fill>
         <QueueView
             id="admin-approval-limits"
             v-model:active="active"

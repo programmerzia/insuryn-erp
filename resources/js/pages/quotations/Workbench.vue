@@ -76,7 +76,7 @@ const ratingProblem = ref<string | null>(null);
 const rating = ref(false);
 const touched = ref(q !== null);
 const readOnly = computed(() => !props.can.edit);
-const problems = computed(() => (touched.value ? localProblems(schema.value, values.value) : {}));
+const problems = computed(() => (touched.value ? localProblems(schema.value, values.value, 'quote', locale.value) : {}));
 const payload = computed(() => ({
     branch_id: state.branch_id, product_id: state.product_id, inception: state.inception, customer_party_id: state.customer_party_id || null, producer_id: state.producer_id || null,
     risk_inputs: riskInputs(schema.value, values.value), coverages: state.coverages.filter((c) => optionalCoverages.value.some((o) => o.code === c)),
@@ -88,7 +88,7 @@ let lastKey = q?.rating_result ? ratingKey(payload.value) : '';
 watch(() => ratingKey(payload.value), (key) => {
     if (readOnly.value || !version.value) return;
     clearTimeout(timer);
-    if (Object.keys(localProblems(schema.value, values.value)).length > 0) {
+    if (Object.keys(localProblems(schema.value, values.value, 'quote', locale.value)).length > 0) {
         result.value = null;
         return;
     }
@@ -112,7 +112,7 @@ async function rate(key: string): Promise<void> {
         const body = error.body as { reason?: string; message?: string; errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null;
         result.value = null;
         if (body?.reason === 'RISK_INPUTS_INVALID') {
-            serverErrors.value = serverProblems(body, schema.value);
+            serverErrors.value = serverProblems(body, schema.value, locale.value);
             ratingProblem.value = null;
         } else {
             serverErrors.value = {};
@@ -139,7 +139,7 @@ const errorFor = (key: string) => serverErrors.value[key] ?? formErrors.value[`r
 const saving = ref(false);
 function save(intent: 'save' | 'issue'): void {
     touched.value = true;
-    if (intent === 'issue' && Object.keys(localProblems(schema.value, values.value)).length > 0) return;
+    if (intent === 'issue' && Object.keys(localProblems(schema.value, values.value, 'quote', locale.value)).length > 0) return;
     const data = { ...payload.value, intent };
     // A fresh page state after saving: the page reads the quotation once (`q`), so a new quote that gets its id, or a draft that gets its number, must
     // remount rather than keep the old state (the flow audit found "make proposal" doing nothing right after issuing a new quote).

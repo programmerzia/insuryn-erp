@@ -50,7 +50,7 @@ const columns: DataColumn<ProducerRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Producers" fill>
+    <AppLayout help="distribution" title="Producers" fill>
         <QueueView
             id="distribution-producers"
             v-model:active="active"

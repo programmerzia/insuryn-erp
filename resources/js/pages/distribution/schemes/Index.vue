@@ -34,7 +34,7 @@ const columns: DataColumn<SchemeRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Compensation schemes" fill>
+    <AppLayout help="distribution" title="Compensation schemes" fill>
         <QueueView
             id="distribution-schemes"
             v-model:active="active"

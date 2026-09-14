@@ -20,7 +20,9 @@ beforeEach(function (): void {
 });
 
 it('has English and Bangla help for every module, each five to eight sentences with the three parts', function (): void {
-    expect(HelpContent::MODULES)->toBe(['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports']);
+    // Gap fixes W7 (GA-30): the screens that had no help have their own module now.
+    expect(HelpContent::MODULES)->toBe(['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports',
+        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events']);
     foreach (HelpContent::MODULES as $module) {
         foreach (['en', 'bn'] as $locale) {
             $path = resource_path("help/{$module}.{$locale}.md");
@@ -79,10 +81,34 @@ it('opens the panel on every module screen', function (): void {
         'accounting' => ['accounting/journals/Index', 'accounting/journals/Show', 'accounting/TrialBalance'],
         'close' => ['close/Index', 'close/Run'],
         'reports' => ['reports/Index', 'reports/Show'],
+        // Gap fixes W7 (GA-30).
+        'distribution' => ['distribution/producers/Index', 'distribution/producers/Show', 'distribution/hierarchy/Index', 'distribution/schemes/Index', 'distribution/schemes/Show', 'distribution/targets/Index'],
+        'refunds' => ['refunds/Index'],
+        'cheques' => ['receipts/Cheques'],
+        'agentcash' => ['agentCash/Index'],
+        'tariffs' => ['rating/plans/Index', 'rating/plans/Show'],
+        'users' => ['admin/users/Index', 'admin/users/Show', 'admin/roles/Index', 'admin/roles/Show'],
+        'limits' => ['admin/approval-limits/Index', 'admin/underwriting-limits/Index'],
+        'chart' => ['accounting/ChartOfAccounts', 'accounting/AccountRoles'],
+        'events' => ['accounting/events/Index'],
     ];
     foreach ($pages as $module => $components) {
         foreach ($components as $component) {
             expect((string) file_get_contents(resource_path("js/pages/{$component}.vue")))->toContain("help=\"{$module}\"");
         }
+    }
+});
+
+it('explains the month-end close\'s newer tasks, and uses the glossary\'s words in the new help', function (): void {
+    // Gap fixes W7: the close help names the reconciliations added by W4, the year-end close and the nightly jobs, in English and Bangla.
+    $close = (string) file_get_contents(resource_path('help/close.en.md'));
+    expect($close)->toContain('unearned premium, suspense, VAT and stamp duty')->toContain('year-end close')->toContain('nightly jobs')->toContain('Retained earnings');
+    expect((string) file_get_contents(resource_path('help/close.bn.md')))->toContain('বছর-শেষের ক্লোজ')->toContain('রাতের কাজগুলো');
+    // docs/glossary.md: Producer (not Agent for every type), Compensation scheme, Commission statements, Premium receivable, Unearned premium reserve.
+    expect((string) file_get_contents(resource_path('help/distribution.en.md')))->toContain('Producers are everyone who brings business')->toContain('*Compensation schemes*')->toContain('*Commission statements*');
+    expect((string) file_get_contents(resource_path('help/chart.bn.md')))->toContain('প্রাপ্য প্রিমিয়াম')->toContain('অনুপার্জিত প্রিমিয়াম রিজার্ভ');
+    foreach (['distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events'] as $module) {
+        $bangla = (string) file_get_contents(resource_path("help/{$module}.bn.md"));
+        expect(str_contains($bangla, 'Premium receivable') || str_contains($bangla, 'unallocated'))->toBeFalse("{$module}.bn uses an English accounting term");
     }
 });

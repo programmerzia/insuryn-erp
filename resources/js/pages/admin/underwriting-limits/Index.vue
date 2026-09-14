@@ -54,7 +54,7 @@ const columns: DataColumn<LimitRow>[] = [
 </script>
 
 <template>
-    <AppLayout title="Underwriting limits" fill>
+    <AppLayout help="limits" title="Underwriting limits" fill>
         <QueueView
             id="admin-underwriting-limits"
             v-model:active="active"

@@ -61,7 +61,7 @@ function reject(row: RefundRow): void {
 </script>
 
 <template>
-    <AppLayout title="Refunds" fill>
+    <AppLayout help="refunds" title="Refunds" fill>
         <QueueView
             id="refunds"
             v-model:active="active"

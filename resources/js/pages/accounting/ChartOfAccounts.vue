@@ -94,7 +94,7 @@ const columns: DataColumn<ChartAccount>[] = [
 </script>
 
 <template>
-    <AppLayout title="Chart of accounts" fill>
+    <AppLayout help="chart" title="Chart of accounts" fill>
         <QueueView
             id="accounting-chart-of-accounts"
             v-model:active="active"

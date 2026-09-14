@@ -39,7 +39,7 @@ async function remove(): Promise<void> {
 </script>
 
 <template>
-    <AppLayout :title="role.name">
+    <AppLayout help="users" :title="role.name">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div class="min-w-0">
                 <Link href="/admin/roles" class="text-dense text-accent-text hover:underline">Roles</Link>

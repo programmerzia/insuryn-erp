@@ -104,12 +104,16 @@ export function formFields(schema: RiskFieldDefinition[], locale: Locale, stage:
     });
 }
 
-/** "50 to 10,000", "At least 1.00", "Up to 60" — money bounds are minor units shown in major units. */
+/**
+ * "50 to 10,000", "At least 1,000.00", "Up to 60" — money bounds are minor units shown in major units. Gap fixes W7 (GA-25): a money minimum of one poisha only
+ * says the amount must be positive, and "At least 0.01" on a sum insured reads oddly, so it gives no hint.
+ */
 export function boundsHint(field: RiskFieldDefinition): string | null {
     if (field.type !== 'integer' && field.type !== 'money') return null;
     const show = (n: number) => (field.type === 'money' ? formatMinor(BigInt(n)) : field.key.startsWith('year') ? String(n) : group(n));
-    if (field.min !== undefined && field.max !== undefined) return `${show(field.min)} to ${show(field.max)}`;
-    if (field.min !== undefined) return `At least ${show(field.min)}`;
+    const min = field.type === 'money' && field.min !== undefined && field.min <= 1 ? undefined : field.min;
+    if (min !== undefined && field.max !== undefined) return `${show(min)} to ${show(field.max)}`;
+    if (min !== undefined) return `At least ${show(min)}`;
     if (field.max !== undefined) return `Up to ${show(field.max)}`;
     return null;
 }
@@ -160,18 +164,21 @@ export function riskInputs(schema: RiskFieldDefinition[], values: FormValues): R
     return inputs;
 }
 
-/** Checks in the browser before rating (the server checks again): required, whole numbers, bounds, options, dates, length. Field key → message. */
-export function localProblems(schema: RiskFieldDefinition[], values: FormValues, stage: RiskStage = 'quote'): Record<string, string> {
+/**
+ * Checks in the browser before rating (the server checks again): required, whole numbers, bounds, options, dates, length. Field key → message, in the user's
+ * language (gap fixes W7, L5).
+ */
+export function localProblems(schema: RiskFieldDefinition[], values: FormValues, stage: RiskStage = 'quote', locale: Locale = 'en'): Record<string, string> {
     const problems: Record<string, string> = {};
     const inputs = riskInputs(schema, values);
     for (const field of schema) {
         const value = inputs[field.key];
         if (value === undefined) {
-            if (requiredFor(field, stage)) problems[field.key] = problemMessage('REQUIRED', field);
+            if (requiredFor(field, stage)) problems[field.key] = problemMessage('REQUIRED', field, locale);
             continue;
         }
         const code = problemCode(field, value);
-        if (code) problems[field.key] = problemMessage(code, field);
+        if (code) problems[field.key] = problemMessage(code, field, locale);
     }
     return problems;
 }
@@ -201,13 +208,17 @@ function problemCode(field: RiskFieldDefinition, value: string | number | boolea
  * Follow-up H2: the problems of a RISK_INPUTS_INVALID refusal per field. The server words them with the schema's labels in the user's language (`fields`);
  * a code without a sentence falls back to the browser's own wording.
  */
-export function serverProblems(body: { errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null, schema: RiskFieldDefinition[]): Record<string, string> {
-    return Object.fromEntries(Object.entries(body?.errors ?? {}).map(([k, code]) => [k, body?.fields?.[k] ?? problemMessage(String(code), schema.find((f) => f.key === k))]));
+export function serverProblems(body: { errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null, schema: RiskFieldDefinition[], locale: Locale = 'en'): Record<string, string> {
+    return Object.fromEntries(Object.entries(body?.errors ?? {}).map(([k, code]) => [k, body?.fields?.[k] ?? problemMessage(String(code), schema.find((f) => f.key === k), locale)]));
 }
 
-/** A risk schema problem code (from the browser or the server) in words for the field. */
-export function problemMessage(code: string, field: RiskFieldDefinition | undefined): string {
+/**
+ * A risk schema problem code (from the browser or the server) in words for the field. Gap fixes W7 (L5): in Bangla for a Bangla user, the same sentences the
+ * server words (App\Http\Feedback\RiskProblems, A-161), with the field's Bangla label.
+ */
+export function problemMessage(code: string, field: RiskFieldDefinition | undefined, locale: Locale = 'en'): string {
     const show = (n: number | undefined) => (n === undefined || !field ? '' : field.type === 'money' ? formatMinor(BigInt(n)) : field.key.startsWith('year') ? String(n) : group(n));
+    if (locale === 'bn') return banglaProblem(code, field, show);
     switch (code) {
         case 'REQUIRED':
             return field?.type === 'select' ? `Choose the ${field.label_en.toLowerCase()}.` : `Enter the ${(field?.label_en ?? 'value').toLowerCase()}.`;
@@ -229,6 +240,32 @@ export function problemMessage(code: string, field: RiskFieldDefinition | undefi
             return 'Tick or clear the box.';
         default:
             return 'Check this value.';
+    }
+}
+
+function banglaProblem(code: string, field: RiskFieldDefinition | undefined, show: (n: number | undefined) => string): string {
+    const label = field?.label_bn ?? 'মান';
+    switch (code) {
+        case 'REQUIRED':
+            return field?.type === 'select' ? `${label} বেছে নিন।` : `${label} লিখুন।`;
+        case 'NOT_INTEGER':
+            return field?.type === 'money' ? 'টাকার অঙ্ক লিখুন, যেমন 1,234,567.00।' : 'একটি পূর্ণ সংখ্যা লিখুন।';
+        case 'BELOW_MIN':
+            return field?.min === undefined ? 'মানটি খুব কম।' : `কমপক্ষে ${show(field.min)} লিখুন।`;
+        case 'ABOVE_MAX':
+            return field?.max === undefined ? 'মানটি খুব বেশি।' : `সর্বোচ্চ ${show(field.max)} লিখুন।`;
+        case 'NOT_AN_OPTION':
+            return 'তালিকা থেকে একটি বেছে নিন।';
+        case 'NOT_A_DATE':
+            return '15 Sep 2026-এর মতো একটি তারিখ লিখুন।';
+        case 'TOO_LONG':
+            return `${field?.max_length ?? 255} অক্ষরের মধ্যে রাখুন।`;
+        case 'UNKNOWN_FIELD':
+            return 'এই পণ্যে এই তথ্য লাগে না।';
+        case 'NOT_BOOLEAN':
+            return 'বাক্সে টিক দিন বা টিক তুলে দিন।';
+        default:
+            return 'মানটি যাচাই করুন।';
     }
 }
 

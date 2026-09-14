@@ -13,7 +13,9 @@ use InvalidArgumentException;
  */
 final class HelpContent
 {
-    public const MODULES = ['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports'];
+    /** Gap fixes W7 (GA-30): distribution, refunds, cheques, agent cash, tariffs, users and roles, approval and underwriting limits, the chart of accounts and accounting events. */
+    public const MODULES = ['quotes', 'policies', 'renewals', 'receipts', 'bank', 'claims', 'commission', 'accounting', 'close', 'reports',
+        'distribution', 'refunds', 'cheques', 'agentcash', 'tariffs', 'users', 'limits', 'chart', 'events'];
 
     public const LOCALES = ['en', 'bn'];
 

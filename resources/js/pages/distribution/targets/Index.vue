@@ -55,7 +55,7 @@ function save(row: Row): void {
 </script>
 
 <template>
-    <AppLayout title="Targets">
+    <AppLayout help="distribution" title="Targets">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div>
                 <Link href="/distribution/producers" class="text-dense text-accent-text hover:underline">Producers</Link>

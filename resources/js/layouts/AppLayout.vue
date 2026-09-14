@@ -15,6 +15,7 @@ import { navOpen, toggleNavigation } from '@/lib/phone';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useShortcut } from '@/lib/shortcuts';
 import { confirmationToast, followStep, type NextStep, toast } from '@/lib/toasts';
+import { installLocalizedValidity } from '@/lib/validationMessages';
 import type { SharedProps } from '@/types/shared';
 
 /**
@@ -33,6 +34,8 @@ onBeforeUnmount(() => {
 
 const page = usePage<SharedProps>();
 const preferences = usePreferences();
+// Gap fixes W7 (L5): the browser's constraint messages in the user's language (installed once for the whole app).
+if (typeof document !== 'undefined') installLocalizedValidity(() => preferences.locale);
 useShortcut('app.sidebar', () => toggleNavigation(() => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed)));
 // GA-16: a page opens with the phone menu closed.
 navOpen.value = false;

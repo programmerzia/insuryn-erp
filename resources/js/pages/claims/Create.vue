@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { toast } from '@/lib/toasts';
+import { formMessages } from '@/lib/validationMessages';
 
 /** GA-12: `unpaid_premium` is the premium already due and unpaid today (a warning, never a refusal). */
 const props = defineProps<{ policies: { id: string; number: string; display_name: string; inception: string; expiry: string; unpaid_premium?: string | null }[]; today: string }>();
@@ -39,15 +40,17 @@ function fail(field: 'policy_id' | 'loss_date' | 'reported_on' | 'description', 
 
 function next(): void {
     form.clearErrors();
-    if (step.value === 0 && !form.policy_id) return fail('policy_id', 'Choose the policy the claim is on.');
+    // Gap fixes W7 (L5): in the user's language.
+    const l = preferences.locale;
+    if (step.value === 0 && !form.policy_id) return fail('policy_id', formMessages.choosePolicyForClaim(l));
     if (step.value === 1) {
-        if (!form.loss_date) return fail('loss_date', 'Enter the date of loss.');
+        if (!form.loss_date) return fail('loss_date', formMessages.enterLossDate(l));
         if (cover.value && (form.loss_date < cover.value.inception || form.loss_date > cover.value.expiry)) {
-            return fail('loss_date', `The loss must fall within the cover, ${formatDate(cover.value.inception)} to ${formatDate(cover.value.expiry)}.`);
+            return fail('loss_date', formMessages.lossOutsideCover(l, formatDate(cover.value.inception), formatDate(cover.value.expiry)));
         }
-        if (!form.reported_on) return fail('reported_on', 'Enter the date the loss was reported.');
-        if (form.reported_on < form.loss_date) return fail('reported_on', 'A loss cannot be reported before it happened.');
-        if (form.description.trim() === '') return fail('description', 'Describe what happened in a sentence.');
+        if (!form.reported_on) return fail('reported_on', formMessages.enterReportedOn(l));
+        if (form.reported_on < form.loss_date) return fail('reported_on', formMessages.reportedBeforeLoss(l));
+        if (form.description.trim() === '') return fail('description', formMessages.describeLoss(l));
     }
     if (step.value < steps.length - 1) {
         step.value++;

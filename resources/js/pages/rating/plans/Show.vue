@@ -202,7 +202,7 @@ watch(compareWith, (id) => {
 </script>
 
 <template>
-    <AppLayout :title="title">
+    <AppLayout help="tariffs" :title="title">
         <div class="flex min-h-full flex-col">
             <header class="border-b border-line px-6 pt-3">
                 <Breadcrumb :base="[{ label: 'Tariffs', href: '/rating/plans' }]" />

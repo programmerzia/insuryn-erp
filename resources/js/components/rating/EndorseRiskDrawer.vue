@@ -43,7 +43,7 @@ let controller: AbortController | null = null;
 
 watch(() => [open.value, effectiveDate.value, ratingKey({ product_id: '', inception: effectiveDate.value, risk_inputs: payload.value.risk_inputs, coverages: chosen.value })], () => {
     clearTimeout(timer);
-    if (!open.value || Object.keys(localProblems(props.schema, values.value, 'proposal')).length > 0) {
+    if (!open.value || Object.keys(localProblems(props.schema, values.value, 'proposal', props.locale)).length > 0) {
         rating.value = null;
         return;
     }
@@ -64,7 +64,7 @@ async function rerate(): Promise<void> {
         const body = error.body as { reason?: string; message?: string; errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null;
         rating.value = null;
         if (body?.reason === 'RISK_INPUTS_INVALID') {
-            serverErrors.value = serverProblems(body, props.schema);
+            serverErrors.value = serverProblems(body, props.schema, props.locale);
             problem.value = null;
         } else {
             serverErrors.value = {};
@@ -80,7 +80,7 @@ const text = (key: string) => {
     return typeof value === 'string' ? value : '';
 };
 const set = (key: string, value: string | undefined) => (values.value = { ...values.value, [key]: value ?? '' });
-const fieldError = (key: string) => serverErrors.value[key] ?? errors.value[`risk_inputs.${key}`] ?? localProblems(props.schema, values.value, 'proposal')[key];
+const fieldError = (key: string) => serverErrors.value[key] ?? errors.value[`risk_inputs.${key}`] ?? localProblems(props.schema, values.value, 'proposal', props.locale)[key];
 
 const preview = ref<PreviewResult | null>(null);
 const previewOpen = ref(false);

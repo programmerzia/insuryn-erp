@@ -43,7 +43,7 @@ function clear(r: Row): void {
 </script>
 
 <template>
-    <AppLayout title="Cheque register" fill>
+    <AppLayout help="cheques" title="Cheque register" fill>
         <QueueView
             id="cheques"
             v-model:active="active"

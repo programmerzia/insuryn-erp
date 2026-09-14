@@ -85,7 +85,7 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
 </script>
 
 <template>
-    <AppLayout :title="`${producer.code} ${producer.name}`">
+    <AppLayout help="distribution" :title="`${producer.code} ${producer.name}`">
         <div class="flex min-h-full flex-col">
             <header class="border-b border-line px-6 pt-3">
                 <Breadcrumb :base="[{ label: 'Producers', href: '/distribution/producers' }]" />

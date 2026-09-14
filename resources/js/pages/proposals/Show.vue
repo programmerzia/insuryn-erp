@@ -52,11 +52,11 @@ const detailFields = computed(() => formFields(props.riskDetails.fields, prefere
 const details = useForm({ risk_inputs: {} as Record<string, string | number | boolean> });
 const detailValues = ref(initialValues(props.riskDetails.fields, props.riskDetails.values));
 const detailTouched = ref(false);
-const detailError = (key: string) => (details.errors as Record<string, string>)[`risk_inputs.${key}`] ?? (detailTouched.value ? localProblems(props.riskDetails.fields, detailValues.value, 'proposal')[key] : undefined);
+const detailError = (key: string) => (details.errors as Record<string, string>)[`risk_inputs.${key}`] ?? (detailTouched.value ? localProblems(props.riskDetails.fields, detailValues.value, 'proposal', preferences.locale)[key] : undefined);
 const detailText = (key: string) => String(detailValues.value[key] ?? '');
 function saveDetails(): void {
     detailTouched.value = true;
-    if (Object.keys(localProblems(props.riskDetails.fields, detailValues.value, 'proposal')).length > 0) return;
+    if (Object.keys(localProblems(props.riskDetails.fields, detailValues.value, 'proposal', preferences.locale)).length > 0) return;
     details.risk_inputs = riskInputs(props.riskDetails.fields, detailValues.value);
     details.post(`${base}/risk-details`, { preserveScroll: true, onSuccess: () => (detailsOpen.value = false) });
 }

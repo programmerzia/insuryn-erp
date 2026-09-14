@@ -71,7 +71,7 @@ function addLevel(): void {
 </script>
 
 <template>
-    <AppLayout :title="scheme.code">
+    <AppLayout help="distribution" :title="scheme.code">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div class="min-w-0">
                 <Link href="/distribution/schemes" class="text-dense text-accent-text hover:underline">Compensation schemes</Link>

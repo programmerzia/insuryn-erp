@@ -71,7 +71,7 @@ function post(): void {
 </script>
 
 <template>
-    <AppLayout title="Agent cash" fill>
+    <AppLayout help="agentcash" title="Agent cash" fill>
         <QueueView
             id="agent-cash"
             v-model:active="active"
