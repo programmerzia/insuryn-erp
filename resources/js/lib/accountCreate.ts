@@ -15,6 +15,9 @@ export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 /** Who to ask when the account is not in the chart (the role template holding accounting.manage_coa). */
 export const ASK_FOR_ACCOUNT = 'An account that is not in the chart is added by the Finance Manager.';
 
+/** UX U2: where the whole chart is kept (every account, headings, deactivation). */
+export const CHART_OF_ACCOUNTS_HREF = '/accounting/chart-of-accounts';
+
 export function normalSideFor(type: string): 'debit' | 'credit' {
     return type === 'asset' || type === 'expense' ? 'debit' : 'credit';
 }

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Accounting;
 
 use App\Modules\Accounting\Application\AmountEvaluator;
+use App\Modules\Accounting\Application\ChartOfAccounts\ChartOfAccounts;
 use App\Modules\Accounting\Application\Close\CloseTaskExecutor;
+use App\Modules\Accounting\Application\Contracts\AccountUsage;
 use App\Modules\Accounting\Application\Contracts\CloseTaskCheck;
 use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
 use App\Modules\Accounting\Application\Contracts\SubledgerReconciler;
@@ -39,6 +41,8 @@ final class AccountingServiceProvider extends ServiceProvider
         $this->app->when(ReconciliationService::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
         $this->app->when(CloseTaskExecutor::class)->needs('$reconcilers')->giveTagged(SubledgerReconciler::class);
         $this->app->when(CloseTaskExecutor::class)->needs('$checks')->giveTagged(CloseTaskCheck::class);
+        // UX U2: contexts that post to an account directly say so before it is deactivated.
+        $this->app->when(ChartOfAccounts::class)->needs('$usages')->giveTagged(AccountUsage::class);
         $this->mergeConfigFrom(base_path('config/erp.php'), 'erp');
     }
 

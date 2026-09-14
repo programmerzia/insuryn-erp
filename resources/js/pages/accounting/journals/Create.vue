@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import { Plus, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -10,7 +10,7 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { ACCOUNT_TYPES, ASK_FOR_ACCOUNT, type AccountChoice, normalSideFor, withAccount } from '@/lib/accountCreate';
+import { ACCOUNT_TYPES, ASK_FOR_ACCOUNT, type AccountChoice, CHART_OF_ACCOUNTS_HREF, normalSideFor, withAccount } from '@/lib/accountCreate';
 import { HttpError, requestJson } from '@/lib/http';
 import { formatMinor, parseMoney } from '@/lib/money';
 
@@ -96,7 +96,7 @@ const words = (k: string) => k.replace(/^./, (c) => c.toUpperCase());
             </div>
             <fieldset class="grid gap-2">
                 <legend class="mb-1 text-ui font-medium">Lines</legend>
-                <p v-if="!canCreateAccount" class="text-dense text-ink-2">{{ ASK_FOR_ACCOUNT }}</p>
+                <p v-if="!canCreateAccount" class="text-dense text-ink-2">{{ ASK_FOR_ACCOUNT }} <Link :href="CHART_OF_ACCOUNTS_HREF" class="text-accent-text hover:underline">See the chart of accounts</Link></p>
                 <div class="grid grid-cols-[minmax(0,1fr)_104px_140px_110px_160px_28px] gap-2 text-dense text-ink-2" aria-hidden="true">
                     <span>Account</span><span>Side</span><span class="text-right">Amount ({{ entity.currency }})</span><span>Branch</span><span>Memo</span><span />
                 </div>
@@ -121,6 +121,7 @@ const words = (k: string) => k.replace(/^./, (c) => c.toUpperCase());
         </FormLayout>
         <Drawer :open="accountLine !== null" title="New account" @update:open="closeAccount">
             <form class="grid gap-4" novalidate @submit.prevent="createAccount">
+                <p class="text-ui text-ink-2">A postable account for this line. Headings, control accounts and changes to existing accounts are in <Link :href="CHART_OF_ACCOUNTS_HREF" class="text-accent-text hover:underline">Chart of accounts</Link>.</p>
                 <p v-if="accountErrors.form" class="border-l-2 border-danger pl-3 text-ui text-danger" role="alert">{{ accountErrors.form }}</p>
                 <div class="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
                     <Field id="new-account-code" label="Code" :error="accountErrors.code"><TextInput id="new-account-code" v-model="accountDraft.code" :maxlength="32" /></Field>

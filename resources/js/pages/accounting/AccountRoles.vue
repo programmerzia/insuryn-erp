@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
@@ -78,11 +78,12 @@ const columns: DataColumn<RoleRow>[] = [
             :rows="rows"
             :row-key="(r) => r.code"
             empty-text="No account roles to show."
-            :empty-action="{ label: 'Import a chart of accounts', href: '/accounting/imports' }"
+            :empty-action="{ label: 'Add accounts in Chart of accounts', href: '/accounting/chart-of-accounts' }"
             :inspector-title="(r) => r.description"
             :inspector-subtitle="(r) => r.code"
         >
             <template #toolbar>
+                <Link href="/accounting/chart-of-accounts" class="ml-2 inline-flex h-8 items-center px-2 text-ui text-accent-text hover:underline">Chart of accounts</Link>
                 <label class="ml-2 flex items-center gap-1.5 text-ui text-ink-2">Entity
                     <SelectInput id="entity" :model-value="entityId" class="w-44" :options="entities.map((e) => ({ value: e.id, label: `${e.code} · ${e.name}` }))" @update:model-value="(v) => choose(v ?? entityId, bookId)" />
                 </label>
@@ -112,7 +113,7 @@ const columns: DataColumn<RoleRow>[] = [
         <Drawer v-model:open="drawerOpen" :title="remapping ? `Map: ${remapping.description}` : 'Map account role'">
             <p class="mb-4 text-ui text-ink-2">From this date the posting rules post this role to the account you choose. The current account keeps everything before it.</p>
             <FormLayout submit-label="Map role" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="form.post('/accounting/account-roles', { preserveScroll: true, onSuccess: () => (drawerOpen = false) })" @cancel="drawerOpen = false">
-                <Field id="account_id" label="Account" :hint="remapping?.control_subledger ? `Control accounts only: the ${remapping.control_subledger} subledger reconciles to this role.` : undefined" :error="form.errors.account_id">
+                <Field id="account_id" label="Account" :hint="remapping?.control_subledger ? `Control accounts only: the ${remapping.control_subledger} subledger reconciles to this role.` : 'Not in the list? Add it in Chart of accounts first.'" :error="form.errors.account_id">
                     <SelectInput id="account_id" v-model="form.account_id" placeholder="Choose an account" :options="accountOptions" />
                 </Field>
                 <Field id="effective_from" label="From" :error="form.errors.effective_from"><DateInput id="effective_from" v-model="form.effective_from" /></Field>

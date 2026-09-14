@@ -155,10 +155,17 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     Route::post('imports/{type}', [ImportController::class, 'submit'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('imports.submit');
 });
 
-// Fix F4: account role → account mappings need accounting.manage_coa (the controller authorizes per entity).
+// Fix F4: account role → account mappings need accounting.manage_coa (the controller authorizes per entity). UX U2: the chart of accounts screen.
 Route::middleware('auth')->prefix('accounting')->group(function (): void {
     Route::get('account-roles', [\App\Modules\Accounting\Http\Controllers\AccountRolesPageController::class, 'index']);
     Route::post('account-roles', [\App\Modules\Accounting\Http\Controllers\AccountRolesPageController::class, 'map']);
+    // UX U2: Accounting → Chart of accounts opens for accounting.view_journals or accounting.manage_coa; every change needs manage_coa (the controller and service authorize).
+    $chart = \App\Modules\Accounting\Http\Controllers\ChartOfAccountsPageController::class;
+    Route::get('chart-of-accounts', [$chart, 'index']);
+    Route::post('chart-of-accounts', [$chart, 'store']);
+    Route::put('chart-of-accounts/{account}', [$chart, 'update'])->whereUuid('account');
+    Route::post('chart-of-accounts/{account}/deactivate', [$chart, 'deactivate'])->whereUuid('account');
+    Route::post('chart-of-accounts/{account}/reactivate', [$chart, 'reactivate'])->whereUuid('account');
 });
 
 // Financial reports need reports.financial (design §7.1–7.2: Auditor reports.*, Finance Manager and CFO).
