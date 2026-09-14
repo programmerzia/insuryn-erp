@@ -80,7 +80,7 @@ code and in the register below, configurable.
 | 2.0b | Phase 1 carry-over: CI pipeline | done | see git log |
 | 2.0c | Phase 1 carry-over: Playwright E2E happy path | todo (pending, after Distribution D1–D9) | |
 | 2.0d | Phase 1 carry-over: claim reserve property test | todo (pending, after Distribution D1–D9) | |
-| 2.1 | Design addendum v2 and Phase 2 customer questions | todo (pending, after Distribution D1–D9) | |
+| 2.1 | Design addendum v2 and Phase 2 customer questions | done | see git log |
 | D1 | Distribution: agents → producers with channels | done | see git log |
 | D2 | Distribution: licences with blocking rules, expiry alerts, IDRA register export | done | see git log |
 | D3 | Distribution: effective-dated hierarchy, levels per scheme, `hierarchyAt` | done | see git log |
@@ -2486,3 +2486,20 @@ Flow audit only, no new features: docs/flow-audit.md now meters each Part A step
   - "Pay from" in the claim release drawer is not read by the release endpoint.
   - Policy, receipt and receipts-create pages need an area permission held tenant-wide, so a user with only a branch-scoped role gets 403.
   - No Pest case covers an endorsement clearing a proposal-stage field.
+
+### 2.1 — Design addendum v2 and Phase 2 customer questions — done
+- Docs only (no code, migration, permission, assumption or decision row; no test run needed). `docs/phase-2/kickoff.md` §1 and the 2.1 row link both documents.
+- `docs/design-addendum-v2.md`:
+  - **Part A**, the delta since design v1 as built: stack and context map; Phase 0/1 deviations; Distribution D1–D9, onboarding S1–S6, F1–F6, Phase 3 R1–R10, X1–X12 (model, invariants, posting rules, permissions and templates, SoD, numbering, approvals, jobs, UI flows); every v1 and design-note OPEN item mapped to its ASSUMPTION (verify) or kept OPEN; D-01–D-42 in one line each; gaps carried into Phase 2.
+  - **Part B**, the Phase 2 design per kickoff §1: workflow engine, AP, AR (non-premium), expenses and petty cash, fixed assets, budgets, cash flow, employees/attendance/leave, payroll (rule sets, runs, final settlement, self-service) and the commission payout route. Each has MVP vs LATER, a data model sketch, posting events with worked examples, invariants, state machines, reconcilers and close tasks, permissions and SoD, screens and dependencies.
+  - Proposed decisions are tagged `DECISION (proposed) PD-n`, for review. They get D-ids only when a slice applies them; D-50–D-52 were not used.
+  - Part B §B.18 proposes slice-list changes: 2.1b business clock and close rules; 2.1c numbering fix; 2.6 split into 2.6a/2.6b; kernel `for_each` rule lines and cost centres with 2.3; 2.14 payroll route blocked on the commission tax question.
+- `docs/phase-2/customer-questions.md`: 71 questions in groups A–J with a summary table (default with A-id, blocked slices, needed before build / finish / go-live):
+  - all 17 Phase 1 questions, carried and updated; none has a recorded answer;
+  - the Phase 3 placeholder values to verify;
+  - the three flow-audit decisions: H2 UTC or Asia/Dhaka for "today", C4 block or warn on pending approvals at close, C5 locking before month end;
+  - the nine kickoff Phase 2 questions, plus the ones Part B needs.
+- Found while reading the code, not changed (listed in addendum §A.7.6, A.12 and CQ-E5):
+  - **Receipt, claim and agent deposit numbers can collide across branches.** Their sequences are per branch, but the format `{prefix}-{fy}-{seq}` has no branch code, and the tables are unique on (tenant, number). A second branch's first receipt of a year would be refused. No test covers two branches for these documents.
+  - **Outbox messages other than `PostAccountingEvent` are never relayed.** This includes `CommissionPayrollEarning` and `CommissionPayableToAp`, so Phase 2 needs consumers (PD-7).
+  - **No role template holds `commission.pay`.**

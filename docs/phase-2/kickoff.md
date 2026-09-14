@@ -23,7 +23,7 @@ What Phase 1 already gives Phase 2 (reuse, do not rebuild):
 - Rule `PAYROLL_POSTED` (summary level, D-05) and golden fixture `10_payroll_posted` (design §4.10).
 - Screens pattern: `PageSupport`, area permissions, form-error contract, CoreBari components.
 
-## 1. Design addendum outline (`docs/design-package-v2.md`)
+## 1. Design addendum outline (written as [`docs/design-addendum-v2.md`](../design-addendum-v2.md), slice 2.1)
 
 Mirror the nine deliverables of spec §12, for Phase 2 only. Tag everything DECISION, INVARIANT or OPEN.
 
@@ -82,7 +82,7 @@ golden fixtures, reconciler and close task where it has them. Same operating rul
 | Slice | Name | Depends on | Notes |
 |---|---|---|---|
 | 2.0 | Phase 1 carry-over: CI, Playwright happy path, reserve property test, user and role admin screens | — | From the exit checklist |
-| 2.1 | Design addendum v2 and Phase 2 customer questions | 2.0 can run in parallel | Docs only; review before 2.2 |
+| 2.1 | Design addendum v2 and Phase 2 customer questions | 2.0 can run in parallel | Done (docs only): [design addendum v2](../design-addendum-v2.md) (Part B proposes changes to this list, §B.18) and [customer questions](customer-questions.md); review both before 2.2 |
 | 2.2 | Workflow engine: sequential and parallel steps, delegation, escalation, SLA timers, rework | 2.1 | Grows `ApprovalService`; existing approval policies keep working |
 | 2.3 | Suppliers and AP bills, AP subledger reconciler, close task 7 (AP part) | 2.2 | |
 | 2.4 | Payment runs create → approve → release, supplier bank file, match to statements | 2.3 | SoD approve ✕ release |
