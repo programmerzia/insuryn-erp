@@ -11,6 +11,8 @@ const LABELS: Record<string, string> = {
     CHEQUE_CLEARED: 'Cheque cleared', CHEQUE_RETURN_CHARGED: 'Bank charge for a returned cheque',
     // Market gap G5: technical provisions.
     IBNR_PROVISION: 'IBNR provision set', IBNR_PROVISION_REVERSED: 'Prior quarter IBNR released',
+    // Slice 2.3/2.4 accounts payable.
+    AP_BILL_POSTED: 'Supplier bill posted', AP_BILL_CANCELLED: 'Supplier bill cancelled', AP_PAYMENT_RELEASED: 'Supplier payment run released',
 };
 
 /** Gap audit GA-34: whether a code is a known event type, so a report cell like the branch code "HO" is not turned into "Ho". */

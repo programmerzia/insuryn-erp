@@ -22,6 +22,10 @@ account role (do not translate it); the others say what a debit or a credit to t
 | commission_withholding_payable | Tax withheld paid to the government | Tax withheld from commission, owed to the government |
 | producer_advances | Advance paid to a producer | Advance recovered from the producer's commission |
 | accounts_payable | Payable settled | We owe a supplier or producer |
+| ap_expense | Cost on a supplier bill | Supplier bill cost reduced |
+| input_vat_receivable | VAT on a supplier bill we can reclaim | Reclaimable VAT reversed or used |
+| vat_deducted_at_source_payable | VAT deducted at source paid to the government | VAT deducted at source from a supplier, owed to the government |
+| supplier_tax_withheld_payable | Supplier tax withheld paid to the government | Income tax deducted at source from a supplier, owed to the government |
 | dac_asset | Selling cost kept for later months | Kept selling cost charged to this month |
 | claims_outstanding | Reserve released or moved to payable | Money we expect to pay on a reported claim |
 | claims_expense | Cost of claims | Claims cost reduced as the reserve is released |

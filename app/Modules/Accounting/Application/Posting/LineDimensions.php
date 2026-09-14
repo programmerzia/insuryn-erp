@@ -27,11 +27,17 @@ final readonly class LineDimensions
      * @param array<string, mixed> $eventDimensions
      * @param array<string, string> $lineDimensions
      * @param array<string, mixed> $payload
+     * @param array<array-key, mixed>|null $item D-100: inside a `for_each` group, `item.<field>` reads the current item
      */
-    public static function forRuleLine(array $eventDimensions, array $lineDimensions, array $payload): self
+    public static function forRuleLine(array $eventDimensions, array $lineDimensions, array $payload, ?array $item = null): self
     {
         $values = $eventDimensions;
         foreach ($lineDimensions as $code => $expression) {
+            if ($item !== null && str_starts_with($expression, 'item.')) {
+                // An item without the value keeps the event's dimension (a bill line without a claim).
+                $values[$code] = $item[substr($expression, 5)] ?? $values[$code] ?? null;
+                continue;
+            }
             $values[$code] = str_starts_with($expression, 'payload.') ? ($payload[substr($expression, 8)] ?? null) : $expression;
         }
 

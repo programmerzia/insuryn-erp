@@ -27,13 +27,15 @@ final readonly class ExpressionScope
      *
      * @param array<array-key, mixed> $payload
      * @param array<array-key, mixed> $dimensions
-     * @return array{payload: self, dims: self}
+     * @param array<array-key, mixed>|null $item D-100: the current item of a `for_each` line group, readable as `item.*`
+     * @return array{payload: self, dims: self, item?: self}
      */
-    public static function forEvent(array $payload, array $dimensions): array
+    public static function forEvent(array $payload, array $dimensions, ?array $item = null): array
     {
         return [
             'payload' => new self('payload', $payload, 'PAYLOAD_FIELD_MISSING'),
             'dims' => new self('dims', $dimensions, 'DIMENSION_MISSING'),
+            ...($item === null ? [] : ['item' => new self('item', $item, 'PAYLOAD_FIELD_MISSING')]),
         ];
     }
 

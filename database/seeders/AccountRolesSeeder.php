@@ -28,6 +28,11 @@ final class AccountRolesSeeder extends Seeder
         'commission_withholding_payable' => 'Withholding tax on commission',
         'producer_advances' => 'Advances paid to producers, recovered from their commission (Distribution D6)',
         'accounts_payable' => 'Amounts owed to suppliers and producers paid through payables (Distribution D6)',
+        // Slice 2.3 accounts payable (addendum v2 B.2.5)
+        'ap_expense' => 'Expense on supplier bill lines (account taken from the bill line)',
+        'input_vat_receivable' => 'Recoverable VAT on supplier bills',
+        'vat_deducted_at_source_payable' => 'VAT deducted at source from suppliers (VDS), owed to the government',
+        'supplier_tax_withheld_payable' => 'Income tax deducted at source from suppliers (TDS/AIT), owed to the government',
         'dac_asset' => 'Deferred acquisition cost (LATER)',
         'claims_outstanding' => 'Outstanding claims reserve',
         'claims_expense' => 'Claims incurred',

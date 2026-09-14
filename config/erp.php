@@ -20,7 +20,8 @@ return [
         'rules_path' => resource_path('posting-rules'),
         'transient_retry_attempts' => 5,
         // Roles an event may point at a specific account through payload.account_overrides (design §4.2: a receipt's bank account).
-        'overridable_roles' => ['bank_main'],
+        // D-100 (addendum v2 §B.2.1 PD-4): ap_expense lines take the account of each supplier bill line.
+        'overridable_roles' => ['bank_main', 'ap_expense'],
         // ASSUMPTION A-173 (gap fix GA-08): a queued event not posted after this many minutes is listed as stuck on Accounting events (the worker was down).
         'stale_after_minutes' => (int) env('ERP_POSTING_STALE_AFTER_MINUTES', 15),
     ],

@@ -1,0 +1,20 @@
+{
+  "code": "AP_PAYMENT_RELEASED.default",
+  "version": 1,
+  "event_type": "AP_PAYMENT_RELEASED",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch", "payment_run"], "inherit_from_event": true },
+  "lines": [
+    { "for_each": "payload.items", "lines": [
+      { "role": "accounts_payable", "side": "debit", "amount": "item.amount", "dims": { "payee_party": "item.payee_party_id", "ap_bill": "item.ap_bill_id", "branch": "item.branch_id" } }
+    ] },
+    { "role": "bank_main", "side": "credit", "amount": "payload.total", "memo": "Supplier payment run" }
+  ],
+  "validation": ["amount > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "AP_PAYMENT_RELEASED:{payment_run_id}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}

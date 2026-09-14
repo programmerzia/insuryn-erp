@@ -107,6 +107,7 @@ final class PostingEngine
         $book = Book::query()->where('code', $bookCode)->firstOrFail();
         $context = $this->contexts->load($event->entity_id, $book->id, $event->transaction_date, $actorMayPostSoftLocked);
         $accounts = $this->overrides->apply($event->entity_id, $context->accountsByRole, $event->payload);
+        $this->overrides->assertItemAccounts($event->entity_id, $rule, $event->payload); // D-100: accounts named per item of a line group
         $draft = $this->drafts->build($rule, $event->payload, $event->dimensions, $event->currency, $accounts);
 
         return $this->writer->post([

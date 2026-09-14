@@ -46,6 +46,44 @@ final class AccountOverrides
         return $accountsByRole;
     }
 
+    /**
+     * D-100 (addendum v2 §B.2.1 PD-4): a `for_each` group line with `account: "item.<field>"` takes its account from each item. Allowed only for roles in
+     * erp.posting.overridable_roles, for an active postable account of the entity that is not a control account (INVARIANT, as manual journals without
+     * adjustment rights).
+     *
+     * @param array<string, mixed> $payload
+     *
+     * @throws PostingFailedException INVALID_ACCOUNT_OVERRIDE (and PAYLOAD_FIELD_MISSING from the group's list)
+     */
+    public function assertItemAccounts(string $entityId, \App\Modules\Accounting\Domain\PostingRule $rule, array $payload): void
+    {
+        /** @var list<string> $overridable */
+        $overridable = config('erp.posting.overridable_roles', []);
+        foreach ($rule->lines as $group) {
+            if (! isset($group['for_each'])) {
+                continue;
+            }
+            foreach ($group['lines'] as $line) {
+                if (! isset($line['account']) || ! str_starts_with($line['account'], 'item.')) {
+                    continue;
+                }
+                foreach (JournalDraftBuilder::items($group['for_each'], $payload) as $item) {
+                    $accountId = $item[substr($line['account'], 5)] ?? null;
+                    if ($accountId === null || $accountId === '') {
+                        continue;
+                    }
+                    if (! in_array($line['role'], $overridable, true)) {
+                        throw new PostingFailedException('INVALID_ACCOUNT_OVERRIDE', "Account role '{$line['role']}' cannot take its account from the item");
+                    }
+                    if (! is_string($accountId) || ! $this->isPostableAccountOf($entityId, $accountId)
+                        || Account::query()->whereKey($accountId)->where('is_control', true)->exists()) {
+                        throw new PostingFailedException('INVALID_ACCOUNT_OVERRIDE', "Item account for role '{$line['role']}' is not an active postable non-control account of the entity");
+                    }
+                }
+            }
+        }
+    }
+
     private function isPostableAccountOf(string $entityId, string $accountId): bool
     {
         return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $accountId) === 1

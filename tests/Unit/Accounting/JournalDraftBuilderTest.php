@@ -19,7 +19,7 @@ function draftBuilder(): JournalDraftBuilder
 }
 
 /**
- * @param list<array{role: string, side: string, amount: string, dims?: array<string,string>, memo?: string}> $lines
+ * @param list<array{role: string, side: string, amount: string, dims?: array<string,string>, memo?: string, account?: string}|array{for_each: string, lines: list<array{role: string, side: string, amount: string, dims?: array<string,string>, memo?: string, account?: string}>}> $lines
  * @param list<string> $requiredDimensions
  */
 function ruleWithLines(array $lines, array $requiredDimensions = []): PostingRule
@@ -151,6 +151,20 @@ it('stores no dims_ext when every dimension has a column', function (): void {
     $draft = draftBuilder()->build($rule, ['amount' => 10], ['branch' => 'b1'], 'BDT', ACCOUNTS_BY_ROLE);
 
     expect($draft->lines[0]->dimensions->toColumns()['dims_ext'])->toBeNull();
+});
+
+it('repeats a for_each line group per payload item, with item accounts and item dimensions (D-100)', function (): void {
+    $rule = ruleWithLines([
+        ['for_each' => 'payload.items', 'lines' => [['role' => 'claims_expense', 'account' => 'item.account_id', 'side' => 'debit', 'amount' => 'item.amount', 'dims' => ['claim' => 'item.claim']]]],
+        ['role' => 'bank_main', 'side' => 'credit', 'amount' => 'payload.total'],
+    ]);
+
+    $draft = draftBuilder()->build($rule, ['total' => 30, 'items' => [['amount' => 10, 'account_id' => 'acc-rent', 'claim' => 'c1'], ['amount' => 0], ['amount' => 20, 'account_id' => null]]], ['branch' => 'b1'], 'BDT', ACCOUNTS_BY_ROLE);
+
+    expect(summarise($draft->lines))->toBe([[1, 'claims_expense', 'debit', 10], [2, 'claims_expense', 'debit', 20], [3, 'bank_main', 'credit', 30]])
+        ->and(array_map(fn (DraftLine $l): string => $l->accountId, $draft->lines))->toBe(['acc-rent', 'acc-claims', 'acc-bank'])
+        ->and($draft->lines[0]->dimensions->values['claim'])->toBe('c1')
+        ->and($draft->lines[1]->dimensions->values['claim'] ?? null)->toBeNull();
 });
 
 it('mirrors a line by flipping only its side', function (): void {

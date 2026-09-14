@@ -162,7 +162,7 @@ final class AccountRoleMappingService
             if (! $rule->isEffectiveOn($on) || ! in_array($bookCode, $rule->books, true)) {
                 continue;
             }
-            foreach ([...array_column($rule->lines, 'role'), $rule->roundingResidualRole] as $role) {
+            foreach ([...$rule->roles(), $rule->roundingResidualRole] as $role) {
                 $used[$role][$rule->eventType] = true;
             }
         }

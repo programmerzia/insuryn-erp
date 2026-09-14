@@ -60,6 +60,10 @@ final class DemoTenantSeeder extends Seeder
                 '2310' => ['Withholding Tax on Commission', 'liability', 'credit', 'commission_withholding_payable', false, null],
                 '2400' => ['Salaries Payable', 'liability', 'credit', 'salary_payable', false, null],
                 '2500' => ['Accounts Payable', 'liability', 'credit', 'accounts_payable', false, null],
+                '1310' => ['Input VAT Receivable', 'asset', 'debit', 'input_vat_receivable', false, null], // slice 2.3 accounts payable
+                '2510' => ['VAT Deducted at Source Payable', 'liability', 'credit', 'vat_deducted_at_source_payable', false, null],
+                '2520' => ['Tax Deducted at Source from Suppliers', 'liability', 'credit', 'supplier_tax_withheld_payable', false, null],
+                '5700' => ['General and Administrative Expenses', 'expense', 'debit', 'ap_expense', false, null],
                 '2410' => ['Employee Tax Payable', 'liability', 'credit', 'employee_tax_payable', false, null],
                 '2420' => ['Provident Fund Payable', 'liability', 'credit', 'pf_payable', false, null],
                 '3100' => ['Retained Earnings', 'equity', 'credit', 'retained_earnings', false, null],

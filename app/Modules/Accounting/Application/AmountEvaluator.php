@@ -19,10 +19,11 @@ final class AmountEvaluator
     /**
      * @param array<string, mixed> $payload
      * @param array<string, mixed> $dimensions
+     * @param array<array-key, mixed>|null $item the current item inside a `for_each` line group (D-100)
      */
-    public function evaluate(string $expression, array $payload, array $dimensions): int
+    public function evaluate(string $expression, array $payload, array $dimensions, ?array $item = null): int
     {
-        $amount = $this->expressions->evaluate($expression, ExpressionScope::forEvent($payload, $dimensions));
+        $amount = $this->expressions->evaluate($expression, ExpressionScope::forEvent($payload, $dimensions, $item));
         if (! is_int($amount)) {
             throw new PostingFailedException('AMOUNT_NOT_INTEGER', "Expression '{$expression}' produced ".get_debug_type($amount).'; amounts must be integer minor units');
         }
