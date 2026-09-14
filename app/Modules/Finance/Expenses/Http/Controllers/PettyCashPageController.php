@@ -99,8 +99,8 @@ final class PettyCashPageController
             // UI consistency pass: the float page is an object page with Timeline, Accounting and Audit like the other documents.
             'timeline' => $history->timeline([['petty_cash_float', $float]]),
             'accounting' => Inertia::defer(fn (): array => $history->accounting(self::journals($float)), 'history'),
-            'audit' => Inertia::defer(fn (): array => $history->audit([['petty_cash_float', $float],
-                ...DB::table('petty_cash_replenishments')->where('float_id', $float)->pluck('id')->map(fn (mixed $id): array => ['petty_cash_replenishment', (string) $id])->all()]), 'history'),
+            'audit' => Inertia::defer(fn (): array => $history->audit(array_values([['petty_cash_float', $float],
+                ...DB::table('petty_cash_replenishments')->where('float_id', $float)->pluck('id')->map(fn (mixed $id): array => ['petty_cash_replenishment', (string) $id])->all()])), 'history'),
         ]);
     }
 
