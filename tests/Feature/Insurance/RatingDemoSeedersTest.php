@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Insurance\Product\Domain\Enums\RiskStage;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Insurance\Product\Domain\Risk\RiskField;
 use App\Modules\Insurance\Rating\Application\RatingEngine;
@@ -34,6 +35,10 @@ it('gives the demo products of the local demo and the Part A story their class, 
             $motor = ProductVersion::query()->where('class_code', 'motor')->firstOrFail()->riskSchema();
             expect(array_map(fn (RiskField $f): string => $f->key, $motor->fields))
                 ->toBe(['vehicle_type', 'registration_no', 'chassis_no', 'engine_cc', 'seats', 'year_of_manufacture', 'driver_age', 'sum_insured', 'ncb_years']);
+            // Flow fix X7: the chassis number is needed for the proposal, not the quote; a quote starts as a private car.
+            expect($motor->field('chassis_no')?->requiredAt)->toBe(RiskStage::Proposal)
+                ->and($motor->field('registration_no')?->requiredAt)->toBe(RiskStage::Quote)
+                ->and($motor->field('vehicle_type')?->default)->toBe('private');
 
             // Slice R3: an active placeholder plan per MVP class, duties flagged verify, and the demo products rate.
             expect(DB::table('rating_plans')->where('status', 'active')->where('verify', true)->orderBy('class_code')->pluck('class_code')->all())

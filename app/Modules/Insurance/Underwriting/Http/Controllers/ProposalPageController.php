@@ -10,6 +10,7 @@ use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Policy\Application\PolicyLifecycle;
 use App\Modules\Insurance\Product\Domain\Enums\RiskFieldType;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
+use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
 use App\Modules\Insurance\Underwriting\Application\ProposalService;
 use App\Modules\Insurance\Underwriting\Application\UnderwritingDecisions;
@@ -63,6 +64,8 @@ final class ProposalPageController
         return Inertia::render('proposals/Show', [
             'proposal' => self::present($model),
             'risk' => self::risk($model),
+            // Flow fix X7: the risk details needed only for the proposal (a chassis number), entered here while it is a draft; submitting refuses while one is empty.
+            'riskDetails' => self::riskDetailsOf($model, $draft && $can(QuotationService::PERMISSION)),
             'kycIdTypes' => array_map(fn (string $t): array => ['value' => $t, 'label' => self::idTypeLabel($t)], (array) config('erp.underwriting.kyc_id_types', [])),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/proposals/{$model->id}/documents" : null,
             'can' => [
@@ -106,6 +109,28 @@ final class ProposalPageController
         }
 
         return redirect("/proposals/{$proposal}")->with('status', $data['action'] === 'verify' ? 'Identity verified.' : 'KYC waived.');
+    }
+
+    /** Flow fix X7: enter the risk details the proposal needs (only those with required_at proposal). */
+    public function riskDetails(Request $request, string $proposal): RedirectResponse
+    {
+        /** @var array{risk_inputs: array<string, mixed>} $data */
+        $data = $request->validate(['risk_inputs' => ['required', 'array', 'max:50']]);
+        try {
+            $this->proposals->completeRiskDetails($proposal, $data['risk_inputs'], PageSupport::actor($request));
+        } catch (RiskInputsInvalid $invalid) {
+            $model = Proposal::query()->findOrFail($proposal);
+            $schema = ProductVersion::query()->whereKey($model->product_version_id)->firstOrFail()->riskSchema();
+            $errors = [];
+            foreach ($invalid->errors as $key => $code) {
+                $field = $schema->field($key);
+                $errors["risk_inputs.{$key}"] = self::problem($code, $field === null ? $key : $field->labelEn);
+            }
+
+            return back()->withErrors($errors);
+        }
+
+        return redirect("/proposals/{$proposal}")->with('status', 'Risk details saved.');
     }
 
     public function submit(Request $request, string $proposal): RedirectResponse
@@ -201,6 +226,38 @@ final class ProposalPageController
         }
 
         return $rows;
+    }
+
+    /**
+     * Flow fix X7: the proposal-stage risk fields (schema definitions), their current values and which are still empty.
+     *
+     * @return array{fields: list<array<string, mixed>>, values: array<string, mixed>, missing: list<string>, editable: bool}
+     */
+    public static function riskDetailsOf(Proposal $proposal, bool $editable): array
+    {
+        $keys = array_keys(ProposalService::proposalStageFields($proposal));
+        $schema = ProductVersion::query()->whereKey($proposal->product_version_id)->firstOrFail()->riskSchema();
+
+        return [
+            'fields' => array_values(array_filter($schema->toArray(), fn (array $f): bool => in_array($f['key'], $keys, true))),
+            'values' => array_intersect_key($proposal->risk_inputs ?? [], array_flip($keys)),
+            'missing' => ProposalService::missingRiskDetails($proposal),
+            'editable' => $editable && $keys !== [],
+        ];
+    }
+
+    private static function problem(string $code, string $label): string
+    {
+        return match ($code) {
+            'REQUIRED' => 'Enter the '.mb_strtolower($label).'.',
+            'TOO_LONG' => 'This is too long.',
+            'NOT_AN_OPTION' => 'Choose one of the options.',
+            'NOT_A_DATE' => 'Enter a date like 15 Sep 2026.',
+            'NOT_INTEGER' => 'Enter a whole number.',
+            'BELOW_MIN' => 'The value is too low.',
+            'ABOVE_MAX' => 'The value is too high.',
+            default => 'Check this value.',
+        };
     }
 
     private static function idTypeLabel(string $type): string

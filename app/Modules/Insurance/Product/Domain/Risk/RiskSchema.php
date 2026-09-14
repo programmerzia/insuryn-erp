@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Product\Domain\Risk;
 
 use App\Modules\Insurance\Product\Domain\Enums\RiskFieldType;
+use App\Modules\Insurance\Product\Domain\Enums\RiskStage;
 use DateTimeImmutable;
 
 /**
  * Phase 3 design §1 product_versions.risk_schema: the ordered list of risk fields a product version needs (vehicle, occupancy, voyage…).
  *
  * Stored shape (JSON list): `{key, label_en, label_bn, type: text|integer|money|date|select|boolean, required, options?: [{value, label_en, label_bn}],
- * min?, max?, max_length?}`. Keys are snake_case and unique. `validate()` checks a set of inputs against the schema and returns them normalised
+ * min?, max?, max_length?, required_at?: quote|proposal, default?}`. Keys are snake_case and unique. `validate()` checks a set of inputs against the schema and returns them normalised
  * (integers and money as int minor units, booleans as bool, dates as Y-m-d, absent optional fields as null) in schema order. No floats.
+ * Flow fix X7: at the quote stage (rating) a field required only at the proposal may be empty; `validate(…, RiskStage::Proposal)` requires it too.
  */
 final readonly class RiskSchema
 {
@@ -83,7 +85,7 @@ final readonly class RiskSchema
      *
      * @throws RiskInputsInvalid listing every problem
      */
-    public function validate(array $inputs): array
+    public function validate(array $inputs, RiskStage $stage = RiskStage::Quote): array
     {
         $errors = [];
         foreach (array_keys($inputs) as $key) {
@@ -95,7 +97,7 @@ final readonly class RiskSchema
         foreach ($this->fields as $field) {
             $raw = $inputs[$field->key] ?? null;
             if ($raw === null || $raw === '') {
-                if ($field->required) {
+                if ($field->requiredFor($stage)) {
                     $errors[$field->key] = 'REQUIRED';
                 }
                 $values[$field->key] = null;
@@ -172,7 +174,7 @@ final readonly class RiskSchema
     /** @param array<mixed> $field */
     private static function parseField(array $field, int $position): RiskField
     {
-        $unknown = array_diff(array_keys($field), ['key', 'label_en', 'label_bn', 'type', 'required', 'options', 'min', 'max', 'max_length']);
+        $unknown = array_diff(array_keys($field), ['key', 'label_en', 'label_bn', 'type', 'required', 'options', 'min', 'max', 'max_length', 'required_at', 'default']);
         if ($unknown !== []) {
             throw new RiskSchemaInvalid("Risk field #{$position} has unknown settings: ".implode(', ', $unknown).'.');
         }
@@ -222,7 +224,23 @@ final readonly class RiskSchema
             $maxLength = $field['max_length'];
         }
 
-        return new RiskField($key, $field['label_en'], $field['label_bn'], $type, $required, $options, $min, $max, $maxLength);
+        $requiredAt = RiskStage::Quote;
+        if (array_key_exists('required_at', $field)) {
+            $requiredAt = is_string($field['required_at']) ? RiskStage::tryFrom($field['required_at']) : null;
+            if ($requiredAt === null || ($requiredAt === RiskStage::Proposal && ! $required)) {
+                throw new RiskSchemaInvalid("Risk field {$key}: required_at is quote or proposal, and proposal only for a required field.");
+            }
+        }
+        $parsed = new RiskField($key, $field['label_en'], $field['label_bn'], $type, $required, $options, $min, $max, $maxLength, $requiredAt);
+        if (! array_key_exists('default', $field)) {
+            return $parsed;
+        }
+        [$default, $problem] = $field['default'] === null || $field['default'] === '' ? [null, 'EMPTY'] : self::normalise($parsed, $field['default']);
+        if ($problem !== null || $default === null) {
+            throw new RiskSchemaInvalid("Risk field {$key}: the default is not a valid value of the field.");
+        }
+
+        return new RiskField($key, $field['label_en'], $field['label_bn'], $type, $required, $options, $min, $max, $maxLength, $requiredAt, $default);
     }
 
     /** @return list<array{value: string, label_en: string, label_bn: string}> */

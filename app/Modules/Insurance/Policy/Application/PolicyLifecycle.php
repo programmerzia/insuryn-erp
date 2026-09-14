@@ -18,6 +18,7 @@ use App\Modules\Insurance\Policy\Domain\Models\PolicyTransaction;
 use App\Modules\Insurance\Policy\Domain\PremiumMath;
 use App\Modules\Insurance\Policy\Domain\RatedPremium;
 use App\Modules\Insurance\Product\Application\ProductCatalogue;
+use App\Modules\Insurance\Product\Domain\Enums\RiskStage;
 use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
 use App\Modules\Insurance\Quotation\Application\RiskKeys;
 use App\Modules\Insurance\Rating\Application\RatingEngine;
@@ -336,6 +337,8 @@ final class PolicyLifecycle
         $latest = PolicyTransaction::query()->where('policy_id', $policy->id)->whereNotNull('rating_result')->orderByDesc('created_at')->orderByDesc('id')->value('rating_result');
         $before = is_array($latest) ? RatingResult::fromArray($latest) : (is_string($latest) ? RatingResult::fromArray((array) json_decode($latest, true)) : $frozen);
         $version = ProductVersion::query()->findOrFail($policy->product_version_id);
+        // Flow fix X7: an issued policy's risk carries every detail its proposal needed; an endorsement cannot empty one.
+        $version->riskSchema()->validate($riskInputs, RiskStage::Proposal);
         $term = null;
         foreach ($policy->special_terms ?? [] as $special) {
             if ($special['code'] === 'manual_loading' && isset($special['loading_bp'])) {

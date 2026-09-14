@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Underwriting\Application;
 
+use App\Modules\Insurance\Product\Domain\Enums\RiskStage;
+use App\Modules\Insurance\Product\Domain\Models\ProductVersion;
+use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
+use App\Modules\Insurance\Quotation\Application\RiskKeys;
 use App\Modules\Insurance\Quotation\Domain\Models\Quotation;
+use App\Modules\Insurance\Rating\Application\RatingEngine;
 use App\Modules\Insurance\Underwriting\Domain\Enums\KycStatus;
 use App\Modules\Insurance\Underwriting\Domain\Enums\ProposalStatus;
 use App\Modules\Insurance\Underwriting\Domain\Enums\UnderwritingStatus;
@@ -33,6 +38,9 @@ use Illuminate\Support\Str;
  * - `verifyKyc` (quotation.create: identity document type and number) or `waiveKyc` (underwriting.decide, reason) while the proposal is a draft (A-92).
  * - `submit`: UnderwritingRules decide — no reason: approved automatically; otherwise referred with every reason and an approval request `proposal_referral`
  *   (an approval policy for it when one matches the sum insured, else one step for the role with the smallest underwriting limit covering it, D-31).
+ * - `completeRiskDetails` (flow fix X7, quotation.create, draft only): the risk details the product needs only for the proposal (`required_at: proposal`, a
+ *   chassis number) are entered on the proposal; re-rated on the frozen result's plan, product version and date, the premium must not move — a detail that
+ *   changes the premium belongs on a new quotation. `submit` refuses while one of them is empty (PROPOSAL_RISK_DETAILS_MISSING).
  * - R7 hooks: `approvedForIssue` (the terms of an approved proposal) and `markIssued` (inside the policy issue transaction).
  * Documents are attached through the Documents tab (DocumentStore, object type `proposal`).
  */
@@ -48,6 +56,7 @@ final class ProposalService
         private readonly ApprovalService $approvals,
         private readonly DocumentNumberer $numbers,
         private readonly Audit $audit,
+        private readonly RatingEngine $rating,
     ) {}
 
     /** @throws BusinessRuleViolation QUOTATION_NOT_ISSUED, QUOTATION_EXPIRED */
@@ -113,13 +122,17 @@ final class ProposalService
     /**
      * Applies the underwriting rules: approved automatically when no referral reason holds, otherwise referred to an underwriter.
      *
-     * @throws BusinessRuleViolation PROPOSAL_NOT_DRAFT
+     * @throws BusinessRuleViolation PROPOSAL_NOT_DRAFT, PROPOSAL_RISK_DETAILS_MISSING
      */
     public function submit(string $proposalId, string $actorUserId): Proposal
     {
         $proposal = Proposal::query()->findOrFail($proposalId);
         $this->authorize($actorUserId, QuotationService::PERMISSION, $proposal->entity_id, $proposal->branch_id);
         $today = CarbonImmutable::today();
+        $missing = self::missingRiskDetails($proposal);
+        if ($missing !== []) {
+            throw new BusinessRuleViolation('PROPOSAL_RISK_DETAILS_MISSING', 'Enter the '.self::listed(array_map(mb_strtolower(...), $missing)).' before submitting the proposal.');
+        }
 
         return DB::transaction(function () use ($proposalId, $actorUserId, $today): Proposal {
             $proposal = $this->lock($proposalId, [ProposalStatus::Draft]);
@@ -144,6 +157,85 @@ final class ProposalService
 
             return $proposal;
         });
+    }
+
+    /**
+     * Flow fix X7: enters the risk details needed only for the proposal on a draft proposal. Only fields with `required_at: proposal` are accepted; the others
+     * are the quotation's terms. The frozen rating is re-rated with the details on its own plan version, product version and date (RatingEngine::rerateWith) and
+     * kept with the new inputs only when the premium is unchanged. Duplicate-risk keys follow the details.
+     *
+     * @param array<mixed> $details field key → value
+     *
+     * @throws RiskInputsInvalid per field
+     * @throws BusinessRuleViolation PROPOSAL_NOT_DRAFT, PROPOSAL_RISK_DETAIL_NOT_EDITABLE, PROPOSAL_RISK_DETAIL_CHANGES_PREMIUM
+     */
+    public function completeRiskDetails(string $proposalId, array $details, string $actorUserId): Proposal
+    {
+        $proposal = Proposal::query()->findOrFail($proposalId);
+        $this->authorize($actorUserId, QuotationService::PERMISSION, $proposal->entity_id, $proposal->branch_id);
+        $schema = ProductVersion::query()->whereKey($proposal->product_version_id)->firstOrFail()->riskSchema();
+        $editable = self::proposalStageFields($proposal);
+        $locked = array_diff(array_map(strval(...), array_keys($details)), array_keys($editable));
+        if ($locked !== []) {
+            throw new BusinessRuleViolation('PROPOSAL_RISK_DETAIL_NOT_EDITABLE', 'Only the details needed for the proposal can be entered here; change the others on a new quotation ('.implode(', ', $locked).').');
+        }
+
+        return DB::transaction(function () use ($proposalId, $details, $actorUserId, $schema): Proposal {
+            $proposal = $this->lock($proposalId, [ProposalStatus::Draft]);
+            $frozen = $proposal->ratingResult();
+            $inputs = $schema->validate([...array_filter($proposal->risk_inputs ?? [], fn (mixed $v): bool => $v !== null), ...$details]);
+            $result = $this->rating->rerateWith($frozen, $inputs);
+            if ($result->netPremiumMinor !== $frozen->netPremiumMinor || $result->grossPremiumMinor !== $frozen->grossPremiumMinor) {
+                throw new BusinessRuleViolation('PROPOSAL_RISK_DETAIL_CHANGES_PREMIUM', 'These details change the premium, so they need a new quotation.');
+            }
+            $before = array_intersect_key($proposal->risk_inputs ?? [], $details);
+            $proposal->forceFill(['risk_inputs' => $result->riskInputs, 'rating_result' => $result->toArray(), 'risk_keys' => RiskKeys::for($proposal->class_code, $result->riskInputs)])->save();
+            $this->audit->record('proposal.risk_details_completed', AuditSubject::of('proposal', $proposal->id), $before, array_intersect_key($result->riskInputs, $details),
+                null, QuotationService::PERMISSION, Actor::user($actorUserId));
+
+            return $proposal;
+        });
+    }
+
+    /**
+     * Flow fix X7: the proposal-stage risk fields of the proposal's product version (key → English label).
+     *
+     * @return array<string, string>
+     */
+    public static function proposalStageFields(Proposal $proposal): array
+    {
+        $fields = [];
+        foreach (ProductVersion::query()->whereKey($proposal->product_version_id)->firstOrFail()->riskSchema()->fields as $field) {
+            if ($field->required && $field->requiredAt === RiskStage::Proposal) {
+                $fields[$field->key] = $field->labelEn;
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Flow fix X7: the labels of the risk details the proposal still needs before it can be submitted.
+     *
+     * @return list<string>
+     */
+    public static function missingRiskDetails(Proposal $proposal): array
+    {
+        try {
+            ProductVersion::query()->whereKey($proposal->product_version_id)->firstOrFail()->riskSchema()->validate($proposal->risk_inputs ?? [], RiskStage::Proposal);
+        } catch (RiskInputsInvalid $invalid) {
+            $labels = self::proposalStageFields($proposal);
+
+            return array_map(fn (string $key): string => $labels[$key] ?? $key, array_keys(array_filter($invalid->errors, fn (string $code): bool => $code === 'REQUIRED')));
+        }
+
+        return [];
+    }
+
+    /** @param list<string> $items */
+    private static function listed(array $items): string
+    {
+        return count($items) < 2 ? implode('', $items) : implode(', ', array_slice($items, 0, -1)).' and '.end($items);
     }
 
     /**

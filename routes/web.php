@@ -189,6 +189,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('quotations/{quotation}/proposal', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'store'])->whereUuid('quotation');
     Route::get('proposals/{proposal}', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'show'])->whereUuid('proposal');
     Route::post('proposals/{proposal}/kyc', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'kyc'])->whereUuid('proposal');
+    Route::post('proposals/{proposal}/risk-details', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'riskDetails'])->whereUuid('proposal');
     Route::post('proposals/{proposal}/submit', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'submit'])->whereUuid('proposal');
     // Phase 3 R7: issue the policy of an approved proposal (journal preview through moves-money).
     Route::post('proposals/{proposal}/issue-policy', [\App\Modules\Insurance\Underwriting\Http\Controllers\ProposalPageController::class, 'issuePolicy'])->whereUuid('proposal')->middleware('moves-money');

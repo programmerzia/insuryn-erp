@@ -7,6 +7,8 @@ import { formatMinor, parseMoney } from '@/lib/money';
  */
 export type Locale = 'en' | 'bn';
 export type RiskFieldType = 'text' | 'integer' | 'money' | 'date' | 'select' | 'boolean';
+/** Flow fix X7: a required field is needed to rate (`quote`) or only when the proposal is submitted (`proposal`). */
+export type RiskStage = 'quote' | 'proposal';
 
 export interface RiskFieldDefinition {
     key: string;
@@ -18,6 +20,10 @@ export interface RiskFieldDefinition {
     min?: number;
     max?: number;
     max_length?: number;
+    /** Flow fix X7: absent means `quote`. */
+    required_at?: RiskStage;
+    /** Flow fix X7: the value a new quote form starts with (money in minor units). */
+    default?: string | number | boolean;
 }
 
 export interface FormField {
@@ -74,16 +80,28 @@ export function versionOn(versions: ProductVersionOption[], day: string): Produc
     return versions.find((v) => v.effective_from <= day && (v.effective_to === null || day < v.effective_to)) ?? null;
 }
 
-export function formFields(schema: RiskFieldDefinition[], locale: Locale): FormField[] {
-    return schema.map((field) => ({
-        key: field.key,
-        label: label(field, locale),
-        type: field.type,
-        required: field.required,
-        options: (field.options ?? []).map((o) => ({ value: o.value, label: label(o, locale) })),
-        hint: boundsHint(field),
-        maxLength: field.max_length ?? null,
-    }));
+/** Whether the field must hold a value at the stage (flow fix X7): a quote-stage field always, a proposal-stage field only for the proposal. */
+export function requiredFor(field: RiskFieldDefinition, stage: RiskStage): boolean {
+    return field.required && ((field.required_at ?? 'quote') === 'quote' || stage === 'proposal');
+}
+
+/** The hint under a field needed only for the proposal, shown on the quote form. */
+export const PROPOSAL_STAGE_HINT = 'Needed when the proposal is submitted, not for the price.';
+
+export function formFields(schema: RiskFieldDefinition[], locale: Locale, stage: RiskStage = 'quote'): FormField[] {
+    return schema.map((field) => {
+        const bounds = boundsHint(field);
+        const later = stage === 'quote' && field.required && !requiredFor(field, 'quote');
+        return {
+            key: field.key,
+            label: label(field, locale),
+            type: field.type,
+            required: requiredFor(field, stage),
+            options: (field.options ?? []).map((o) => ({ value: o.value, label: label(o, locale) })),
+            hint: later ? (bounds ? `${bounds}. ${PROPOSAL_STAGE_HINT}` : PROPOSAL_STAGE_HINT) : bounds,
+            maxLength: field.max_length ?? null,
+        };
+    });
 }
 
 /** "50 to 10,000", "At least 1.00", "Up to 60" — money bounds are minor units shown in major units. */
@@ -96,11 +114,14 @@ export function boundsHint(field: RiskFieldDefinition): string | null {
     return null;
 }
 
-/** Stored risk inputs (a saved quotation) → form values: money minor units become "1,234,567.00". */
+/**
+ * Stored risk inputs (a saved quotation) → form values: money minor units become "1,234,567.00". A new form (no inputs at all) starts from the schema's
+ * defaults (flow fix X7); a saved quotation keeps what was saved.
+ */
 export function initialValues(schema: RiskFieldDefinition[], inputs: Record<string, unknown> | null | undefined): FormValues {
     const values: FormValues = {};
     for (const field of schema) {
-        const raw = inputs?.[field.key];
+        const raw = inputs == null ? field.default : inputs[field.key];
         if (field.type === 'boolean') {
             values[field.key] = raw === true || raw === 'true' || raw === 1 || raw === '1';
         } else if (field.type === 'money' && (typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw)))) {
@@ -140,13 +161,13 @@ export function riskInputs(schema: RiskFieldDefinition[], values: FormValues): R
 }
 
 /** Checks in the browser before rating (the server checks again): required, whole numbers, bounds, options, dates, length. Field key → message. */
-export function localProblems(schema: RiskFieldDefinition[], values: FormValues): Record<string, string> {
+export function localProblems(schema: RiskFieldDefinition[], values: FormValues, stage: RiskStage = 'quote'): Record<string, string> {
     const problems: Record<string, string> = {};
     const inputs = riskInputs(schema, values);
     for (const field of schema) {
         const value = inputs[field.key];
         if (value === undefined) {
-            if (field.required) problems[field.key] = problemMessage('REQUIRED', field);
+            if (requiredFor(field, stage)) problems[field.key] = problemMessage('REQUIRED', field);
             continue;
         }
         const code = problemCode(field, value);

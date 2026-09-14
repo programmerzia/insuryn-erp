@@ -19,6 +19,7 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 import { usePreferences } from '@/lib/preferences';
 import type { ProposalData } from '@/lib/proposals';
+import { formFields, initialValues, localProblems, type RiskFieldDefinition, riskInputs } from '@/lib/riskForm';
 
 /**
  * Proposal page (Phase 3 design §2 step 2, slice R5): the accepted quotation's terms and premium, KYC, documents, and the underwriting outcome — approved
@@ -26,6 +27,8 @@ import type { ProposalData } from '@/lib/proposals';
  */
 const props = defineProps<{
     proposal: ProposalData; risk: { label_en: string; label_bn: string; value: string }[]; kycIdTypes: { value: string; label: string }[];
+    /** Flow fix X7: the risk details needed only for the proposal (a chassis number), which ones are still empty, and whether they can be entered here. */
+    riskDetails: { fields: RiskFieldDefinition[]; values: Record<string, unknown>; missing: string[]; editable: boolean };
     can: { verify_kyc: boolean; waive_kyc: boolean; submit: boolean; decide: boolean; issue_cover_note: boolean; issue_policy: boolean };
     /** Slice R7: issuing the policy — whether the product issues on credit, until when the quotation's premium holds, the policy once issued. */
     policyIssue: { allow_credit: boolean; valid_until: string | null; policy: { id: string; number: string } | null };
@@ -42,7 +45,26 @@ function saveKyc(): void {
     kyc.action = kycOpen.value ?? 'verify';
     kyc.post(`${base}/kyc`, { preserveScroll: true, onSuccess: () => (kycOpen.value = null) });
 }
+// Flow fix X7: details the quote could do without are entered on the draft proposal; Submit opens them first while one is missing.
+const detailsOpen = ref(false);
+const detailFields = computed(() => formFields(props.riskDetails.fields, preferences.locale, 'proposal'));
+const details = useForm({ risk_inputs: {} as Record<string, string | number | boolean> });
+const detailValues = ref(initialValues(props.riskDetails.fields, props.riskDetails.values));
+const detailTouched = ref(false);
+const detailError = (key: string) => (details.errors as Record<string, string>)[`risk_inputs.${key}`] ?? (detailTouched.value ? localProblems(props.riskDetails.fields, detailValues.value, 'proposal')[key] : undefined);
+const detailText = (key: string) => String(detailValues.value[key] ?? '');
+function saveDetails(): void {
+    detailTouched.value = true;
+    if (Object.keys(localProblems(props.riskDetails.fields, detailValues.value, 'proposal')).length > 0) return;
+    details.risk_inputs = riskInputs(props.riskDetails.fields, detailValues.value);
+    details.post(`${base}/risk-details`, { preserveScroll: true, onSuccess: () => (detailsOpen.value = false) });
+}
 async function submit(): Promise<void> {
+    if (props.riskDetails.missing.length > 0 && props.riskDetails.editable) {
+        detailTouched.value = true;
+        detailsOpen.value = true;
+        return;
+    }
     const pending = p.value.kyc_status === 'pending' ? ' KYC is not verified, so it will be referred.' : '';
     if (await confirmAction({ title: `Submit ${p.value.number}?`, body: `The underwriting rules decide whether it is approved now or referred to an underwriter.${pending}`, confirmLabel: 'Submit proposal' })) {
         router.post(`${base}/submit`, {}, { preserveScroll: true });
@@ -90,6 +112,7 @@ const facts = computed(() => [
                 <button v-if="can.issue_cover_note" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="coverOpen = true">Issue cover note</button>
                 <Link v-if="policyIssue.policy" :href="`/policies/${policyIssue.policy.id}`" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Open policy {{ policyIssue.policy.number }}</Link>
                 <button v-if="can.issue_policy" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="issueOpen = true">Issue policy</button>
+                <button v-if="riskDetails.editable" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="detailsOpen = true">Enter risk details</button>
                 <button v-if="can.submit" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="submit">Submit to underwriting</button>
             </template>
             <template #overview>
@@ -107,6 +130,7 @@ const facts = computed(() => [
                                 </ul>
                                 <p v-if="proposal.decided_by" class="text-ui"><StatusBadge :status="proposal.underwriting_status" /> by {{ proposal.decided_by }}<template v-if="proposal.decision_reason">: {{ proposal.decision_reason }}</template></p>
                             </template>
+                            <p v-if="!proposal.underwriting_status && riskDetails.missing.length" class="mt-1 border-l-2 border-warn pl-3 text-ui">Before submitting, enter the {{ riskDetails.missing.map((m) => m.toLowerCase()).join(', ') }}.</p>
                             <p v-if="proposal.manual_loading" class="mt-2 text-ui">Special terms: loading {{ proposal.manual_loading }}% — {{ proposal.manual_loading_reason }}</p>
                         </section>
                         <section v-if="coverNotes.length">
@@ -168,6 +192,21 @@ const facts = computed(() => [
             <FormLayout submit-label="Issue cover note" :dirty="cover.isDirty" :processing="cover.processing" :error="(cover.errors as Record<string, string>).form" @submit="issueCoverNote" @cancel="coverOpen = false">
                 <Field id="valid_from" label="Cover from" :error="cover.errors.valid_from"><DateInput id="valid_from" v-model="cover.valid_from" /></Field>
                 <Field id="valid_to" label="Cover until" :hint="`Included. At most ${coverNoteMaxDays} days.`" :error="cover.errors.valid_to"><DateInput id="valid_to" v-model="cover.valid_to" /></Field>
+            </FormLayout>
+        </Drawer>
+        <Drawer v-model:open="detailsOpen" :title="`Risk details for ${proposal.number}`">
+            <p class="mb-4 text-ui text-ink-2">Details the underwriters need that did not change the price. They are checked against the quotation's rating, so the premium stays as quoted.</p>
+            <FormLayout submit-label="Save details" :dirty="details.isDirty || detailTouched" :processing="details.processing" :error="(details.errors as Record<string, string>).form" @submit="saveDetails" @cancel="detailsOpen = false">
+                <template v-for="field in detailFields" :key="field.key">
+                    <Field v-if="field.type === 'boolean'" :id="`detail_${field.key}`" :label="field.label" optional>
+                        <label class="flex items-center gap-2 text-ui"><input :id="`detail_${field.key}`" v-model="detailValues[field.key]" type="checkbox" class="size-3.5 accent-accent" />Yes</label>
+                    </Field>
+                    <Field v-else :id="`detail_${field.key}`" :label="field.label" :optional="!field.required" :hint="field.hint ?? undefined" :error="detailError(field.key)">
+                        <SelectInput v-if="field.type === 'select'" :id="`detail_${field.key}`" :model-value="detailText(field.key)" placeholder="Choose" :options="field.options" @update:model-value="(v) => (detailValues[field.key] = v ?? '')" />
+                        <DateInput v-else-if="field.type === 'date'" :id="`detail_${field.key}`" :model-value="detailText(field.key)" @update:model-value="(v) => (detailValues[field.key] = v ?? '')" />
+                        <TextInput v-else :id="`detail_${field.key}`" :model-value="detailText(field.key)" :maxlength="field.maxLength ?? undefined" @update:model-value="(v) => (detailValues[field.key] = String(v))" />
+                    </Field>
+                </template>
             </FormLayout>
         </Drawer>
         <Drawer :open="kycOpen !== null" :title="kycOpen === 'waive' ? 'Waive KYC' : 'Verify identity'" @update:open="(o) => !o && (kycOpen = null)">

@@ -27,13 +27,15 @@ final class DemoRatingCatalogue
 
         return match ($classCode) {
             'motor' => [
-                ['key' => 'vehicle_type', 'label_en' => 'Vehicle type', 'label_bn' => 'যানবাহনের ধরন', 'type' => 'select', 'required' => true, 'options' => [
+                ['key' => 'vehicle_type', 'label_en' => 'Vehicle type', 'label_bn' => 'যানবাহনের ধরন', 'type' => 'select', 'required' => true, 'default' => 'private', 'options' => [
                     ['value' => 'private', 'label_en' => 'Private car', 'label_bn' => 'ব্যক্তিগত গাড়ি'],
                     ['value' => 'commercial', 'label_en' => 'Commercial vehicle', 'label_bn' => 'বাণিজ্যিক যান'],
                     ['value' => 'motorcycle', 'label_en' => 'Motorcycle', 'label_bn' => 'মোটরসাইকেল'],
                 ]],
                 ['key' => 'registration_no', 'label_en' => 'Registration number', 'label_bn' => 'নিবন্ধন নম্বর', 'type' => 'text', 'required' => true, 'max_length' => 32],
-                ['key' => 'chassis_no', 'label_en' => 'Chassis number', 'label_bn' => 'চেসিস নম্বর', 'type' => 'text', 'required' => true, 'max_length' => 32],
+                ['key' => 'chassis_no', 'label_en' => 'Chassis number', 'label_bn' => 'চেসিস নম্বর', 'type' => 'text', 'required' => true, 'max_length' => 32,
+                    // Flow fix X7: a customer asking for a price rarely has the chassis number; it is needed when the proposal is submitted.
+                    'required_at' => 'proposal'],
                 ['key' => 'engine_cc', 'label_en' => 'Engine capacity (cc)', 'label_bn' => 'ইঞ্জিন ক্ষমতা (সিসি)', 'type' => 'integer', 'required' => true, 'min' => 50, 'max' => 10000],
                 ['key' => 'seats', 'label_en' => 'Seats', 'label_bn' => 'আসন সংখ্যা', 'type' => 'integer', 'required' => true, 'min' => 1, 'max' => 60],
                 ['key' => 'year_of_manufacture', 'label_en' => 'Year of manufacture', 'label_bn' => 'তৈরির বছর', 'type' => 'integer', 'required' => true, 'min' => 1950, 'max' => 2100],

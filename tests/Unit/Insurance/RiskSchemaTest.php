@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Insurance\Product\Domain\DutyProfile;
 use App\Modules\Insurance\Product\Domain\Enums\RiskFieldType;
+use App\Modules\Insurance\Product\Domain\Enums\RiskStage;
 use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
 use App\Modules\Insurance\Product\Domain\Risk\RiskSchema;
 use App\Modules\Insurance\Product\Domain\Risk\RiskSchemaInvalid;
@@ -57,7 +58,12 @@ it('refuses malformed schemas', function (array $definition, string $message): v
     'float bound' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'integer', 'max' => 1.5]], 'max must be an integer'],
     'min above max' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'integer', 'min' => 5, 'max' => 1]], 'min is above max'],
     'negative money' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'money', 'min' => -1]], 'below zero'],
-    'unknown setting' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'text', 'default' => 'x']], 'unknown settings'],
+    'unknown setting' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'text', 'placeholder' => 'x']], 'unknown settings'],
+    'required_at not a stage' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'text', 'required' => true, 'required_at' => 'policy']], 'required_at is quote or proposal'],
+    'proposal stage on an optional field' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'text', 'required_at' => 'proposal']], 'only for a required field'],
+    'default not an option' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'select', 'options' => [['value' => 'p', 'label_en' => 'P', 'label_bn' => 'P']], 'default' => 'q']], 'default is not a valid value'],
+    'default out of bounds' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'integer', 'max' => 5, 'default' => 6]], 'default is not a valid value'],
+    'empty default' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'text', 'default' => '']], 'default is not a valid value'],
     'required not bool' => [[['key' => 'a', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'text', 'required' => 'yes']], 'required must be'],
 ]);
 
@@ -84,6 +90,33 @@ it('checks integer bounds inclusively and text length', function (): void {
         ->and(riskErrors([...$valid, 'engine_cc' => 100, 'registration_no' => 'DHA-12345678']))->toBe(['registration_no' => 'TOO_LONG'])
         ->and(riskErrors([...$valid, 'engine_cc' => 100, 'registration_no' => '']))->toBe(['registration_no' => 'REQUIRED'])
         ->and(riskErrors([...$valid, 'engine_cc' => 100, 'vehicle_type' => 1]))->toBe(['vehicle_type' => 'NOT_AN_OPTION']);
+});
+
+it('flow fix X7: requires a proposal-stage field only when validating for the proposal, and keeps the form default out of validation', function (): void {
+    $schema = RiskSchema::fromArray([...motorSchema()->toArray(),
+        ['key' => 'chassis_no', 'label_en' => 'Chassis', 'label_bn' => 'চেসিস', 'type' => 'text', 'required' => true, 'required_at' => 'proposal', 'max_length' => 32],
+        ['key' => 'use', 'label_en' => 'Use', 'label_bn' => 'ব্যবহার', 'type' => 'select', 'required' => false, 'default' => 'own', 'options' => [
+            ['value' => 'own', 'label_en' => 'Own', 'label_bn' => 'নিজ'], ['value' => 'hire', 'label_en' => 'Hire', 'label_bn' => 'ভাড়া'],
+        ]],
+    ]);
+    $inputs = ['vehicle_type' => 'private', 'registration_no' => 'DHA-1', 'engine_cc' => 1500, 'sum_insured' => 100];
+
+    expect($schema->validate($inputs))->toMatchArray(['chassis_no' => null, 'use' => null])
+        ->and(thrownBy(fn () => $schema->validate($inputs, RiskStage::Proposal), RiskInputsInvalid::class)->errors)->toBe(['chassis_no' => 'REQUIRED'])
+        ->and($schema->validate([...$inputs, 'chassis_no' => 'CH-1'], RiskStage::Proposal)['chassis_no'])->toBe('CH-1')
+        ->and(thrownBy(fn () => $schema->validate([...$inputs, 'registration_no' => '']), RiskInputsInvalid::class)->errors)->toBe(['registration_no' => 'REQUIRED'])
+        ->and($schema->field('chassis_no')?->requiredAt)->toBe(RiskStage::Proposal)
+        ->and($schema->field('use')?->default)->toBe('own')
+        ->and(array_slice($schema->toArray(), -2))->toBe([
+            ['key' => 'chassis_no', 'label_en' => 'Chassis', 'label_bn' => 'চেসিস', 'type' => 'text', 'required' => true, 'max_length' => 32, 'required_at' => 'proposal'],
+            ['key' => 'use', 'label_en' => 'Use', 'label_bn' => 'ব্যবহার', 'type' => 'select', 'required' => false, 'options' => [
+                ['value' => 'own', 'label_en' => 'Own', 'label_bn' => 'নিজ'], ['value' => 'hire', 'label_en' => 'Hire', 'label_bn' => 'ভাড়া'],
+            ], 'default' => 'own'],
+        ])
+        ->and(RiskSchema::fromArray($schema->toArray()))->toEqual($schema)
+        ->and(motorSchema()->toArray()[0])->not->toHaveKeys(['required_at', 'default']);
+    // A money default is minor units, normalised like an input.
+    expect(RiskSchema::fromArray([['key' => 'si', 'label_en' => 'x', 'label_bn' => 'x', 'type' => 'money', 'default' => '500']])->field('si')?->default)->toBe(500);
 });
 
 it('reads duty profiles that exclude named duties only', function (): void {

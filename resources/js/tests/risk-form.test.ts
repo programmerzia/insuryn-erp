@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsHint, breakdown, formFields, initialValues, localProblems, problemMessage, ratingKey, riskInputs, type RiskFieldDefinition, versionOn } from '@/lib/riskForm';
+import { boundsHint, breakdown, formFields, initialValues, localProblems, problemMessage, PROPOSAL_STAGE_HINT, ratingKey, requiredFor, riskInputs, type RiskFieldDefinition, versionOn } from '@/lib/riskForm';
 
 const schema: RiskFieldDefinition[] = [
     { key: 'vehicle_type', label_en: 'Vehicle type', label_bn: 'যানবাহনের ধরন', type: 'select', required: true, options: [{ value: 'private', label_en: 'Private car', label_bn: 'ব্যক্তিগত গাড়ি' }] },
@@ -51,6 +51,30 @@ describe('risk form generated from the risk schema (slice R4)', () => {
         expect(localProblems(schema, { vehicle_type: '', registration_no: 'D', engine_cc: '1500', year_of_manufacture: '2020', sum_insured: '10.00', garaged: false })).toEqual({ vehicle_type: 'Choose the vehicle type.' });
         expect(problemMessage('NOT_INTEGER', schema[4])).toBe('Enter an amount, like 1,234,567.00.');
         expect(problemMessage('UNKNOWN_FIELD', undefined)).toBe('This product does not ask for this.');
+    });
+
+    it('flow fix X7: a field needed only for the proposal is optional on the quote with a hint, required for the proposal, and defaults start a new form', () => {
+        const staged: RiskFieldDefinition[] = [
+            { ...schema[0]!, default: 'private' },
+            { key: 'chassis_no', label_en: 'Chassis number', label_bn: 'চেসিস নম্বর', type: 'text', required: true, required_at: 'proposal', max_length: 32 },
+            { key: 'sum_insured', label_en: 'Sum insured', label_bn: 'বিমাকৃত অঙ্ক', type: 'money', required: true, min: 1, default: 50000 },
+        ];
+        const quote = formFields(staged, 'en');
+        expect(quote[1]).toMatchObject({ key: 'chassis_no', required: false, hint: PROPOSAL_STAGE_HINT });
+        expect(quote[0]).toMatchObject({ required: true, hint: null });
+        expect(formFields(staged, 'en', 'proposal')[1]).toMatchObject({ required: true, hint: null });
+        expect(requiredFor(staged[1]!, 'quote')).toBe(false);
+        expect(requiredFor(staged[1]!, 'proposal')).toBe(true);
+        expect(requiredFor(schema[5]!, 'proposal')).toBe(false);
+
+        const values = { vehicle_type: 'private', chassis_no: '', sum_insured: '10.00' };
+        expect(localProblems(staged, values)).toEqual({});
+        expect(localProblems(staged, values, 'proposal')).toEqual({ chassis_no: 'Enter the chassis number.' });
+
+        expect(initialValues(staged, null)).toEqual({ vehicle_type: 'private', chassis_no: '', sum_insured: '500.00' });
+        expect(initialValues(staged, undefined).vehicle_type).toBe('private');
+        // A saved quotation keeps what was saved, even an empty choice.
+        expect(initialValues(staged, { chassis_no: 'CH-1' })).toEqual({ vehicle_type: '', chassis_no: 'CH-1', sum_insured: '' });
     });
 
     it('picks the product version in force on the cover start', () => {

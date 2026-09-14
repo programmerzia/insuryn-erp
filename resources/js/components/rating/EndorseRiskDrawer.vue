@@ -29,7 +29,7 @@ const effectiveDate = ref(props.today < props.inception ? props.inception : prop
 const reason = ref('');
 const values = ref<FormValues>(initialValues(props.schema, props.inputs));
 const chosen = ref<string[]>(props.chosen.filter((c) => props.coverages.some((o) => o.code === c && !o.mandatory)));
-const fields = computed(() => formFields(props.schema, props.locale));
+const fields = computed(() => formFields(props.schema, props.locale, 'proposal'));
 const optional = computed(() => props.coverages.filter((c) => !c.mandatory));
 const payload = computed(() => ({ effective_date: effectiveDate.value, risk_inputs: riskInputs(props.schema, values.value), coverages: chosen.value }));
 
@@ -43,7 +43,7 @@ let controller: AbortController | null = null;
 
 watch(() => [open.value, effectiveDate.value, ratingKey({ product_id: '', inception: effectiveDate.value, risk_inputs: payload.value.risk_inputs, coverages: chosen.value })], () => {
     clearTimeout(timer);
-    if (!open.value || Object.keys(localProblems(props.schema, values.value)).length > 0) {
+    if (!open.value || Object.keys(localProblems(props.schema, values.value, 'proposal')).length > 0) {
         rating.value = null;
         return;
     }
@@ -80,7 +80,7 @@ const text = (key: string) => {
     return typeof value === 'string' ? value : '';
 };
 const set = (key: string, value: string | undefined) => (values.value = { ...values.value, [key]: value ?? '' });
-const fieldError = (key: string) => serverErrors.value[key] ?? localProblems(props.schema, values.value)[key];
+const fieldError = (key: string) => serverErrors.value[key] ?? localProblems(props.schema, values.value, 'proposal')[key];
 
 const preview = ref<PreviewResult | null>(null);
 const previewOpen = ref(false);
