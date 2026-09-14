@@ -46,7 +46,7 @@ function submitEnd(): void {
 const columns: DataColumn<LimitRow>[] = [
     { id: 'class', header: 'Class', value: (l) => l.class_name ?? l.class_code, width: 160, filterOptions: props.classes.map((c) => c.label) },
     { id: 'role', header: 'Role', value: (l) => l.role_name ?? `${l.role_code} (role removed)`, width: 200 },
-    { id: 'limit', header: `Largest sum insured (${props.currency})`, type: 'money', value: (l) => l.max_sum_insured },
+    { id: 'limit', header: 'Largest sum insured' /* gap audit GA-39: the table adds the currency to money headers */, type: 'money', value: (l) => l.max_sum_insured },
     { id: 'from', header: 'From', type: 'date', value: (l) => l.effective_from, width: 120 },
     { id: 'to', header: 'Until', type: 'date', value: (l) => l.effective_to, width: 120 },
     { id: 'status', header: 'Status', type: 'status', value: (l) => l.status, filterOptions: ['in_force', 'scheduled', 'ended'] },

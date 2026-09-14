@@ -31,9 +31,9 @@ void props;
         <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Commission', href: '/commission' }]" /></div>
         <DataTable id="commission-entries" v-model:active="active" :label="`Commission for agent ${agent.code}`" :columns="columns" :rows="statement.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false" empty-text="No commission in this period.">
             <template #toolbar>
-                <h1 class="mr-2 text-section font-semibold">Agent {{ agent.code }}</h1>
+                <h1 class="mr-2 shrink-0 text-section font-semibold">Agent {{ agent.code }}</h1>
                 <DateRangeFilter :url="`/commission/agents/${agent.id}`" :from="from" :to="to" />
-                <span class="ml-3 text-ui text-ink-2">Payable at the start <span class="tabular-nums text-ink">{{ formatMoney(statement.opening_payable) }}</span> · at the end <span class="tabular-nums text-ink">{{ formatMoney(statement.closing_payable) }}</span> · clawed back <span class="tabular-nums text-ink">{{ formatMoney(statement.totals.clawback) }}</span></span>
+                <span class="ml-3 text-ui whitespace-normal text-ink-2">Payable at the start <span class="tabular-nums text-ink">{{ formatMoney(statement.opening_payable) }}</span> · at the end <span class="tabular-nums text-ink">{{ formatMoney(statement.closing_payable) }}</span> · clawed back <span class="tabular-nums text-ink">{{ formatMoney(statement.totals.clawback) }}</span></span>
             </template>
         </DataTable>
     </AppLayout>

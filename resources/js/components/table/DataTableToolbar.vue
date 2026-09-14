@@ -49,7 +49,7 @@ function save(): void {
         <div class="ml-2 flex items-center gap-2"><slot name="bulk" /></div>
         <button type="button" :class="[button, 'ml-auto']" @click="emit('clearSelection')"><X :size="16" :stroke-width="1.5" />Clear selection</button>
     </div>
-    <div v-else class="flex h-11 items-center gap-1 border-b border-line px-3 whitespace-nowrap" role="toolbar" aria-label="Table">
+    <div v-else class="flex min-h-11 flex-wrap items-center gap-1 border-b border-line px-3 py-1 whitespace-nowrap" role="toolbar" aria-label="Table">
         <slot name="start" />
         <div class="ml-auto flex items-center gap-1">
             <Menu>

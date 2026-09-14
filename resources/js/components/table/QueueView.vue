@@ -57,7 +57,7 @@ const selected = computed(() => (active.value === null ? null : (props.rows.find
             @empty-action="emit('action')"
         >
             <template #toolbar>
-                <h1 class="mr-3 text-section font-semibold">{{ title }}</h1>
+                <h1 class="mr-3 shrink-0 text-section font-semibold">{{ title }}</h1>
                 <template v-if="action">
                     <Link v-if="action.href" :href="action.href" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">{{ action.label }}</Link>
                     <button v-else type="button" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="emit('action')">{{ action.label }}</button>
