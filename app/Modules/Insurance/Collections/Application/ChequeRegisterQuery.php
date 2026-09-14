@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Collections\Application;
 
+use App\Modules\Platform\Authorization\AreaReach;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -15,9 +16,10 @@ final class ChequeRegisterQuery
      *     rows: list<array{receipt_id: string, receipt_number: string, cheque_no: string, cheque_bank: string, cheque_date: string, value_date: string,
      *     amount_minor: int, state: string, bounced_on: string|null, bounce_reason: string|null}>}
      */
-    public function register(string $entityId, CarbonImmutable $from, CarbonImmutable $to): array
+    public function register(string $entityId, CarbonImmutable $from, CarbonImmutable $to, ?AreaReach $reach = null): array
     {
-        $cheques = DB::table('receipts')->where('entity_id', $entityId)->where('channel', 'cheque')
+        // Follow-up H1: limited to the receipts within the user's reach when a screen passes it.
+        $cheques = ($reach ?? AreaReach::everywhere())->constrain(DB::table('receipts'), 'entity_id', 'branch_id')->where('entity_id', $entityId)->where('channel', 'cheque')
             ->whereBetween('value_date', [$from->toDateString(), $to->toDateString()])->orderBy('value_date')->orderBy('number')
             ->get(['id', 'number', 'cheque_no', 'cheque_bank', 'cheque_date', 'value_date', 'amount_minor', 'status', 'bounced_on', 'bounce_reason']);
 

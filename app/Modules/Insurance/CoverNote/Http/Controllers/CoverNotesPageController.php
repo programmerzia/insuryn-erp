@@ -8,7 +8,6 @@ use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\CoverNote\Application\CoverNoteService;
 use App\Modules\Insurance\Quotation\Application\QuotationService;
 use App\Modules\Platform\Authorization\PermissionChecker;
-use App\Modules\Platform\Authorization\PermissionDenied;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -33,22 +32,20 @@ final class CoverNotesPageController
     public function index(Request $request): Response
     {
         $actor = PageSupport::actor($request);
-        $held = $this->permissions->permissionsOf($actor);
-        if (array_intersect(self::AREA, $held) === []) {
-            throw new PermissionDenied($actor, implode('|', self::AREA));
-        }
+        // Follow-up H1: opens for the area's permissions in any scope; a branch-scoped user lists only their branches' cover notes.
+        $reach = $this->permissions->authorizeArea($actor, self::AREA);
+        $cancelAnywhere = ! $this->permissions->reach($actor, [CoverNoteService::CANCEL])->isEmpty();
         $this->coverNotes->expireDue(app(BusinessClock::class)->today());
         $within = $request->query('within');
         $days = is_string($within) && preg_match('/^\d{1,3}$/', $within) === 1 ? (int) $within : null;
         $entity = PageSupport::entity();
         $today = app(BusinessClock::class)->today();
-        $rows = DB::table('cover_notes as n')->join('proposals as p', 'p.id', '=', 'n.proposal_id')->leftJoin('parties as c', 'c.id', '=', 'p.customer_party_id')
+        $rows = $reach->constrain(DB::table('cover_notes as n'), 'n.entity_id', 'n.branch_id')->join('proposals as p', 'p.id', '=', 'n.proposal_id')->leftJoin('parties as c', 'c.id', '=', 'p.customer_party_id')
             ->leftJoin('products as pr', 'pr.id', '=', 'p.product_id')->leftJoin('users as u', 'u.id', '=', 'n.issued_by')->where('n.entity_id', $entity['id'])
             ->when($days !== null, fn ($q) => $q->where('n.status', 'active')->where('n.valid_to', '<=', $today->addDays((int) $days)->toDateString()))
             ->orderByRaw("case when n.status = 'active' then 0 else 1 end")->orderBy('n.valid_to')->limit(PageSupport::LIST_PAGE_SIZE)
             ->get(['n.id', 'n.number', 'n.status', 'n.valid_from', 'n.valid_to', 'n.cancel_reason', 'n.issued_at', 'n.branch_id', 'n.entity_id', 'p.id as proposal_id', 'p.number as proposal_number',
                 'c.display_name as customer', 'pr.code as product', 'u.name as issued_by']);
-        $cancelAnywhere = in_array(CoverNoteService::CANCEL, $held, true);
 
         return Inertia::render('coverNotes/Index', [
             'today' => $today->toDateString(),

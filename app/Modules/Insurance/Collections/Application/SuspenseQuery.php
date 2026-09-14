@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Collections\Application;
 
+use App\Modules\Platform\Authorization\AreaReach;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -19,9 +20,10 @@ final class SuspenseQuery
      * @return array{as_of: string, buckets: array<string, int>, total_minor: int,
      *     items: list<array{id: string, receipt_id: string, receipt_number: string, reference: string|null, branch_id: string, aged_since: string, open_minor: int, days: int}>}
      */
-    public function ageing(?string $entityId, CarbonImmutable $asOf): array
+    public function ageing(?string $entityId, CarbonImmutable $asOf, ?AreaReach $reach = null): array
     {
-        $rows = DB::table('suspense_items as s')->join('receipts as r', 'r.id', '=', 's.receipt_id')
+        // Follow-up H1: a screen passes the user's reach, so a branch-scoped user ages only their branches' receipts.
+        $rows = ($reach ?? AreaReach::everywhere())->constrain(DB::table('suspense_items as s'), 'r.entity_id', 'r.branch_id')->join('receipts as r', 'r.id', '=', 's.receipt_id')
             ->where('s.status', 'open')->where('s.aged_since', '<=', $asOf->toDateString())
             ->when($entityId !== null, fn ($q) => $q->where('s.entity_id', $entityId))
             ->orderBy('s.aged_since')->orderBy('s.id')

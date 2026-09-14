@@ -6,7 +6,12 @@ namespace App\Http\Home;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Claims\Domain\Enums\ClaimPaymentStatus;
+use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
+use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
+use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
+use App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController;
 use App\Modules\Platform\Approvals\ApprovalInboxQuery;
+use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
@@ -37,6 +42,9 @@ final class WorkQueues
         'suspense' => 'unallocated_receipts', 'journals' => 'journals_to_approve', 'claims' => ['claims_awaiting_reserve', 'claims_to_settle', 'payments_to_release'], 'close' => 'reconciliation_variances'];
 
     private const TOP = 5;
+
+    /** @var array<string, AreaReach> */
+    private array $reaches = [];
 
     public function __construct(private readonly PermissionChecker $permissions, private readonly ApprovalInboxQuery $inbox) {}
 
@@ -144,10 +152,10 @@ final class WorkQueues
         $unpaid = 'i.amount_minor - i.paid_minor - i.cancelled_minor';
 
         return match ($key) {
-            'installments_due' => DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as h', 'h.id', '=', 'i.payer_party_id')
+            'installments_due' => $this->within($userId, PolicyPageController::AREA, DB::table('installments as i'), 'p')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as h', 'h.id', '=', 'i.payer_party_id')
                 ->whereIn('p.status', ['issued', 'active'])->whereRaw("{$unpaid} > 0")->whereBetween('i.due_date', [$today->toDateString(), $today->addDays(7)->toDateString()])
                 ->orderBy('i.due_date')->select(['p.id', 'p.number', 'h.display_name', 'i.due_date', 'p.currency', DB::raw("{$unpaid} as outstanding")]),
-            'lapsing_policies' => DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
+            'lapsing_policies' => $this->within($userId, PolicyPageController::AREA, DB::table('policies as p'), 'p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
                 ->joinSub(DB::table('installments as i')->whereRaw("{$unpaid} > 0")->groupBy('i.policy_id')->select(['i.policy_id', DB::raw('min(i.due_date) as oldest_due')]), 'o', 'o.policy_id', '=', 'p.id')
                 ->whereIn('p.status', ['issued', 'active'])->where('o.oldest_due', '<=', $today->addDays(14)->subDays((int) config('erp.collections.grace_days', 30))->toDateString())
                 ->orderBy('o.oldest_due')->select(['p.id', 'p.number', 'h.display_name', 'o.oldest_due']),
@@ -155,27 +163,27 @@ final class WorkQueues
                 ->when($key === 'receipts_to_record', fn (Builder $q) => $q->where('l.amount_minor', '>', 0))
                 ->orderBy('l.posted_on')->select(['l.id', 'l.bank_account_id', 'l.posted_on', 'l.reference', 'l.description', 'l.amount_minor', 'b.currency', 'b.bank_name']),
             // Issued quotations still valid (Phase 3 quote workbench) and Phase 1 policy quotes, earliest cover start first.
-            'quotes' => DB::query()->fromSub(DB::table('quotations as q')->leftJoin('parties as h', 'h.id', '=', 'q.customer_party_id')->where('q.status', 'issued')
+            'quotes' => DB::query()->fromSub($this->within($userId, QuotationPageController::AREA, DB::table('quotations as q'), 'q')->leftJoin('parties as h', 'h.id', '=', 'q.customer_party_id')->where('q.status', 'issued')
                 ->where('q.valid_until', '>=', $today->toDateString())
                 ->select([DB::raw("'quotation' as kind"), 'q.id', 'q.number', DB::raw("coalesce(h.display_name, '') as display_name"), 'q.inception', 'q.gross_premium_minor', 'q.currency'])
-                ->unionAll(DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.status', 'quote')
+                ->unionAll($this->within($userId, PolicyPageController::AREA, DB::table('policies as p'), 'p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->where('p.status', 'quote')
                     ->select([DB::raw("'policy' as kind"), 'p.id', DB::raw('null as number'), 'h.display_name', 'p.inception', 'p.gross_premium_minor', 'p.currency'])), 'f')
                 ->orderBy('inception')->select(['kind', 'id', 'number', 'display_name', 'inception', 'gross_premium_minor', 'currency']),
-            'unallocated_receipts' => DB::table('suspense_items as s')->join('receipts as r', 'r.id', '=', 's.receipt_id')->where('s.status', 'open')
+            'unallocated_receipts' => $this->within($userId, CollectionsPageController::AREA, DB::table('suspense_items as s'), 'r')->join('receipts as r', 'r.id', '=', 's.receipt_id')->where('s.status', 'open')
                 ->orderBy('s.aged_since')->select(['s.id', 'r.id as receipt_id', 'r.number', 'r.reference', 's.aged_since', 'r.currency', DB::raw('s.amount_minor - s.allocated_minor as open_minor')]),
             'journals_to_approve' => DB::table('journals as j')->where('j.status', 'pending_approval')->where('j.created_by', '<>', $userId)
                 ->when(! $this->permissions->has($userId, 'accounting.approve_journal'), fn (Builder $q) => $q->whereRaw('false'))
                 ->orderBy('j.created_at')->select(['j.id', 'j.transaction_date', 'j.description', 'j.currency',
                     DB::raw("(select coalesce(sum(amount_minor), 0) from journal_lines l where l.journal_id = j.id and l.side = 'debit') as total_minor")]),
             'failed_events' => DB::table('accounting_events')->where('status', 'failed')->orderByDesc('created_at')->select(['id', 'event_type', 'transaction_date', 'failure_reason']),
-            'claims_awaiting_reserve' => DB::table('claims as c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'registered')->where('c.reserve_minor', 0)
+            'claims_awaiting_reserve' => $this->within($userId, ClaimPageController::AREA, DB::table('claims as c'), 'c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'registered')->where('c.reserve_minor', 0)
                 ->orderBy('c.reported_on')->select(['c.id', 'c.number', 'p.number as policy_number', 'c.description', 'c.reported_on']),
             // Reserved claims with nothing committed against the reserve yet: the settlement decision (approve a payment) is still to make.
-            'claims_to_settle' => DB::table('claims as c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'reserved')->where('c.reserve_minor', '>', 0)
+            'claims_to_settle' => $this->within($userId, ClaimPageController::AREA, DB::table('claims as c'), 'c')->join('policies as p', 'p.id', '=', 'c.policy_id')->where('c.status', 'reserved')->where('c.reserve_minor', '>', 0)
                 ->whereNotExists(fn (Builder $q) => $q->from('claim_payments as cp')->whereColumn('cp.claim_id', 'c.id')->whereIn('cp.status', ClaimPaymentStatus::committed()))
                 ->orderBy('c.reported_on')->orderBy('c.number')->select(['c.id', 'c.number', 'p.number as policy_number', 'c.reserve_minor', 'c.currency', 'c.reported_on']),
             // Someone who releases but does not request releases (finance) only has the requested ones to act on.
-            'payments_to_release' => DB::table('claim_payments as cp')->join('claims as c', 'c.id', '=', 'cp.claim_id')
+            'payments_to_release' => $this->within($userId, ClaimPageController::AREA, DB::table('claim_payments as cp'), 'c')->join('claims as c', 'c.id', '=', 'cp.claim_id')
                 ->whereIn('cp.status', $this->permissions->has($userId, 'claim.pay_release') && ! $this->permissions->has($userId, 'claim.pay_request') ? ['release_requested'] : ['approved', 'release_requested'])
                 ->orderBy('cp.approved_on')->select(['c.id', 'c.number', 'cp.status', 'cp.approved_on', 'cp.amount_minor', 'cp.currency']),
             'reconciliation_variances' => DB::table('reconciliation_runs as r')->join('fiscal_periods as f', 'f.id', '=', 'r.period_id')->where('r.status', 'variance')
@@ -189,6 +197,20 @@ final class WorkQueues
                 ->orderByDesc('j.posting_date')->select(['j.id', 'j.number', 'j.posting_date', 'a.code', 'a.name', 'l.side', 'l.amount_minor', 'j.currency']),
             default => throw new \InvalidArgumentException("Unknown work queue {$key}."),
         };
+    }
+
+    /**
+     * Follow-up H1 (design §7.2, D-43): a branch-bound queue lists only the rows the user could open — those within their reach for the area of the page the
+     * row links to ($alias names the table carrying entity_id and branch_id). Tenant-wide users are unchanged.
+     *
+     * @param list<string> $area
+     */
+    private function within(string $userId, array $area, Builder $query, string $alias): Builder
+    {
+        $key = $userId.'|'.implode(',', $area);
+        $this->reaches[$key] ??= $this->permissions->reach($userId, $area);
+
+        return $this->reaches[$key]->constrain($query, "{$alias}.entity_id", "{$alias}.branch_id");
     }
 
     /** @return array{0: list<array{id: string, label: string, type: string}>, 1: callable(\stdClass): array{href: string|null, cells: array<string, string|null>}} */

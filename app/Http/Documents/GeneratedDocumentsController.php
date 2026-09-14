@@ -33,9 +33,7 @@ final class GeneratedDocumentsController
     public function policy(Request $request, string $policy): RedirectResponse
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, PolicyPageController::AREA);
-        $model = DB::table('policies')->where('id', $policy)->first(['id']);
-        abort_if($model === null, 404);
+        $this->open($actor, PolicyPageController::AREA, 'policies', $policy);
         /** @var array{template_code: string, object_id?: string|null, locale: string} $data */
         $data = $request->validate(['template_code' => ['required', Rule::in([DocumentTemplateCode::PolicySchedule->value, DocumentTemplateCode::Endorsement->value])],
             'object_id' => ['nullable', 'uuid'], 'locale' => ['required', Rule::in(['en', 'bn'])]]);
@@ -51,8 +49,7 @@ final class GeneratedDocumentsController
     public function receipt(Request $request, string $receipt): RedirectResponse
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, CollectionsPageController::AREA);
-        abort_if(! DB::table('receipts')->where('id', $receipt)->exists(), 404);
+        $this->open($actor, CollectionsPageController::AREA, 'receipts', $receipt);
         /** @var array{locale: string} $data */
         $data = $request->validate(['locale' => ['required', Rule::in(['en', 'bn'])]]);
         $generated = $this->generator->generate(DocumentTemplateCode::Receipt, 'receipt', $receipt, $actor, $data['locale']);
@@ -66,8 +63,7 @@ final class GeneratedDocumentsController
     public function quotation(Request $request, string $quotation): RedirectResponse
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, \App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::AREA);
-        abort_if(! DB::table('quotations')->where('id', $quotation)->exists(), 404);
+        $this->open($actor, \App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::AREA, 'quotations', $quotation);
         /** @var array{locale: string} $data */
         $data = $request->validate(['locale' => ['required', Rule::in(['en', 'bn'])]]);
         $generated = $this->generator->generate(DocumentTemplateCode::Quotation, 'quotation', $quotation, $actor, $data['locale']);
@@ -79,8 +75,7 @@ final class GeneratedDocumentsController
     public function coverNote(Request $request, string $coverNote): RedirectResponse
     {
         $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, \App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::AREA);
-        abort_if(! DB::table('cover_notes')->where('id', $coverNote)->exists(), 404);
+        $this->open($actor, \App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::AREA, 'cover_notes', $coverNote);
         /** @var array{locale: string} $data */
         $data = $request->validate(['locale' => ['required', Rule::in(['en', 'bn'])]]);
         $generated = $this->generator->generate(DocumentTemplateCode::CoverNote, 'cover_note', $coverNote, $actor, $data['locale']);
@@ -91,7 +86,7 @@ final class GeneratedDocumentsController
     /** GET /quotations/{id}/documents/{document} — a printed quotation, audited as a download. */
     public function quotationDocument(Request $request, \App\Http\Pages\ObjectDocuments $documents, string $quotation, string $document): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), \App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::AREA);
+        $this->open(PageSupport::actor($request), \App\Modules\Insurance\Quotation\Http\Controllers\QuotationPageController::AREA, 'quotations', $quotation);
 
         return $documents->download($request, 'quotation', $quotation, $document);
     }
@@ -99,9 +94,22 @@ final class GeneratedDocumentsController
     /** GET /cover-notes/{id}/documents/{document} — a printed cover note, audited as a download. */
     public function coverNoteDocument(Request $request, \App\Http\Pages\ObjectDocuments $documents, string $coverNote, string $document): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), \App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::AREA);
+        $this->open(PageSupport::actor($request), \App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::AREA, 'cover_notes', $coverNote);
 
         return $documents->download($request, 'cover_note', $coverNote, $document);
+    }
+
+    /**
+     * Follow-up H1 (D-43): the page's area opens in any scope, the object must exist (404), and its own branch must be within the user's reach (403).
+     *
+     * @param list<string> $area
+     */
+    private function open(string $actor, array $area, string $table, string $id): void
+    {
+        $this->permissions->authorizeArea($actor, $area);
+        $model = DB::table($table)->where('id', $id)->first(['entity_id', 'branch_id']);
+        abort_if($model === null, 404);
+        $this->permissions->authorizeAny($actor, $area, AuthorizationScope::branch((string) $model->entity_id, (string) $model->branch_id));
     }
 
     /** @return array<string, mixed> the quotation workbench's print panel: printing once issued, and every version printed */

@@ -129,7 +129,7 @@ final class CollectionsPageController
             'suspense' => $item === null ? null : ['id' => $item->id, 'amount' => $money($item->amount_minor), 'open' => $money($item->openMinor()), 'status' => $item->status->value],
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id)))
                 ? "/receipts/{$model->id}/documents" : null,
-            'actions' => ['bounce' => $model->channel === 'cheque' && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate'),
+            'actions' => ['bounce' => $model->channel === 'cheque' && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($model->entity_id, $model->branch_id)),
                 // Flow fix X5: print the receipt from the header; allocate what waits in suspense.
                 'print' => app(NextSteps::class)->canPrintReceipt($actor, $model->id),
                 'allocate' => $item !== null && $item->status->value === 'open' && $item->openMinor() > 0 && $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($model->entity_id, $model->branch_id))],
@@ -147,17 +147,18 @@ final class CollectionsPageController
 
     public function suspense(Request $request, SuspenseQuery $query): Response
     {
-        $this->authorize($request);
+        // Follow-up H1: opens for the area's permissions in any scope; a branch-scoped user sees only their branches' suspense and installments.
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
         $asOf = self::date($request, 'as_of');
-        $ageing = $query->ageing($entity['id'], $asOf);
+        $ageing = $query->ageing($entity['id'], $asOf, $reach);
 
         return Inertia::render('suspense/Index', [
             'asOf' => $asOf->toDateString(),
             'ageing' => ['buckets' => array_map(fn (int $m): string => PageSupport::money($m, $entity['currency']), $ageing['buckets']), 'total' => PageSupport::money($ageing['total_minor'], $entity['currency']),
                 'items' => array_map(fn (array $i): array => ['id' => $i['id'], 'receipt_id' => $i['receipt_id'], 'receipt_number' => $i['receipt_number'], 'reference' => $i['reference'],
                     'aged_since' => $i['aged_since'], 'days' => $i['days'], 'open' => PageSupport::money($i['open_minor'], $entity['currency'])], $ageing['items'])],
-            'installments' => $this->outstandingInstallments($entity, AreaReach::everywhere()),
+            'installments' => $this->outstandingInstallments($entity, $reach),
         ]);
     }
 
@@ -174,13 +175,16 @@ final class CollectionsPageController
     /** UX brief §6.3 allocation workbench: the receipt and its open suspense on the left, candidate installments (the payer's first) on the right. */
     public function allocateWorkbench(Request $request, string $receipt): Response
     {
-        $this->authorize($request);
+        $actor = PageSupport::actor($request);
+        $reach = $this->permissions->authorizeArea($actor, self::AREA);
         $entity = PageSupport::entity();
         $r = DB::table('receipts as r')->leftJoin('parties as p', 'p.id', '=', 'r.party_id')->where('r.id', $receipt)
-            ->first(['r.id', 'r.number', 'r.party_id', 'r.amount_minor', 'r.currency', 'r.value_date', 'r.reference', 'r.channel', 'r.status', 'p.display_name']) ?? abort(404);
+            ->first(['r.id', 'r.number', 'r.party_id', 'r.entity_id', 'r.branch_id', 'r.amount_minor', 'r.currency', 'r.value_date', 'r.reference', 'r.channel', 'r.status', 'p.display_name']) ?? abort(404);
+        $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch((string) $r->entity_id, (string) $r->branch_id)); // H1: another branch's receipt is 403
         $item = DB::table('suspense_items')->where('receipt_id', $receipt)->where('status', 'open')->first(['id', 'amount_minor', 'allocated_minor']);
         $candidates = [];
-        $rows = DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
+        // H1: candidate installments only on the user's branches' policies.
+        $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
             ->where('p.entity_id', $entity['id'])->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->orderByRaw('case when i.payer_party_id = ? then 0 else 1 end', [$r->party_id])->orderBy('i.due_date')->orderBy('p.number')->limit(500)
             ->get(['i.id', 'i.no', 'i.due_date', 'i.payer_party_id', 'p.number', 'payer.display_name', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
@@ -226,16 +230,18 @@ final class CollectionsPageController
 
     public function refunds(Request $request, RefundableQuery $refundable): Response
     {
-        $actor = $this->authorize($request);
+        $actor = PageSupport::actor($request);
+        $reach = $this->permissions->authorizeArea($actor, self::AREA); // H1: a branch-scoped user sees only their branches' refunds
         $entity = PageSupport::entity();
 
         return Inertia::render('refunds/Index', [
-            'refundable' => array_map(fn (array $r): array => $r + ['available' => PageSupport::money($r['available_minor'], $r['currency'])], $refundable->refundable($entity['id'])),
-            'refunds' => DB::table('refunds as r')->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')->where('r.entity_id', $entity['id'])->orderByDesc('r.requested_at')->limit(100)
+            'refundable' => array_map(fn (array $r): array => $r + ['available' => PageSupport::money($r['available_minor'], $r['currency'])], $refundable->refundable($entity['id'], $reach)),
+            'refunds' => $reach->constrain(DB::table('refunds as r'), 'r.entity_id', 'r.branch_id')->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')->where('r.entity_id', $entity['id'])->orderByDesc('r.requested_at')->limit(100)
                 ->get(['r.id', 'p.number', 'r.amount_minor', 'r.currency', 'r.reason', 'r.status', 'r.requested_at', 'r.decision_reason'])
                 ->map(fn (object $r): array => ['id' => (string) $r->id, 'policy_number' => $r->number, 'amount' => PageSupport::money((int) $r->amount_minor, (string) $r->currency),
                     'reason' => (string) $r->reason, 'status' => (string) $r->status, 'requested_at' => (string) $r->requested_at, 'decision_reason' => $r->decision_reason])->values()->all(),
-            'can' => ['request' => $this->permissions->has($actor, 'receipt.refund_request'), 'release' => $this->permissions->has($actor, 'receipt.refund_release')],
+            // H1: offered to holders in any scope; RefundService checks the policy's or refund's branch.
+            'can' => ['request' => ! $this->permissions->reach($actor, ['receipt.refund_request'])->isEmpty(), 'release' => ! $this->permissions->reach($actor, ['receipt.refund_release'])->isEmpty()],
         ]);
     }
 
@@ -266,10 +272,11 @@ final class CollectionsPageController
 
     public function agentCash(Request $request, AgentCashPositionQuery $position): Response
     {
-        $this->authorize($request);
+        // H1: a branch-scoped user sees the agents of their branches (AgentDepositService checks a deposit on the agent's branch).
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA);
         $entity = PageSupport::entity();
         $asOf = self::date($request, 'as_of');
-        $result = $position->position($entity['id'], $asOf);
+        $result = $position->position($entity['id'], $asOf, $reach);
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
 
         return Inertia::render('agentCash/Index', [
@@ -278,7 +285,8 @@ final class CollectionsPageController
                 'deposited' => $money($r['deposited_minor']), 'undeposited' => $money($r['undeposited_minor']), 'gl' => $money($r['gl_minor']), 'difference' => $money($r['difference_minor']),
                 'oldest_undeposited_on' => $r['oldest_undeposited_on'], 'days_undeposited' => $r['days_undeposited']], $result['rows']),
                 'totals' => array_map($money, $result['totals'])],
-            'agents' => DB::table('producers')->where('status', 'active')->orderBy('code')->get(['id', 'code'])->map(fn (object $a): array => (array) $a)->values()->all(),
+            'agents' => $reach->constrain(DB::table('producers as a')->join('branches as b', 'b.id', '=', 'a.branch_id'), 'b.entity_id', 'a.branch_id')->where('a.status', 'active')->orderBy('a.code')
+                ->get(['a.id', 'a.code'])->map(fn (object $a): array => (array) $a)->values()->all(),
             'bankAccounts' => DB::table('bank_accounts')->where('entity_id', $entity['id'])->where('status', 'active')->orderBy('bank_name')
                 ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => (array) $b)->values()->all(),
         ]);
@@ -298,11 +306,11 @@ final class CollectionsPageController
 
     public function cheques(Request $request, ChequeRegisterQuery $register): Response
     {
-        $this->authorize($request);
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA); // H1: only the user's branches' cheques
         $entity = PageSupport::entity();
         $from = self::date($request, 'from', app(BusinessClock::class)->today()->startOfMonth());
         $to = self::date($request, 'to');
-        $result = $register->register($entity['id'], $from, $to);
+        $result = $register->register($entity['id'], $from, $to, $reach);
 
         return Inertia::render('receipts/Cheques', ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'register' => [
             'rows' => array_map(fn (array $r): array => $r + ['amount' => PageSupport::money($r['amount_minor'], $entity['currency'])], $result['rows']),
@@ -312,13 +320,13 @@ final class CollectionsPageController
 
     public function dunning(Request $request): Response
     {
-        $this->authorize($request);
+        $reach = $this->permissions->authorizeArea(PageSupport::actor($request), self::AREA); // H1: only notices on the user's branches' policies
         $entity = PageSupport::entity();
         $from = self::date($request, 'from', app(BusinessClock::class)->today()->startOfMonth());
         $to = self::date($request, 'to');
 
         return Inertia::render('receipts/Dunning', ['from' => $from->toDateString(), 'to' => $to->toDateString(),
-            'notices' => DB::table('dunning_notices as n')->join('policies as p', 'p.id', '=', 'n.policy_id')->join('installments as i', 'i.id', '=', 'n.installment_id')
+            'notices' => $reach->constrain(DB::table('dunning_notices as n'), 'n.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'n.policy_id')->join('installments as i', 'i.id', '=', 'n.installment_id')
                 ->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')->where('n.entity_id', $entity['id'])->whereBetween('n.issued_on', [$from->toDateString(), $to->toDateString()])
                 ->orderByDesc('n.issued_on')->get(['n.id', 'p.id as policy_id', 'p.number', 'payer.display_name', 'n.level', 'n.days_overdue', 'n.outstanding_minor', 'n.issued_on'])
                 ->map(fn (object $n): array => ['id' => (string) $n->id, 'policy_id' => (string) $n->policy_id, 'policy_number' => $n->number, 'payer' => (string) $n->display_name, 'level' => (int) $n->level,
@@ -389,14 +397,6 @@ final class CollectionsPageController
         $this->permissions->authorizeAny($actor, self::AREA, AuthorizationScope::branch($model->entity_id, $model->branch_id));
 
         return $documents->download($request, 'receipt', $model->id, $document);
-    }
-
-    private function authorize(Request $request): string
-    {
-        $actor = PageSupport::actor($request);
-        $this->permissions->authorizeAny($actor, self::AREA);
-
-        return $actor;
     }
 
     private static function date(Request $request, string $key, ?CarbonImmutable $default = null): CarbonImmutable

@@ -10,6 +10,7 @@ use App\Modules\Insurance\Claims\Http\Controllers\ClaimPageController;
 use App\Modules\Insurance\Collections\Http\Controllers\CollectionsPageController;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
+use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -37,12 +38,14 @@ final class GlobalSearchQuery
         $may = fn (array $area): bool => array_intersect($area, $held) !== [];
         $like = '%'.addcslashes($query, '%_\\').'%';
         $number = self::shortNumber($query);
+        // Follow-up H1: branch-bound records only within the user's reach for the area (a branch-scoped user finds their branches' records).
+        $reach = fn (array $area): AreaReach => $this->permissions->reach($userId, array_values($area));
 
         return [
             ...($may(ClosePageController::AREA) ? $this->periodActions($query, $held) : []),
-            ...($may(PolicyPageController::AREA) ? $this->policies($like, $number) : []),
-            ...($may(ClaimPageController::AREA) ? $this->claims($like, $number) : []),
-            ...($may(CollectionsPageController::AREA) ? $this->receipts($like, $number) : []),
+            ...($may(PolicyPageController::AREA) ? $this->policies($like, $number, $reach(PolicyPageController::AREA)) : []),
+            ...($may(ClaimPageController::AREA) ? $this->claims($like, $number, $reach(ClaimPageController::AREA)) : []),
+            ...($may(CollectionsPageController::AREA) ? $this->receipts($like, $number, $reach(CollectionsPageController::AREA)) : []),
             ...($may(PartyPageController::AREA) || $may(PolicyPageController::AREA) ? $this->customers($like) : []),
             ...(in_array('accounting.view_journals', $held, true) ? $this->journals($like, $number) : []),
         ];
@@ -52,9 +55,9 @@ final class GlobalSearchQuery
      * @param array{0: string, 1: string}|null $number
      * @return list<array{kind: string, label: string, detail: string, href: string}>
      */
-    private function policies(string $like, ?array $number): array
+    private function policies(string $like, ?array $number, AreaReach $reach): array
     {
-        $rows = DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
+        $rows = $reach->constrain(DB::table('policies as p'), 'p.entity_id', 'p.branch_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')
             ->whereNotNull('p.number')->where(fn ($q) => self::numberOr($q->where('h.display_name', 'ilike', $like)->orWhere('p.number', 'ilike', $like), 'p.number', $number))
             ->orderByDesc('p.created_at')->limit(self::PER_KIND)->get(['p.id', 'p.number', 'p.status', 'h.display_name']);
         $results = [];
@@ -69,9 +72,9 @@ final class GlobalSearchQuery
      * @param array{0: string, 1: string}|null $number
      * @return list<array{kind: string, label: string, detail: string, href: string}>
      */
-    private function claims(string $like, ?array $number): array
+    private function claims(string $like, ?array $number, AreaReach $reach): array
     {
-        $rows = DB::table('claims')->where(fn ($q) => self::numberOr($q->where('number', 'ilike', $like)->orWhere('description', 'ilike', $like), 'number', $number))
+        $rows = $reach->constrain(DB::table('claims'), 'entity_id', 'branch_id')->where(fn ($q) => self::numberOr($q->where('number', 'ilike', $like)->orWhere('description', 'ilike', $like), 'number', $number))
             ->orderByDesc('created_at')->limit(self::PER_KIND)->get(['id', 'number', 'status', 'description']);
         $results = [];
         foreach ($rows as $row) {
@@ -85,9 +88,9 @@ final class GlobalSearchQuery
      * @param array{0: string, 1: string}|null $number
      * @return list<array{kind: string, label: string, detail: string, href: string}>
      */
-    private function receipts(string $like, ?array $number): array
+    private function receipts(string $like, ?array $number, AreaReach $reach): array
     {
-        $rows = DB::table('receipts')->where(fn ($q) => self::numberOr($q->where('number', 'ilike', $like)->orWhere('cheque_no', 'ilike', $like)->orWhere('reference', 'ilike', $like), 'number', $number))
+        $rows = $reach->constrain(DB::table('receipts'), 'entity_id', 'branch_id')->where(fn ($q) => self::numberOr($q->where('number', 'ilike', $like)->orWhere('cheque_no', 'ilike', $like)->orWhere('reference', 'ilike', $like), 'number', $number))
             ->orderByDesc('created_at')->limit(self::PER_KIND)->get(['id', 'number', 'cheque_no', 'cheque_bank', 'reference', 'amount_minor', 'currency']);
         $results = [];
         foreach ($rows as $row) {

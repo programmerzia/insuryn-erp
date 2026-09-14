@@ -15,6 +15,7 @@ use App\Modules\Insurance\Party\Domain\Enums\PartyKind;
 use App\Modules\Insurance\Party\Domain\Enums\PartyRoleType;
 use App\Modules\Insurance\Party\Http\Controllers\PartyPageController;
 use App\Modules\Insurance\Policy\Http\Controllers\PolicyPageController;
+use App\Modules\Platform\Authorization\AreaReach;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use App\Modules\Platform\Tenancy\BusinessClock;
@@ -47,10 +48,12 @@ final class LookupController
         $actor = PageSupport::actor($request);
         $like = '%'.addcslashes(trim((string) $request->query('q', '')), '%_\\').'%';
         $results = match ($type) {
+            // Follow-up H1: lookups open for the area's permissions in any scope. Policies and installments are branch-bound and limited to the user's reach;
+            // customers, producers and payees are parties of the whole tenant (ASSUMPTION A-160).
             'customer' => $this->guarded($actor, [...PartyPageController::AREA, ...PolicyPageController::AREA, 'claim.pay_request'], fn (): array => $this->customers($like)),
             'agent' => $this->guarded($actor, [...PartyPageController::AREA, ...CollectionsPageController::AREA], fn (): array => $this->agents($like)),
-            'policy' => $this->guarded($actor, [...PolicyPageController::AREA, 'claim.register'], fn (): array => $this->policies($like)),
-            'installment' => $this->guarded($actor, CollectionsPageController::AREA, fn (): array => $this->installments($like)),
+            'policy' => $this->guarded($actor, [...PolicyPageController::AREA, 'claim.register'], fn (AreaReach $reach): array => $this->policies($like, $reach)),
+            'installment' => $this->guarded($actor, CollectionsPageController::AREA, fn (AreaReach $reach): array => $this->installments($like, $reach)),
             // Flow fix X8: whoever approves claim payments picks the payee from every active party.
             'payee' => $this->guarded($actor, [self::PAYEE_DUTY], fn (): array => $this->payees($like)),
             default => abort(404),
@@ -142,14 +145,12 @@ final class LookupController
 
     /**
      * @param list<string> $area
-     * @param callable(): list<array<string, string>> $query
+     * @param callable(AreaReach): list<array<string, string>> $query
      * @return list<array<string, string>>
      */
     private function guarded(string $actor, array $area, callable $query): array
     {
-        $this->permissions->authorizeAny($actor, array_values(array_unique($area)));
-
-        return $query();
+        return $query($this->permissions->authorizeArea($actor, array_values(array_unique($area))));
     }
 
     /** @return list<array<string, string>> */
@@ -193,9 +194,9 @@ final class LookupController
     }
 
     /** @return list<array<string, string>> */
-    private function policies(string $like): array
+    private function policies(string $like, AreaReach $reach): array
     {
-        $rows = DB::table('policies as p')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->whereNotNull('p.number')
+        $rows = $reach->constrain(DB::table('policies as p'), 'p.entity_id', 'p.branch_id')->join('parties as h', 'h.id', '=', 'p.policyholder_party_id')->whereNotNull('p.number')
             ->where(fn ($q) => $q->where('p.number', 'ilike', $like)->orWhere('h.display_name', 'ilike', $like))->orderByDesc('p.inception')->limit(self::LIMIT)
             ->get(['p.id', 'p.number', 'p.status', 'p.inception', 'p.expiry', 'h.display_name']);
         $results = [];
@@ -207,9 +208,9 @@ final class LookupController
     }
 
     /** @return list<array<string, string>> */
-    private function installments(string $like): array
+    private function installments(string $like, AreaReach $reach): array
     {
-        $rows = DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
+        $rows = $reach->constrain(DB::table('installments as i'), 'p.entity_id', 'p.branch_id')->join('policies as p', 'p.id', '=', 'i.policy_id')->leftJoin('parties as payer', 'payer.id', '=', 'i.payer_party_id')
             ->whereIn('p.status', ['issued', 'active', 'lapsed', 'expired'])->whereRaw('i.amount_minor - i.paid_minor - i.cancelled_minor > 0')
             ->where(fn ($q) => $q->where('p.number', 'ilike', $like)->orWhere('payer.display_name', 'ilike', $like))
             ->orderBy('p.number')->orderBy('i.no')->limit(self::LIMIT)

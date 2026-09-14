@@ -11,7 +11,6 @@ use App\Modules\Insurance\Renewal\Domain\ExpiryRegisterStatus;
 use App\Modules\Insurance\Renewal\Domain\RenewalReasons;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
-use App\Modules\Platform\Authorization\PermissionDenied;
 use App\Modules\Platform\Tenancy\BusinessClock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -39,9 +38,8 @@ final class RenewalsPageController
     public function index(Request $request): Response
     {
         $actor = PageSupport::actor($request);
-        if (! in_array(ExpiryRegister::PERMISSION, $this->permissions->permissionsOf($actor), true)) {
-            throw new PermissionDenied($actor, ExpiryRegister::PERMISSION);
-        }
+        // Follow-up H1: a branch-scoped user lists only their branches' expiring policies (and picks only their branches in the filter).
+        $reach = $this->permissions->authorizeArea($actor, [ExpiryRegister::PERMISSION]);
         $today = app(BusinessClock::class)->today();
         $this->register->build($today);
         $entity = PageSupport::entity();
@@ -51,7 +49,7 @@ final class RenewalsPageController
         $branch = is_string($request->query('branch')) && \Illuminate\Support\Str::isUuid($request->query('branch')) ? $request->query('branch') : null;
         $producer = is_string($request->query('producer')) && \Illuminate\Support\Str::isUuid($request->query('producer')) ? $request->query('producer') : null;
 
-        $rows = DB::table('expiry_register as r')->leftJoin('parties as c', 'c.id', '=', 'r.policyholder_party_id')->leftJoin('products as pr', 'pr.id', '=', 'r.product_id')
+        $rows = $reach->constrain(DB::table('expiry_register as r'), 'r.entity_id', 'r.branch_id')->leftJoin('parties as c', 'c.id', '=', 'r.policyholder_party_id')->leftJoin('products as pr', 'pr.id', '=', 'r.product_id')
             ->leftJoin('branches as b', 'b.id', '=', 'r.branch_id')->leftJoin('producers as a', 'a.id', '=', 'r.agent_id')->leftJoin('parties as ap', 'ap.id', '=', 'a.party_id')
             ->leftJoin('quotations as q', 'q.id', '=', 'r.renewal_quotation_id')->leftJoin('policies as rp', 'rp.id', '=', 'r.renewal_policy_id')
             ->leftJoin('policies as p', 'p.id', '=', 'r.policy_id')
@@ -74,7 +72,7 @@ final class RenewalsPageController
             'filters' => ['bucket' => $bucket, 'status' => $status, 'branch' => $branch, 'producer' => $producer],
             'quoteDaysBefore' => RenewalQuotations::quoteDaysBefore(),
             'reasons' => array_map(fn (string $code, array $labels): array => ['value' => $code, 'label' => $labels['en']], array_keys($reasonChoices), $reasonChoices),
-            'branches' => DB::table('branches')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code'])->map(fn (object $b): array => ['id' => (string) $b->id, 'code' => (string) $b->code])->all(),
+            'branches' => $reach->constrain(DB::table('branches'), 'entity_id', 'id')->where('entity_id', $entity['id'])->orderBy('code')->get(['id', 'code'])->map(fn (object $b): array => ['id' => (string) $b->id, 'code' => (string) $b->code])->all(),
             'producers' => DB::table('producers as a')->join('parties as ap', 'ap.id', '=', 'a.party_id')->orderBy('a.code')->get(['a.id', 'a.code', 'ap.display_name'])
                 ->map(fn (object $a): array => ['id' => (string) $a->id, 'label' => "{$a->code} {$a->display_name}"])->all(),
             'entries' => $rows->map(function (object $r) use ($actor, $today, $notices, &$manageable): array {

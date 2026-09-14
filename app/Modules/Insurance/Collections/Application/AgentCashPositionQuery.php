@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Insurance\Collections\Application;
 
 use App\Modules\Accounting\Application\Reports\FinancialStatementsQuery;
+use App\Modules\Platform\Authorization\AreaReach;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -29,9 +30,12 @@ final class AgentCashPositionQuery
      *     rows: list<array{agent_id: string, agent_code: string, collected_minor: int, deposited_minor: int, undeposited_minor: int, gl_minor: int,
      *     difference_minor: int, oldest_undeposited_on: string|null, days_undeposited: int|null}>}
      */
-    public function position(string $entityId, CarbonImmutable $asOf): array
+    public function position(string $entityId, CarbonImmutable $asOf, ?AreaReach $reach = null): array
     {
         $day = $asOf->toDateString();
+        // Follow-up H1 (ASSUMPTION A-159): a branch-scoped user sees the agents whose branch is within reach, each with their whole position, so the GL by agent still matches.
+        $inReach = $reach === null || $reach->tenantWide ? null
+            : array_flip($reach->constrain(DB::table('producers as a')->join('branches as b', 'b.id', '=', 'a.branch_id'), 'b.entity_id', 'a.branch_id')->pluck('a.id')->map(fn ($id): string => (string) $id)->all());
         $collections = DB::table('receipts')->where('entity_id', $entityId)->whereNotNull('collected_by_agent_id')->where('value_date', '<=', $day)
             ->where(fn ($q) => $q->whereNull('bounced_on')->orWhere('bounced_on', '>', $day))
             ->orderBy('value_date')->get(['collected_by_agent_id', 'value_date', 'amount_minor'])->groupBy('collected_by_agent_id');
@@ -39,6 +43,9 @@ final class AgentCashPositionQuery
             ->groupBy('agent_id')->selectRaw('agent_id, sum(amount_minor) as total')->pluck('total', 'agent_id');
         $gl = $this->ledger->roleMovementByDimension($entityId, 'agent_receivable', CarbonImmutable::parse('1900-01-01'), $asOf, 'agent')['by_dimension'];
         $agentIds = array_values(array_unique([...$collections->keys()->map(fn ($id): string => (string) $id)->all(), ...$deposits->keys()->map(fn ($id): string => (string) $id)->all()]));
+        if ($inReach !== null) {
+            $agentIds = array_values(array_filter($agentIds, fn (string $id): bool => isset($inReach[$id])));
+        }
         $codes = DB::table('producers')->whereIn('id', $agentIds)->pluck('code', 'id');
 
         $rows = [];
