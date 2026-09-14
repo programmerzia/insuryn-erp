@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Reports\Http\Controllers;
 
+use App\Http\Pages\JournalSources;
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Reports\FinancialStatementsQuery;
 use App\Modules\Insurance\Reports\Application\ClaimsPaidRegisterQuery;
@@ -251,7 +252,8 @@ final class ReportsPageController
         }
 
         return self::table('Profit and loss', 'range', [['section', 'Section'], ['code', 'Account'], ['name', 'Name'], ['amount', 'Amount', 'right']], $rows,
-            ['income' => $money($result['total_income_minor']), 'expense' => $money($result['total_expense_minor']), 'amount' => $money($result['net_profit_minor'])]);
+            ['income' => $money($result['total_income_minor']), 'expense' => $money($result['total_expense_minor']), 'amount' => $money($result['net_profit_minor'])])
+            + ['related' => self::statements('profit-and-loss', $from, $to)];
     }
 
     /**
@@ -270,7 +272,8 @@ final class ReportsPageController
         $rows[] = ['cells' => ['section' => 'Equity', 'code' => '', 'name' => 'Current earnings', 'amount' => $money($result['current_earnings_minor'])], 'link' => null];
 
         return self::table('Balance sheet', 'as_of', [['section', 'Section'], ['code', 'Account'], ['name', 'Name'], ['amount', 'Amount', 'right']], $rows,
-            ['assets' => $money($result['total_assets_minor']), 'liabilities_and_equity' => $money($result['total_liabilities_minor'] + $result['total_equity_minor'] + $result['current_earnings_minor'])]);
+            ['assets' => $money($result['total_assets_minor']), 'liabilities_and_equity' => $money($result['total_liabilities_minor'] + $result['total_equity_minor'] + $result['current_earnings_minor'])])
+            + ['related' => self::statements('balance-sheet', $asOf->startOfMonth(), $asOf)];
     }
 
     /**
@@ -284,10 +287,13 @@ final class ReportsPageController
         $result = app(FinancialStatementsQuery::class)->accountActivity($entityId, $accountId, $request->query('from') === null ? null : $from, $to, $dimension,
             $dimension === null ? null : (string) $request->query('value', ''));
         abort_if($result['account'] === null, 404);
+        // Flow fix X11: the policy, claim or receipt behind each journal in its own column, one click from the figure (the journal stays on the row).
+        $sources = JournalSources::forJournals(array_column($result['lines'], 'journal_id'));
 
-        return self::table("Account activity: {$result['account']['code']} {$result['account']['name']}", 'range', [['posting_date', 'Date'], ['journal_number', 'Journal'], ['description', 'Description'], ['debit', 'Debit', 'right'], ['credit', 'Credit', 'right']],
-            array_map(fn (array $l): array => ['cells' => ['posting_date' => $l['posting_date'], 'journal_number' => $l['journal_number'], 'description' => $l['description'] ?? $l['memo'],
-                'debit' => $money($l['debit_minor']), 'credit' => $money($l['credit_minor'])], 'link' => $l['url']], $result['lines']),
+        return self::table("Account activity: {$result['account']['code']} {$result['account']['name']}", 'range', [['posting_date', 'Date'], ['journal_number', 'Journal'], ['source', 'Source'], ['description', 'Description'], ['debit', 'Debit', 'right'], ['credit', 'Credit', 'right']],
+            array_map(fn (array $l): array => ['cells' => ['posting_date' => $l['posting_date'], 'journal_number' => $l['journal_number'], 'source' => $sources[$l['journal_id']]['label'] ?? null,
+                'description' => $l['description'] ?? $l['memo'], 'debit' => $money($l['debit_minor']), 'credit' => $money($l['credit_minor'])], 'link' => $l['url'],
+                'links' => isset($sources[$l['journal_id']]) ? ['source' => $sources[$l['journal_id']]['url']] : []], $result['lines']),
             ['opening' => $money($result['opening_minor']), 'closing' => $money($result['closing_minor'])]);
     }
 
@@ -314,6 +320,24 @@ final class ReportsPageController
     private static function summary(string $title, array $columns, array $rows): array
     {
         return ['title' => $title, 'columns' => array_map(fn (array $c): array => ['key' => $c[0], 'label' => $c[1]], $columns), 'rows' => array_values($rows)];
+    }
+
+    /**
+     * Flow fix X11: the other financial statements for the same period — profit and loss for the range, the balance sheet and trial balance at its end — so
+     * reviewing all three does not go back through the reports index.
+     *
+     * @return list<array{label: string, href: string}>
+     */
+    private static function statements(string $current, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $links = [
+            'profit-and-loss' => ['label' => 'Profit and loss', 'href' => '/reports/profit-and-loss?'.http_build_query(['from' => $from->toDateString(), 'to' => $to->toDateString()])],
+            'balance-sheet' => ['label' => 'Balance sheet', 'href' => '/reports/balance-sheet?'.http_build_query(['as_of' => $to->toDateString()])],
+            'trial-balance' => ['label' => 'Trial balance', 'href' => '/accounting/trial-balance?'.http_build_query(['as_of' => $to->toDateString()])],
+        ];
+        unset($links[$current]);
+
+        return array_values($links);
     }
 
     /** API drill URL → the account activity report page with the same filters. */

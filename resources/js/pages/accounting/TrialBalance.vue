@@ -40,6 +40,11 @@ startTrail();
             <h1 class="text-section font-semibold">Trial balance</h1>
             <DateRangeFilter url="/accounting/trial-balance" :as-of="asOf" />
             <span class="ml-2 text-ui text-ink-2">{{ entity.name }} · local book · compared with {{ formatDate(compare?.asOf) }}</span>
+            <!-- Flow fix X11: the statements for the same period, without going back through the reports index. -->
+            <nav class="ml-2 flex items-center gap-3 text-ui" aria-label="Statements for this period">
+                <Link :href="`/reports/profit-and-loss?from=${asOf.slice(0, 8)}01&to=${asOf}`" class="text-accent-text hover:underline" @click="drillFrom('Trial balance')">Profit and loss</Link>
+                <Link :href="`/reports/balance-sheet?as_of=${asOf}`" class="text-accent-text hover:underline" @click="drillFrom('Trial balance')">Balance sheet</Link>
+            </nav>
             <span class="ml-auto inline-flex items-center gap-1.5 text-ui" :class="totals.balanced ? 'text-ok' : 'text-danger'" role="status">
                 <span class="size-1.5 rounded-full" :class="totals.balanced ? 'bg-ok' : 'bg-danger'" aria-hidden="true" />{{ totals.balanced ? 'Balanced' : 'Out of balance' }}
             </span>

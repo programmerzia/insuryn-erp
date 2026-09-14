@@ -31,7 +31,7 @@ final class JournalPageController
 
         return $response->with([
             'dimensions' => $this->dimensions($journal),
-            'sourceLink' => $source === null || $source->source_type === null ? null : $this->sourceLink((string) $source->source_type, (string) $source->source_id),
+            'sourceLink' => $source === null || $source->source_type === null ? null : JournalSources::link((string) $source->source_type, (string) $source->source_id),
         ]);
     }
 
@@ -58,25 +58,5 @@ final class JournalPageController
         }
 
         return $result;
-    }
-
-    private function sourceLink(string $type, string $id): ?string
-    {
-        $via = fn (string $table, string $column, string $prefix): ?string => ($parent = DB::table($table)->where('id', $id)->value($column)) === null ? null : "{$prefix}/{$parent}";
-
-        return match ($type) {
-            'policy_transaction' => $via('policy_transactions', 'policy_id', '/policies'),
-            'premium_earning_ledger' => $via('premium_earning_ledger', 'policy_id', '/policies'),
-            'receipt' => "/receipts/{$id}",
-            'receipt_allocation' => $via('receipt_allocations', 'receipt_id', '/receipts'),
-            'claim' => "/claims/{$id}",
-            'claim_reserve' => $via('claim_reserves', 'claim_id', '/claims'),
-            'claim_payment' => $via('claim_payments', 'claim_id', '/claims'),
-            'claim_recovery' => $via('claim_recoveries', 'claim_id', '/claims'),
-            'refund' => '/refunds',
-            'agent_deposit' => '/agent-cash',
-            'commission_entry', 'commission_statement' => '/commission',
-            default => null,
-        };
     }
 }

@@ -25,6 +25,8 @@ const props = defineProps<{
     rows: { cells: Record<string, string | number | null>; link: string | null; links?: Record<string, string> }[];
     totals: Record<string, string>;
     summaries?: Summary[];
+    /** Flow fix X11: the other financial statements for the same period. */
+    related?: { label: string; href: string }[];
 }>();
 
 // A report opened without a start date covers everything before `to`; show that instead of a default start that was not applied.
@@ -71,6 +73,9 @@ function open(row: Row): void {
                         </select>
                     </template>
                 </form>
+                <nav v-if="related?.length" class="ml-2 flex items-center gap-3 text-ui" aria-label="Other statements for this period">
+                    <Link v-for="statement in related" :key="statement.href" :href="statement.href" class="text-accent-text hover:underline" @click="drillFrom(title)">{{ statement.label }}</Link>
+                </nav>
             </template>
         </DataTable>
         </div>
