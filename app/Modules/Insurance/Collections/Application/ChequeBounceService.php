@@ -10,6 +10,7 @@ use App\Modules\Insurance\Collections\Domain\Events\ReceiptAllocationReversed;
 use App\Modules\Insurance\Collections\Domain\Models\Receipt;
 use App\Modules\Insurance\Collections\Domain\Models\ReceiptAllocation;
 use App\Modules\Insurance\Collections\Domain\Models\SuspenseItem;
+use App\Modules\Insurance\Policy\Application\Dunning\DunningRun;
 use App\Modules\Insurance\Policy\Domain\Enums\InstallmentStatus;
 use App\Modules\Insurance\Policy\Domain\Enums\PolicyStatus;
 use App\Modules\Insurance\Policy\Domain\Models\Installment;
@@ -36,18 +37,27 @@ final class ChequeBounceService
         private readonly PermissionChecker $permissions,
         private readonly CollectionsAccountingEvents $accounting,
         private readonly Audit $audit,
+        private readonly DunningRun $dunning,
     ) {}
 
-    /** @throws BusinessRuleViolation REASON_REQUIRED | NOT_A_CHEQUE | ALREADY_BOUNCED | BOUNCE_BEFORE_RECEIPT | BOUNCE_AFTER_CANCELLATION */
-    public function bounce(string $receiptId, string $reason, string $actorUserId, CarbonImmutable $bouncedOn): Receipt
+    /**
+     * Gap fix GA-14: a cheque still in clearing is reversed out of cheques in clearing (it never reached the bank); `$bankChargeMinor` is what the bank
+     * deducted for returning it (CHEQUE_RETURN_CHARGED, optional); each installment left unpaid on a policy in force gets its first payment reminder now.
+     *
+     * @throws BusinessRuleViolation REASON_REQUIRED | INVALID_AMOUNT | NOT_A_CHEQUE | ALREADY_BOUNCED | BOUNCE_BEFORE_RECEIPT | BOUNCE_AFTER_CANCELLATION
+     */
+    public function bounce(string $receiptId, string $reason, string $actorUserId, CarbonImmutable $bouncedOn, int $bankChargeMinor = 0): Receipt
     {
         $receipt = Receipt::query()->findOrFail($receiptId);
         $this->permissions->authorize($actorUserId, 'receipt.allocate', AuthorizationScope::branch($receipt->entity_id, $receipt->branch_id));
         if (trim($reason) === '') {
             throw new BusinessRuleViolation('REASON_REQUIRED', 'A bounced cheque needs the bank\'s reason.');
         }
+        if ($bankChargeMinor < 0) {
+            throw new BusinessRuleViolation('INVALID_AMOUNT', 'A bank charge cannot be negative.');
+        }
 
-        return DB::transaction(function () use ($receiptId, $reason, $actorUserId, $bouncedOn): Receipt {
+        return DB::transaction(function () use ($receiptId, $reason, $actorUserId, $bouncedOn, $bankChargeMinor): Receipt {
             $receipt = $this->lockBounceable($receiptId, $bouncedOn);
             $allocations = ReceiptAllocation::query()->where('receipt_id', $receipt->id)->whereNull('reversed_on')->orderBy('allocated_at')->lockForUpdate()->get();
             foreach ($allocations as $allocation) {
@@ -58,9 +68,17 @@ final class ChequeBounceService
                 $item->forceFill(['allocated_minor' => 0, 'status' => SuspenseStatus::Bounced->value, 'bounced_on' => $bouncedOn->toDateString()])->save();
                 $this->accounting->receiptBounced($receipt, $item, $bouncedOn);
             }
-            $receipt->forceFill(['status' => ReceiptStatus::Bounced->value, 'bounced_on' => $bouncedOn->toDateString(), 'bounce_reason' => $reason])->save();
+            if ($bankChargeMinor > 0) {
+                $this->accounting->chequeReturnCharged($receipt, $bankChargeMinor, $bouncedOn);
+            }
+            $receipt->forceFill(['status' => ReceiptStatus::Bounced->value, 'bounced_on' => $bouncedOn->toDateString(), 'bounce_reason' => $reason, 'bounce_charge_minor' => $bankChargeMinor])->save();
+            $reminders = 0;
+            foreach ($allocations->pluck('target_id')->unique() as $installmentId) {
+                $reminders += $this->dunning->bouncedPremiumNotice((string) $installmentId, $bouncedOn) ? 1 : 0;
+            }
             $this->audit->record('receipt.bounced', AuditSubject::of('receipt', $receipt->id), null,
-                ['bounced_on' => $bouncedOn->toDateString(), 'allocations_reversed' => $allocations->count(), 'suspense_minor' => $item === null ? 0 : $item->amount_minor],
+                ['bounced_on' => $bouncedOn->toDateString(), 'allocations_reversed' => $allocations->count(), 'suspense_minor' => $item === null ? 0 : $item->amount_minor,
+                    'in_clearing' => $receipt->stillInClearing(), 'bank_charge_minor' => $bankChargeMinor, 'reminders' => $reminders],
                 $reason, 'receipt.allocate', Actor::user($actorUserId));
 
             return $receipt;

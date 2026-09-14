@@ -58,6 +58,8 @@ final class LookupController
             'account' => $this->guarded($actor, ['accounting.create_manual_journal', 'accounting.manage_coa'], fn (): array => $this->accounts($like)),
             // Flow fix X8: whoever approves claim payments picks the payee from every active party.
             'payee' => $this->guarded($actor, [self::PAYEE_DUTY], fn (): array => $this->payees($like)),
+            // Gap fix GA-21: whoever receipts a claim recovery picks its payer (a salvage buyer, a third party's insurer) from every active party.
+            'payer' => $this->guarded($actor, \App\Modules\Insurance\Claims\Application\ClaimRecoveryReceipts::PERMISSIONS, fn (): array => $this->payees($like)),
             default => abort(404),
         };
 

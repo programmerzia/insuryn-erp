@@ -63,7 +63,10 @@ final class BankPageController
         $money = fn (int $minor): string => PageSupport::money($minor, $account->currency);
 
         return Inertia::render('bank/Show', [
-            'account' => ['id' => $account->id, 'bank_name' => $account->bank_name, 'account_no_masked' => $account->account_no_masked, 'currency' => $account->currency],
+            // Gap fix GA-27: the GL account (prefills a bank charge journal) and the branches (a receipt recorded from a credit line belongs to one).
+            'account' => ['id' => $account->id, 'bank_name' => $account->bank_name, 'account_no_masked' => $account->account_no_masked, 'currency' => $account->currency, 'gl_account_id' => $account->gl_account_id],
+            // Follow-up H1: only the branches where this user may record a receipt.
+            'branches' => $this->permissions->reach(PageSupport::actor($request), ['receipt.create'])->constrain(DB::table('branches'), 'entity_id', 'id')->where('entity_id', $account->entity_id)->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => ['id' => (string) $b->id, 'code' => (string) $b->code, 'name' => (string) $b->name])->values()->all(),
             'asOf' => $asOf->toDateString(),
             'unmatched' => [
                 'statement_lines' => array_map(fn (array $l): array => $l + ['amount' => $money($l['amount_minor'])], $queue['statement_lines']),
@@ -108,6 +111,25 @@ final class BankPageController
         $matcher->unmatch($statementLine, PageSupport::actor($request));
 
         return back()->with('status', 'Match undone.');
+    }
+
+    /** Gap fix GA-27: ledger lines that cancel each other out (a bounced cheque and its reversal) are matched to each other. */
+    public function offset(Request $request, string $bankAccount, BankMatcher $matcher): RedirectResponse
+    {
+        /** @var array{journal_line_ids: list<string>} $data */
+        $data = $request->validate(['journal_line_ids' => ['required', 'array', 'min:2'], 'journal_line_ids.*' => ['required', 'uuid']],
+            ['journal_line_ids.min' => 'Choose at least two ledger lines that cancel each other out.']);
+        $group = $matcher->offset($bankAccount, $data['journal_line_ids'], PageSupport::actor($request));
+
+        return back()->with('status', count($data['journal_line_ids']).' ledger lines offset against each other.')
+            ->with('undo', ['label' => 'Undo', 'url' => "/bank/{$bankAccount}/offsets/{$group}/undo"]);
+    }
+
+    public function undoOffset(Request $request, string $bankAccount, string $group, BankMatcher $matcher): RedirectResponse
+    {
+        $matcher->undoOffset($bankAccount, $group, PageSupport::actor($request));
+
+        return back()->with('status', 'Offset undone.');
     }
 
     public function explain(Request $request, string $statementLine, BankMatcher $matcher): RedirectResponse

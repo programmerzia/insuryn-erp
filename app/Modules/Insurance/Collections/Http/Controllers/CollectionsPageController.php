@@ -12,6 +12,7 @@ use App\Modules\Insurance\Collections\Application\AgentCashPositionQuery;
 use App\Modules\Insurance\Collections\Application\AgentDepositService;
 use App\Modules\Insurance\Collections\Application\AllocationLine;
 use App\Modules\Insurance\Collections\Application\ChequeBounceService;
+use App\Modules\Insurance\Collections\Application\ChequeClearingService;
 use App\Modules\Insurance\Collections\Application\ChequeDetails;
 use App\Modules\Insurance\Collections\Application\ChequeRegisterQuery;
 use App\Modules\Insurance\Collections\Application\ReceiptService;
@@ -138,7 +139,9 @@ final class CollectionsPageController
                 'reference' => $model->reference, 'status' => $model->status->value, 'cheque_no' => $model->cheque_no, 'cheque_bank' => $model->cheque_bank,
                 'bounced_on' => $model->bounced_on?->toDateString(), 'bounce_reason' => $model->bounce_reason,
                 // GA-03: the policy the money was taken for, while it waits in suspense for someone who allocates.
-                'for_policy' => $model->for_policy_id === null ? null : ['id' => $model->for_policy_id, 'number' => (string) DB::table('policies')->where('id', $model->for_policy_id)->value('number')]],
+                'for_policy' => $model->for_policy_id === null ? null : ['id' => $model->for_policy_id, 'number' => (string) DB::table('policies')->where('id', $model->for_policy_id)->value('number')],
+                // Gap fix GA-14: where a cheque's money is — in clearing, cleared into the bank, or bounced — and the bank's charge on a bounce.
+                'in_clearing' => $model->in_clearing, 'cleared_on' => $model->cleared_on?->toDateString(), 'bounce_charge' => $model->bounce_charge_minor > 0 ? $money($model->bounce_charge_minor) : null],
             'allocations' => DB::table('receipt_allocations as a')->leftJoin('policies as p', 'p.id', '=', 'a.policy_id')->where('a.receipt_id', $model->id)->orderBy('a.allocated_at')
                 ->get(['a.id', 'a.policy_id', 'p.number', 'a.amount_minor', 'a.posted_on', 'a.reversed_on'])
                 ->map(fn (object $a): array => ['id' => (string) $a->id, 'policy_id' => $a->policy_id === null ? null : (string) $a->policy_id, 'policy_number' => $a->number, 'amount' => $money((int) $a->amount_minor), 'posted_on' => (string) $a->posted_on,
@@ -147,6 +150,7 @@ final class CollectionsPageController
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id)))
                 ? "/receipts/{$model->id}/documents" : null,
             'actions' => ['bounce' => $model->channel === 'cheque' && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($model->entity_id, $model->branch_id)),
+                'clear' => $model->stillInClearing() && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($model->entity_id, $model->branch_id)),
                 // Flow fix X5: print the receipt from the header; allocate what waits in suspense.
                 'print' => app(NextSteps::class)->canPrintReceipt($actor, $model->id),
                 'allocate' => $item !== null && $item->status->value === 'open' && $item->openMinor() > 0 && $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($model->entity_id, $model->branch_id))],
@@ -155,11 +159,24 @@ final class CollectionsPageController
 
     public function bounce(Request $request, string $receipt, ChequeBounceService $bounces): RedirectResponse
     {
-        /** @var array{bounced_on: string, reason: string} $data */
-        $data = $request->validate(['bounced_on' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000']]);
-        $bounces->bounce($receipt, $data['reason'], PageSupport::actor($request), CarbonImmutable::parse($data['bounced_on']));
+        /** @var array{bounced_on: string, reason: string, bank_charge?: string|null} $data */
+        $data = $request->validate(['bounced_on' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000'], 'bank_charge' => ['nullable', 'string']]);
+        $currency = (string) Receipt::query()->whereKey($receipt)->value('currency');
+        // Gap fix GA-14: the bank's charge for returning the cheque is optional.
+        $charge = ($data['bank_charge'] ?? '') === '' ? 0 : PageSupport::minor('bank_charge', $data['bank_charge'], $currency === '' ? PageSupport::entity()['currency'] : $currency);
+        $bounces->bounce($receipt, $data['reason'], PageSupport::actor($request), CarbonImmutable::parse($data['bounced_on']), $charge);
 
-        return redirect("/receipts/{$receipt}")->with('status', 'Cheque marked as bounced; its allocations were reversed.');
+        return redirect("/receipts/{$receipt}")->with('status', 'Cheque marked as bounced; its allocations were reversed and the first payment reminder is on its way.');
+    }
+
+    /** Gap fix GA-14: the bank credited a cheque that waited in clearing. */
+    public function clearCheque(Request $request, string $receipt, ChequeClearingService $clearing): RedirectResponse
+    {
+        /** @var array{cleared_on: string} $data */
+        $data = $request->validate(['cleared_on' => ['required', 'date_format:Y-m-d']]);
+        $cleared = $clearing->clear($receipt, PageSupport::actor($request), CarbonImmutable::parse($data['cleared_on']));
+
+        return back()->with('status', "Cheque {$cleared->cheque_no} on {$cleared->number} cleared into the bank.");
     }
 
     public function suspense(Request $request, SuspenseQuery $query): Response
@@ -345,8 +362,9 @@ final class CollectionsPageController
 
         return Inertia::render('receipts/Cheques', ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'register' => [
             'rows' => array_map(fn (array $r): array => $r + ['amount' => PageSupport::money($r['amount_minor'], $entity['currency'])], $result['rows']),
-            'totals' => ['presented' => PageSupport::money($result['totals']['presented_minor'], $entity['currency']), 'bounced' => PageSupport::money($result['totals']['bounced_minor'], $entity['currency'])],
-        ]]);
+            'totals' => ['presented' => PageSupport::money($result['totals']['presented_minor'], $entity['currency']), 'bounced' => PageSupport::money($result['totals']['bounced_minor'], $entity['currency']),
+                'in_clearing' => PageSupport::money($result['totals']['in_clearing_minor'], $entity['currency']), 'cleared' => PageSupport::money($result['totals']['cleared_minor'], $entity['currency'])],
+        ], 'today' => app(BusinessClock::class)->today()->toDateString()]);
     }
 
     public function dunning(Request $request): Response

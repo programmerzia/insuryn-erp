@@ -135,6 +135,78 @@ final class BankMatcher
         });
     }
 
+    /**
+     * Gap fix GA-27: ledger lines of the bank account that cancel each other out — a bounced cheque's receipt and its reversal, a payment and its
+     * correction — are matched to each other (one contra group, no statement line), because the bank statement shows neither. Two or more unmatched
+     * posted lines on the bank account's GL account, summing to zero. Returns the group id (the undo key).
+     *
+     * @param list<string> $journalLineIds
+     *
+     * @throws BusinessRuleViolation OFFSET_NEEDS_TWO_LINES | JOURNAL_LINE_NOT_IN_BANK_ACCOUNT | JOURNAL_LINE_ALREADY_MATCHED | OFFSET_NOT_ZERO
+     */
+    public function offset(string $bankAccountId, array $journalLineIds, string $actorUserId): string
+    {
+        $bankAccount = BankAccount::query()->findOrFail($bankAccountId);
+        $this->permissions->authorize($actorUserId, 'bank.match', AuthorizationScope::entity($bankAccount->entity_id));
+        $journalLineIds = array_values(array_unique($journalLineIds));
+        if (count($journalLineIds) < 2) {
+            throw new BusinessRuleViolation('OFFSET_NEEDS_TWO_LINES', 'Choose at least two ledger lines that cancel each other out.');
+        }
+
+        return DB::transaction(function () use ($bankAccount, $journalLineIds, $actorUserId): string {
+            DB::table('bank_accounts')->where('id', $bankAccount->id)->lockForUpdate()->value('id');
+            $lines = $this->ledger->postedLinesByIds($bankAccount->gl_account_id, $journalLineIds);
+            if (count($lines) !== count($journalLineIds)) {
+                throw new BusinessRuleViolation('JOURNAL_LINE_NOT_IN_BANK_ACCOUNT', 'Every journal line must be a posted line on the bank account\'s GL account.');
+            }
+            if (DB::table('bank_matches')->whereIn('journal_line_id', $journalLineIds)->exists()) {
+                throw new BusinessRuleViolation('JOURNAL_LINE_ALREADY_MATCHED', 'A journal line is already matched.');
+            }
+            $total = array_sum(array_column($lines, 'amount_minor'));
+            if ($total !== 0) {
+                throw new BusinessRuleViolation('OFFSET_NOT_ZERO', "The chosen ledger lines add up to {$total}, not zero, so they do not cancel each other out.");
+            }
+            $group = (string) Str::uuid7();
+            DB::table('bank_matches')->insert(array_map(fn (string $journalLineId): array => ['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(),
+                'statement_line_id' => null, 'contra_group_id' => $group, 'journal_line_id' => $journalLineId, 'matched_by' => $actorUserId, 'method' => 'contra',
+                'confidence' => null, 'matched_at' => CarbonImmutable::now()], $journalLineIds));
+            $this->audit->record('bank_lines.offset', AuditSubject::of('bank_account', $bankAccount->id), null, ['contra_group_id' => $group, 'journal_line_ids' => $journalLineIds],
+                null, 'bank.match', Actor::user($actorUserId));
+
+            return $group;
+        });
+    }
+
+    /**
+     * Gap fix GA-27: undo an offset while none of its lines falls in a locked month (the reconciliation signed off there stays as it was).
+     *
+     * @throws BusinessRuleViolation NOT_MATCHED | PERIOD_LOCKED
+     */
+    public function undoOffset(string $bankAccountId, string $contraGroupId, string $actorUserId): void
+    {
+        $bankAccount = BankAccount::query()->findOrFail($bankAccountId);
+        $this->permissions->authorize($actorUserId, 'bank.match', AuthorizationScope::entity($bankAccount->entity_id));
+
+        DB::transaction(function () use ($bankAccount, $contraGroupId, $actorUserId): void {
+            $journalLineIds = array_values(DB::table('bank_matches')->where('contra_group_id', $contraGroupId)->lockForUpdate()->pluck('journal_line_id')->map(fn ($id): string => (string) $id)->all());
+            $lines = $this->ledger->postedLinesByIds($bankAccount->gl_account_id, $journalLineIds);
+            if ($journalLineIds === [] || $lines === []) {
+                throw new BusinessRuleViolation('NOT_MATCHED', 'These ledger lines are not offset against each other, so there is nothing to undo.');
+            }
+            foreach ($lines as $line) {
+                $postedOn = $line['posting_date'];
+                $locked = DB::table('fiscal_periods as f')->join('books as b', 'b.id', '=', 'f.book_id')->where('b.is_primary', true)->where('f.entity_id', $bankAccount->entity_id)
+                    ->where('f.starts', '<=', $postedOn)->where('f.ends', '>=', $postedOn)->where('f.status', 'locked')->exists();
+                if ($locked) {
+                    throw new BusinessRuleViolation('PERIOD_LOCKED', CarbonImmutable::parse($postedOn)->format('F Y').' is locked, so its bank matches cannot change. Ask for the period to be reopened first.');
+                }
+            }
+            DB::table('bank_matches')->where('contra_group_id', $contraGroupId)->delete();
+            $this->audit->record('bank_lines.offset_undone', AuditSubject::of('bank_account', $bankAccount->id), ['contra_group_id' => $contraGroupId, 'journal_line_ids' => $journalLineIds], null,
+                null, 'bank.match', Actor::user($actorUserId));
+        });
+    }
+
     /** @throws BusinessRuleViolation REASON_REQUIRED | ALREADY_MATCHED */
     public function explain(string $statementLineId, string $reason, string $actorUserId): void
     {

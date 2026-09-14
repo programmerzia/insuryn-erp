@@ -55,6 +55,30 @@ final class DunningRun
         return new DunningRunResult($notices, $lapsed);
     }
 
+    /**
+     * Gap fix GA-14 (ASSUMPTION A-218): the premium cheque for an installment bounced, so its first reminder goes out now instead of 7 days after the
+     * due date — for a policy in force with the installment still unpaid. Recorded once per installment and level like the nightly notices (a later
+     * nightly run does not repeat level 1; level 2 follows the schedule), and queued as `DunningNoticeDue` with the reason.
+     */
+    public function bouncedPremiumNotice(string $installmentId, CarbonImmutable $on): bool
+    {
+        $installment = DB::table('installments as i')->join('policies as p', 'p.id', '=', 'i.policy_id')->where('i.id', $installmentId)
+            ->whereIn('p.status', [PolicyStatus::Issued->value, PolicyStatus::Active->value])
+            ->first(['i.id', 'i.policy_id', 'i.due_date', 'p.entity_id', DB::raw('i.amount_minor - i.paid_minor - i.cancelled_minor as outstanding')]);
+        if ($installment === null || (int) $installment->outstanding <= 0) {
+            return false;
+        }
+        $inserted = DB::table('dunning_notices')->insertOrIgnore(['id' => (string) Str::uuid7(), 'tenant_id' => TenantContext::id(), 'entity_id' => (string) $installment->entity_id,
+            'policy_id' => (string) $installment->policy_id, 'installment_id' => (string) $installment->id, 'level' => 1,
+            'days_overdue' => max(0, (int) CarbonImmutable::parse((string) $installment->due_date)->diffInDays($on, false)),
+            'outstanding_minor' => (int) $installment->outstanding, 'issued_on' => $on->toDateString(), 'created_at' => now()]);
+        if ($inserted === 1) {
+            $this->outbox->add('DunningNoticeDue', ['policy_id' => (string) $installment->policy_id, 'installment_id' => (string) $installment->id, 'level' => 1, 'reason' => 'cheque_bounced']);
+        }
+
+        return $inserted === 1;
+    }
+
     /** @param object{id: string, policy_id: string, outstanding: int|string} $installment */
     private function issueNotices(string $entityId, object $installment, int $daysOverdue, CarbonImmutable $asOf): int
     {

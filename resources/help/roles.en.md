@@ -7,6 +7,8 @@ account role (do not translate it); the others say what a debit or a credit to t
 |---|---|---|
 | bank_main | Money came into the bank | Money went out of the bank |
 | bank_clearing | Money is on its way to the bank through a payment gateway | Money left the clearing account for the bank |
+| cheques_in_clearing | A cheque was received and the bank has not credited it yet | The cheque cleared into the bank, or bounced |
+| bank_charges | The bank deducted a charge | Bank charge reduced |
 | suspense_receipts | Money in suspense was matched to a policy | Money arrived that is not yet matched to a policy |
 | premium_receivable | Customer owes us the premium | Customer paid, so owes us less |
 | unearned_premium | Cover has been provided, so this premium is no longer owed to the customer | Cover not yet provided — a liability until time passes |

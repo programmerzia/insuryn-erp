@@ -77,7 +77,9 @@ final class RoleTemplates
                 'commission.pay',
                 // ASSUMPTION A-172 (gap fix GA-13): the accountant prepares the close and ties bank and suspense to the ledger, so reads the trial balance, account
                 // activity, the close checklist and the reports (read-only; the finance manager already holds it, so it is added here, not to ACCOUNTANT).
-                'reports.financial']],
+                'reports.financial',
+                // ASSUMPTION A-219 (gap fix GA-27): the accountant who reconciles the bank records an unknown credit on the statement as a receipt held in suspense.
+                'receipt.create']],
             'finance_manager' => ['name' => 'Finance Manager', 'permissions' => $financeManager],
             'cfo' => ['name' => 'CFO', 'permissions' => [...$financeManager, ...self::CFO_EXTRA]],
             self::AUDITOR => ['name' => 'Auditor', 'permissions' => self::READ_ONLY_PERMISSIONS],

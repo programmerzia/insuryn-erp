@@ -60,6 +60,13 @@ final class ReasonMessages
         'JOB_FAILED' => 'The job did not finish; the error is in the application log. Try again, or ask your administrator if it fails again.',
         'EVENT_NOT_STUCK' => 'This accounting event has already been posted or is waiting its turn; only failed or long-queued events can be sent again. Refresh the list.',
         'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',
+        // Gap fix GA-14: cheques in clearing.
+        'CHEQUE_NOT_IN_CLEARING' => 'This cheque went straight to the bank when it was recorded, so there is nothing to clear.',
+        'ALREADY_CLEARED' => 'This cheque has already cleared. Refresh the page to see it.',
+        'CLEARED_BEFORE_RECEIPT' => 'A cheque cannot clear before the day it was received. Choose a later date.',
+        // Gap fix GA-27: bank reconciliation actions.
+        'OFFSET_NEEDS_TWO_LINES' => 'Choose at least two ledger lines that cancel each other out.',
+        'STATEMENT_LINE_NOT_A_CREDIT' => 'Only money paid into the bank can be recorded as a receipt. Post a charge or payment as a journal instead.',
     ];
 
     /** @var list<string> reasons worded below from the amounts or dates in the domain message */
@@ -123,6 +130,8 @@ final class ReasonMessages
             $reason === 'RESERVE_BELOW_APPROVED' && $amounts !== [] => 'The reserve cannot go below the '.$money($amounts[count($amounts) - 1]).' already approved for payment.',
             $reason === 'PREMIUM_CREDIT_EXCEEDS_OUTSTANDING' && $amounts !== [] => 'The premium decrease of '.$money($amounts[count($amounts) - 1]).' is more than the premium still unpaid.',
             $reason === 'MATCH_AMOUNT_MISMATCH' && count($amounts) >= 2 => 'The ledger lines add up to '.$money($amounts[0]).', not the statement line\'s '.$money($amounts[1]).'. Choose lines that add up.',
+            // Gap fix GA-27.
+            $reason === 'OFFSET_NOT_ZERO' && $amounts !== [] => 'The chosen ledger lines add up to '.$money($amounts[0]).', not zero, so they do not cancel each other out.',
             isset(self::FIXED[$reason]) => self::FIXED[$reason],
             default => self::withoutIds($message),
         };

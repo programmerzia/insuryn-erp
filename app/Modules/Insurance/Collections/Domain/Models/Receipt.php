@@ -34,6 +34,9 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonImmutable|null $bounced_on
  * @property string|null $bounce_reason
  * @property string|null $for_policy_id
+ * @property bool $in_clearing gap fix GA-14: a cheque taken into cheques in clearing
+ * @property CarbonImmutable|null $cleared_on gap fix GA-14: the day the bank credited the cheque
+ * @property int $bounce_charge_minor gap fix GA-14: the bank's charge recorded with a bounce
  */
 final class Receipt extends Model
 {
@@ -42,5 +45,12 @@ final class Receipt extends Model
 
     protected $table = 'receipts';
     protected $guarded = [];
-    protected $casts = ['status' => ReceiptStatus::class, 'value_date' => 'immutable_date', 'received_at' => 'immutable_datetime', 'cheque_date' => 'immutable_date', 'bounced_on' => 'immutable_date', 'amount_minor' => 'int'];
+    protected $casts = ['status' => ReceiptStatus::class, 'value_date' => 'immutable_date', 'received_at' => 'immutable_datetime', 'cheque_date' => 'immutable_date', 'bounced_on' => 'immutable_date', 'amount_minor' => 'int',
+        'in_clearing' => 'bool', 'cleared_on' => 'immutable_date', 'bounce_charge_minor' => 'int'];
+
+    /** Gap fix GA-14: the money is still in cheques in clearing (taken into clearing, neither cleared nor bounced). */
+    public function stillInClearing(): bool
+    {
+        return $this->in_clearing && $this->cleared_on === null;
+    }
 }

@@ -50,10 +50,10 @@ final class ReceiptController
 
     public function bounce(Request $request, string $receipt, ChequeBounceService $bounces): JsonResponse
     {
-        /** @var array{bounced_on: string, reason: string} $data */
-        $data = $request->validate(['bounced_on' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000']]);
+        /** @var array{bounced_on: string, reason: string, bank_charge_minor?: int|null} $data */
+        $data = $request->validate(['bounced_on' => ['required', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000'], 'bank_charge_minor' => ['nullable', 'integer', 'min:0']]); // GA-14
 
-        return response()->json(['data' => self::present($bounces->bounce($receipt, $data['reason'], self::actor($request), CarbonImmutable::parse($data['bounced_on'])))]);
+        return response()->json(['data' => self::present($bounces->bounce($receipt, $data['reason'], self::actor($request), CarbonImmutable::parse($data['bounced_on']), (int) ($data['bank_charge_minor'] ?? 0)))]);
     }
 
     public function deposit(Request $request, string $agent, \App\Modules\Insurance\Collections\Application\AgentDepositService $deposits): JsonResponse

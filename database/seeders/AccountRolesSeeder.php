@@ -13,6 +13,8 @@ final class AccountRolesSeeder extends Seeder
     public const ROLES = [
         'bank_main' => 'Main bank account (overridden per bank account LATER)',
         'bank_clearing' => 'Payment gateway / clearing',
+        'cheques_in_clearing' => 'Cheques received and not yet cleared by the bank', // gap fix GA-14
+        'bank_charges' => 'Bank charges', // gap fix GA-14
         'suspense_receipts' => 'Unallocated receipts',
         'premium_receivable' => 'Premium receivable control',
         'unearned_premium' => 'Unearned premium reserve',

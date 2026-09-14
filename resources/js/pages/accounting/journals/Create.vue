@@ -27,13 +27,15 @@ const props = defineProps<{
     branches: { id: string; code: string; name: string }[];
     today: string;
     canCreateAccount?: boolean;
+    /** Gap fix GA-27: a journal another screen asked for ("Post as bank charge" on the bank statement). */
+    prefill?: { transaction_date: string; description: string; reason: string; lines: { account_id: string; side: string; amount: string; memo: string }[] } | null;
 }>();
 
 type Line = { account_id: string; side: string; amount: string; branch_id: string; memo: string };
 const blank = (side: string): Line => ({ account_id: '', side, amount: '', branch_id: props.branches[0]?.id ?? '', memo: '' });
-const form = useForm<{ transaction_date: string; description: string; kind: string; reason: string; lines: Line[]; voucher: File | null }>({
-    transaction_date: props.today, description: '', kind: 'manual', reason: '', lines: [blank('debit'), blank('credit')], voucher: null,
-});
+const form = useForm<{ transaction_date: string; description: string; kind: string; reason: string; lines: Line[]; voucher: File | null }>(props.prefill
+    ? { transaction_date: props.prefill.transaction_date, description: props.prefill.description, kind: 'manual', reason: props.prefill.reason, lines: props.prefill.lines.map((l) => ({ ...blank(l.side), ...l })), voucher: null }
+    : { transaction_date: props.today, description: '', kind: 'manual', reason: '', lines: [blank('debit'), blank('credit')], voucher: null });
 const accounts = ref<AccountChoice[]>(props.accounts);
 const created = ref(0); // remounts the line lookups so a line shows an account created inline
 /** The label a line's lookup shows for its chosen account (also for one just created inline). */

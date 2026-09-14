@@ -91,6 +91,18 @@ final class AccountRoleMappingService
     }
 
     /**
+     * Gap fix GA-14: whether $roleCode has an account in the entity's primary book on $on — how a business module learns an optional role is in use
+     * (cheques in clearing) without reading kernel tables itself. Read-only; no permission.
+     */
+    public function isMapped(string $entityId, string $roleCode, CarbonImmutable $on): bool
+    {
+        $day = $on->toDateString();
+
+        return DB::table('account_role_mappings as m')->join('books as b', 'b.id', '=', 'm.book_id')->where('b.is_primary', true)->where('m.entity_id', $entityId)
+            ->where('m.role_code', $roleCode)->where('m.effective_from', '<=', $day)->where(fn ($q) => $q->whereNull('m.effective_to')->orWhere('m.effective_to', '>', $day))->exists();
+    }
+
+    /**
      * Maps $roleCode to $accountId from $from. Returns the new mapping id.
      *
      * @throws BusinessRuleViolation ROLE_MAPPING_INVALID | ROLE_MAPPING_OVERLAP | ROLE_ALREADY_POSTED

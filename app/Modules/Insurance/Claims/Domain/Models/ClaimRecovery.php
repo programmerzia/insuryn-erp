@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $bank_account_id
  * @property string|null $reference
  * @property string $recorded_by
+ * @property string|null $number gap fix GA-21: the recovery receipt number (null for recoveries recorded before)
+ * @property string|null $payer_party_id gap fix GA-21: who paid the recovery
  */
 final class ClaimRecovery extends Model
 {

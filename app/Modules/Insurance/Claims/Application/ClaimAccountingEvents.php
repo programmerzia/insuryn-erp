@@ -54,7 +54,8 @@ final class ClaimAccountingEvents
     {
         $this->submitFor($claim, 'CLAIM_RECOVERED', 'claim_recovery', $recovery->id, 'CLAIM_RECOVERED:'.$recovery->id, $recovery->received_on,
             ['amount' => $recovery->amount_minor, 'recovery_id' => $recovery->id, 'recovery_type' => $recovery->type, 'reference' => $recovery->reference,
-                'bank_account_id' => $recovery->bank_account_id] + $this->bankOverride($recovery->bank_account_id, $claim));
+                'bank_account_id' => $recovery->bank_account_id] + ($recovery->number === null ? [] : ['receipt_number' => $recovery->number]) // GA-21: the bank line names the recovery receipt
+                + $this->bankOverride($recovery->bank_account_id, $claim));
     }
 
     /** @return array{account_overrides?: array{bank_main: string}} */

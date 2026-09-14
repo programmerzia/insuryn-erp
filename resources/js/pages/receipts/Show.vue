@@ -5,6 +5,7 @@ import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
 import FormLayout from '@/components/forms/FormLayout.vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import MoneyInput from '@/components/forms/MoneyInput.vue';
 import TextInput from '@/components/forms/TextInput.vue';
 import ObjectPage from '@/components/object/ObjectPage.vue';
 import type { AccountingJournal, AuditRow, DocumentGeneration, StoredDocumentRow, TimelineEntry } from '@/components/object/types';
@@ -19,11 +20,13 @@ const props = defineProps<{
     receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null;
         /** GA-03: the policy the money was taken for while it waits in suspense. */
         for_policy?: { id: string; number: string } | null,
-        payer: { id: string; name: string } | null; collected_by: { id: string; code: string } | null };
+        payer: { id: string; name: string } | null; collected_by: { id: string; code: string } | null;
+        /** Gap fix GA-14. */
+        in_clearing?: boolean; cleared_on?: string | null; bounce_charge?: string | null };
     allocations: { id: string; policy_id: string | null; policy_number: string | null; amount: string; posted_on: string; reversed_on: string | null }[];
     suspense: { id: string; amount: string; open: string; status: string } | null;
     /** Flow fix X5: print from the header (then download what was printed); allocate while part of the receipt waits in suspense. */
-    actions: { bounce: boolean; print: boolean; allocate: boolean };
+    actions: { bounce: boolean; print: boolean; allocate: boolean; clear?: boolean };
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
     audit?: AuditRow[];
@@ -33,8 +36,18 @@ const props = defineProps<{
 }>();
 
 const bouncing = ref(false);
-// Gap fix GA-19: the bank returns the cheque today unless changed.
-const bounce = useMoneyForm(() => `/receipts/${props.receipt.id}/bounce`, { bounced_on: useBusinessToday(), reason: '' }, () => (bouncing.value = false));
+// Gap fix GA-19: the bank returns the cheque today unless changed. GA-14: with the bank's charge for returning it, when there is one.
+const today = useBusinessToday();
+const bounce = useMoneyForm(() => `/receipts/${props.receipt.id}/bounce`, { bounced_on: today, reason: '', bank_charge: '' }, () => (bouncing.value = false));
+// Gap fix GA-14: a cheque in clearing is cleared when the bank credits it.
+const clearing = ref(false);
+const clear = useMoneyForm(() => `/receipts/${props.receipt.id}/clear`, { cleared_on: today }, () => (clearing.value = false));
+const whereTheMoneyIs = computed(() => {
+    if (props.receipt.channel !== 'cheque') return null;
+    if (props.receipt.bounced_on) return null;
+    if (props.receipt.cleared_on) return `cleared ${formatDate(props.receipt.cleared_on)}`;
+    return props.receipt.in_clearing ? 'in clearing' : null;
+});
 const preferences = usePreferences();
 const printing = useForm({ locale: preferences.locale });
 function print(): void {
@@ -56,7 +69,7 @@ const facts = computed(() => [
     <AppLayout help="receipts" :title="receipt.number">
         <ObjectPage
             :title="receipt.number"
-            :subtitle="[receipt.reference, receipt.cheque_no ? `cheque ${receipt.cheque_no} ${receipt.cheque_bank}` : null, receipt.bounced_on ? `bounced ${formatDate(receipt.bounced_on)}: ${receipt.bounce_reason}` : null].filter(Boolean).join(' · ')"
+            :subtitle="[receipt.reference, receipt.cheque_no ? `cheque ${receipt.cheque_no} ${receipt.cheque_bank}` : null, whereTheMoneyIs, receipt.bounced_on ? `bounced ${formatDate(receipt.bounced_on)}: ${receipt.bounce_reason}` : null, receipt.bounce_charge ? `bank charge ${formatMoney(receipt.bounce_charge)}` : null].filter(Boolean).join(' · ')"
             :status="receipt.status"
             :facts="facts"
             :crumbs="[{ label: 'Receipts', href: '/receipts' }]"
@@ -69,6 +82,7 @@ const facts = computed(() => [
             :document-generation="documentGeneration"
         >
             <template #actions>
+                <button v-if="actions.clear" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="clearing = true">Cheque cleared</button>
                 <button v-if="actions.bounce" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="bouncing = true">Cheque bounced</button>
                 <button v-if="actions.print" type="button" :disabled="printing.processing" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" @click="print">
                     {{ printing.processing ? 'Printing…' : 'Print receipt' }}
@@ -99,11 +113,19 @@ const facts = computed(() => [
         </ObjectPage>
         <Drawer v-model:open="bouncing" title="Record a bounced cheque">
             <FormLayout submit-label="Review the reversal" :dirty="bounce.form.isDirty" :processing="bounce.form.processing" :error="(bounce.form.errors as Record<string, string>).form" @submit="bounce.review" @cancel="bouncing = false">
-                <p class="text-ui text-ink-2">Every allocation is reversed, the installments become unpaid again and the money leaves the bank account.</p>
+                <p class="text-ui text-ink-2">Every allocation is reversed, the installments become unpaid again and the money leaves {{ receipt.in_clearing && !receipt.cleared_on ? 'cheques in clearing' : 'the bank account' }}. Each policy in force gets its first payment reminder now.</p>
                 <Field id="bounced_on" label="Bounced on" :error="bounce.form.errors.bounced_on"><DateInput v-model="bounce.form.bounced_on" /></Field>
                 <Field id="bounce_reason" label="Bank's reason" :error="bounce.form.errors.reason"><TextInput v-model="bounce.form.reason" /></Field>
+                <Field id="bounce_charge" label="Bank charge (BDT)" optional hint="What the bank deducted for returning the cheque; booked as a bank charge." :error="bounce.form.errors.bank_charge"><MoneyInput v-model="bounce.form.bank_charge" /></Field>
             </FormLayout>
         </Drawer>
+        <Drawer v-model:open="clearing" title="Cheque cleared">
+            <FormLayout submit-label="Review the clearing" :dirty="clear.form.isDirty" :processing="clear.form.processing" :error="(clear.form.errors as Record<string, string>).form" @submit="clear.review" @cancel="clearing = false">
+                <p class="text-ui text-ink-2">The bank credited the cheque: its {{ formatMoney(receipt.amount) }} BDT moves from cheques in clearing into the bank account, where the statement line matches it.</p>
+                <Field id="cleared_on" label="Cleared on" :error="clear.form.errors.cleared_on"><DateInput v-model="clear.form.cleared_on" /></Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-model:open="clear.previewOpen.value" :result="clear.preview.value" :title="`Clear cheque ${receipt.cheque_no}?`" confirm-label="Clear into the bank" currency="BDT" :processing="clear.form.processing" @confirm="clear.post" />
         <JournalPreviewDialog v-model:open="bounce.previewOpen.value" :result="bounce.preview.value" :title="`Reverse ${receipt.number}?`" confirm-label="Reverse the receipt" currency="BDT" :processing="bounce.form.processing" @confirm="bounce.post" />
     </AppLayout>
 </template>

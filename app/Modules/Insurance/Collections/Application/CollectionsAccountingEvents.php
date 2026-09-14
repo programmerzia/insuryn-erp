@@ -104,11 +104,45 @@ final class CollectionsAccountingEvents
         );
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Gap fix GA-14: the bank credited a cheque that sat in clearing — DR bank_main (the receipt's bank account) / CR cheques_in_clearing for the whole
+     * cheque, dated the clearing day. It carries the receipt number and reference, so the statement line matches it.
+     */
+    public function chequeCleared(Receipt $receipt, CarbonImmutable $clearedOn): void
+    {
+        ($this->submit)(
+            entityId: $receipt->entity_id, eventType: 'CHEQUE_CLEARED', sourceType: 'receipt', sourceId: $receipt->id,
+            idempotencyKey: 'CHEQUE_CLEARED:'.$receipt->id, transactionDate: $clearedOn, effectiveDate: $clearedOn,
+            currency: $receipt->currency, payload: ['amount' => $receipt->amount_minor, 'receipt_id' => $receipt->id, 'receipt_number' => $receipt->number,
+                'reference' => $receipt->reference, 'bank_account_id' => $receipt->bank_account_id] + $this->bankOverride($receipt->bank_account_id, $receipt->entity_id, $receipt->currency),
+            dimensions: ['branch' => $receipt->branch_id, 'receipt' => $receipt->id],
+        );
+    }
+
+    /** Gap fix GA-14: the bank's charge for a returned cheque — DR bank_charges / CR bank_main (the receipt's bank account), dated the bounce. */
+    public function chequeReturnCharged(Receipt $receipt, int $chargeMinor, CarbonImmutable $bouncedOn): void
+    {
+        ($this->submit)(
+            entityId: $receipt->entity_id, eventType: 'CHEQUE_RETURN_CHARGED', sourceType: 'receipt', sourceId: $receipt->id,
+            idempotencyKey: 'CHEQUE_RETURN_CHARGED:'.$receipt->id, transactionDate: $bouncedOn, effectiveDate: $bouncedOn,
+            currency: $receipt->currency, payload: ['amount' => $chargeMinor, 'receipt_id' => $receipt->id, 'receipt_number' => $receipt->number,
+                'reference' => $receipt->cheque_no === null ? $receipt->reference : "Returned cheque {$receipt->cheque_no}", 'bank_account_id' => $receipt->bank_account_id]
+                + $this->bankOverride($receipt->bank_account_id, $receipt->entity_id, $receipt->currency),
+            dimensions: ['branch' => $receipt->branch_id, 'receipt' => $receipt->id],
+        );
+    }
+
+    /**
+     * Gap fix GA-14: `in_clearing` = 1 while the cheque's money sits in cheques in clearing, so the bank lines of PREMIUM_RECEIVED, RECEIPT_RECORDED,
+     * PREMIUM_RECEIPT_REVERSED and RECEIPT_BOUNCED (rule version 2) use cheques_in_clearing instead of bank_main; absent otherwise, which posts as version 1.
+     *
+     * @return array<string, mixed>
+     */
     private function receiptPayload(Receipt $receipt, int $amountMinor): array
     {
         return ['amount' => $amountMinor, 'receipt_id' => $receipt->id, 'receipt_number' => $receipt->number,
             'reference' => $receipt->reference, 'bank_account_id' => $receipt->bank_account_id]
+            + ($receipt->stillInClearing() ? ['in_clearing' => 1] : [])
             + $this->bankOverride($receipt->bank_account_id, $receipt->entity_id, $receipt->currency);
     }
 

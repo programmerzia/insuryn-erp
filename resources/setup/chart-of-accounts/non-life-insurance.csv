@@ -1,6 +1,7 @@
 code,name,type,normal_side,is_control,control_subledger,role
 1010,Bank - Main,asset,debit,false,,bank_main
 1020,Bank - Clearing,asset,debit,false,,bank_clearing
+1025,Cheques in Clearing,asset,debit,false,,cheques_in_clearing
 1030,Cash in Hand,asset,debit,false,,
 1100,Premium Receivable,asset,debit,true,premium,premium_receivable
 1150,Agent Collections Receivable,asset,debit,true,agent,agent_receivable
@@ -31,4 +32,5 @@ code,name,type,normal_side,is_control,control_subledger,role
 5310,Employer PF Contribution,expense,debit,false,,employer_pf_expense
 5400,Office Rent,expense,debit,false,,
 5500,Printing and Stationery,expense,debit,false,,
+5600,Bank Charges,expense,debit,false,,bank_charges
 5900,Rounding Differences,expense,debit,false,,rounding_difference

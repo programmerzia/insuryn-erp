@@ -38,6 +38,8 @@ const props = defineProps<{
         schema: RiskFieldDefinition[]; current_inputs: Record<string, unknown>; coverages: { code: string; name_en: string; name_bn: string; mandatory: boolean }[]; chosen_coverages: string[];
     } | null;
     today: string;
+    /** Gap fix GA-14. */
+    bouncedPremium?: { receipt_id: string; receipt_number: string; cheque_no: string | null; bounced_on: string; bounce_reason: string | null; installment_no: number; outstanding: string }[];
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
     audit?: AuditRow[];
@@ -103,6 +105,17 @@ async function renew(): Promise<void> {
                 <Link v-if="actions.record_receipt" :href="`/receipts/create?policy=${policy.id}`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Record receipt</Link>
             </template>
             <template #overview>
+                <!-- Gap fix GA-14: no premium, no cover — premium a bounced cheque was paying is unpaid again. -->
+                <div v-if="bouncedPremium?.length" class="mb-4 max-w-[1000px] border-l-2 border-danger bg-surface-2 px-3 py-2 text-ui" role="alert">
+                    <p class="font-medium">Premium cheque bounced: no premium, no cover.</p>
+                    <ul class="mt-1 grid gap-0.5">
+                        <li v-for="b in bouncedPremium" :key="`${b.receipt_id}-${b.installment_no}`">
+                            Cheque {{ b.cheque_no ?? '' }} on <Link :href="`/receipts/${b.receipt_id}`" class="text-accent-text hover:underline">{{ b.receipt_number }}</Link> bounced {{ formatDate(b.bounced_on) }}<template v-if="b.bounce_reason"> ({{ b.bounce_reason }})</template>:
+                            installment #{{ b.installment_no }} has {{ formatMoney(b.outstanding) }} {{ policy.currency }} unpaid.
+                        </li>
+                    </ul>
+                    <p class="mt-1 text-ink-2">The first payment reminder went out when it bounced. Take the premium again, or cancel the policy if the customer does not pay.</p>
+                </div>
                 <h2 class="mb-2 text-ui font-medium">Installments <span class="font-normal text-ink-2">· {{ outstanding }} with money outstanding</span></h2>
                 <div class="mb-6 max-w-[1000px] overflow-x-auto border border-line">
                     <table class="w-full table-fixed border-separate border-spacing-0 text-dense">

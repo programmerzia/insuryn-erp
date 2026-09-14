@@ -78,10 +78,13 @@ it('undoes a bounced cheque: allocations, suspense and bank, keeping every suble
                 ->toBe([[0, 'pending'], [0, 'pending'], [0, 'pending']])
             ->and(DB::table('suspense_items')->value('status'))->toBe('bounced')
             ->and(DB::table('receipt_allocations')->whereNull('reversed_on')->count())->toBe(0)
-            ->and(bounceLines('PREMIUM_RECEIPT_REVERSED'))->toBe([['premium_receivable', 'debit', 4_000_000], ['bank_main', 'credit', 4_000_000]])
+            // Gap fix GA-14: the demo chart maps cheques in clearing, so a cheque that bounces before it cleared leaves clearing, not the bank (was: bank_main).
+            // A cheque posted straight to the bank is covered in ChequeClearingTest.
+            ->and(bounceLines('PREMIUM_RECEIPT_REVERSED'))->toBe([['premium_receivable', 'debit', 4_000_000], ['cheques_in_clearing', 'credit', 4_000_000]])
             ->and(bounceLines('RECEIPT_ALLOCATION_REVERSED'))->toBe([['premium_receivable', 'debit', 1_000_000], ['suspense_receipts', 'credit', 1_000_000]])
-            ->and(bounceLines('RECEIPT_BOUNCED'))->toBe([['suspense_receipts', 'debit', 3_000_000], ['bank_main', 'credit', 3_000_000]])
+            ->and(bounceLines('RECEIPT_BOUNCED'))->toBe([['suspense_receipts', 'debit', 3_000_000], ['cheques_in_clearing', 'credit', 3_000_000]])
             ->and(($this->glBalance)('bank_main'))->toBe(0)
+            ->and(($this->glBalance)('cheques_in_clearing'))->toBe(0)
             ->and(($this->glBalance)('suspense_receipts'))->toBe(0)
             ->and(DB::table('accounting_events')->where('status', '<>', 'posted')->count())->toBe(0);
 
@@ -138,8 +141,9 @@ it('lists the cheque register with presented and bounced cheques, over the API t
 
         $register = app(ChequeRegisterQuery::class)->register($this->ctx['entity_id'], CarbonImmutable::parse('2026-09-01'), CarbonImmutable::parse('2026-09-30'));
         expect(array_map(fn (array $r): array => [$r['cheque_no'], $r['state'], $r['amount_minor'], $r['bounced_on']], $register['rows']))
-            ->toBe([['700001', 'bounced', 1_000_000, '2026-09-08'], ['700002', 'presented', 2_000_000, null]])
-            ->and($register['totals'])->toBe(['presented_minor' => 2_000_000, 'bounced_minor' => 1_000_000]);
+            // Gap fix GA-14: a cheque not bounced is in clearing until cleared (was: 'presented'); the totals split presented into in clearing and cleared.
+            ->toBe([['700001', 'bounced', 1_000_000, '2026-09-08'], ['700002', 'in_clearing', 2_000_000, null]])
+            ->and($register['totals'])->toBe(['presented_minor' => 2_000_000, 'bounced_minor' => 1_000_000, 'in_clearing_minor' => 2_000_000, 'cleared_minor' => 0]);
     });
 
     $headers = ['X-Tenant' => $this->ctx['tenant_id'], 'Accept' => 'application/json'];

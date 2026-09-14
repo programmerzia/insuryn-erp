@@ -43,7 +43,8 @@ it('offers each role the work it starts', function (array $roles, array $starts)
     'branch manager' => [['branch_manager'], [['label' => 'New quote', 'href' => '/quotations/create'], ['label' => 'Record a receipt', 'href' => '/receipts/create'],
         ['label' => 'Register a claim', 'href' => '/claims/create']]],
     'claims officer' => [['claims_officer'], [['label' => 'Register a claim', 'href' => '/claims/create']]],
-    'accountant' => [['accountant'], [['label' => 'New manual journal', 'href' => '/accounting/journals/create']]],
+    // Gap fix GA-27 (A-219): the accountant template records receipts (unknown bank credits into suspense), so it is offered here too.
+    'accountant' => [['accountant'], [['label' => 'Record a receipt', 'href' => '/receipts/create'], ['label' => 'New manual journal', 'href' => '/accounting/journals/create']]],
     'finance manager' => [['finance_manager'], [['label' => 'New manual journal', 'href' => '/accounting/journals/create']]],
     'auditor' => [['auditor'], []],
     'officer and accountant' => [['branch_officer', 'accountant'], [['label' => 'New quote', 'href' => '/quotations/create'], ['label' => 'Record a receipt', 'href' => '/receipts/create'],

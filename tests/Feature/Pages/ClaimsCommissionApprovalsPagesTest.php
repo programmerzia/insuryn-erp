@@ -60,7 +60,17 @@ it('takes a claim from registration to close, with release by someone else', fun
     $paymentId = asTenant($this->ctx['tenant_id'], fn (): string => (string) DB::table('claim_payments')->value('id'));
     actingAs($manager)->post("/claim-payments/{$paymentId}/request-release", [], $this->headers)->assertSessionHasNoErrors();
     actingAs($finance)->post("/claim-payments/{$paymentId}/release", ['paid_on' => '2026-09-08'], $this->headers)->assertSessionHasNoErrors();
-    actingAs($manager)->post("/claims/{$claimId}/recover", ['type' => 'salvage', 'amount' => '1,000.00', 'received_on' => '2026-09-10'], $this->headers)->assertSessionHasNoErrors();
+    // Gap fix GA-21 (D-88): a recovery is receipted by the collections side with its bank account and payer, not by the claims manager (was: the manager, no bank or payer).
+    $bankAccountId = asTenant($this->ctx['tenant_id'], function (): string {
+        DB::table('bank_accounts')->insert(['id' => $id = (string) Illuminate\Support\Str::uuid7(), 'tenant_id' => $this->ctx['tenant_id'], 'entity_id' => $this->ctx['entity_id'],
+            'gl_account_id' => $this->ctx['accounts']['bank_main'], 'bank_name' => 'City Bank', 'account_no_masked' => '****1', 'currency' => 'BDT', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+
+        return $id;
+    });
+    $recovery = ['type' => 'salvage', 'amount' => '1,000.00', 'received_on' => '2026-09-10', 'bank_account_id' => $bankAccountId, 'payer_party_id' => $this->world['policyholder_id']];
+    actingAs($manager)->post("/claims/{$claimId}/recover", $recovery, $this->headers)->assertSessionHasErrors('form');
+    $receipting = ($this->userWith)(['receipt.allocate', 'reports.financial']);
+    actingAs($receipting)->post("/claims/{$claimId}/recover", $recovery, $this->headers)->assertSessionHasNoErrors();
     actingAs($manager)->post("/claims/{$claimId}/close", ['reason' => 'Settled', 'on' => '2026-09-12'], $this->headers)->assertSessionHasNoErrors();
 
     actingAs($manager)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('claims/Show')
@@ -72,8 +82,10 @@ it('takes a claim from registration to close, with release by someone else', fun
     actingAs($manager)->post("/claims/{$claimId}/reopen", ['reason' => 'Supplementary bill', 'on' => '2026-09-13'], $this->headers)->assertSessionHasNoErrors();
     actingAs($officer)->post("/claims/{$claimId}/reserve", ['reserve' => '24,000.00', 'reason' => 'Supplementary bill', 'on' => '2026-09-13'], $this->headers)->assertSessionHasNoErrors();
     actingAs($manager)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('claim.status', 'reserved')->where('actions.close', true)->where('actions.recover', true)->where('actions.reopen', false));
-    actingAs($manager)->post("/claims/{$claimId}/recover", ['type' => 'subrogation', 'amount' => '500.00', 'received_on' => '2026-09-14'], $this->headers)->assertSessionHasNoErrors();
+        ->where('claim.status', 'reserved')->where('actions.close', true)->where('actions.recover', false)->where('actions.reopen', false)); // GA-21: not the claims manager's to receipt
+    actingAs($receipting)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->where('claim.status', 'reserved')->where('actions.recover', true));
+    actingAs($receipting)->post("/claims/{$claimId}/recover", ['type' => 'subrogation', 'amount' => '500.00', 'received_on' => '2026-09-14', 'bank_account_id' => $bankAccountId,
+        'payer_party_id' => $this->world['policyholder_id']], $this->headers)->assertSessionHasNoErrors();
     actingAs($manager)->post("/claims/{$claimId}/close", ['reason' => 'Bill not covered', 'on' => '2026-09-15'], $this->headers)->assertSessionHasNoErrors();
     actingAs($manager)->get("/claims/{$claimId}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('claim.status', 'closed')->where('claim.reserve', '20,000.00')->has('recoveries', 2)->where('actions.close', false));

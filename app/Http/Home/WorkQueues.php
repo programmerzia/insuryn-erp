@@ -27,11 +27,12 @@ final class WorkQueues
 {
     /** Brief §5 blocks per role template, top to bottom. SLA breaches are not listed: claim SLA timers are not built (exit checklist). */
     public const BY_ROLE = [
-        'branch_officer' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes'],
+        // Gap fix GA-14: 'bounced_premium' (policies in force whose premium cheque bounced and is still unpaid) for the branch and the accountant.
+        'branch_officer' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes', 'bounced_premium'],
         // GA-03 (D-65): the branch manager allocates the premium officers record into suspense for a policy.
-        'branch_manager' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes', 'receipts_to_allocate'],
+        'branch_manager' => ['installments_due', 'lapsing_policies', 'receipts_to_record', 'quotes', 'receipts_to_allocate', 'bounced_premium'],
         // GA-13: journals_to_approve becomes journals_submitted for someone who cannot approve journals (the accountant template, §7.2) — see keysFor.
-        'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events'],
+        'accountant' => ['unallocated_receipts', 'unmatched_bank_lines', 'journals_to_approve', 'failed_events', 'bounced_premium'],
         'claims_officer' => ['claims_awaiting_reserve', 'claim_approvals', 'payments_to_release'],
         // Flow fix X3: the claims manager decides settlements of reserved claims; finance releases requested claim payments.
         'claims_manager' => ['claims_awaiting_reserve', 'claims_to_settle', 'claim_approvals', 'payments_to_release'],
@@ -114,6 +115,7 @@ final class WorkQueues
             'receipts_to_record' => ['Receipts to record', '/bank', 'Every credit on the bank statements has a receipt.', ['Import a bank statement', '/bank']],
             'quotes' => ['Quotes to follow up', '/quotations', 'No open quotes.', ['New quote', '/quotations/create']],
             'receipts_to_allocate' => ['Receipts to allocate', '/suspense', 'No receipt taken for a policy is waiting to be allocated.', ['Record a receipt', '/receipts/create']],
+            'bounced_premium' => ['Policies with bounced premium', '/cheques', 'No policy in force has an unpaid bounced cheque.', ['Open the cheque register', '/cheques']],
             'unallocated_receipts' => ['Unallocated receipts', '/suspense', 'No unallocated receipts.', ['Import a bank statement', '/bank']],
             'unmatched_bank_lines' => ['Unmatched bank lines', '/bank', 'Every statement line is matched or explained.', ['Import a bank statement', '/bank']],
             'journals_submitted' => ['Journals I submitted', '/accounting/journals?f.status=pending_approval', 'None of your journals is in draft, waiting for approval or recently rejected.', ['New manual journal', '/accounting/journals/create']],
@@ -210,6 +212,8 @@ final class WorkQueues
                 ->when(! $this->permissions->has($userId, 'accounting.approve_journal'), fn (Builder $q) => $q->whereRaw('false'))
                 ->orderBy('j.created_at')->select(['j.id', 'j.transaction_date', 'j.description', 'j.currency',
                     DB::raw("(select coalesce(sum(amount_minor), 0) from journal_lines l where l.journal_id = j.id and l.side = 'debit') as total_minor")]),
+            // Gap fix GA-14, follow-up H1: limited to the branches the user's collections permissions reach.
+            'bounced_premium' => $this->within($userId, CollectionsPageController::AREA, app(\App\Modules\Insurance\Collections\Application\BouncedPremiumQuery::class)->policiesInForce(), 'b'),
             // GA-13: manual journals this user prepared that are still drafts, wait for approval, or were rejected (cancelled) in the last 30 days, newest first.
             'journals_submitted' => DB::table('journals as j')->where('j.created_by', $userId)->whereIn('j.kind', ['manual', 'adjustment'])
                 ->where(fn (Builder $q) => $q->whereIn('j.status', ['draft', 'pending_approval'])->orWhere(fn (Builder $c) => $c->where('j.status', 'cancelled')->where('j.created_at', '>=', $today->subDays(30))))
@@ -282,6 +286,8 @@ final class WorkQueues
             'failed_events' => [[$col('event', 'Event', 'event'), $col('date', 'Date', 'date'), $col('reason', 'Why it did not post')],
                 fn (\stdClass $r): array => ['href' => '/accounting/events', 'cells' => ['event' => $r->event_type, 'date' => $r->transaction_date,
                     'reason' => $r->failure_reason ?? 'Not posted after '.StuckAccountingEvents::staleAfterMinutes().' minutes']]],
+            'bounced_premium' => [[$col('policy', 'Policy'), $col('holder', 'Policyholder'), $col('bounced', 'Bounced', 'date'), $col('amount', 'Unpaid', 'money')],
+                fn (\stdClass $r): array => ['href' => "/policies/{$r->id}", 'cells' => ['policy' => $r->number, 'holder' => $r->display_name, 'bounced' => $r->bounced_on, 'amount' => $money($r, 'outstanding_minor')]]],
             'claims_awaiting_reserve' => [[$col('claim', 'Claim'), $col('policy', 'Policy'), $col('description', 'What happened'), $col('reported', 'Reported', 'date')],
                 fn (\stdClass $r): array => ['href' => "/claims/{$r->id}", 'cells' => ['claim' => $r->number, 'policy' => $r->policy_number, 'description' => $r->description, 'reported' => $r->reported_on]]],
             'claims_to_settle' => [[$col('claim', 'Claim'), $col('policy', 'Policy'), $col('reported', 'Reported', 'date'), $col('reserve', 'Reserve', 'money')],

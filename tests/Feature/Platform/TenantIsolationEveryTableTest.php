@@ -90,6 +90,8 @@ function populateEveryTenantTable(array $ctx): void
         $receipts = app(ReceiptService::class);
         $cheque = $receipts->record(new RecordReceiptRequest($ctx['entity_id'], $ctx['branch_id'], null, 'cheque', 4_500_000, 'BDT', $d('2026-09-02'), null, 'chq',
             [new AllocationLine($installments[0], 4_000_000)], new ChequeDetails('000111', 'Sonali Bank', $d('2026-09-01'))), $world['admin']);
+        // Gap fix GA-14: the cheque waits in clearing; clearing it puts the whole cheque into the bank, where the statement line matches it.
+        app(App\Modules\Insurance\Collections\Application\ChequeClearingService::class)->clear($cheque->id, $world['admin'], $d('2026-09-02'));
         $receipts->record(new RecordReceiptRequest($ctx['entity_id'], $ctx['branch_id'], null, 'cash', 4_000_000, 'BDT', $d('2026-09-03'), null, 'agent',
             [new AllocationLine($installments[1], 4_000_000)], null, $world['agent_id']), $world['admin']);
         app(AgentDepositService::class)->record($world['agent_id'], 4_000_000, null, 'slip', $world['admin'], $d('2026-09-04'));

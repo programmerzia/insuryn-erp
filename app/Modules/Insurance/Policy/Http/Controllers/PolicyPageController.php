@@ -142,6 +142,10 @@ final class PolicyPageController
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/policies/{$model->id}/documents" : null,
             'rating' => $this->rating($model),
             'today' => app(BusinessClock::class)->today()->toDateString(),
+            // Gap fix GA-14: premium a bounced cheque was paying and that is still unpaid ("no premium, no cover" banner).
+            'bouncedPremium' => array_map(fn (array $b): array => ['receipt_id' => $b['receipt_id'], 'receipt_number' => $b['receipt_number'], 'cheque_no' => $b['cheque_no'],
+                'bounced_on' => $b['bounced_on'], 'bounce_reason' => $b['bounce_reason'], 'installment_no' => $b['installment_no'], 'outstanding' => $money($b['outstanding_minor'])],
+                app(\App\Modules\Insurance\Collections\Application\BouncedPremiumQuery::class)->forPolicy($model->id)),
             'actions' => [
                 'issue' => $status === PolicyStatus::Quote && $can('policy.issue'),
                 // Flow fix X1: record the premium receipt, prefilled from this policy, while money is outstanding.

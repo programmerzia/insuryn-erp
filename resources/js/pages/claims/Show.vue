@@ -22,7 +22,9 @@ const props = defineProps<{
     claim: { id: string; number: string; status: string; loss_date: string; reported_on: string; description: string; reserve: string; uncommitted: string; currency: string; status_reason: string | null; policy: { id: string; number: string | null; policyholder: string; policyholder_id: string } };
     reserves: { version: number; reserve: string; delta: string; kind: string; reason: string; recorded_on: string }[];
     payments: { id: string; amount: string; status: string; approved_on: string; paid_on: string | null; bank_account_id: string | null; pay_from: string; can_request_release: boolean; can_release: boolean }[];
-    recoveries: { type: string; amount: string; received_on: string; reference: string | null }[];
+    recoveries: { type: string; amount: string; received_on: string; reference: string | null; number?: string | null; payer?: string | null }[];
+    /** Gap fix GA-21: the bank accounts a recovery is paid into, the main one first. */
+    recoveryBankAccounts?: { id: string; label: string }[];
     actions: { reserve: boolean; approve: boolean; recover: boolean; close: boolean; reject: boolean; reopen: boolean };
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
@@ -45,7 +47,9 @@ const releasing = ref<string | null>(null);
 const done = () => (drawer.value = null);
 const reserve = useMoneyForm(() => `${base}/reserve`, { reserve: '', reason: '', on: '' }, done);
 const payment = useMoneyForm(() => `${base}/payments`, { amount: '', payee_party_id: '', on: '' }, done);
-const recover = useMoneyForm(() => `${base}/recover`, { type: 'salvage', amount: '', received_on: '', reference: '', bank_account_id: '' }, done);
+const recover = useMoneyForm(() => `${base}/recover`, { type: 'salvage', amount: '', received_on: '', reference: '', bank_account_id: '', payer_party_id: '' }, done);
+const recoveryPayer = ref<LookupResult | null>(null); // gap fix GA-21
+const recoveryOpened = ref(0);
 const closing = useMoneyForm(() => `${base}/close`, { reason: '', on: '' }, done);
 const release = useMoneyForm(() => `/claim-payments/${releasing.value}/release`, { paid_on: '' }, done);
 // G1: the bank account is fixed when the release is requested; the drawer only says which one pays.
@@ -85,8 +89,11 @@ function openDrawer(name: 'reserve' | 'recover' | 'reject' | 'reopen'): void {
         reserve.form.defaults({ reserve: '', reason: '', on: props.today });
         reserve.form.reset();
     } else if (name === 'recover') {
-        recover.form.defaults({ type: 'salvage', amount: '', received_on: props.today, reference: '', bank_account_id: '' });
+        // Gap fix GA-21: a recovery receipt names the bank account it was paid into (the main one first) and its payer.
+        recover.form.defaults({ type: 'salvage', amount: '', received_on: props.today, reference: '', bank_account_id: props.recoveryBankAccounts?.[0]?.id ?? '', payer_party_id: '' });
         recover.form.reset();
+        recoveryPayer.value = null;
+        recoveryOpened.value++;
     } else {
         const form = (name === 'reopen' ? reopening : rejecting).form;
         form.defaults({ reason: '', on: props.today });
@@ -165,7 +172,7 @@ function openRelease(id: string): void {
                         <h2 class="mb-2 text-ui font-medium">Recoveries</h2>
                         <ul class="border border-line">
                             <li v-for="(r, index) in recoveries" :key="index" class="flex items-center gap-3 border-b border-line px-3 py-2 text-ui last:border-b-0">
-                                <span class="w-32 tabular-nums font-medium">{{ formatMoney(r.amount) }}</span><span>{{ words(r.type) }}</span><span class="text-ink-2">{{ formatDate(r.received_on) }}</span><span class="ml-auto text-ink-2">{{ r.reference }}</span>
+                                <span class="w-32 tabular-nums font-medium">{{ formatMoney(r.amount) }}</span><span>{{ words(r.type) }}</span><span class="text-ink-2">{{ formatDate(r.received_on) }}</span><span v-if="r.payer" class="text-ink-2">from {{ r.payer }}</span><span class="ml-auto text-ink-2">{{ [r.number, r.reference].filter(Boolean).join(' · ') }}</span>
                             </li>
                             <li v-if="recoveries.length === 0" class="px-3 py-4 text-ui text-ink-2">No recoveries.</li>
                         </ul>
@@ -204,6 +211,12 @@ function openRelease(id: string): void {
                 <Field id="recovery_type" label="Type" :error="recover.form.errors.type"><SelectInput id="recovery_type" v-model="recover.form.type" :options="['salvage', 'subrogation', 'third_party'].map((t) => ({ value: t, label: words(t) }))" /></Field>
                 <Field id="recovery_amount" :label="`Amount (${claim.currency})`" :error="recover.form.errors.amount"><MoneyInput v-model="recover.form.amount" /></Field>
                 <Field id="received_on" label="Received on" :error="recover.form.errors.received_on"><DateInput v-model="recover.form.received_on" /></Field>
+                <Field id="recovery_payer" label="Paid by" hint="The salvage buyer, the third party or their insurer." :error="recover.form.errors.payer_party_id">
+                    <LookupInput id="recovery_payer" :key="recoveryOpened" v-model="recover.form.payer_party_id" type="payer" :initial="recoveryPayer" placeholder="Type a name" @selected="recoveryPayer = $event" />
+                </Field>
+                <Field id="recovery_bank" label="Paid into" :error="recover.form.errors.bank_account_id">
+                    <SelectInput id="recovery_bank" v-model="recover.form.bank_account_id" placeholder="Choose a bank account" :options="(recoveryBankAccounts ?? []).map((b) => ({ value: b.id, label: b.label }))" />
+                </Field>
                 <Field id="recovery_reference" label="Reference" optional :error="recover.form.errors.reference"><TextInput v-model="recover.form.reference" /></Field>
             </FormLayout>
         </Drawer>

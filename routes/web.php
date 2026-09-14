@@ -257,6 +257,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('receipts/{receipt}/generated-documents', [\App\Http\Documents\GeneratedDocumentsController::class, 'receipt'])->whereUuid('receipt'); // slice R8
     Route::get('receipts/{receipt}/allocate', [CollectionsPageController::class, 'allocateWorkbench'])->whereUuid('receipt');
     Route::post('receipts/{receipt}/bounce', [CollectionsPageController::class, 'bounce'])->whereUuid('receipt')->middleware('moves-money');
+    Route::post('receipts/{receipt}/clear', [CollectionsPageController::class, 'clearCheque'])->whereUuid('receipt')->middleware('moves-money'); // gap fix GA-14
     Route::get('suspense', [CollectionsPageController::class, 'suspense']);
     Route::post('suspense/{suspenseItem}/allocate', [CollectionsPageController::class, 'allocate'])->whereUuid('suspenseItem')->middleware('moves-money');
     Route::post('suspense/{suspenseItem}/allocations', [CollectionsPageController::class, 'allocateMany'])->whereUuid('suspenseItem')->middleware('moves-money');
@@ -276,6 +277,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('bank/lines/{statementLine}/match', [BankPageController::class, 'match'])->whereUuid('statementLine');
     Route::post('bank/lines/{statementLine}/explain', [BankPageController::class, 'explain'])->whereUuid('statementLine');
     Route::post('bank/lines/{statementLine}/unmatch', [BankPageController::class, 'unmatch'])->whereUuid('statementLine');
+    // Gap fix GA-27: offset ledger lines that cancel out; record an unknown credit as a receipt held in suspense.
+    Route::post('bank/{bankAccount}/offset', [BankPageController::class, 'offset'])->whereUuid('bankAccount');
+    Route::post('bank/{bankAccount}/offsets/{group}/undo', [BankPageController::class, 'undoOffset'])->whereUuid(['bankAccount', 'group']);
+    Route::post('bank/lines/{statementLine}/receipt', [\App\Http\Bank\StatementLineReceiptController::class, 'store'])->whereUuid('statementLine')->middleware('moves-money');
 
     Route::get('claims', [ClaimPageController::class, 'index']);
     Route::get('claims/create', [ClaimPageController::class, 'create']);

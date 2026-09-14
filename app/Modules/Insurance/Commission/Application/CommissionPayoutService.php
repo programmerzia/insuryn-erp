@@ -62,7 +62,8 @@ final class CommissionPayoutService
                 ($this->submit)(
                     entityId: $statement->entity_id, eventType: $eventType, sourceType: 'commission_statement', sourceId: $statement->id,
                     idempotencyKey: $eventType.':'.$statement->id, transactionDate: $paidOn, effectiveDate: $paidOn, currency: $statement->currency,
-                    payload: ['amount' => $statement->net_minor, 'commission_statement_id' => $statement->id, 'bank_account_id' => $bankAccountId]
+                    // Gap fix GA-27: the statement number is the payout's reference, so the bank line of the payment names it and the statement line matches it.
+                    payload: ['amount' => $statement->net_minor, 'commission_statement_id' => $statement->id, 'bank_account_id' => $bankAccountId, 'reference' => $statement->number]
                         + ($bankGl === null || $statement->paid_via !== 'bank' ? [] : ['account_overrides' => ['bank_main' => $bankGl]]),
                     dimensions: ['branch' => $agent->branchId, 'agent' => $agent->id],
                 );

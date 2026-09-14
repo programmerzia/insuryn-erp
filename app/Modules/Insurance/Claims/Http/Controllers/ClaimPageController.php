@@ -130,14 +130,20 @@ final class ClaimPageController
                 'pay_from' => $bankLabel($p->bank_account_id ?? $defaultBank),
                 'can_request_release' => $p->status === ClaimPaymentStatus::Approved && $can('claim.pay_request'),
                 'can_release' => $p->status === ClaimPaymentStatus::ReleaseRequested && $can('claim.pay_release')])->values()->all(),
-            'recoveries' => DB::table('claim_recoveries')->where('claim_id', $model->id)->orderBy('received_on')->get(['type', 'amount_minor', 'received_on', 'reference'])
-                ->map(fn (object $r): array => ['type' => (string) $r->type, 'amount' => $money((int) $r->amount_minor), 'received_on' => (string) $r->received_on, 'reference' => $r->reference])->values()->all(),
+            'recoveries' => DB::table('claim_recoveries as r')->leftJoin('parties as payer', 'payer.id', '=', 'r.payer_party_id')->where('r.claim_id', $model->id)->orderBy('r.received_on')
+                ->get(['r.type', 'r.amount_minor', 'r.received_on', 'r.reference', 'r.number', 'payer.display_name as payer'])
+                ->map(fn (object $r): array => ['type' => (string) $r->type, 'amount' => $money((int) $r->amount_minor), 'received_on' => (string) $r->received_on, 'reference' => $r->reference,
+                    'number' => $r->number, 'payer' => $r->payer])->values()->all(),
+            // Gap fix GA-21: the bank accounts a recovery can be paid into (the claim's currency), the main one first.
+            'recoveryBankAccounts' => $bankAccounts->filter(fn (object $b): bool => $b->status === 'active' && $b->currency === $model->currency)
+                ->sortBy(fn (object $b): int => $b->id === $defaultBank ? 0 : 1)->map(fn (object $b): array => ['id' => (string) $b->id, 'label' => "{$b->bank_name} {$b->account_no_masked}"])->values()->all(),
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, $can) ? "/claims/{$model->id}/documents" : null,
             'actions' => [
                 'reserve' => in_array($status, [ClaimStatus::Registered, ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true) && $can('claim.reserve'),
                 'approve' => in_array($status, [ClaimStatus::Reserved, ClaimStatus::Approved, ClaimStatus::Paid], true) && $can('claim.approve'),
-                // Follow-up H3: a paid claim reopened and reserved again still closes and takes recoveries.
-                'recover' => $this->claims->recoverable($model) && $can('claim.pay_request'),
+                // Follow-up H3: a paid claim reopened and reserved again still closes and takes recoveries. Gap fix GA-21 (D-88): recoveries are receipted by
+                // whoever takes money in (was: claim.pay_request).
+                'recover' => $this->claims->recoverable($model) && array_any(\App\Modules\Insurance\Claims\Application\ClaimRecoveryReceipts::PERMISSIONS, $can),
                 'close' => $this->claims->closable($model) && ! $unsettled && $can('claim.close'),
                 'reject' => in_array($status, [ClaimStatus::Registered, ClaimStatus::Reserved], true) && $can('claim.approve'),
                 'reopen' => $status === ClaimStatus::Closed && $can('claim.approve')
@@ -243,16 +249,18 @@ final class ClaimPageController
         return redirect("/claims/{$claim}")->with('status', $message);
     }
 
-    public function recover(Request $request, string $claim): RedirectResponse
+    /** Gap fix GA-21 (D-88): a recovery is receipted by whoever takes money in, with its number, payer and bank account. */
+    public function recover(Request $request, string $claim, \App\Modules\Insurance\Claims\Application\ClaimRecoveryReceipts $receipts): RedirectResponse
     {
-        /** @var array{type: string, amount: string, received_on: string, bank_account_id?: string|null, reference?: string|null} $data */
+        /** @var array{type: string, amount: string, received_on: string, bank_account_id: string, payer_party_id: string, reference?: string|null} $data */
         $data = $request->validate(['type' => ['required', 'in:salvage,subrogation,third_party'], 'amount' => ['required', 'string'], 'received_on' => ['required', 'date_format:Y-m-d'],
-            'bank_account_id' => ['nullable', 'uuid'], 'reference' => ['nullable', 'string', 'max:255']]);
+            'bank_account_id' => ['required', 'uuid'], 'payer_party_id' => ['required', 'uuid'], 'reference' => ['nullable', 'string', 'max:255']],
+            ['bank_account_id.required' => 'Choose the bank account the money was paid into.', 'payer_party_id.required' => 'Choose who paid the recovery.']);
         $currency = (string) Claim::query()->whereKey($claim)->value('currency');
-        $this->claims->recover($claim, $data['type'], PageSupport::minor('amount', $data['amount'], $currency), ($data['bank_account_id'] ?? '') === '' ? null : $data['bank_account_id'],
+        $recovery = $receipts->receive($claim, $data['type'], PageSupport::minor('amount', $data['amount'], $currency), $data['bank_account_id'], $data['payer_party_id'],
             $data['reference'] ?? null, PageSupport::actor($request), CarbonImmutable::parse($data['received_on']));
 
-        return redirect("/claims/{$claim}")->with('status', 'Recovery recorded.');
+        return redirect("/claims/{$claim}")->with('status', "Recovery receipt {$recovery->number} recorded.");
     }
 
     public function attachDocument(Request $request, string $claim, ObjectDocuments $documents): RedirectResponse

@@ -42,7 +42,41 @@ final class ManualJournalPageController
             'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
             // Flow fix X10: an account missing from the chart can be created from a line.
             'canCreateAccount' => $permissions->has(PageSupport::actor($request), 'accounting.manage_coa', AuthorizationScope::entity($entity['id'])),
+            'prefill' => $this->prefill($request, $entity['id']),
         ]);
+    }
+
+    /**
+     * Gap fix GA-27 ("Post as bank charge"): a journal the bank screen asks for, as plain values in the query — `date`, `amount` (major units), `memo` (the
+     * statement line's text, which later matches the line), `credit_account` (the bank's GL account) and `debit_role` (an account role, bank_charges) — only
+     * accounts of this entity that accept postings are used; anything else is left for the person to fill in. The journal still goes for approval.
+     * The kernel reads only its own tables here: the bank screen passes the GL account, never a statement line.
+     *
+     * @return array{transaction_date: string, description: string, reason: string, lines: list<array{account_id: string, side: string, amount: string, memo: string}>}|null
+     */
+    private function prefill(Request $request, string $entityId): ?array
+    {
+        $query = $request->query('prefill');
+        if (! is_array($query)) {
+            return null;
+        }
+        $text = fn (string $key, int $max): string => is_string($query[$key] ?? null) ? mb_substr(trim((string) $query[$key]), 0, $max) : '';
+        $date = $text('date', 10);
+        $amount = $text('amount', 32);
+        $postable = fn (string $accountId): bool => preg_match('/^[0-9a-f-]{36}$/i', $accountId) === 1
+            && DB::table('accounts')->where('id', $accountId)->where('entity_id', $entityId)->where('is_postable', true)->where('status', 'active')->exists();
+        $credit = $text('credit_account', 36);
+        $role = $text('debit_role', 64);
+        $debit = $role === '' ? '' : (string) (DB::table('account_role_mappings as m')->join('books as b', 'b.id', '=', 'm.book_id')->where('b.is_primary', true)->where('m.entity_id', $entityId)
+            ->where('m.role_code', $role)->where('m.effective_from', '<=', preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : app(BusinessClock::class)->today()->toDateString())
+            ->orderByDesc('m.effective_from')->value('m.account_id') ?? '');
+        $memo = $text('memo', 255);
+        $amount = preg_match('/^\d[\d,]*(\.\d{1,2})?$/', $amount) === 1 ? $amount : '';
+
+        return ['transaction_date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : app(BusinessClock::class)->today()->toDateString(),
+            'description' => $text('description', 255), 'reason' => $text('reason', 255),
+            'lines' => [['account_id' => $postable($debit) ? $debit : '', 'side' => 'debit', 'amount' => $amount, 'memo' => $memo],
+                ['account_id' => $postable($credit) ? $credit : '', 'side' => 'credit', 'amount' => $amount, 'memo' => $memo]]];
     }
 
     /**

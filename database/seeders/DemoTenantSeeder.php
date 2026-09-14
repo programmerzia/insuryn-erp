@@ -42,6 +42,8 @@ final class DemoTenantSeeder extends Seeder
             $coa = [
                 '1010' => ['Bank - Main', 'asset', 'debit', 'bank_main', false, null],
                 '1020' => ['Bank - Clearing', 'asset', 'debit', 'bank_clearing', false, null],
+                '1025' => ['Cheques in Clearing', 'asset', 'debit', 'cheques_in_clearing', false, null], // gap fix GA-14
+                '5600' => ['Bank Charges', 'expense', 'debit', 'bank_charges', false, null], // gap fix GA-14
                 '1100' => ['Premium Receivable', 'asset', 'debit', 'premium_receivable', true, 'premium'],
                 '1150' => ['Agent Collections Receivable', 'asset', 'debit', 'agent_receivable', true, 'agent'],
                 '1160' => ['Producer Advances', 'asset', 'debit', 'producer_advances', false, null],

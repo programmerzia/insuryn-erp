@@ -63,7 +63,8 @@ final class AccountLineQuery
     {
         $rows = $query->orderBy('j.posting_date')->orderBy('l.id')
             ->get(['l.id', 'l.journal_id', 'j.number', 'j.posting_date', 'l.side', 'l.amount_minor', 'l.currency', 'j.source_type', 'j.source_id',
-                DB::raw("e.payload->>'reference' as reference"), DB::raw("e.payload->>'receipt_number' as receipt_number")]);
+                // Gap fix GA-27: a journal line without an event (a manual journal for bank charges) is referenced by its line memo.
+                DB::raw("coalesce(e.payload->>'reference', l.memo) as reference"), DB::raw("e.payload->>'receipt_number' as receipt_number")]);
         $lines = [];
         foreach ($rows as $row) {
             $amount = (int) $row->amount_minor;

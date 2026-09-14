@@ -1,0 +1,1 @@
+{ "event_type": "RECEIPT_BOUNCED", "payload": {"amount":3000000,"in_clearing":1}, "dimensions": {"branch":"B1","product":"P1","product_code":"MOTOR","lob":"motor","channel":"agent","policy":"POL1","customer":"CU1","agent":"AG1","claim":"CL1"}, "expected": [["suspense_receipts","debit",3000000],["cheques_in_clearing","credit",3000000]] }

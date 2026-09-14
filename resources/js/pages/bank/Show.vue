@@ -3,6 +3,12 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { Upload, Wand2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
+import Field from '@/components/forms/Field.vue';
+import FormLayout from '@/components/forms/FormLayout.vue';
+import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
+import SelectInput from '@/components/forms/SelectInput.vue';
+import Drawer from '@/components/ui/Drawer.vue';
+import { useMoneyForm } from '@/lib/moneyForm';
 import DataTable from '@/components/table/DataTable.vue';
 import type { DataColumn } from '@/components/table/types';
 import Kbd from '@/components/ui/Kbd.vue';
@@ -20,7 +26,10 @@ import { usePermissions } from '@/lib/permissions';
 interface StatementLine { id: string; posted_on: string; amount: string; reference: string | null; description: string | null }
 interface LedgerLine { journal_line_id: string; journal_id: string; journal_number: string | null; posting_date: string; amount: string; reference: string | null; receipt_number: string | null }
 interface Suggestion { statement_line_id: string; journal_line_id: string; confidence: number; why: string }
-const props = defineProps<{ account: { id: string; bank_name: string; account_no_masked: string; currency: string }; asOf: string; unmatched: { statement_lines: StatementLine[]; journal_lines: LedgerLine[] }; suggestions?: Suggestion[] }>();
+const props = defineProps<{
+    account: { id: string; bank_name: string; account_no_masked: string; currency: string; gl_account_id?: string }; asOf: string; unmatched: { statement_lines: StatementLine[]; journal_lines: LedgerLine[] }; suggestions?: Suggestion[];
+    branches?: { id: string; code: string; name: string }[];
+}>();
 
 const { can } = usePermissions();
 const activeStatement = ref<string | null>(null);
@@ -88,6 +97,28 @@ function explain(): void {
     router.post(`/bank/lines/${statement.value.id}/explain`, { reason: explanation.value }, { preserveScroll: true, onSuccess: () => { explanation.value = ''; activeStatement.value = null; } });
 }
 
+/** Gap fix GA-27: ledger lines that cancel each other out (a bounced cheque and its reversal) are offset against each other, with no statement line. */
+const offsetReady = computed(() => statement.value === null && selectedLedger.value.length >= 2 && selectedTotal.value === 0n);
+function offsetSelected(): void {
+    if (!offsetReady.value) return;
+    router.post(`/bank/${props.account.id}/offset`, { journal_line_ids: selectedLedger.value.map((l) => l.journal_line_id) }, { preserveScroll: true, preserveState: true, onSuccess: () => ledgerTable.value?.state.clearSelection() });
+}
+
+/** Gap fix GA-27: an unknown credit becomes a receipt held in suspense, in one step (journal preview first). */
+const receiving = ref(false);
+const receipt = useMoneyForm(() => `/bank/lines/${statement.value?.id ?? ''}/receipt`, { branch_id: props.branches?.[0]?.id ?? '' }, () => { receiving.value = false; activeStatement.value = null; });
+const isCredit = (line: StatementLine) => (parseMoney(line.amount) ?? 0n) > 0n;
+/** Gap fix GA-27: a charge the bank deducted opens a manual journal prefilled with the bank charge, for approval as usual. */
+function bankChargeHref(line: StatementLine): string {
+    const amount = parseMoney(line.amount) ?? 0n;
+    const params = new URLSearchParams({
+        'prefill[date]': line.posted_on, 'prefill[amount]': formatMinor(amount < 0n ? -amount : amount).replaceAll(',', ''), 'prefill[debit_role]': 'bank_charges',
+        'prefill[credit_account]': props.account.gl_account_id ?? '', 'prefill[memo]': [line.reference, line.description].filter(Boolean).join(' '),
+        'prefill[description]': `Bank charges, ${props.account.bank_name} ${props.account.account_no_masked}`, 'prefill[reason]': 'Charge on the bank statement',
+    });
+    return `/accounting/journals/create?${params.toString()}`;
+}
+
 function importFile(event: Event): void {
     upload.file = (event.target as HTMLInputElement).files?.[0] ?? null;
     if (upload.file) upload.post(`/bank/${props.account.id}/statements`, { forceFormData: true, preserveScroll: true, onFinish: () => upload.reset() });
@@ -124,9 +155,12 @@ function importFile(event: Event): void {
                         <span v-else class="text-ink-2">No suggestion</span>
                     </template>
                 </DataTable>
-                <div v-if="statement" class="flex items-center gap-2 border-t border-line bg-surface-2 px-4 py-2">
-                    <input v-model="explanation" class="h-8 min-w-0 flex-1 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="No ledger entry? Say why (e.g. bank charges)" aria-label="Explanation" @keydown.enter.prevent="explain" />
+                <div v-if="statement" class="flex flex-wrap items-center gap-2 border-t border-line bg-surface-2 px-4 py-2">
+                    <input v-model="explanation" class="h-8 min-w-0 flex-1 rounded-control border border-line-control bg-surface px-2 text-body" placeholder="No ledger entry? Say why" aria-label="Explanation" @keydown.enter.prevent="explain" />
                     <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="explanation.trim() === ''" @click="explain">Explain</button>
+                    <!-- Gap fix GA-27: book what the ledger is missing instead of only explaining it. -->
+                    <button v-if="isCredit(statement) && can('receipt.create') && !bestFor(statement.id)" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="receiving = true">Record receipt</button>
+                    <Link v-if="!isCredit(statement) && can('accounting.create_manual_journal') && !bestFor(statement.id)" :href="bankChargeHref(statement)" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Post as bank charge</Link>
                 </div>
             </section>
             <section class="flex min-h-0 flex-col" aria-label="Ledger lines">
@@ -139,7 +173,13 @@ function importFile(event: Event): void {
                         </span>
                     </template>
                     <template #bulk>
-                        <span class="text-ui text-ink-2" :class="{ 'text-danger': statement && !mergeReady }">
+                        <template v-if="!statement && can('bank.match')">
+                            <span class="text-ui text-ink-2" :class="{ 'text-danger': selectedLedger.length >= 2 && !offsetReady }">
+                                {{ offsetReady ? 'These cancel each other out.' : `Choose the statement line these pay, or lines that net to zero (now ${formatMinor(selectedTotal)}).` }}
+                            </span>
+                            <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" :disabled="!offsetReady" @click="offsetSelected">Offset selected</button>
+                        </template>
+                        <span v-if="statement || !can('bank.match')" class="text-ui text-ink-2" :class="{ 'text-danger': statement && !mergeReady }">
                             <template v-if="!statement">Choose the statement line these pay.</template>
                             <template v-else-if="!mergeReady">Selected {{ formatMinor(selectedTotal) }} does not equal the statement line {{ formatMoney(statement.amount) }}.</template>
                             <template v-else>Equals the statement line.</template>
@@ -151,5 +191,14 @@ function importFile(event: Event): void {
                 </DataTable>
             </section>
         </div>
+        <Drawer v-model:open="receiving" title="Record receipt from the statement">
+            <FormLayout v-if="statement" submit-label="Review the receipt" :dirty="true" :processing="receipt.form.processing" :error="(receipt.form.errors as Record<string, string>).form" @submit="receipt.review" @cancel="receiving = false">
+                <p class="text-ui text-ink-2">{{ formatMoney(statement.amount) }} {{ account.currency }} paid into {{ account.bank_name }} on {{ formatDate(statement.posted_on) }} ({{ [statement.reference, statement.description].filter(Boolean).join(' · ') || 'no reference' }}). It is held in suspense until someone matches it to a policy, and the statement line is matched to it.</p>
+                <Field id="receipt_branch" label="Branch" :error="receipt.form.errors.branch_id">
+                    <SelectInput id="receipt_branch" v-model="receipt.form.branch_id" :options="(branches ?? []).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))" />
+                </Field>
+            </FormLayout>
+        </Drawer>
+        <JournalPreviewDialog v-model:open="receipt.previewOpen.value" :result="receipt.preview.value" title="Record this receipt?" confirm-label="Record the receipt" :currency="account.currency" :processing="receipt.form.processing" @confirm="receipt.post" />
     </AppLayout>
 </template>

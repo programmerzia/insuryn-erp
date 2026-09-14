@@ -98,15 +98,16 @@ final class ClaimController
         return response()->json(['data' => self::present(Claim::query()->findOrFail($claim)) + ['approval_id' => $approvalId]]);
     }
 
-    public function recover(Request $request, string $claim): JsonResponse
+    /** Gap fix GA-21 (D-88): a recovery is receipted by the collections duties, with its bank account and payer. */
+    public function recover(Request $request, string $claim, \App\Modules\Insurance\Claims\Application\ClaimRecoveryReceipts $receipts): JsonResponse
     {
-        /** @var array{type: string, amount_minor: int, received_on: string, bank_account_id?: string|null, reference?: string|null} $data */
+        /** @var array{type: string, amount_minor: int, received_on: string, bank_account_id: string, payer_party_id: string, reference?: string|null} $data */
         $data = $request->validate(['type' => ['required', 'in:salvage,subrogation,third_party'], 'amount_minor' => ['required', 'integer', 'min:1'],
-            'received_on' => ['required', 'date_format:Y-m-d'], 'bank_account_id' => ['nullable', 'uuid'], 'reference' => ['nullable', 'string', 'max:255']]);
-        $recovery = $this->claims->recover($claim, $data['type'], (int) $data['amount_minor'], $data['bank_account_id'] ?? null, $data['reference'] ?? null,
+            'received_on' => ['required', 'date_format:Y-m-d'], 'bank_account_id' => ['required', 'uuid'], 'payer_party_id' => ['required', 'uuid'], 'reference' => ['nullable', 'string', 'max:255']]);
+        $recovery = $receipts->receive($claim, $data['type'], (int) $data['amount_minor'], $data['bank_account_id'], $data['payer_party_id'], $data['reference'] ?? null,
             self::actor($request), CarbonImmutable::parse($data['received_on']));
 
-        return response()->json(['data' => ['id' => $recovery->id, 'type' => $recovery->type, 'amount_minor' => $recovery->amount_minor]], 201);
+        return response()->json(['data' => ['id' => $recovery->id, 'number' => $recovery->number, 'type' => $recovery->type, 'amount_minor' => $recovery->amount_minor]], 201);
     }
 
     /** @return array{reason: string, on: string} */

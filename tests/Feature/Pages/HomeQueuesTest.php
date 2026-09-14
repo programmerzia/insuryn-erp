@@ -94,9 +94,10 @@ it('gives every seeded role its own work queues', function (string $role, array 
     actingAs(($this->asRole)($role))->get('/home', $this->headers)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('home/Index')
         ->where('queues', fn ($queues): bool => array_column(json_decode((string) json_encode($queues), true), 'title') === $titles));
 })->with([
-    'branch officer' => ['branch_officer', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up']],
-    'branch manager' => ['branch_manager', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Receipts to allocate']],
-    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events']],
+    // Gap fix GA-14 added "Policies with bounced premium" at the end for the branch and the accountant.
+    'branch officer' => ['branch_officer', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Policies with bounced premium']],
+    'branch manager' => ['branch_manager', ['Installments due this week', 'Lapsing policies', 'Receipts to record', 'Quotes to follow up', 'Receipts to allocate', 'Policies with bounced premium']],
+    'accountant' => ['accountant', ['Unallocated receipts', 'Unmatched bank lines', 'Journals I submitted', 'Failed accounting events', 'Policies with bounced premium']],
     'claims officer' => ['claims_officer', ['Claims awaiting reserve', 'Awaiting my approval', 'Payments to release']],
     'claims manager' => ['claims_manager', ['Claims awaiting reserve', 'Claims to settle', 'Awaiting my approval', 'Payments to release']],
     'finance manager' => ['finance_manager', ['Close progress', 'Reconciliation variances', 'Approvals over threshold', 'Cash position', 'Payments to release', 'Failed accounting events']],
@@ -136,7 +137,7 @@ it('counts and lists what needs action, and the sidebar badges show the same cou
 
 it('shows each queue once for a user with several roles, and lands everyone on home after sign-in', function (): void {
     actingAs(($this->asRole)('branch_manager', 'branch_officer', 'accountant'))->get('/home', $this->headers)
-        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 9));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('queues', 10)); // GA-14: + policies with bounced premium, shown once (was 9)
     expect(config('fortify.home'))->toBe('/home');
     actingAs(($this->asRole)('auditor'))->get('/', $this->headers)->assertRedirect('/home');
 });

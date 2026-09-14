@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Collections\Application;
 
+use App\Modules\Accounting\Application\AccountRoles\AccountRoleMappingService;
 use App\Modules\Finance\Bank\Application\BankAccountQuery;
 use App\Modules\Insurance\Collections\Domain\Enums\ReceiptStatus;
 use App\Modules\Distribution\Application\ProducerDirectory;
@@ -65,6 +66,8 @@ final class ReceiptService
                 'value_date' => $request->valueDate->toDateString(), 'received_at' => CarbonImmutable::now(), 'bank_account_id' => $request->bankAccountId,
                 'reference' => $request->reference, 'status' => $this->statusFor($request), 'created_by' => $actorUserId,
                 'collected_by_agent_id' => $request->collectedByAgentId, 'for_policy_id' => $request->forPolicyId, 'cheque_no' => $request->cheque?->number, 'cheque_bank' => $request->cheque?->bank, 'cheque_date' => $request->cheque?->date->toDateString(),
+                // Gap fix GA-14, ASSUMPTION A-215: a cheque waits in cheques in clearing when the company has an account for it; otherwise it posts to the bank as before.
+                'in_clearing' => $request->channel === 'cheque' && app(AccountRoleMappingService::class)->isMapped($request->entityId, 'cheques_in_clearing', $request->valueDate),
             ]);
             $this->numbers->markUsed($number->id, 'receipt', $receipt->id);
             foreach ($request->allocations as $line) {
