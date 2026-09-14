@@ -137,7 +137,9 @@ function save(intent: 'save' | 'issue'): void {
     touched.value = true;
     if (intent === 'issue' && Object.keys(localProblems(schema.value, values.value)).length > 0) return;
     const data = { ...payload.value, intent };
-    const options = { preserveScroll: true, onStart: () => (saving.value = true), onFinish: () => (saving.value = false) };
+    // A fresh page state after saving: the page reads the quotation once (`q`), so a new quote that gets its id, or a draft that gets its number, must
+    // remount rather than keep the old state (the flow audit found "make proposal" doing nothing right after issuing a new quote).
+    const options = { preserveScroll: true, preserveState: false, onStart: () => (saving.value = true), onFinish: () => (saving.value = false) };
     if (q) router.put(`/quotations/${q.id}`, data, options);
     else router.post('/quotations', data, options);
 }

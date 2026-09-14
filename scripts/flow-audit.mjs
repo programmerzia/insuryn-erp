@@ -168,10 +168,22 @@ await step(3, 'Receive the premium by bank transfer and allocate to the installm
     await page.waitForURL(/\/receipts\/[0-9a-f-]{36}/);
     state.receiptUrl = page.url();
     notes.push(`Receipt ${(await page.locator('h1').first().innerText()).trim()} recorded.`);
-    const printable = await page.getByRole('button', { name: /print|receipt pdf|generate receipt/i }).count() + await page.getByRole('link', { name: /print|download receipt/i }).count();
-    if (printable === 0) {
-        notes.push('No printable receipt for the customer (documents are Phase 3, G2).');
+    await page.goto(`${state.receiptUrl.split('?')[0]}?tab=documents`);
+    await settle(page);
+    const generate = page.getByRole('button', { name: 'Generate receipt' });
+    if ((await generate.count()) === 0) {
+        notes.push('No printable receipt for the customer.');
         outcome = 'partial';
+    } else {
+        await generate.click();
+        const printed = await page.getByText('Nothing printed yet').waitFor({ state: 'detached', timeout: 60000 }).then(() => true).catch(() => false);
+        await settle(page);
+        if (printed) {
+            notes.push('Receipt PDF generated for the customer from the Documents tab (headless Chromium).');
+        } else {
+            notes.push('Generating the receipt did not finish within a minute.');
+            outcome = 'partial';
+        }
     }
     return outcome;
 });
@@ -292,9 +304,8 @@ await step(8, 'Home queue shows unallocated receipts, unmatched bank lines, jour
     await candidates.first().click();
     await page.keyboard.press('Enter');
     await page.waitForTimeout(300);
-    const amount = page.locator('section[aria-label="Receipt"] input[id^="line-"]').first();
-    await amount.waitFor();
-    await amount.fill('8,500.00');
+    // Enter fills the line with what the installment still needs, up to what is left in suspense.
+    await page.locator('section[aria-label="Receipt"] input[id^="line-"]').first().waitFor();
     await page.getByLabel('Allocation date').fill('t');
     await page.getByRole('button', { name: /^Allocate/ }).click();
     notes.push(`Allocation preview: ${(await confirmJournal(page)).join(' | ')}`);
