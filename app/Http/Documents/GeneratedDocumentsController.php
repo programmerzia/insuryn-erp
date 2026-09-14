@@ -57,7 +57,9 @@ final class GeneratedDocumentsController
         $data = $request->validate(['locale' => ['required', Rule::in(['en', 'bn'])]]);
         $generated = $this->generator->generate(DocumentTemplateCode::Receipt, 'receipt', $receipt, $actor, $data['locale']);
 
-        return redirect("/receipts/{$receipt}?tab=documents")->with('status', self::generatedMessage($generated));
+        // Flow fix X5: printed from the receipt page's header, the file is offered for download straight away.
+        return redirect("/receipts/{$receipt}?tab=documents")->with('status', self::generatedMessage($generated))
+            ->with('next', ['label' => 'Download', 'url' => "/receipts/{$receipt}/documents/{$generated->storedDocumentId}", 'method' => 'download']);
     }
 
     /** POST /quotations/{id}/generated-documents — print an issued quotation (Phase 3 §2 step 1 "save/print quotation"). */

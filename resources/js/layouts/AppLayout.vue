@@ -13,7 +13,7 @@ import { type HelpModule, helpModule } from '@/lib/help';
 import { openPalette, paletteOpen } from '@/lib/palette';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useShortcut } from '@/lib/shortcuts';
-import { confirmationToast, type NextStep, toast } from '@/lib/toasts';
+import { confirmationToast, followStep, type NextStep, toast } from '@/lib/toasts';
 import type { SharedProps } from '@/types/shared';
 
 /**
@@ -42,7 +42,9 @@ const status = computed(() => page.props.status);
 watch(status, (message) => {
     if (!message) return;
     const confirmation = confirmationToast(message, page.props.undo as { label: string; url: string } | null, page.props.next as NextStep | null,
-        (url) => router.visit(url), (url) => router.post(url, {}, { preserveScroll: true }));
+        (step) => followStep(step, { visit: (url) => router.visit(url), post: (url) => router.post(url, { locale: preferences.locale }, { preserveScroll: true }),
+            download: (url) => window.location.assign(url) }),
+        (url) => router.post(url, {}, { preserveScroll: true }));
     toast(confirmation.message, confirmation.options);
 }, { immediate: true });
 // Business-rule refusals from list and inspector actions (forms show theirs above the fields as well).

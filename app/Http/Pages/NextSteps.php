@@ -6,11 +6,12 @@ namespace App\Http\Pages;
 
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Documents\Generation\DocumentGenerator;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Flow audit: the next step offered when a piece of work is done (the brief's "after issue → Record receipt?", "after receipt → Print receipt").
- * A step is flashed as `next` ({label, url, prompt}) beside the status message; the shell shows it as the confirmation's action.
+ * A step is flashed as `next` ({label, url, prompt?, method?: get|post|download}) beside the status message; the shell shows it as the confirmation's action.
  */
 final class NextSteps
 {
@@ -40,6 +41,21 @@ final class NextSteps
         return $policy !== null && in_array((string) $policy->status, ['issued', 'active', 'lapsed', 'expired'], true)
             && $this->permissions->has($userId, 'receipt.create', AuthorizationScope::branch((string) $policy->entity_id, (string) $policy->branch_id))
             && self::outstandingInstallments($policyId) !== [];
+    }
+
+    /** Flow fix X5: whether the user may print this receipt now (as the Documents tab offers it: not bounced, document.generate in its branch). */
+    public function canPrintReceipt(string $userId, string $receiptId): bool
+    {
+        $receipt = DB::table('receipts')->where('id', $receiptId)->first(['entity_id', 'branch_id', 'status']);
+
+        return $receipt !== null && $receipt->status !== 'bounced'
+            && $this->permissions->has($userId, DocumentGenerator::PERMISSION, AuthorizationScope::branch((string) $receipt->entity_id, (string) $receipt->branch_id));
+    }
+
+    /** @return array{label: string, url: string, method: string}|null */
+    public function afterReceipt(string $userId, string $receiptId): ?array
+    {
+        return $this->canPrintReceipt($userId, $receiptId) ? ['label' => 'Print receipt', 'url' => "/receipts/{$receiptId}/generated-documents", 'method' => 'post'] : null;
     }
 
     /** @return array{label: string, url: string, prompt: string}|null */

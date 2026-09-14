@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
@@ -12,12 +12,14 @@ import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
+import { usePreferences } from '@/lib/preferences';
 
 const props = defineProps<{
     receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null };
     allocations: { id: string; policy_number: string | null; amount: string; posted_on: string; reversed_on: string | null }[];
     suspense: { id: string; amount: string; open: string; status: string } | null;
-    actions: { bounce: boolean };
+    /** Flow fix X5: print from the header (then download what was printed); allocate while part of the receipt waits in suspense. */
+    actions: { bounce: boolean; print: boolean; allocate: boolean };
     timeline?: TimelineEntry[];
     accounting?: AccountingJournal[];
     audit?: AuditRow[];
@@ -28,6 +30,12 @@ const props = defineProps<{
 
 const bouncing = ref(false);
 const bounce = useMoneyForm(() => `/receipts/${props.receipt.id}/bounce`, { bounced_on: '', reason: '' }, () => (bouncing.value = false));
+const preferences = usePreferences();
+const printing = useForm({ locale: preferences.locale });
+function print(): void {
+    printing.locale = preferences.locale;
+    printing.post(`/receipts/${props.receipt.id}/generated-documents`, { preserveScroll: true });
+}
 const words = (v: string) => v.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
 const facts = computed(() => [
     { label: 'Amount (BDT)', value: formatMoney(props.receipt.amount), num: true },
@@ -55,7 +63,10 @@ const facts = computed(() => [
         >
             <template #actions>
                 <button v-if="actions.bounce" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="bouncing = true">Cheque bounced</button>
-                <Link v-if="suspense && suspense.status === 'open'" :href="`/receipts/${receipt.id}/allocate`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Allocate {{ formatMoney(suspense.open) }}</Link>
+                <button v-if="actions.print" type="button" :disabled="printing.processing" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2 disabled:opacity-50" @click="print">
+                    {{ printing.processing ? 'Printing…' : 'Print receipt' }}
+                </button>
+                <Link v-if="actions.allocate && suspense" :href="`/receipts/${receipt.id}/allocate`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Allocate {{ formatMoney(suspense.open) }}</Link>
             </template>
             <template #overview>
                 <h2 class="mb-2 text-ui font-medium">Allocations</h2>

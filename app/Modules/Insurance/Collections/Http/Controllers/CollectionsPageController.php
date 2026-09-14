@@ -82,7 +82,7 @@ final class CollectionsPageController
         ]);
     }
 
-    public function store(Request $request, ReceiptService $receipts, FormDefaults $defaults): RedirectResponse
+    public function store(Request $request, ReceiptService $receipts, FormDefaults $defaults, NextSteps $nextSteps): RedirectResponse
     {
         /** @var array{branch_id: string, channel: string, amount: string, value_date: string, reference?: string|null, bank_account_id?: string|null, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null, allocations?: list<array{installment_id: string, amount: string}>} $data */
         $data = $request->validate(['branch_id' => ['required', 'uuid'], 'channel' => ['required', 'in:'.implode(',', self::CHANNELS)], 'amount' => ['required', 'string'],
@@ -101,7 +101,8 @@ final class CollectionsPageController
             ($data['collected_by_agent_id'] ?? '') === '' ? null : $data['collected_by_agent_id']), PageSupport::actor($request));
         $defaults->remember(PageSupport::actor($request), FormDefaults::LAST_RECEIPT_CHANNEL, $data['channel']);
 
-        return redirect("/receipts/{$receipt->id}")->with('status', "Receipt {$receipt->number} recorded.");
+        // Flow fix X5: printing the receipt for the customer is the next step.
+        return redirect("/receipts/{$receipt->id}")->with('status', "Receipt {$receipt->number} recorded.")->with('next', $nextSteps->afterReceipt(PageSupport::actor($request), $receipt->id));
     }
 
     public function show(Request $request, string $receipt): Response
@@ -122,7 +123,10 @@ final class CollectionsPageController
             'suspense' => $item === null ? null : ['id' => $item->id, 'amount' => $money($item->amount_minor), 'open' => $money($item->openMinor()), 'status' => $item->status->value],
             'documentUpload' => array_any(self::ATTACH_DOCUMENTS, fn (string $permission): bool => $this->permissions->has($actor, $permission, AuthorizationScope::branch($model->entity_id, $model->branch_id)))
                 ? "/receipts/{$model->id}/documents" : null,
-            'actions' => ['bounce' => $model->channel === 'cheque' && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate')],
+            'actions' => ['bounce' => $model->channel === 'cheque' && $model->status !== ReceiptStatus::Bounced && $this->permissions->has($actor, 'receipt.allocate'),
+                // Flow fix X5: print the receipt from the header; allocate what waits in suspense.
+                'print' => app(NextSteps::class)->canPrintReceipt($actor, $model->id),
+                'allocate' => $item !== null && $item->status->value === 'open' && $item->openMinor() > 0 && $this->permissions->has($actor, 'receipt.allocate', AuthorizationScope::branch($model->entity_id, $model->branch_id))],
         ]);
     }
 

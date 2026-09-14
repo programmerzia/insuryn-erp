@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { initialReceipt } from '@/lib/receiptForm';
-import { confirmationToast } from '@/lib/toasts';
+import { confirmationToast, followStep } from '@/lib/toasts';
 
 /** Flow fix X1: after issuing, the confirmation offers the receipt; the receipt opened from a policy starts filled in. */
 describe('confirmation toast with a next step', () => {
@@ -12,7 +12,24 @@ describe('confirmation toast with a next step', () => {
         expect(options.action?.label).toBe('Record receipt');
         expect(options.duration).toBe(10000);
         options.action?.run();
-        expect(visit).toHaveBeenCalledWith('/receipts/create?policy=p1');
+        expect(visit).toHaveBeenCalledWith({ label: 'Record receipt', url: '/receipts/create?policy=p1', prompt: 'Record the premium receipt?' });
+    });
+
+    it('follows a step by visiting, posting (print receipt) or downloading (the printed file)', () => {
+        const handlers = { visit: vi.fn(), post: vi.fn(), download: vi.fn() };
+        followStep({ label: 'Record receipt', url: '/receipts/create?policy=p1' }, handlers);
+        followStep({ label: 'Print receipt', url: '/receipts/r1/generated-documents', method: 'post' }, handlers);
+        followStep({ label: 'Download', url: '/receipts/r1/documents/d1', method: 'download' }, handlers);
+        expect(handlers.visit).toHaveBeenCalledWith('/receipts/create?policy=p1');
+        expect(handlers.post).toHaveBeenCalledWith('/receipts/r1/generated-documents');
+        expect(handlers.download).toHaveBeenCalledWith('/receipts/r1/documents/d1');
+        expect([handlers.visit.mock.calls.length, handlers.post.mock.calls.length, handlers.download.mock.calls.length]).toEqual([1, 1, 1]);
+    });
+
+    it('offers Print receipt without a question when a receipt is recorded', () => {
+        const { message, options } = confirmationToast('Receipt RCT-HO-2026-000001 recorded.', null, { label: 'Print receipt', url: '/receipts/r1/generated-documents', method: 'post' }, vi.fn(), vi.fn());
+        expect(message).toBe('Receipt RCT-HO-2026-000001 recorded.');
+        expect(options.action?.label).toBe('Print receipt');
     });
 
     it('keeps a plain confirmation and an undo as they were', () => {
