@@ -48,17 +48,17 @@ function file(form: FormRow): void {
 </script>
 
 <template>
-    <AppLayout help="reports" title="Regulatory returns" fill>
-        <div class="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-            <h1 class="mr-2 text-section font-semibold">Regulatory returns</h1>
+    <AppLayout help="regulatory" title="Regulatory returns" fill>
+        <div class="flex min-h-11 flex-wrap items-center gap-2 border-b border-line px-3 py-1">
+            <h1 class="mr-3 text-section font-semibold">Regulatory returns</h1>
+            <Button v-if="can.generate" size="md" @click="generate">{{ generated ? 'Generate again' : 'Generate returns' }}</Button>
             <label class="sr-only" for="return-period">Period</label>
             <SelectInput id="return-period" :model-value="period.key" class="w-60" :options="periods" @update:model-value="(v) => go({ period: String(v) })" />
             <span class="text-ui text-ink-2">{{ generated }} of {{ forms.length }} generated · {{ filed }} filed</span>
-            <div class="ml-auto flex items-center gap-2">
-                <Link href="/regulatory" class="text-ui text-accent-text hover:underline">Dashboard</Link>
-                <a v-if="can.export" :href="exportUrl('xlsx')" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Download set (XLSX)</a>
-                <a v-if="can.export" :href="exportUrl('pdf')" class="inline-flex h-8 items-center rounded-control border border-line-control px-3 text-ui hover:bg-surface-2">Download set (PDF)</a>
-                <Button v-if="can.generate" size="md" @click="generate">{{ generated ? 'Generate again' : 'Generate returns' }}</Button>
+            <div class="ml-auto flex items-center gap-1">
+                <Link href="/regulatory" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2">Regulatory dashboard</Link>
+                <a v-if="can.export" :href="exportUrl('xlsx')" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2" aria-label="Export the returns set as XLSX" download>Export XLSX</a>
+                <a v-if="can.export" :href="exportUrl('pdf')" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2" aria-label="Export the returns set as PDF" download>Export PDF</a>
             </div>
         </div>
         <div class="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -76,7 +76,7 @@ function file(form: FormRow): void {
                 </ul>
                 <p class="px-4 py-3 text-dense text-ink-2">Form titles are descriptive; IDRA's form numbers and wording are to be confirmed (layouts are configuration).</p>
             </nav>
-            <main class="min-w-0 flex-1 overflow-auto px-4 py-4">
+            <main class="min-w-0 flex-1 overflow-auto px-6 py-4 max-sm:px-4">
                 <template v-if="preview && current">
                     <header class="mb-3 flex flex-wrap items-start gap-3">
                         <div class="min-w-0">
@@ -91,8 +91,8 @@ function file(form: FormRow): void {
                             </p>
                         </div>
                         <div class="ml-auto flex items-center gap-2">
-                            <a v-if="can.export" :href="exportUrl('xlsx', current.code)" class="text-ui text-accent-text hover:underline">XLSX</a>
-                            <a v-if="can.export" :href="exportUrl('pdf', current.code)" class="text-ui text-accent-text hover:underline">PDF</a>
+                            <a v-if="can.export" :href="exportUrl('xlsx', current.code)" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2" :aria-label="`Export ${current.title} as XLSX`" download>Export XLSX</a>
+                            <a v-if="can.export" :href="exportUrl('pdf', current.code)" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2" :aria-label="`Export ${current.title} as PDF`" download>Export PDF</a>
                             <Button v-if="can.review && current.status === 'draft'" variant="secondary" @click="review(current)">Mark reviewed</Button>
                         </div>
                     </header>

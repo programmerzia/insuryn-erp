@@ -66,6 +66,7 @@ final class TechnicalProvisionsPageController
         $percent = fn (int $bp): string => PageSupport::percent($bp).'%';
 
         return Inertia::render('regulatory/Provisions', [
+            'currency' => $entity['currency'],
             'quarter' => ['key' => $quarter->key, 'label' => $quarter->label(), 'end' => $quarter->end->toDateString()],
             'quarters' => array_map(fn (string $key): array => ['value' => $key, 'label' => RegulatoryPeriod::fromKey($key)->label()], array_values(array_filter(RegulatoryPeriod::choices($today, 8, $quarter->key), fn (string $key): bool => str_contains($key, 'Q')))),
             'run' => $run === null ? null : ['id' => (string) $run->id, 'number' => $run->number, 'status' => (string) $run->status,

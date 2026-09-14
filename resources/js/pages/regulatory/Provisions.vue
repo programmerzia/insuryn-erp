@@ -32,7 +32,9 @@ const props = defineProps<{
     notes: string[];
     minQuarters: number;
     can: { run: boolean; approve: boolean };
+    currency?: string;
 }>();
+const cur = computed(() => props.currency ?? 'BDT');
 
 const methods = reactive<Record<string, string>>(Object.fromEntries(props.classes.map((c) => [c.class, c.method])));
 const triangleClass = ref(props.triangles.find((t) => t.available)?.class ?? props.triangles[0]?.class ?? '');
@@ -51,14 +53,14 @@ function review(): void {
     if (props.run) router.post(`/regulatory/provisions/${props.run.id}/review`, {}, { preserveScroll: true });
 }
 function approve(): void {
-    if (props.run) void confirm.request(`/regulatory/provisions/${props.run.id}/approve`, {}, `Approve and post the technical provisions for ${props.quarter.label}?`, `Post ${formatMoney(props.totals.ibnr)} BDT IBNR`);
+    if (props.run) void confirm.request(`/regulatory/provisions/${props.run.id}/approve`, {}, `Approve and post the technical provisions for ${props.quarter.label}?`, `Post ${formatMoney(props.totals.ibnr)} ${cur.value} IBNR`);
 }
 </script>
 
 <template>
-    <AppLayout help="reports" title="Technical provisions" fill>
-        <div class="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-            <h1 class="mr-2 text-section font-semibold">Technical provisions</h1>
+    <AppLayout help="regulatory" title="Technical provisions" fill>
+        <div class="flex min-h-11 flex-wrap items-center gap-2 border-b border-line px-3 py-1">
+            <h1 class="mr-3 text-section font-semibold">Technical provisions</h1>
             <label class="sr-only" for="provisions-quarter">Quarter</label>
             <SelectInput id="provisions-quarter" :model-value="quarter.key" class="w-60" :options="quarters" @update:model-value="(v) => pickQuarter(String(v))" />
             <template v-if="run">
@@ -67,13 +69,13 @@ function approve(): void {
             </template>
             <span v-else class="text-ui text-ink-2">Not prepared — the figures below are a live calculation.</span>
             <div class="ml-auto flex items-center gap-2">
-                <Link href="/regulatory" class="text-ui text-accent-text hover:underline">Dashboard</Link>
+                <Link href="/regulatory" class="inline-flex h-8 items-center rounded-control px-2 text-ui text-accent-text hover:bg-surface-2">Regulatory dashboard</Link>
                 <Button v-if="editable" :variant="run ? 'secondary' : 'primary'" @click="prepare">{{ run ? (changed ? 'Recalculate with these methods' : 'Recalculate') : 'Prepare run' }}</Button>
                 <Button v-if="can.run && run?.status === 'draft'" @click="review">Mark reviewed</Button>
                 <Button v-if="can.approve && run?.status === 'reviewed' && !run.sod_blocked" @click="approve">Approve and post</Button>
             </div>
         </div>
-        <div class="min-h-0 flex-1 overflow-auto px-4 py-4">
+        <div class="min-h-0 flex-1 overflow-auto px-6 py-4 max-sm:px-4">
             <p v-if="run" class="mb-3 flex flex-wrap gap-4 text-dense text-ink-2">
                 <span>Prepared by {{ run.prepared }}</span>
                 <span v-if="run.reviewed">Reviewed by {{ run.reviewed }}</span>
@@ -82,13 +84,13 @@ function approve(): void {
             </p>
 
             <div class="mb-4 grid gap-3 sm:grid-cols-3">
-                <div class="border border-line bg-surface p-3"><p class="text-dense text-ink-2">Unearned premium reserve at {{ formatDate(quarter.end) }}</p><p class="text-lg font-semibold tabular-nums">{{ formatMoney(totals.upr) }}</p></div>
-                <div class="border border-line bg-surface p-3"><p class="text-dense text-ink-2">IBNR provision this quarter</p><p class="text-lg font-semibold tabular-nums">{{ formatMoney(totals.ibnr) }}</p></div>
-                <div class="border border-line bg-surface p-3"><p class="text-dense text-ink-2">Prior quarter's IBNR (released on posting)</p><p class="text-lg font-semibold tabular-nums">{{ formatMoney(totals.prior) }}</p></div>
+                <div class="border border-line bg-surface p-3"><p class="text-dense text-ink-2">Unearned premium reserve at {{ formatDate(quarter.end) }} ({{ cur }})</p><p class="text-title font-semibold tabular-nums">{{ formatMoney(totals.upr) }}</p></div>
+                <div class="border border-line bg-surface p-3"><p class="text-dense text-ink-2">IBNR provision this quarter ({{ cur }})</p><p class="text-title font-semibold tabular-nums">{{ formatMoney(totals.ibnr) }}</p></div>
+                <div class="border border-line bg-surface p-3"><p class="text-dense text-ink-2">Prior quarter's IBNR, released on posting ({{ cur }})</p><p class="text-title font-semibold tabular-nums">{{ formatMoney(totals.prior) }}</p></div>
             </div>
 
             <section class="mb-5">
-                <h2 class="mb-1 text-ui font-medium">IBNR by class <span class="font-normal text-ink-2">(BDT)</span></h2>
+                <h2 class="mb-1 text-section font-semibold">IBNR by class <span class="text-ui font-normal text-ink-2">({{ cur }})</span></h2>
                 <div class="overflow-x-auto border border-line">
                     <table class="w-full text-ui">
                         <thead>
@@ -138,7 +140,7 @@ function approve(): void {
 
             <section v-if="triangle" class="mb-5">
                 <div class="mb-1 flex flex-wrap items-center gap-2">
-                    <h2 class="text-ui font-medium">Paid claims triangle <span class="font-normal text-ink-2">(cumulative, BDT, by accident quarter and development quarter)</span></h2>
+                    <h2 class="text-section font-semibold">Paid claims triangle <span class="text-ui font-normal text-ink-2">(cumulative, {{ cur }}, by accident quarter and development quarter)</span></h2>
                     <div class="ml-auto flex gap-1" role="tablist">
                         <button v-for="t in triangles" :key="t.class" type="button" role="tab" :aria-selected="t.class === triangleClass" class="h-7 rounded-control border px-2 text-ui"
                             :class="t.class === triangleClass ? 'border-accent text-accent-text' : 'border-line-control text-ink-2 hover:bg-surface-2'" @click="triangleClass = t.class">{{ t.label }}</button>
@@ -176,7 +178,7 @@ function approve(): void {
 
             <div class="grid gap-5 lg:grid-cols-2">
                 <section>
-                    <h2 class="mb-1 text-ui font-medium">Premium deficiency check</h2>
+                    <h2 class="mb-1 text-section font-semibold">Premium deficiency check</h2>
                     <ul class="grid gap-2">
                         <li v-for="line in classes" :key="line.class" class="border border-line p-2 text-ui">
                             <p :class="line.deficiency !== '0.00' ? 'text-danger' : ''">{{ line.deficiency_note }}</p>
@@ -185,7 +187,7 @@ function approve(): void {
                     </ul>
                 </section>
                 <section>
-                    <h2 class="mb-1 text-ui font-medium">Journal on posting <span class="font-normal text-ink-2">dated {{ formatDate(quarter.end) }}</span></h2>
+                    <h2 class="mb-1 text-section font-semibold">Journal on posting <span class="text-ui font-normal text-ink-2">dated {{ formatDate(quarter.end) }}</span></h2>
                     <div class="overflow-x-auto border border-line">
                         <table class="w-full text-ui">
                             <thead>
@@ -215,6 +217,6 @@ function approve(): void {
                 <li v-for="note in notes" :key="note">{{ note }}</li>
             </ul>
         </div>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="cur" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

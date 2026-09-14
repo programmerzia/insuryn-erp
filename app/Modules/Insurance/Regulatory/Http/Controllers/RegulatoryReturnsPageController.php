@@ -51,6 +51,7 @@ final class RegulatoryReturnsPageController
         $run = DB::table('technical_provision_runs')->where('entity_id', $entity['id'])->orderByDesc('quarter_end')->first(['number', 'quarter_key', 'status', 'total_ibnr_minor']);
 
         return Inertia::render('regulatory/Dashboard', [
+            'currency' => $entity['currency'],
             'quarter' => ['key' => $quarter->key, 'label' => $quarter->label()],
             'solvency' => ['as_of' => $snapshot['as_of'], 'available' => $money($snapshot['available_minor']), 'required' => $money($snapshot['required_minor']),
                 'minimum_capital' => $money($snapshot['minimum_capital_minor']), 'premium_basis' => $money($snapshot['premium_basis_minor']), 'premium_component' => $money($snapshot['premium_component_minor']),
