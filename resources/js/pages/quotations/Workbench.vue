@@ -20,7 +20,7 @@ import { HttpError, requestJson } from '@/lib/http';
 import { startingProduct } from '@/lib/lastProduct';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import {
-    type FormValues, formFields, initialValues, localProblems, problemMessage, type ProductVersionOption, ratingKey, type RatingResultData, riskInputs, versionOn,
+    type FormValues, formFields, initialValues, localProblems, type ProductVersionOption, ratingKey, type RatingResultData, riskInputs, serverProblems, versionOn,
 } from '@/lib/riskForm';
 import type { SharedProps } from '@/types/shared';
 
@@ -109,10 +109,10 @@ async function rate(key: string): Promise<void> {
         lastKey = key;
     } catch (error) {
         if (!(error instanceof HttpError)) return;
-        const body = error.body as { reason?: string; message?: string; errors?: Record<string, string | string[]> } | null;
+        const body = error.body as { reason?: string; message?: string; errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null;
         result.value = null;
         if (body?.reason === 'RISK_INPUTS_INVALID') {
-            serverErrors.value = Object.fromEntries(Object.entries(body.errors ?? {}).map(([k, code]) => [k, problemMessage(String(code), schema.value.find((f) => f.key === k))]));
+            serverErrors.value = serverProblems(body, schema.value);
             ratingProblem.value = null;
         } else {
             serverErrors.value = {};
@@ -131,8 +131,9 @@ function set(key: string, value: string | undefined): void {
     values.value = { ...values.value, [key]: value ?? '' };
     touched.value = true;
 }
-const errorFor = (key: string) => serverErrors.value[key] ?? problems.value[key];
 const formErrors = computed(() => page.props.errors as Record<string, string>);
+// Follow-up H2: a refused save or issue names the risk fields too (`risk_inputs.<key>`).
+const errorFor = (key: string) => serverErrors.value[key] ?? formErrors.value[`risk_inputs.${key}`] ?? problems.value[key];
 
 // Save, issue, decline.
 const saving = ref(false);

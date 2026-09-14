@@ -43,15 +43,67 @@ final class ReasonMessages
         'PERIOD_NOT_ENDED' => 'This month has not ended yet, so it cannot be locked. Lock it from the first day of the next month, or ask the CFO to lock it earlier with a written reason.',
         'EARLY_LOCK_REASON_REQUIRED' => 'This month has not ended yet. To lock it now, write the reason for locking early.',
         'RECONCILIATION_VARIANCE' => 'A subledger does not reconcile to the ledger. Rerun the reconciliation tasks and resolve the difference before locking.',
+        // Follow-up H2: reasons whose domain message carries record ids, codes, minor units or keys (tests/Unit/Feedback/ReasonMessagesCoverageTest).
+        'RISK_INPUTS_INVALID' => 'Check the risk details: each field that needs attention is marked.',
+        'DOCUMENT_PDF_FAILED' => 'The PDF could not be produced. Ask an administrator to check the document renderer, then try again.',
+        'COMPENSATION_SCHEME_UNKNOWN' => 'That compensation scheme no longer exists. Choose another scheme.',
+        'ADVANCE_INVALID' => 'Choose how the advance is recovered: in full, or a percentage of each net commission from 0.01% to 100%.',
+        'SCHEME_MODE_INVALID' => 'Choose how producers are paid: commission, salary with incentive, hybrid or none.',
+        'INVALID_LICENCE_CLASS' => 'Choose the licence class: life, non-life or both.',
+        'PERIOD_NOT_OPEN' => 'This period is not open, so it cannot be closed. Refresh the close list.',
+        'DUTY_NOT_FOUND' => 'No duty rate covers this policy (its class, date or sum insured). Check the duties in the tariff editor.',
+        'INVALID_RECOVERY_TYPE' => 'Choose the kind of recovery: salvage, subrogation or third party.',
+        'INVALID_INSURANCE_CLASS' => 'Choose the insurance class: life or non-life.',
+        'MIN_PREMIUM_INVALID' => 'Enter a minimum premium of zero or more.',
+        'RECOGNISE_AT_INVALID' => 'Choose when the premium is recognised: at the policy or at the cover note.',
+        'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',
     ];
+
+    /** @var list<string> reasons worded below from the amounts or dates in the domain message */
+    private const COMPUTED = ['ALLOCATION_EXCEEDS_OUTSTANDING', 'ALLOCATION_EXCEEDS_RECEIPT', 'ALLOCATION_EXCEEDS_SUSPENSE', 'APPROVAL_EXCEEDS_RESERVE', 'DEPOSIT_EXCEEDS_UNDEPOSITED_CASH',
+        'REFUND_EXCEEDS_DUE', 'RESERVE_UNCHANGED', 'RESERVE_BELOW_APPROVED', 'PREMIUM_CREDIT_EXCEEDS_OUTSTANDING', 'MATCH_AMOUNT_MISMATCH', 'NOTHING_TO_PAY', 'PRODUCT_VERSION_NOT_EFFECTIVE',
+        'PRODUCT_VERSION_OVERLAP', 'RATING_EXPRESSION_INVALID', 'RATING_EXPRESSION_NOT_INTEGER', 'RATING_CONDITION_NOT_BOOLEAN'];
+
+    /**
+     * @var list<string> follow-up H2: reasons whose domain message is the detail people need (a tariff, schema, target or statement file being set up, a role
+     *     conflict) but names keys or permissions by code: kept, with keys in words and permissions as "Context: action".
+     */
+    private const REWORDED = ['RATING_PLAN_INVALID', 'RISK_SCHEMA_INVALID', 'RATE_TABLE_TYPE', 'STATEMENT_UNREADABLE', 'TARGET_INVALID', 'INCENTIVE_PLAN_INVALID', 'COMPLIANCE_PROFILE_INVALID',
+        'ROLE_CONFLICT', 'AUDITOR_WRITE_PERMISSION'];
+
+    /** Whether the reason is worded here rather than by its domain message. */
+    public static function covers(string $reason): bool
+    {
+        return isset(self::FIXED[$reason]) || in_array($reason, self::COMPUTED, true) || in_array($reason, self::REWORDED, true);
+    }
+
+    /** @return array<string, string> the fixed sentences, by reason */
+    public static function fixed(): array
+    {
+        return self::FIXED;
+    }
 
     public static function forPeople(string $reason, string $message, string $currency = 'BDT'): string
     {
         $amounts = self::integers($message);
         $money = fn (int $minor): string => MinorUnits::format($minor, $currency);
         $over = fn (int $have, int $asked): string => $money(max(0, $asked - $have));
+        $dates = self::dates($message);
+        $quoted = preg_match("/'([^']+)'/", $message, $found) === 1 ? $found[1] : null;
 
         return match (true) {
+            $reason === 'NOTHING_TO_PAY' && $dates !== [] => "This agent has nothing payable up to {$dates[0]}.",
+            $reason === 'PRODUCT_VERSION_NOT_EFFECTIVE' && $dates !== [] => "The product has no version in force on {$dates[0]}. Choose another cover start or product.",
+            $reason === 'PRODUCT_VERSION_OVERLAP' && $dates !== [] => "The product already has a version in force from {$dates[0]}".(isset($dates[1]) ? " to {$dates[1]}" : '').'. End that version first or choose other dates.',
+            $reason === 'RATING_EXPRESSION_NOT_INTEGER' && $quoted !== null => "The formula '{$quoted}' must give a whole amount. Check it in the tariff editor.",
+            $reason === 'RATING_CONDITION_NOT_BOOLEAN' && $quoted !== null => "The condition '{$quoted}' must give yes or no. Check it in the tariff editor.",
+            // An expression the evaluator refused carries the evaluator's own error text or a PHP type name: name the formula instead.
+            $reason === 'RATING_EXPRESSION_INVALID' && $quoted !== null && preg_match('/is not valid:|wrong kind:/', $message) === 1
+                => "The formula '{$quoted}' cannot be worked out. Check it in the tariff editor.",
+            $reason === 'RATING_EXPRESSION_INVALID' && preg_match('/^(\w+)\(\) needs whole numbers/', $message, $function) === 1
+                => "{$function[1]}() needs whole amounts or basis points. Check the formula in the tariff editor.",
+            in_array($reason, ['NOTHING_TO_PAY', 'PRODUCT_VERSION_NOT_EFFECTIVE', 'PRODUCT_VERSION_OVERLAP', 'RATING_EXPRESSION_INVALID', 'RATING_EXPRESSION_NOT_INTEGER', 'RATING_CONDITION_NOT_BOOLEAN'], true),
+            in_array($reason, self::REWORDED, true) => self::reworded(self::withoutIds($message)),
             $reason === 'ALLOCATION_EXCEEDS_OUTSTANDING' && count($amounts) >= 2
                 => 'The amount exceeds the installment balance of '.$money($amounts[count($amounts) - 2]).' by '.$over($amounts[count($amounts) - 2], $amounts[count($amounts) - 1]).'.',
             $reason === 'ALLOCATION_EXCEEDS_RECEIPT' && count($amounts) >= 2 => 'The allocations exceed the amount received by '.$over($amounts[1], $amounts[0]).'.',
@@ -78,6 +130,22 @@ final class ReasonMessages
         preg_match_all('/-?\b\d+\b/', $cleaned, $matches);
 
         return array_map('intval', $matches[0]);
+    }
+
+    /** @return list<string> the dates in the message, as people read them ("30 Sep 2026") */
+    private static function dates(string $message): array
+    {
+        preg_match_all('/\b\d{4}-\d{2}-\d{2}\b/', $message, $matches);
+
+        return array_map(fn (string $date): string => \Carbon\CarbonImmutable::parse($date)->format('j M Y'), $matches[0]);
+    }
+
+    /** Keys and permission codes in words: `order_no` → "order no", `accounting.approve_journal` → "Accounting: approve journal". */
+    private static function reworded(string $message): string
+    {
+        $permissions = (string) preg_replace_callback('/\b([a-z][a-z_]{2,})\.([a-z][a-z_]{2,})\b/', fn (array $m): string => ucfirst(str_replace('_', ' ', $m[1])).': '.str_replace('_', ' ', $m[2]), $message);
+
+        return (string) preg_replace_callback('/\b[a-z]+(?:_[a-z0-9]+)+\b/', fn (array $m): string => str_replace('_', ' ', $m[0]), $permissions);
     }
 
     private static function withoutIds(string $message): string

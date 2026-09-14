@@ -85,7 +85,7 @@ it('assigns roles by tenant, entity or branch and removes them', function (): vo
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('branch_officer'), 'scope_type' => 'branch', 'scope_id' => $this->ctx['branch_id']], $this->headers)
         ->assertSessionHasNoErrors()->assertSessionHas('status', 'Branch Officer added.');
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('auditor'), 'scope_type' => 'tenant'], $this->headers)
-        ->assertSessionHasErrors(['form' => 'An auditor stays read-only, so Rafiq Officer cannot hold the Auditor role together with cover_note.issue.']); // the first write permission of the role (slices R8 and R6 added document.generate and cover_note.issue)
+        ->assertSessionHasErrors(['form' => 'An auditor stays read-only, so Rafiq Officer cannot hold the Auditor role together with Cover note: issue.']); // the first write permission of the role (slices R8 and R6 added document.generate and cover_note.issue)
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('branch_officer'), 'scope_type' => 'branch', 'scope_id' => $this->ctx['branch_id']], $this->headers)
         ->assertSessionHasErrors(['form' => 'Rafiq Officer already has Branch Officer there.']);
     actingAs($this->admin)->post("/admin/users/{$officer->id}/roles", ['role_id' => ($this->role)('accountant'), 'scope_type' => 'branch', 'scope_id' => (string) Str::uuid7()], $this->headers)
@@ -107,7 +107,7 @@ it('refuses role combinations segregation of duties forbids, and says which', fu
     $manager = ($this->person)('Selim Manager', ['finance_manager']);
 
     actingAs($this->admin)->post("/admin/users/{$manager->id}/roles", ['role_id' => ($this->role)('tenant_admin'), 'scope_type' => 'tenant'], $this->headers)
-        ->assertSessionHasErrors(['form' => 'Selim Manager cannot hold platform.manage_roles together with accounting.approve_journal (segregation of duties). Remove one of the roles first.']);
+        ->assertSessionHasErrors(['form' => 'Selim Manager cannot hold Platform: manage roles together with Accounting: approve journal (segregation of duties). Remove one of the roles first.']);
     expect(($this->rolesOf)($manager))->toBe([['code' => 'finance_manager', 'scope_type' => 'tenant', 'scope_id' => $this->ctx['tenant_id']]]);
 });
 

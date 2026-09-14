@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Quotation\Http\Controllers;
 
+use App\Http\Feedback\RiskProblems;
 use App\Http\Pages\FormDefaults;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid;
@@ -92,7 +93,7 @@ final class QuotationPageController
         try {
             $result = $this->quotations->rate($terms, PageSupport::actor($request));
         } catch (RiskInputsInvalid $invalid) {
-            return response()->json(['reason' => $invalid->reasonCode, 'message' => $invalid->getMessage(), 'errors' => $invalid->errors], 422);
+            return response()->json(RiskProblems::json($invalid, RiskProblems::locale($request)), 422); // follow-up H2: each field in words, with its label
         } catch (RatingFailed $failed) {
             return response()->json(['reason' => $failed->reasonCode, 'message' => $failed->getMessage(), 'errors' => (object) []], 422);
         }
@@ -140,6 +141,8 @@ final class QuotationPageController
         }
         try {
             $this->quotations->issue($quotation->id, app(BusinessClock::class)->today(), PageSupport::actor($request));
+        } catch (RiskInputsInvalid $invalid) {
+            return redirect("/quotations/{$quotation->id}")->withErrors(RiskProblems::formErrorsFor($invalid, RiskProblems::locale($request)));
         } catch (BusinessRuleViolation $refused) {
             return redirect("/quotations/{$quotation->id}")->withErrors(['form' => \App\Http\Feedback\ReasonMessages::forPeople($refused->reasonCode, $refused->getMessage()), 'reason' => $refused->reasonCode]);
         }

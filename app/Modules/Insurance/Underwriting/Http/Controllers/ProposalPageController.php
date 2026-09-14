@@ -120,15 +120,8 @@ final class ProposalPageController
         try {
             $this->proposals->completeRiskDetails($proposal, $data['risk_inputs'], PageSupport::actor($request));
         } catch (RiskInputsInvalid $invalid) {
-            $model = Proposal::query()->findOrFail($proposal);
-            $schema = ProductVersion::query()->whereKey($model->product_version_id)->firstOrFail()->riskSchema();
-            $errors = [];
-            foreach ($invalid->errors as $key => $code) {
-                $field = $schema->field($key);
-                $errors["risk_inputs.{$key}"] = self::problem($code, $field === null ? $key : $field->labelEn);
-            }
-
-            return back()->withErrors($errors);
+            // Follow-up H2: the same wording as every risk form, in the user's language.
+            return back()->withErrors(\App\Http\Feedback\RiskProblems::formErrorsFor($invalid, \App\Http\Feedback\RiskProblems::locale($request)));
         }
 
         return redirect("/proposals/{$proposal}")->with('status', 'Risk details saved.');
@@ -234,20 +227,6 @@ final class ProposalPageController
             'missing' => ProposalService::missingRiskDetails($proposal),
             'editable' => $editable && $keys !== [],
         ];
-    }
-
-    private static function problem(string $code, string $label): string
-    {
-        return match ($code) {
-            'REQUIRED' => 'Enter the '.mb_strtolower($label).'.',
-            'TOO_LONG' => 'This is too long.',
-            'NOT_AN_OPTION' => 'Choose one of the options.',
-            'NOT_A_DATE' => 'Enter a date like 15 Sep 2026.',
-            'NOT_INTEGER' => 'Enter a whole number.',
-            'BELOW_MIN' => 'The value is too low.',
-            'ABOVE_MAX' => 'The value is too high.',
-            default => 'Check this value.',
-        };
     }
 
     private static function idTypeLabel(string $type): string

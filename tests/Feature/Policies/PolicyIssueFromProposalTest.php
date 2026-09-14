@@ -311,9 +311,18 @@ it('refuses an endorsement that empties a risk detail needed only from the propo
 
     // On the policy page: the live re-rating names the field (the drawer shows "Enter the chassis number."), and posting is refused.
     actingAs($user)->postJson("/policies/{$policy->id}/endorsement-rating", ['effective_date' => '2026-10-15', 'risk_inputs' => [...$older, 'chassis_no' => '']], $headers)
-        ->assertStatus(422)->assertJsonPath('reason', 'RISK_INPUTS_INVALID')->assertJsonPath('errors', ['chassis_no' => 'REQUIRED']);
+        ->assertStatus(422)->assertJsonPath('reason', 'RISK_INPUTS_INVALID')->assertJsonPath('errors', ['chassis_no' => 'REQUIRED'])
+        ->assertJsonPath('fields', ['chassis_no' => 'Enter the chassis number.'])->assertJsonPath('message', 'Check the risk details: chassis number.');
+    // Follow-up H2: the refusal names the field with its label, not "(chassis_no: REQUIRED)" — on the post, and on the journal preview the drawer asks for first.
     actingAs($user)->post("/policies/{$policy->id}/endorse-risk", ['effective_date' => '2026-10-15', 'risk_inputs' => [...$older, 'chassis_no' => ''], 'reason' => 'Named driver changed'], $headers)
-        ->assertSessionHasErrors(['reason' => 'RISK_INPUTS_INVALID', 'form' => 'The risk details are not valid (chassis_no: REQUIRED).']);
+        ->assertSessionHasErrors(['reason' => 'RISK_INPUTS_INVALID', 'form' => 'Check the risk details: chassis number.', 'risk_inputs.chassis_no' => 'Enter the chassis number.']);
+    actingAs($user)->postJson("/policies/{$policy->id}/endorse-risk", ['effective_date' => '2026-10-15', 'risk_inputs' => [...$older, 'chassis_no' => ''], 'reason' => 'Named driver changed'],
+        [...$headers, 'X-Journal-Preview' => '1'])->assertStatus(422)
+        ->assertJson(['errors' => ['form' => 'Check the risk details: chassis number.', 'risk_inputs.chassis_no' => 'Enter the chassis number.', 'reason' => 'RISK_INPUTS_INVALID']]);
+    ($this->in)(fn () => app(App\Modules\Platform\Preferences\UserPreferences::class)->set((string) $admin, 'locale', 'bn'));
+    actingAs($user)->post("/policies/{$policy->id}/endorse-risk", ['effective_date' => '2026-10-15', 'risk_inputs' => [...$older, 'chassis_no' => ''], 'reason' => 'Named driver changed'], $headers)
+        ->assertSessionHasErrors(['form' => 'ঝুঁকির বিবরণ দেখুন: চেসিস নম্বর।', 'risk_inputs.chassis_no' => 'চেসিস নম্বর লিখুন।']);
+    ($this->in)(fn () => app(App\Modules\Platform\Preferences\UserPreferences::class)->set((string) $admin, 'locale', 'en'));
     expect(($this->in)(fn (): array => [DB::table('policy_transactions')->where('policy_id', $policy->id)->where('type', 'endorsement')->count(),
         Policy::query()->whereKey($policy->id)->firstOrFail()->risk_inputs['chassis_no'] ?? null]))->toBe([0, $chassis]);
 

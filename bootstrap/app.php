@@ -52,6 +52,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (SodViolation $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));
+        // Follow-up H2: risk schema problems name each field by its label, per field (`risk_inputs.<key>`), in the user's language.
+        $exceptions->render(fn (\App\Modules\Insurance\Product\Domain\Risk\RiskInputsInvalid $e, Request $request) => $wantsJson($request)
+            ? response()->json(\App\Http\Feedback\RiskProblems::json($e, \App\Http\Feedback\RiskProblems::locale($request)), 422)
+            : back()->withInput($request->except(['password', 'password_confirmation', 'current_password']))
+                ->withErrors(\App\Http\Feedback\RiskProblems::formErrorsFor($e, \App\Http\Feedback\RiskProblems::locale($request))));
         $exceptions->render(fn (AccountingException|BusinessRuleViolation|ApprovalException|NumberingException $e, Request $request) => $wantsJson($request)
             // Slice 2.1b: a period refusal carries its detail (the pending documents that hold the lock).
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode]

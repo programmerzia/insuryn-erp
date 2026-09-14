@@ -12,7 +12,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import { basisSentence, changeRows, changeSentence, type EndorsementRatingData } from '@/lib/endorsement';
 import { HttpError, requestJson } from '@/lib/http';
 import { type PreviewResult, previewJournal } from '@/lib/preview';
-import { type FormValues, formFields, initialValues, type Locale, localProblems, problemMessage, ratingKey, type RiskFieldDefinition, riskInputs } from '@/lib/riskForm';
+import { type FormValues, formFields, initialValues, type Locale, localProblems, ratingKey, type RiskFieldDefinition, riskInputs, serverProblems } from '@/lib/riskForm';
 
 /**
  * Phase 3 design §2 step 5 (slice R7): endorse a rated policy by changing its risk. The form comes from the product's risk schema, prefilled with the risk in force;
@@ -61,10 +61,10 @@ async function rerate(): Promise<void> {
         serverErrors.value = {};
     } catch (error) {
         if (!(error instanceof HttpError)) return;
-        const body = error.body as { reason?: string; message?: string; errors?: Record<string, string | string[]> } | null;
+        const body = error.body as { reason?: string; message?: string; errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null;
         rating.value = null;
         if (body?.reason === 'RISK_INPUTS_INVALID') {
-            serverErrors.value = Object.fromEntries(Object.entries(body.errors ?? {}).map(([k, code]) => [k, problemMessage(String(code), props.schema.find((f) => f.key === k))]));
+            serverErrors.value = serverProblems(body, props.schema);
             problem.value = null;
         } else {
             serverErrors.value = {};
@@ -80,7 +80,7 @@ const text = (key: string) => {
     return typeof value === 'string' ? value : '';
 };
 const set = (key: string, value: string | undefined) => (values.value = { ...values.value, [key]: value ?? '' });
-const fieldError = (key: string) => serverErrors.value[key] ?? localProblems(props.schema, values.value, 'proposal')[key];
+const fieldError = (key: string) => serverErrors.value[key] ?? errors.value[`risk_inputs.${key}`] ?? localProblems(props.schema, values.value, 'proposal')[key];
 
 const preview = ref<PreviewResult | null>(null);
 const previewOpen = ref(false);

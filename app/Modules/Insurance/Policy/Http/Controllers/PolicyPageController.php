@@ -177,7 +177,7 @@ final class PolicyPageController
         try {
             $rating = $this->lifecycle->rateEndorsement($policy, $date, $inputs, PageSupport::actor($request), $coverages);
         } catch (RiskInputsInvalid $invalid) {
-            return response()->json(['reason' => $invalid->reasonCode, 'message' => $invalid->getMessage(), 'errors' => $invalid->errors], 422);
+            return response()->json(\App\Http\Feedback\RiskProblems::json($invalid, \App\Http\Feedback\RiskProblems::locale($request)), 422); // follow-up H2: in words, with labels
         } catch (RatingFailed $failed) {
             return response()->json(['reason' => $failed->reasonCode, 'message' => $failed->getMessage(), 'errors' => (object) []], 422);
         }

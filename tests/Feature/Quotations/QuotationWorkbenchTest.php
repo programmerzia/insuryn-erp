@@ -72,6 +72,32 @@ it('returns risk schema problems per field, and rating failures with their reaso
     actingAs($this->officer)->postJson('/quotations/rate', ($this->form)(['inception' => '15/09/2026']), $this->headers)->assertStatus(422)->assertJsonValidationErrors('inception');
 });
 
+it('words risk problems with the schema labels, in Bangla for a Bangla user, on the live rating and when saving and issuing', function (): void {
+    // Follow-up H2: no raw field keys or problem codes in what people read.
+    $inputs = [...$this->world['motor_inputs'], 'registration_no' => '', 'engine_cc' => 20, 'vehicle_type' => 'tractor', 'wheels' => 4];
+
+    actingAs($this->officer)->postJson('/quotations/rate', ($this->form)(['risk_inputs' => $inputs]), $this->headers)
+        ->assertStatus(422)->assertJsonPath('reason', 'RISK_INPUTS_INVALID')
+        ->assertJsonPath('errors', ['wheels' => 'UNKNOWN_FIELD', 'vehicle_type' => 'NOT_AN_OPTION', 'registration_no' => 'REQUIRED', 'engine_cc' => 'BELOW_MIN'])
+        ->assertJsonPath('fields', ['wheels' => 'This product does not ask for this.', 'vehicle_type' => 'Choose one of the options.',
+            'registration_no' => 'Enter the registration number.', 'engine_cc' => 'Enter at least 50.'])
+        ->assertJsonPath('message', 'Check the risk details: wheels, vehicle type, registration number, engine capacity (cc).');
+
+    actingAs($this->officer)->post('/quotations', [...($this->form)(['risk_inputs' => [...$this->world['motor_inputs'], 'registration_no' => '', 'seats' => 99]]), 'intent' => 'issue'], $this->headers)
+        ->assertSessionHasErrors(['reason' => 'RISK_INPUTS_INVALID', 'form' => 'Check the risk details: registration number, seats.',
+            'risk_inputs.registration_no' => 'Enter the registration number.', 'risk_inputs.seats' => 'Enter at most 60.']);
+    $draft = ($this->in)(fn (): string => (string) DB::table('quotations')->value('id'));
+    actingAs($this->officer)->post("/quotations/{$draft}/issue", [], $this->headers)
+        ->assertSessionHasErrors(['reason' => 'RISK_INPUTS_INVALID', 'risk_inputs.registration_no' => 'Enter the registration number.']);
+
+    ($this->in)(fn () => app(App\Modules\Platform\Preferences\UserPreferences::class)->set($this->officerId, 'locale', 'bn'));
+    actingAs($this->officer)->postJson('/quotations/rate', ($this->form)(['risk_inputs' => [...$this->world['motor_inputs'], 'registration_no' => '', 'vehicle_type' => '', 'engine_cc' => 99999]]), $this->headers)
+        ->assertStatus(422)->assertJsonPath('fields', ['vehicle_type' => 'যানবাহনের ধরন বেছে নিন।', 'registration_no' => 'নিবন্ধন নম্বর লিখুন।', 'engine_cc' => 'সর্বোচ্চ 10,000 লিখুন।'])
+        ->assertJsonPath('message', 'ঝুঁকির বিবরণ দেখুন: যানবাহনের ধরন, নিবন্ধন নম্বর, ইঞ্জিন ক্ষমতা (সিসি)।');
+    actingAs($this->officer)->post("/quotations/{$draft}/issue", [], $this->headers)
+        ->assertSessionHasErrors(['form' => 'ঝুঁকির বিবরণ দেখুন: নিবন্ধন নম্বর, আসন সংখ্যা।', 'risk_inputs.registration_no' => 'নিবন্ধন নম্বর লিখুন।']);
+});
+
 it('saves a draft, re-rates it on every save, and keeps an incomplete draft without a rating', function (): void {
     actingAs($this->officer)->post('/quotations', ($this->form)(), $this->headers)->assertSessionHasNoErrors()->assertSessionHas('status', 'Draft saved.');
     $quotation = ($this->in)(fn (): Quotation => Quotation::query()->sole());

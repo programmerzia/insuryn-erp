@@ -70,10 +70,10 @@ it('refuses a permission change that would give a holder a forbidden combination
     ($this->person)('Selim Manager', ['finance_manager', 'branch_officer']);
 
     actingAs($this->admin)->put('/admin/roles/'.($this->role)('branch_officer'), ['permissions' => ['policy.create', 'policy.issue', 'receipt.create', 'party.manage', 'platform.manage_roles']], $this->headers)
-        ->assertSessionHasErrors(['form' => 'Selim Manager holds this role and cannot hold platform.manage_roles together with accounting.approve_journal (segregation of duties).']);
+        ->assertSessionHasErrors(['form' => 'Selim Manager holds this role and cannot hold Platform: manage roles together with Accounting: approve journal (segregation of duties).']);
     ($this->person)('Ayesha Auditor', ['auditor']);
     actingAs($this->admin)->put('/admin/roles/'.($this->role)('auditor'), ['permissions' => ['audit.view', 'receipt.create']], $this->headers)
-        ->assertSessionHasErrors(['form' => 'Auditors stay read-only, so the Auditor role cannot include receipt.create.']);
+        ->assertSessionHasErrors(['form' => 'Auditors stay read-only, so the Auditor role cannot include Receipt: create.']);
 
     expect(($this->permissionsOf)('branch_officer'))->toBe(['cover_note.issue', 'document.generate', 'party.manage', 'policy.create', 'policy.issue', 'quotation.create', 'receipt.create', 'renewal.manage']); // + A-101 (slice R8), A-83 (R4), A-94 (R6), A-126 (R9)
 });

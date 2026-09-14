@@ -79,7 +79,10 @@ final class PreviewJournal
         if ($response instanceof JsonResponse && $response->getStatusCode() >= 400) {
             /** @var array<string, mixed> $body */
             $body = (array) $response->getData(true);
-            if (! isset($body['errors']) && isset($body['message'])) {
+            if (($body['reason'] ?? null) === \App\Http\Feedback\RiskProblems::REASON && isset($body['fields']) && is_array($body['fields'])) {
+                // Follow-up H2: the risk form reads the problems per field, as on the real post.
+                $body['errors'] = \App\Http\Feedback\RiskProblems::formErrors((string) ($body['message'] ?? ''), array_map(strval(...), $body['fields']));
+            } elseif (! isset($body['errors']) && isset($body['message'])) {
                 $body['errors'] = ['form' => \App\Http\Feedback\ReasonMessages::forPeople((string) ($body['reason'] ?? ''), (string) $body['message']), 'reason' => $body['reason'] ?? null];
             }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsHint, breakdown, formFields, initialValues, localProblems, problemMessage, PROPOSAL_STAGE_HINT, ratingKey, requiredFor, riskInputs, type RiskFieldDefinition, versionOn } from '@/lib/riskForm';
+import { boundsHint, breakdown, formFields, initialValues, localProblems, problemMessage, PROPOSAL_STAGE_HINT, ratingKey, requiredFor, riskInputs, type RiskFieldDefinition, serverProblems, versionOn } from '@/lib/riskForm';
 
 const schema: RiskFieldDefinition[] = [
     { key: 'vehicle_type', label_en: 'Vehicle type', label_bn: 'যানবাহনের ধরন', type: 'select', required: true, options: [{ value: 'private', label_en: 'Private car', label_bn: 'ব্যক্তিগত গাড়ি' }] },
@@ -51,6 +51,12 @@ describe('risk form generated from the risk schema (slice R4)', () => {
         expect(localProblems(schema, { vehicle_type: '', registration_no: 'D', engine_cc: '1500', year_of_manufacture: '2020', sum_insured: '10.00', garaged: false })).toEqual({ vehicle_type: 'Choose the vehicle type.' });
         expect(problemMessage('NOT_INTEGER', schema[4])).toBe('Enter an amount, like 1,234,567.00.');
         expect(problemMessage('UNKNOWN_FIELD', undefined)).toBe('This product does not ask for this.');
+    });
+
+    it('follow-up H2: shows the server\'s own sentence for a refused field (in the user\'s language), falling back to the browser wording for a bare code', () => {
+        expect(serverProblems({ errors: { registration_no: 'REQUIRED', engine_cc: 'BELOW_MIN' }, fields: { registration_no: 'নিবন্ধন নম্বর লিখুন।' } }, schema))
+            .toEqual({ registration_no: 'নিবন্ধন নম্বর লিখুন।', engine_cc: 'Enter at least 50.' });
+        expect(serverProblems(null, schema)).toEqual({});
     });
 
     it('flow fix X7: a field needed only for the proposal is optional on the quote with a hint, required for the proposal, and defaults start a new form', () => {

@@ -197,6 +197,14 @@ function problemCode(field: RiskFieldDefinition, value: string | number | boolea
     }
 }
 
+/**
+ * Follow-up H2: the problems of a RISK_INPUTS_INVALID refusal per field. The server words them with the schema's labels in the user's language (`fields`);
+ * a code without a sentence falls back to the browser's own wording.
+ */
+export function serverProblems(body: { errors?: Record<string, string | string[]>; fields?: Record<string, string> } | null, schema: RiskFieldDefinition[]): Record<string, string> {
+    return Object.fromEntries(Object.entries(body?.errors ?? {}).map(([k, code]) => [k, body?.fields?.[k] ?? problemMessage(String(code), schema.find((f) => f.key === k))]));
+}
+
 /** A risk schema problem code (from the browser or the server) in words for the field. */
 export function problemMessage(code: string, field: RiskFieldDefinition | undefined): string {
     const show = (n: number | undefined) => (n === undefined || !field ? '' : field.type === 'money' ? formatMinor(BigInt(n)) : field.key.startsWith('year') ? String(n) : group(n));

@@ -111,7 +111,7 @@ final readonly class RiskSchema
             $values[$field->key] = $value;
         }
         if ($errors !== []) {
-            throw new RiskInputsInvalid($errors);
+            throw new RiskInputsInvalid($errors, $this);
         }
 
         return $values;

@@ -92,7 +92,12 @@ it('refuses to submit the proposal until the chassis number is entered on it, th
     actingAs($this->officer)->post("/proposals/{$draft->id}/risk-details", ['risk_inputs' => ['engine_cc' => 2000]], $this->headers)
         ->assertSessionHasErrors(['reason' => 'PROPOSAL_RISK_DETAIL_NOT_EDITABLE']);
     actingAs($this->officer)->post("/proposals/{$draft->id}/risk-details", ['risk_inputs' => ['chassis_no' => str_repeat('X', 33)]], $this->headers)
-        ->assertSessionHasErrors(['risk_inputs.chassis_no' => 'This is too long.']);
+        ->assertSessionHasErrors(['risk_inputs.chassis_no' => 'Keep it to 32 characters.', 'form' => 'Check the risk details: chassis number.', 'reason' => 'RISK_INPUTS_INVALID']);
+    // Follow-up H2: in Bangla for a Bangla user, with the schema's Bangla label.
+    ($this->in)(fn () => app(App\Modules\Platform\Preferences\UserPreferences::class)->set($this->officer->id, 'locale', 'bn'));
+    actingAs($this->officer)->post("/proposals/{$draft->id}/risk-details", ['risk_inputs' => ['chassis_no' => str_repeat('X', 33)]], $this->headers)
+        ->assertSessionHasErrors(['risk_inputs.chassis_no' => '32 অক্ষরের মধ্যে রাখুন।', 'form' => 'ঝুঁকির বিবরণ দেখুন: চেসিস নম্বর।']);
+    ($this->in)(fn () => app(App\Modules\Platform\Preferences\UserPreferences::class)->set($this->officer->id, 'locale', 'en'));
 
     actingAs($this->officer)->post("/proposals/{$draft->id}/risk-details", ['risk_inputs' => ['chassis_no' => 'CHS-LATE-0001']], $this->headers)
         ->assertSessionHasNoErrors()->assertSessionHas('status', 'Risk details saved.');
