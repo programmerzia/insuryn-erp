@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import PendingDocuments from '@/components/close/PendingDocuments.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import DetailList from '@/components/table/DetailList.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
 import { useOnboarding } from '@/lib/onboarding';
 
-interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null }
+interface Period { id: string; label: string; starts: string; ends: string; status: string; run: { id: string; status: string } | null; pending?: PendingDocument[] }
 const props = defineProps<{ periods: Period[]; can: { start: boolean; reopen: boolean } }>();
 const onboarding = useOnboarding();
 
@@ -26,6 +28,8 @@ const columns: DataColumn<Period>[] = [
     { id: 'ends', header: 'Ends', type: 'date', value: (p) => p.ends },
     { id: 'status', header: 'Period', type: 'status', value: (p) => p.status, filterOptions: ['open', 'soft_locked', 'locked'] },
     { id: 'close', header: 'Close', type: 'status', value: (p) => closeState(p), filterOptions: ['not_started', 'running', 'completed', 'reopened'] },
+    // Slice 2.1b (D-55): documents dated in the period still waiting for approval, release or posting.
+    { id: 'pending', header: 'Pending', type: 'number', value: (p) => p.pending?.length ?? 0, width: 90 },
 ];
 
 function start(p: Period): void {
@@ -59,6 +63,7 @@ async function reopen(p: Period): Promise<void> {
                     <template #Period><StatusBadge :status="row.status" /></template>
                     <template #Close><StatusBadge :status="closeState(row)" /></template>
                 </DetailList>
+                <PendingDocuments class="mt-4" :documents="row.pending ?? []" :month="month(row)" compact />
                 <Link v-if="row.run" :href="`/close/runs/${row.run.id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the close checklist</Link>
                 <div v-if="can.reopen && row.status !== 'open'" class="mt-4 grid gap-2 border-t border-line pt-4">
                     <label class="grid gap-1 text-ui font-medium" for="reopen-reason">Reason to reopen<input id="reopen-reason" v-model="reason" class="h-8 rounded-control border border-line-control bg-surface px-2 text-body font-normal" /></label>

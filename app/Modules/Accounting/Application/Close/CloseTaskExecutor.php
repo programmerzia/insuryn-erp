@@ -26,6 +26,7 @@ final class CloseTaskExecutor
         private readonly LedgerQuery $ledger,
         private readonly iterable $checks,
         private readonly iterable $reconcilers,
+        private readonly PendingDocumentsQuery $pendingDocuments,
     ) {}
 
     public function execute(CloseTaskDefinition $task, FiscalPeriodView $period, string $closeRunId, string $actorUserId, ?string $note): CloseCheckResult
@@ -74,7 +75,10 @@ final class CloseTaskExecutor
         return CloseCheckResult::blocked("No reconciler is registered for subledger {$task->subledger}.");
     }
 
-    /** Task 13: soft-locks the period (design §5.7), then checks the trial balance balances. */
+    /**
+     * Task 13: soft-locks the period (design §5.7), then checks the trial balance balances. Slice 2.1b (D-55): documents dated in the period that
+     * still wait do not stop the soft lock; they are counted in the result as a warning, because the period lock will refuse while they remain.
+     */
     private function trialBalance(FiscalPeriodView $period, string $actorUserId): CloseCheckResult
     {
         if ($period->status === 'open') {
@@ -83,9 +87,11 @@ final class CloseTaskExecutor
         $rows = $this->ledger->trialBalance($period->entityId, $period->bookId, $period->ends);
         $debit = array_sum(array_column($rows, 'debit'));
         $credit = array_sum(array_column($rows, 'credit'));
-        $details = ['as_of' => $period->ends->toDateString(), 'accounts' => count($rows), 'debit_minor' => $debit, 'credit_minor' => $credit];
+        $pending = $this->pendingDocuments->forPeriod($period);
+        $details = ['as_of' => $period->ends->toDateString(), 'accounts' => count($rows), 'debit_minor' => $debit, 'credit_minor' => $credit, 'pending_documents' => count($pending)];
+        $warning = $pending === [] ? '' : ' Warning: '.PendingDocumentsQuery::summary($pending).' dated in the period still waiting; the lock waits for them.';
 
-        return $debit === $credit ? CloseCheckResult::passed('Trial balance balances.', $details) : CloseCheckResult::blocked('Trial balance does not balance.', $details);
+        return $debit === $credit ? CloseCheckResult::passed('Trial balance balances.'.$warning, $details) : CloseCheckResult::blocked('Trial balance does not balance.'.$warning, $details);
     }
 
     /**

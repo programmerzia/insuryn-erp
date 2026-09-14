@@ -7,8 +7,11 @@ namespace App\Modules\Accounting;
 use App\Modules\Accounting\Application\AmountEvaluator;
 use App\Modules\Accounting\Application\ChartOfAccounts\ChartOfAccounts;
 use App\Modules\Accounting\Application\Close\CloseTaskExecutor;
+use App\Modules\Accounting\Application\Close\KernelPendingDocuments;
+use App\Modules\Accounting\Application\Close\PendingDocumentsQuery;
 use App\Modules\Accounting\Application\Contracts\AccountUsage;
 use App\Modules\Accounting\Application\Contracts\CloseTaskCheck;
+use App\Modules\Accounting\Application\Contracts\PendingCloseDocuments;
 use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
 use App\Modules\Accounting\Application\Contracts\SubledgerReconciler;
 use App\Modules\Accounting\Application\Expressions\PostingFunctionProvider;
@@ -43,6 +46,9 @@ final class AccountingServiceProvider extends ServiceProvider
         $this->app->when(CloseTaskExecutor::class)->needs('$checks')->giveTagged(CloseTaskCheck::class);
         // UX U2: contexts that post to an account directly say so before it is deactivated.
         $this->app->when(ChartOfAccounts::class)->needs('$usages')->giveTagged(AccountUsage::class);
+        // Slice 2.1b (D-55): documents that hold a period's lock; business contexts tag their own sources next to the kernel's.
+        $this->app->tag([KernelPendingDocuments::class], PendingCloseDocuments::class);
+        $this->app->when(PendingDocumentsQuery::class)->needs('$sources')->giveTagged(PendingCloseDocuments::class);
         $this->mergeConfigFrom(base_path('config/erp.php'), 'erp');
     }
 

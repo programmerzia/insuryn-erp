@@ -39,6 +39,9 @@ final class InsuranceServiceProvider extends ServiceProvider
     {
         $this->app->tag([PremiumReconciler::class, SuspenseReconciler::class, CommissionReconciler::class, ClaimsReconciler::class], SubledgerReconciler::class);
         $this->app->tag([PremiumEarningCloseCheck::class, SuspenseReviewCloseCheck::class], CloseTaskCheck::class);
+        // Slice 2.1b (D-55): claim payments and refunds still waiting hold the period's lock.
+        $this->app->tag([\App\Modules\Insurance\Claims\Application\ClaimPaymentsPendingAtClose::class, \App\Modules\Insurance\Collections\Application\RefundsPendingAtClose::class],
+            \App\Modules\Accounting\Application\Contracts\PendingCloseDocuments::class);
         // Slice R8: printable documents. A new document for an object is one DocumentDataProvider class tagged here.
         $this->app->tag([PolicyScheduleDocumentData::class, EndorsementDocumentData::class, ReceiptDocumentData::class,
             \App\Modules\Insurance\Quotation\Application\Documents\QuotationDocumentData::class, \App\Modules\Insurance\CoverNote\Application\Documents\CoverNoteDocumentData::class,

@@ -6,8 +6,13 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Close\CloseRunQuery;
+use App\Modules\Accounting\Application\Close\PendingDocumentsQuery;
 use App\Modules\Accounting\Application\Close\PeriodCloseService;
+use App\Modules\Accounting\Application\Contracts\PendingCloseDocument;
+use App\Modules\Accounting\Application\ManualJournals\ManualJournalService;
 use App\Modules\Accounting\Application\Periods\FiscalPeriodService;
+use App\Modules\Accounting\Application\Queries\FiscalPeriodQuery;
+use App\Modules\Accounting\Application\Queries\FiscalPeriodView;
 use App\Modules\Platform\Authorization\PermissionChecker;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,12 +20,19 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
-/** Month-end close screens (design §5.7): periods of the primary book with their close run, and a run's tasks to execute or skip. */
+/**
+ * Month-end close screens (design §5.7): periods of the primary book with their close run, and a run's tasks to execute or skip. Slice 2.1b
+ * (D-55): both show the documents dated in a period that still wait for approval, release or posting; the lock stays disabled while any remains.
+ */
 final class ClosePageController
 {
     public const AREA = ['periods.soft_lock', 'periods.lock', 'periods.reopen', 'reports.financial'];
 
-    public function __construct(private readonly PermissionChecker $permissions) {}
+    public function __construct(
+        private readonly PermissionChecker $permissions,
+        private readonly PendingDocumentsQuery $pendingDocuments,
+        private readonly FiscalPeriodQuery $periodQuery,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -34,7 +46,9 @@ final class ClosePageController
         return Inertia::render('close/Index', [
             'periods' => $periods->map(fn (object $p): array => ['id' => (string) $p->id, 'label' => sprintf('%d-%02d', (int) $p->year, (int) $p->period), 'starts' => (string) $p->starts,
                 'ends' => (string) $p->ends, 'status' => (string) $p->status,
-                'run' => isset($runs[$p->id]) ? ['id' => (string) $runs[$p->id]->id, 'status' => (string) $runs[$p->id]->status] : null])->values()->all(),
+                'run' => isset($runs[$p->id]) ? ['id' => (string) $runs[$p->id]->id, 'status' => (string) $runs[$p->id]->status] : null,
+                // Slice 2.1b: a locked period cannot hold pending documents any more; the others list theirs.
+                'pending' => $p->status === 'locked' ? [] : $this->pending((string) $p->id, $actor)])->values()->all(),
             'can' => ['start' => $this->permissions->has($actor, 'periods.soft_lock'), 'reopen' => $this->permissions->has($actor, 'periods.reopen')],
         ]);
     }
@@ -57,7 +71,8 @@ final class ClosePageController
 
     public function run(Request $request, string $run, CloseRunQuery $runs): Response
     {
-        $this->permissions->authorizeAny(PageSupport::actor($request), self::AREA);
+        $actor = PageSupport::actor($request);
+        $this->permissions->authorizeAny($actor, self::AREA);
         $detail = $runs->find($run) ?? abort(404);
         $period = DB::table('fiscal_periods')->where('id', $detail['period_id'])->first(['year', 'period', 'status', 'starts', 'ends']);
 
@@ -66,6 +81,7 @@ final class ClosePageController
         $settled = fn (string $code): bool => in_array($statusByCode[$code] ?? '', ['done', 'skipped'], true);
         $open = count(array_filter($detail['tasks'], fn (array $t): bool => $t['code'] !== 'period_lock' && ! $settled($t['code'])));
         $variance = DB::table('reconciliation_runs')->where('period_id', $detail['period_id'])->where('status', 'variance')->pluck('subledger')->map(fn ($s): string => (string) $s)->all();
+        $pending = ($period->status ?? '') === 'locked' ? [] : $this->pending($detail['period_id'], $actor);
 
         return Inertia::render('close/Run', [
             'run' => ['id' => $detail['id'], 'status' => $detail['status'], 'started_at' => $detail['started_at'], 'completed_at' => $detail['completed_at'],
@@ -75,10 +91,12 @@ final class ClosePageController
                 'depends_on' => $t['depends_on'], 'summary' => is_array($t['result']) ? (string) ($t['result']['summary'] ?? ($t['result']['skip_reason'] ?? '')) : null,
                 'done_at' => $t['done_at'],
                 'blocked_by' => array_values(array_map($label, array_filter($t['depends_on'], fn (string $code): bool => ! $settled($code))))], $detail['tasks']),
+            'pending' => $pending,
             // UX brief §6.5: the lock button stays disabled with the reason until the close is clean (the lock itself re-checks everything, design §5.7).
             'lock' => match (true) {
                 $detail['status'] !== 'running' => ['ready' => false, 'reason' => 'This close is not running.'],
                 $open > 0 => ['ready' => false, 'reason' => "Finish or skip {$open} open ".($open === 1 ? 'task' : 'tasks').' before locking.'],
+                $pending !== [] => ['ready' => false, 'reason' => self::pendingReason(count($pending))],
                 $variance !== [] => ['ready' => false, 'reason' => 'Resolve the reconciliation variance in '.implode(', ', $variance).' before locking.'],
                 default => ['ready' => true, 'reason' => null],
             },
@@ -101,5 +119,35 @@ final class ClosePageController
         $close->skip($task, $data['reason'], PageSupport::actor($request));
 
         return back()->with('status', 'Task skipped.');
+    }
+
+    /** Slice 2.1b (D-55): the approver moves a manual journal pending approval to the first day of the next open period, so this period can be locked. */
+    public function moveJournal(Request $request, string $journal, ManualJournalService $journals): RedirectResponse
+    {
+        /** @var array{reason?: string|null} $data */
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:1000']]);
+        $moved = $journals->moveToNextPeriod($journal, PageSupport::actor($request), $data['reason'] ?? null);
+
+        return back()->with('status', 'Journal moved to '.$moved->transaction_date->format('j M Y').'; it waits for approval there.');
+    }
+
+    public static function pendingReason(int $count): string
+    {
+        return $count.' '.($count === 1 ? 'document' : 'documents').' dated in this period '.($count === 1 ? 'is' : 'are')
+            .' still waiting. Approve or reject '.($count === 1 ? 'it' : 'each one').', or move a pending manual journal to the next period, before locking.';
+    }
+
+    /** @return list<array{type: string, id: string, label: string, date: string, status: string, cleared_by: string, amount_minor: int|null, currency: string|null, link: string|null, movable: bool, amount: string|null, can_move: bool}> */
+    private function pending(string $periodId, string $actor): array
+    {
+        $period = $this->periodQuery->find($periodId);
+        if (! $period instanceof FiscalPeriodView) {
+            return [];
+        }
+        $mayApprove = $this->permissions->has($actor, 'accounting.approve_journal');
+
+        return array_map(fn (PendingCloseDocument $d): array => [...$d->toArray(),
+            'amount' => $d->amountMinor === null || $d->currency === null ? null : PageSupport::money($d->amountMinor, $d->currency),
+            'can_move' => $d->movable && $mayApprove], $this->pendingDocuments->forPeriod($period));
     }
 }

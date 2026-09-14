@@ -151,6 +151,39 @@ final class ManualJournalService
         });
     }
 
+    /**
+     * Slice 2.1b (DECISION D-55, CQ-C4): a manual journal waiting for approval is re-dated to the first day of the period right after its own, by
+     * someone who could approve it (the current approval step's decider, or a single checker holding accounting.approve_journal who is not the
+     * maker), so its period can be locked. The following period must be open (not soft-locked or locked); the approval keeps its steps.
+     * Audited `journal.moved_to_next_period` with both dates. ASSUMPTION A-154.
+     *
+     * @throws ManualJournalException INVALID_STATUS | NEXT_PERIOD_NOT_OPEN
+     */
+    public function moveToNextPeriod(string $journalId, string $approverId, ?string $reason = null): Journal
+    {
+        return DB::transaction(function () use ($journalId, $approverId, $reason): Journal {
+            $journal = $this->lockJournal($journalId, JournalStatus::PendingApproval);
+            $approvalId = $this->approvals->pendingFor('journal', $journalId);
+            $approvalId !== null ? $this->approvals->assertMayDecideCurrentStep($approvalId, $approverId) : $this->assertSingleChecker($journal, $approverId);
+
+            $current = DB::table('fiscal_periods')->where('id', $journal->period_id)->first(['ends']);
+            $next = $current === null ? null : DB::table('fiscal_periods')->where('entity_id', $journal->entity_id)->where('book_id', $journal->book_id)
+                ->where('starts', '>', (string) $current->ends)->orderBy('starts')->lockForUpdate()->first(['id', 'starts', 'status', 'year', 'period']);
+            if ($next === null || $next->status !== 'open') {
+                throw new ManualJournalException('NEXT_PERIOD_NOT_OPEN', $next === null
+                    ? "No fiscal period follows journal {$journalId}'s period. Open the next fiscal year first."
+                    : sprintf('The next period, %d-%02d, is not open, so journal %s cannot move into it.', (int) $next->year, (int) $next->period, $journalId));
+            }
+            $before = ['transaction_date' => $journal->transaction_date->toDateString(), 'period_id' => (string) $journal->period_id];
+            $on = substr((string) $next->starts, 0, 10);
+            $journal->forceFill(['transaction_date' => $on, 'posting_date' => $on, 'effective_date' => $on, 'period_id' => (string) $next->id])->save();
+            $this->audit->record('journal.moved_to_next_period', AuditSubject::of('journal', $journalId), $before, ['transaction_date' => $on, 'period_id' => (string) $next->id],
+                $reason === null || trim($reason) === '' ? null : trim($reason), 'accounting.approve_journal', Actor::user($approverId));
+
+            return $journal->refresh();
+        });
+    }
+
     public function cancel(string $journalId, string $deciderId, string $reason): void
     {
         $journal = $this->lockJournal($journalId, JournalStatus::PendingApproval);

@@ -35,7 +35,10 @@ final class ReasonMessages
         'PERMISSION_DENIED' => 'You do not have permission for this action. Ask an administrator if you need it.',
         'CONTROL_ACCOUNT' => 'Control accounts only take adjustments. Use an adjustment journal with a reason, or post through the business screen.',
         'CLOSE_TASKS_OPEN' => 'Finish or skip every close task before locking the period.',
-        'RECONCILIATION_VARIANCE' => 'A subledger does not reconcile to the ledger. Rerun the reconciliation tasks and resolve the difference before locking.',
+        // Slice 2.1b (D-55): pending documents hold the lock; a pending manual journal moves only into an open next period.
+        'PERIOD_HAS_PENDING_DOCUMENTS' => 'Documents dated in this period are still waiting for approval, release or posting. Approve or reject each one, or move a pending manual journal to the next period, before locking. The close checklist lists them.',
+        'NEXT_PERIOD_NOT_OPEN' => 'The journal can only move into the next period while that period is open. Open the next fiscal year, or reopen the next period, first.',
+        'RECONCILIATION_VARIANCE' =>'A subledger does not reconcile to the ledger. Rerun the reconciliation tasks and resolve the difference before locking.',
     ];
 
     public static function forPeople(string $reason, string $message, string $currency = 'BDT'): string

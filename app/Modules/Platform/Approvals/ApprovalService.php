@@ -144,6 +144,26 @@ final class ApprovalService
         });
     }
 
+    /**
+     * Slice 2.1b: whether the user could decide the pending approval's current step now (the same checks as decide, nothing written). Used where
+     * "its approver" acts on a pending object without deciding it, such as moving a pending manual journal to the next period.
+     *
+     * @throws ApprovalException NOT_PENDING, APPROVER_ALREADY_DECIDED
+     * @throws \App\Modules\Platform\Authorization\PermissionDenied
+     * @throws SodViolation
+     */
+    public function assertMayDecideCurrentStep(string $approvalId, string $deciderId): void
+    {
+        /** @var object{object_type: string, object_id: string, policy_id: string|null, steps: string|null, status: string, current_step: int, requested_by: string}|null $approval */
+        $approval = DB::table('approvals')->where('id', $approvalId)->first(['object_type', 'object_id', 'policy_id', 'steps', 'status', 'current_step', 'requested_by']);
+        if ($approval === null || $approval->status !== ApprovalStatus::Pending->value) {
+            throw new ApprovalException('NOT_PENDING', "Approval {$approvalId} is not pending.");
+        }
+        $steps = $approval->steps !== null ? $this->parseSteps((string) $approval->steps, "on approval {$approvalId}") : $this->steps((string) $approval->policy_id);
+        $step = $steps[(int) $approval->current_step - 1] ?? throw new ApprovalException('INVALID_POLICY', "Approval {$approvalId} has no step {$approval->current_step}.");
+        $this->assertMayDecide($approvalId, (string) $approval->requested_by, $deciderId, $step, AuditSubject::of((string) $approval->object_type, (string) $approval->object_id));
+    }
+
     /** @param array{permission: string, role: string|null} $step */
     private function assertMayDecide(string $approvalId, string $requestedBy, string $deciderId, array $step, AuditSubject $subject): void
     {

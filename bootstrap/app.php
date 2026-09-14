@@ -53,6 +53,8 @@ return Application::configure(basePath: dirname(__DIR__))
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode, 'rule' => $e->ruleCode], 403)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));
         $exceptions->render(fn (AccountingException|BusinessRuleViolation|ApprovalException|NumberingException $e, Request $request) => $wantsJson($request)
-            ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode], 422)
+            // Slice 2.1b: a period refusal carries its detail (the pending documents that hold the lock).
+            ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode]
+                + ($e instanceof \App\Modules\Accounting\Exceptions\PeriodTransitionException && $e->details !== [] ? ['details' => $e->details] : []), 422)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));
     })->create();

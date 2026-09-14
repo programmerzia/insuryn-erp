@@ -2,8 +2,10 @@
 import { Link, router } from '@inertiajs/vue3';
 import { Check, Lock } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
+import PendingDocuments from '@/components/close/PendingDocuments.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import type { PendingDocument } from '@/lib/closePending';
 import { confirmAction } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
 import { usePermissions } from '@/lib/permissions';
@@ -17,6 +19,7 @@ const props = defineProps<{
     run: { id: string; status: string; period: string; period_status: string; started_at: string; completed_at: string | null; starts?: string; ends?: string };
     tasks: Task[];
     lock?: { ready: boolean; reason: string | null };
+    pending?: PendingDocument[];
 }>();
 
 const { can } = usePermissions();
@@ -97,6 +100,9 @@ async function lockPeriod(): Promise<void> {
                     </div>
                 </li>
             </ol>
+
+            <!-- Slice 2.1b (D-55): what still waits in the period; the lock below stays disabled while anything does. -->
+            <PendingDocuments :documents="pending ?? []" :month="month" />
 
             <section class="flex flex-wrap items-center gap-3 rounded-panel border border-line px-4 py-3" aria-label="Lock the period">
                 <Lock :size="16" :stroke-width="1.5" class="text-ink-2" aria-hidden="true" />

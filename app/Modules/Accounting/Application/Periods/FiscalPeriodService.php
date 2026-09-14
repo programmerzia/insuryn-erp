@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application\Periods;
 
+use App\Modules\Accounting\Application\Close\PendingDocumentsQuery;
+use App\Modules\Accounting\Application\Contracts\PendingCloseDocument;
+use App\Modules\Accounting\Application\Queries\FiscalPeriodQuery;
 use App\Modules\Accounting\Application\Reconciliation\ReconciliationService;
 use App\Modules\Accounting\Domain\Enums\PeriodStatus;
 use App\Modules\Accounting\Exceptions\PeriodTransitionException;
@@ -24,7 +27,8 @@ use Illuminate\Support\Facades\DB;
  * Each transition runs under the period's row lock, requires its periods.* permission, is audited and
  * announced through the outbox (PeriodLocked, PeriodReopened). §5.7 INVARIANT: lock refuses while close
  * tasks are open or a reconciliation shows a variance — a recorded variance run, or a variance recomputed under the
- * period's row lock (postings made after the reconciliation tasks, e.g. while soft-locked, are never trusted as clean).
+ * period's row lock (postings made after the reconciliation tasks, e.g. while soft-locked, are never trusted as clean) — and, since
+ * slice 2.1b (D-55), while documents dated in the period still wait for approval, release or posting.
  */
 final class FiscalPeriodService
 {
@@ -34,6 +38,8 @@ final class FiscalPeriodService
         private readonly Outbox $outbox,
         private readonly ApprovalService $approvals,
         private readonly ReconciliationService $reconciliation,
+        private readonly PendingDocumentsQuery $pendingDocuments,
+        private readonly FiscalPeriodQuery $periodQuery,
     ) {}
 
     public function softLock(string $periodId, string $actorUserId): void
@@ -152,6 +158,14 @@ final class FiscalPeriodService
             ->where('r.period_id', $periodId)->where('r.status', '<>', 'reopened')->whereNotIn('t.status', ['done', 'skipped'])->count();
         if ($openTasks > 0) {
             throw new PeriodTransitionException('CLOSE_TASKS_OPEN', "Period {$periodId} has {$openTasks} close task(s) not done or skipped.");
+        }
+        // Slice 2.1b (D-55, CQ-C4): documents dated in the period still waiting for approval, release or posting hold the lock. No override.
+        $period = $this->periodQuery->find($periodId);
+        $pending = $period === null ? [] : $this->pendingDocuments->forPeriod($period);
+        if ($pending !== []) {
+            throw new PeriodTransitionException('PERIOD_HAS_PENDING_DOCUMENTS',
+                "Period {$periodId} has documents dated in it still waiting: ".PendingDocumentsQuery::summary($pending).'. Approve or reject each one, or move a pending manual journal to the next period, before locking.',
+                ['pending' => array_map(fn (PendingCloseDocument $d): array => $d->toArray(), $pending)]);
         }
         if (DB::table('reconciliation_runs')->where('period_id', $periodId)->where('status', 'variance')->exists()) {
             throw new PeriodTransitionException('RECONCILIATION_VARIANCE', "Period {$periodId} has an unresolved reconciliation variance.");

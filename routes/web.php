@@ -290,6 +290,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('close/runs/{run}', [ClosePageController::class, 'run'])->whereUuid('run');
     Route::post('close/tasks/{task}/execute', [ClosePageController::class, 'execute'])->whereUuid('task')->middleware('moves-money');
     Route::post('close/tasks/{task}/skip', [ClosePageController::class, 'skip'])->whereUuid('task');
+    // Slice 2.1b (D-55): a manual journal pending approval moved by its approver to the next open period, so its period can be locked.
+    Route::post('close/journals/{journal}/move-to-next-period', [ClosePageController::class, 'moveJournal'])->whereUuid('journal');
 
     Route::get('reports', [ReportsPageController::class, 'index']);
     Route::get('reports/{report}', [ReportsPageController::class, 'show'])->where('report', '[a-z-]+');
