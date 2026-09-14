@@ -68,7 +68,9 @@ it('issues the policy from the proposal page after showing its journal, and refu
 
     $response = actingAs($this->officer)->post("/proposals/{$id}/issue-policy", ['on' => '2026-09-15', 'installment_count' => 2, 'premium_received' => true, 'premium_reference' => 'TRF 88'], $this->headers);
     $policy = ($this->in)(fn (): Policy => Policy::query()->where('proposal_id', $id)->firstOrFail());
-    $response->assertSessionHasNoErrors()->assertRedirect("/policies/{$policy->id}")->assertSessionHas('status', 'Policy POL-HO-2026-000001 issued.');
+    $response->assertSessionHasNoErrors()->assertRedirect("/policies/{$policy->id}")->assertSessionHas('status', 'Policy POL-HO-2026-000001 issued.')
+        // Flow fix X1: the premium receipt is offered next, prefilled from the policy.
+        ->assertSessionHas('next', ['label' => 'Record receipt', 'url' => "/receipts/create?policy={$policy->id}", 'prompt' => 'Record the premium receipt?']);
     actingAs($this->officer)->get("/proposals/{$id}", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
         ->where('can.issue_policy', false)->where('policyIssue.policy', ['id' => $policy->id, 'number' => 'POL-HO-2026-000001']));
 });

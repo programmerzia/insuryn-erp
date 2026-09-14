@@ -116,15 +116,17 @@ final class ProposalPageController
     }
 
     /** Slice R7 (design §2 step 4): issue the policy of an approved proposal and open it. Premium received with a reference unless the product issues on credit (A-117). */
-    public function issuePolicy(Request $request, string $proposal, PolicyLifecycle $lifecycle): RedirectResponse
+    public function issuePolicy(Request $request, string $proposal, PolicyLifecycle $lifecycle, \App\Http\Pages\NextSteps $nextSteps): RedirectResponse
     {
         /** @var array{on: string, installment_count: int|string, premium_received?: bool|null, premium_reference?: string|null} $data */
         $data = $request->validate(['on' => ['required', 'date_format:Y-m-d'], 'installment_count' => ['required', 'integer', 'min:1', 'max:12'], 'premium_received' => ['nullable', 'boolean'],
             'premium_reference' => ['nullable', 'string', 'max:128']]);
         $reference = ($data['premium_received'] ?? false) ? trim((string) ($data['premium_reference'] ?? '')) : null;
-        $policy = $lifecycle->issueFromProposal($proposal, \Carbon\CarbonImmutable::parse($data['on']), PageSupport::actor($request), (int) $data['installment_count'], $reference);
+        $actor = PageSupport::actor($request);
+        $policy = $lifecycle->issueFromProposal($proposal, \Carbon\CarbonImmutable::parse($data['on']), $actor, (int) $data['installment_count'], $reference);
 
-        return redirect("/policies/{$policy->id}")->with('status', "Policy {$policy->number} issued.");
+        // Flow fix X1: the premium receipt is the next step (Part A step 3).
+        return redirect("/policies/{$policy->id}")->with('status', "Policy {$policy->number} issued.")->with('next', $nextSteps->afterIssue($actor, $policy->id));
     }
 
     public function attachDocument(Request $request, string $proposal, ObjectDocuments $documents): RedirectResponse

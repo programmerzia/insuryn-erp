@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Collections\Http\Controllers;
 
+use App\Http\Pages\FormDefaults;
+use App\Http\Pages\NextSteps;
 use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Collections\Application\AgentCashPositionQuery;
@@ -27,6 +29,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -58,12 +61,17 @@ final class CollectionsPageController
         return Inertia::render('receipts/Index', ['receipts' => PageSupport::page($page, $rows)]);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request, FormDefaults $defaults): Response
     {
-        $this->authorize($request);
+        $actor = $this->authorize($request);
         $entity = PageSupport::entity();
+        $policy = $request->query('policy');
 
         return Inertia::render('receipts/Create', [
+            // Flow fix X1: opened from a policy (/receipts/create?policy=…) the receipt arrives filled in; otherwise the user's branch, today and their last channel.
+            'prefill' => is_string($policy) && Str::isUuid($policy) ? $this->prefill($entity, $policy) : null,
+            'defaults' => ['branch_id' => $defaults->branch($actor, $entity['id']), 'value_date' => CarbonImmutable::today()->toDateString(),
+                'channel' => self::channel($defaults->remembered($actor, FormDefaults::LAST_RECEIPT_CHANNEL))],
             'entity' => $entity,
             'channels' => self::CHANNELS,
             'branches' => DB::table('branches')->orderBy('code')->get(['id', 'code', 'name'])->map(fn (object $b): array => (array) $b)->values()->all(),
@@ -74,7 +82,7 @@ final class CollectionsPageController
         ]);
     }
 
-    public function store(Request $request, ReceiptService $receipts): RedirectResponse
+    public function store(Request $request, ReceiptService $receipts, FormDefaults $defaults): RedirectResponse
     {
         /** @var array{branch_id: string, channel: string, amount: string, value_date: string, reference?: string|null, bank_account_id?: string|null, cheque_no?: string|null, cheque_bank?: string|null, cheque_date?: string|null, collected_by_agent_id?: string|null, allocations?: list<array{installment_id: string, amount: string}>} $data */
         $data = $request->validate(['branch_id' => ['required', 'uuid'], 'channel' => ['required', 'in:'.implode(',', self::CHANNELS)], 'amount' => ['required', 'string'],
@@ -91,6 +99,7 @@ final class CollectionsPageController
         $receipt = $receipts->record(new RecordReceiptRequest($entity['id'], $data['branch_id'], null, $data['channel'], PageSupport::minor('amount', $data['amount'], $entity['currency']),
             $entity['currency'], CarbonImmutable::parse($data['value_date']), $data['bank_account_id'] ?? null, $data['reference'] ?? null, $allocations, $cheque,
             ($data['collected_by_agent_id'] ?? '') === '' ? null : $data['collected_by_agent_id']), PageSupport::actor($request));
+        $defaults->remember(PageSupport::actor($request), FormDefaults::LAST_RECEIPT_CHANNEL, $data['channel']);
 
         return redirect("/receipts/{$receipt->id}")->with('status', "Receipt {$receipt->number} recorded.");
     }
@@ -303,6 +312,35 @@ final class CollectionsPageController
                 ->orderByDesc('n.issued_on')->get(['n.id', 'p.id as policy_id', 'p.number', 'payer.display_name', 'n.level', 'n.days_overdue', 'n.outstanding_minor', 'n.issued_on'])
                 ->map(fn (object $n): array => ['id' => (string) $n->id, 'policy_id' => (string) $n->policy_id, 'policy_number' => $n->number, 'payer' => (string) $n->display_name, 'level' => (int) $n->level,
                     'days_overdue' => (int) $n->days_overdue, 'outstanding' => PageSupport::money((int) $n->outstanding_minor, $entity['currency']), 'issued_on' => (string) $n->issued_on])->values()->all()]);
+    }
+
+    /**
+     * Flow fix X1: the receipt of a policy's premium — the total outstanding, allocated line by line to its unpaid installments, oldest due first; null when
+     * the policy is not this entity's, is not in force or owes nothing.
+     *
+     * @param array{id: string, currency: string} $entity
+     * @return array{policy: array{id: string, number: string}, amount: string, branch_id: string, allocations: list<array{installment_id: string, label: string, amount: string, outstanding: string}>}|null
+     */
+    private function prefill(array $entity, string $policyId): ?array
+    {
+        $policy = DB::table('policies')->where('id', $policyId)->where('entity_id', $entity['id'])->whereIn('status', ['issued', 'active', 'lapsed', 'expired'])
+            ->first(['id', 'number', 'branch_id', 'currency']);
+        $installments = $policy === null ? [] : NextSteps::outstandingInstallments($policyId);
+        if ($policy === null || $installments === []) {
+            return null;
+        }
+        $currency = (string) $policy->currency;
+        $lines = array_map(fn (array $i): array => ['installment_id' => $i['id'], 'label' => "{$policy->number} #{$i['no']}", 'amount' => PageSupport::money($i['outstanding_minor'], $currency),
+            'outstanding' => PageSupport::money($i['outstanding_minor'], $currency)], $installments);
+
+        return ['policy' => ['id' => (string) $policy->id, 'number' => (string) $policy->number], 'amount' => PageSupport::money(array_sum(array_column($installments, 'outstanding_minor')), $currency),
+            'branch_id' => (string) $policy->branch_id, 'allocations' => $lines];
+    }
+
+    /** The channel a receipt form starts with: the user's last one while it is still offered, else bank transfer. */
+    private static function channel(?string $remembered): string
+    {
+        return $remembered !== null && in_array($remembered, self::CHANNELS, true) ? $remembered : 'bank_transfer';
     }
 
     /**

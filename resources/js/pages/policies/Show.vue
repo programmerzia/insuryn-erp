@@ -28,7 +28,7 @@ const props = defineProps<{
     transactions: { id: string; type: string; effective_date: string; premium_delta: string; reason: string | null }[];
     installments: { id: string; no: number; payer: string; due_date: string; amount: string; paid: string; credited: string; outstanding: string; status: string }[];
     payers: { name: string; share_percent: string; billed: string; paid: string; outstanding: string }[];
-    actions: { issue: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
+    actions: { issue: boolean; record_receipt: boolean; endorse: boolean; endorse_risk: boolean; cancel: boolean; lapse: boolean; reinstate: boolean; renew: boolean };
     /** Slice R7: the frozen rating of a policy issued from a proposal; null for products without a rating plan. */
     rating: {
         result: RatingResultData; risk: { label_en: string; label_bn: string; value: string }[]; special_terms: string[]; issue_basis: string | null; premium_received_reference: string | null;
@@ -98,6 +98,7 @@ async function renew(): Promise<void> {
                 <button v-if="actions.renew" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="renew">Renew</button>
                 <button v-if="actions.cancel" type="button" class="h-8 rounded-control border border-danger px-3 text-ui text-danger hover:bg-surface-2" @click="drawer = 'cancel'">Cancel policy</button>
                 <button v-if="actions.issue" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="drawer = 'issue'">Issue policy</button>
+                <Link v-if="actions.record_receipt" :href="`/receipts/create?policy=${policy.id}`" class="inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Record receipt</Link>
             </template>
             <template #overview>
                 <h2 class="mb-2 text-ui font-medium">Installments <span class="font-normal text-ink-2">· {{ outstanding }} with money outstanding</span></h2>

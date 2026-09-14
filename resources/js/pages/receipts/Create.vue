@@ -12,6 +12,7 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { type PreviewResult, previewJournal } from '@/lib/preview';
+import { initialReceipt, type ReceiptDefaults, type ReceiptPrefill } from '@/lib/receiptForm';
 
 const props = defineProps<{
     entity: { code: string; currency: string };
@@ -20,11 +21,14 @@ const props = defineProps<{
     bankAccounts: { id: string; bank_name: string; account_no_masked: string }[];
     agents: { id: string; code: string }[];
     installments: { id: string; label: string; outstanding: string }[];
+    /** Flow fix X1: filled in from the policy the receipt was opened from (/receipts/create?policy=…). */
+    prefill: ReceiptPrefill | null;
+    defaults: ReceiptDefaults;
 }>();
 
 const form = useForm({
-    branch_id: props.branches[0]?.id ?? '', channel: 'bank_transfer', amount: '', value_date: '', reference: '', bank_account_id: '',
-    cheque_no: '', cheque_bank: '', cheque_date: '', collected_by_agent_id: '', allocations: [] as { installment_id: string; amount: string; outstanding?: string }[],
+    ...initialReceipt(props.prefill, props.defaults, props.branches), reference: '', bank_account_id: '',
+    cheque_no: '', cheque_bank: '', cheque_date: '', collected_by_agent_id: '',
 });
 const dateErrors = ref<Record<string, string | null>>({});
 const words = (value: string) => value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
@@ -35,6 +39,7 @@ const remaining = computed(() => (received.value === null ? null : received.valu
 
 const preview = ref<PreviewResult | null>(null);
 const previewOpen = ref(false);
+const cancelHref = props.prefill ? `/policies/${props.prefill.policy.id}` : '/receipts';
 const payload = () => ({ ...form.data(), allocations: form.allocations.map(({ installment_id, amount }) => ({ installment_id, amount })) });
 
 async function review(): Promise<void> {
@@ -56,8 +61,9 @@ function post(): void {
 <template>
     <AppLayout help="receipts" title="Record a receipt">
         <h1 class="text-title font-semibold">Record a receipt</h1>
-        <p class="mb-5 text-ui text-ink-2">Allocate the money to installments now; anything left over is held in suspense.</p>
-        <FormLayout data-tour="receipt-form" submit-label="Review and post" cancel-href="/receipts" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review">
+        <p v-if="prefill" class="mb-5 text-ui text-ink-2">The premium outstanding on {{ prefill.policy.number }}, allocated to its unpaid installments. Change the amount if the customer paid less; anything left over is held in suspense.</p>
+        <p v-else class="mb-5 text-ui text-ink-2">Allocate the money to installments now; anything left over is held in suspense.</p>
+        <FormLayout data-tour="receipt-form" submit-label="Review and post" :cancel-href="cancelHref":dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="review">
             <Field id="amount" :label="`Amount received (${entity.currency})`" :error="form.errors.amount" hint="↑ and ↓ add or take away 1,000.">
                 <MoneyInput v-model="form.amount" />
             </Field>
@@ -95,7 +101,7 @@ function post(): void {
                 <legend class="mb-1 text-ui font-medium">Allocate to installments</legend>
                 <div v-for="(line, index) in form.allocations" :key="index" class="grid grid-cols-[minmax(0,1fr)_140px_32px] items-start gap-2">
                     <div>
-                        <LookupInput :id="`allocation-${index}`" v-model="line.installment_id" type="installment" placeholder="Policy number or payer" @selected="(r) => { line.outstanding = r?.amount; if (r?.amount && !line.amount) line.amount = r.amount; }" />
+                        <LookupInput :id="`allocation-${index}`" v-model="line.installment_id" type="installment" :initial="line.label ? { id: line.installment_id, label: line.label } : null"placeholder="Policy number or payer" @selected="(r) => { line.outstanding = r?.amount; if (r?.amount && !line.amount) line.amount = r.amount; }" />
                         <p v-if="form.errors[`allocations.${index}.installment_id` as never]" class="text-dense text-danger" role="alert">{{ form.errors[`allocations.${index}.installment_id` as never] }}</p>
                     </div>
                     <div>

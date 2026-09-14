@@ -30,6 +30,8 @@ final class HandleInertiaRequests extends Middleware
             'status' => fn (): mixed => $request->hasSession() ? $request->session()->get('status') : null,
             // UX brief §4: a reversible action's confirmation carries its undo (label and the POST that reverses it).
             'undo' => fn (): mixed => $request->hasSession() ? $request->session()->get('undo') : null,
+            // Flow audit: the next step offered with a completed action's confirmation ({label, url, prompt}), e.g. "Record receipt" after issuing a policy.
+            'next' => fn (): mixed => $request->hasSession() ? $request->session()->get('next') : null,
         ];
     }
 

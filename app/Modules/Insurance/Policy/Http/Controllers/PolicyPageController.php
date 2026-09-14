@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Insurance\Policy\Http\Controllers;
 
+use App\Http\Pages\NextSteps;
 use App\Http\Pages\ObjectDocuments;
 use App\Http\Pages\PageSupport;
 use App\Modules\Insurance\Policy\Application\PayerShare;
@@ -44,6 +45,7 @@ final class PolicyPageController
         private readonly PolicyLifecycle $lifecycle,
         private readonly PayerStatementQuery $payers,
         private readonly PermissionChecker $permissions,
+        private readonly NextSteps $nextSteps,
     ) {}
 
     public function index(Request $request): Response
@@ -126,6 +128,8 @@ final class PolicyPageController
             'today' => CarbonImmutable::today()->toDateString(),
             'actions' => [
                 'issue' => $status === PolicyStatus::Quote && $can('policy.issue'),
+                // Flow fix X1: record the premium receipt, prefilled from this policy, while money is outstanding.
+                'record_receipt' => $this->nextSteps->canRecordReceipt($actor, $model->id),
                 'endorse' => $model->rating_result === null && in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
                 'endorse_risk' => $model->rating_result !== null && in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.endorse'),
                 'cancel' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.cancel'),
@@ -141,9 +145,11 @@ final class PolicyPageController
     {
         /** @var array{on: string} $data */
         $data = $request->validate(['on' => ['required', 'date_format:Y-m-d']]);
-        $this->lifecycle->issue($policy, CarbonImmutable::parse($data['on']), PageSupport::actor($request));
+        $actor = PageSupport::actor($request);
+        $issued = $this->lifecycle->issue($policy, CarbonImmutable::parse($data['on']), $actor);
 
-        return redirect("/policies/{$policy}")->with('status', 'Policy issued.');
+        // Flow fix X1: the premium receipt is the next step (Part A step 3).
+        return redirect("/policies/{$policy}")->with('status', "Policy {$issued->number} issued.")->with('next', $this->nextSteps->afterIssue($actor, $policy));
     }
 
     public function endorse(Request $request, string $policy): RedirectResponse
