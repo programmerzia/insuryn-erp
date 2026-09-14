@@ -32,7 +32,7 @@ interface Product { id: string; code: string; name: string; versions: ProductVer
 interface QuotationData {
     id: string; number: string | null; status: string; branch_id: string; product_id: string; product_version_id: string; inception: string; valid_until: string | null;
     customer: LookupResult | null; producer: LookupResult | null; risk_inputs: Record<string, unknown>; coverages: string[]; rating_result: RatingResultData | null;
-    producer_eligible: boolean | null; producer_eligibility_note: string | null; decline_reason: string | null; issued_at: string | null; proposal_id: string | null;
+    producer_eligible: boolean | null; producer_eligibility_note: string | null; decline_reason: string | null; issued_at: string | null; proposal_id: string | null; renewal_of?: { id: string; number: string } | null;
 }
 const props = defineProps<{
     quotation: QuotationData | null; products: Product[]; branches: { id: string; code: string; name: string }[]; currency: string; today: string; validDays: number;
@@ -166,6 +166,7 @@ const validUntil = computed(() => q?.valid_until ?? null);
                 <h1 class="text-title font-semibold">{{ title }}</h1>
                 <StatusBadge v-if="q" :status="q.status" />
                 <p v-if="validUntil" class="text-ui text-ink-2">Valid until {{ formatDate(validUntil) }}</p>
+                <p v-if="q?.renewal_of" class="text-ui text-ink-2">Renewal of <Link :href="`/policies/${q.renewal_of.id}`" class="text-accent-text hover:underline">{{ q.renewal_of.number }}</Link></p>
                 <div class="ml-auto flex gap-2">
                     <Button v-if="can.edit" variant="secondary" :disabled="saving || !state.product_id" @click="save('save')">Save draft</Button>
                     <Button v-if="can.issue" :disabled="saving || !result" @click="save('issue')">Issue quotation</Button>

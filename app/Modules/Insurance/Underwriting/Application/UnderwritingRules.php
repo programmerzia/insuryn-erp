@@ -38,14 +38,17 @@ final class UnderwritingRules
             $reasons[] = new ReferralReason(ReferralReason::SUM_INSURED_ABOVE_LIMIT,
                 "Sum insured {$sumInsured} is above the submitter's limit of ".MinorUnits::format($limit, $proposal->currency)." for {$proposal->class_code}.");
         }
+        // Slice R9 (A-133): a renewal is not new business — the producer's licence does not refer it, and the policy it renews is not a duplicate of it.
+        $renews = DB::table('quotations')->where('id', $proposal->quotation_id)->value('renewal_of_policy_id');
+        $renews = $renews === null ? null : (string) $renews;
         $eligibility = ProducerEligibility::check($proposal->producer_id, $proposal->product_id, $on);
-        if ($eligibility->eligible === false) {
+        if ($renews === null && $eligibility->eligible === false) {
             $reasons[] = new ReferralReason(ReferralReason::PRODUCER_INELIGIBLE, (string) $eligibility->note);
         }
         foreach (self::riskFlags($proposal->class_code, $proposal->risk_inputs, $on) as $flag) {
             $reasons[] = new ReferralReason(ReferralReason::RISK_FLAG, $flag);
         }
-        $duplicates = self::duplicates($proposal->risk_keys, $proposal->quotation_id, $proposal->id, $on);
+        $duplicates = self::duplicates($proposal->risk_keys, $proposal->quotation_id, $proposal->id, $on, $renews);
         if ($duplicates !== []) {
             $reasons[] = new ReferralReason(ReferralReason::DUPLICATE_RISK, 'The same risk is on '.implode(', ', $duplicates).'.');
         }
@@ -86,13 +89,13 @@ final class UnderwritingRules
 
     /**
      * Numbers of the other documents holding one of the risk keys: issued quotations (not this proposal's), draft, submitted or approved proposals, and policies
-     * issued or active and not yet expired (slice R7: a policy carries the keys of its current risk — set at issue, moved by re-rated endorsements — whether it
+     * issued or active and not yet expired, except the policy a renewal renews (slice R9) (slice R7: a policy carries the keys of its current risk — set at issue, moved by re-rated endorsements — whether it
      * came from a proposal or not; its own proposal is not a duplicate of it).
      *
      * @param list<string> $keys
      * @return list<string>
      */
-    public static function duplicates(array $keys, ?string $quotationId, ?string $proposalId, CarbonImmutable $on): array
+    public static function duplicates(array $keys, ?string $quotationId, ?string $proposalId, CarbonImmutable $on, ?string $renewedPolicyId = null): array
     {
         if ($keys === []) {
             return [];
@@ -104,6 +107,7 @@ final class UnderwritingRules
             ->whereRaw('jsonb_exists_any(risk_keys, ?::text[])', [$literal])->orderBy('number')->pluck('number');
         $policies = DB::table('policies')->whereIn('status', ['issued', 'active'])->where('expiry', '>=', $on->toDateString())->whereNotNull('number')
             ->when($proposalId !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('proposal_id')->orWhere('proposal_id', '<>', $proposalId)))
+            ->when($renewedPolicyId !== null, fn ($q) => $q->where('id', '<>', $renewedPolicyId))
             ->whereRaw('jsonb_exists_any(risk_keys, ?::text[])', [$literal])->orderBy('number')->pluck('number');
 
         return array_values(array_unique(array_map(fn (mixed $n): string => (string) $n, [...$quotations->all(), ...$proposals->all(), ...$policies->all()])));

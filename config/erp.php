@@ -54,6 +54,34 @@ return [
         // (effective date to expiry, both included, over the policy's days), stamp duty in full.
         'endorsement_premium' => env('ERP_ENDORSEMENT_PREMIUM', 'full'),
     ],
+    // Phase 3 slice R9 renewals (design §4).
+    'renewals' => [
+        // ASSUMPTION: A-125 — the expiry register lists issued and active policies expiring within the largest bucket; a policy is in the smallest bucket
+        // (days) not below its days left. Verify with the insurer.
+        'buckets' => [60, 30, 15, 7],
+        // ASSUMPTION: A-127 — the renewal quotation is offered this many days before expiry, valid until the expiry date (renew by).
+        'quote_days_before' => (int) env('ERP_RENEWAL_QUOTE_DAYS_BEFORE', 45),
+        // ASSUMPTION: A-131 — the renewal notice goes out with the renewal quotation; reminders at these days before expiry.
+        'reminders' => [30, 15, 7],
+        // ASSUMPTION: A-128 — the risk field holding claim-free years (no-claim bonus): one more after a period without claims, 0 after a claim.
+        'ncb_field' => 'ncb_years',
+        // ASSUMPTION: A-132 — why a policy was not renewed (people choose one; `other` needs a note). Labels in English and Bangla.
+        'lapse_reasons' => [
+            'price' => ['en' => 'Price', 'bn' => 'মূল্য'],
+            'service' => ['en' => 'Service', 'bn' => 'সেবা'],
+            'sold_asset' => ['en' => 'Sold the insured asset', 'bn' => 'বিমাকৃত সম্পদ বিক্রি'],
+            'moved_to_competitor' => ['en' => 'Moved to a competitor', 'bn' => 'অন্য বিমাকারীর কাছে গেছেন'],
+            'no_response' => ['en' => 'No response', 'bn' => 'সাড়া নেই'],
+            'other' => ['en' => 'Other', 'bn' => 'অন্যান্য'],
+        ],
+    ],
+    // Slice R9 (DECISION D-41): notification channels. Every channel uses the log-only adapter until a gateway adapter exists (SSL Wireless, Twilio: LATER).
+    'notifications' => [
+        'channels' => [
+            'email' => ['enabled' => (bool) env('ERP_NOTIFY_EMAIL', true), 'adapter' => env('ERP_NOTIFY_EMAIL_ADAPTER', 'log')],
+            'sms' => ['enabled' => (bool) env('ERP_NOTIFY_SMS', true), 'adapter' => env('ERP_NOTIFY_SMS_ADAPTER', 'log')],
+        ],
+    ],
     // Phase 3 slice R6 cover notes. ASSUMPTION: A-93 — design OPEN 2: the longest cover note per product class in days, both ends included (default 30, verify).
     'cover_notes' => [
         'max_days' => ['default' => 30, 'motor' => 30, 'fire' => 30, 'marine_cargo' => 30, 'misc' => 30],

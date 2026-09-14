@@ -7,6 +7,8 @@ namespace App\Modules\Insurance\Reports\Http\Controllers;
 use App\Http\Pages\PageSupport;
 use App\Modules\Accounting\Application\Reports\FinancialStatementsQuery;
 use App\Modules\Insurance\Reports\Application\ClaimsPaidRegisterQuery;
+use App\Modules\Insurance\Reports\Application\ExpiryRegisterReportQuery;
+use App\Modules\Insurance\Reports\Application\RenewalConversionQuery;
 use App\Modules\Insurance\Reports\Application\LossRatioQuery;
 use App\Modules\Insurance\Reports\Application\OutstandingClaimsQuery;
 use App\Modules\Insurance\Reports\Application\PremiumRegisterQuery;
@@ -32,6 +34,9 @@ final class ReportsPageController
         ['key' => 'outstanding-claims', 'title' => 'Outstanding claims', 'description' => 'Open reserves and approved-unpaid amounts per claim.', 'filter' => 'as_of'],
         ['key' => 'claims-paid', 'title' => 'Claims paid', 'description' => 'Claim payments released in a period.', 'filter' => 'range'],
         ['key' => 'loss-ratio', 'title' => 'Loss ratio', 'description' => 'Incurred claims over earned premium by product, branch or agent.', 'filter' => 'range_by'],
+        // Phase 3 slice R9 (design §4 reports).
+        ['key' => 'expiry-register', 'title' => 'Expiry register', 'description' => 'Policies expiring after a date, by bucket, branch and producer.', 'filter' => 'as_of'],
+        ['key' => 'renewal-conversion', 'title' => 'Renewal conversion', 'description' => 'Policies expiring in a period renewed or lost, by branch, agent or product, with lapse reasons.', 'filter' => 'range_by'],
         ['key' => 'profit-and-loss', 'title' => 'Profit and loss', 'description' => 'Income and expense for a period.', 'filter' => 'range'],
         ['key' => 'balance-sheet', 'title' => 'Balance sheet', 'description' => 'Assets, liabilities and equity at a date.', 'filter' => 'as_of'],
     ];
@@ -59,6 +64,9 @@ final class ReportsPageController
         $to = self::date($request, 'to', CarbonImmutable::today());
         $asOf = self::date($request, 'as_of', CarbonImmutable::today());
         $by = in_array($request->query('by'), LossRatioQuery::DIMENSIONS, true) ? (string) $request->query('by') : 'product';
+        if ($report === 'renewal-conversion' && ! in_array($request->query('by'), RenewalConversionQuery::DIMENSIONS, true)) {
+            $by = 'branch'; // slice R9: conversion is read by branch first
+        }
 
         $page = match ($report) {
             'premium-register' => $this->premiumRegister($entity['id'], $from, $to, $money),
@@ -67,6 +75,8 @@ final class ReportsPageController
             'outstanding-claims' => $this->outstandingClaims($entity['id'], $asOf, $money),
             'claims-paid' => $this->claimsPaid($entity['id'], $from, $to, $money),
             'loss-ratio' => $this->lossRatio($entity['id'], $from, $to, $by, $money),
+            'expiry-register' => $this->expiryRegister($entity['id'], $asOf, $money),
+            'renewal-conversion' => $this->renewalConversion($entity['id'], $from, $to, $by),
             'profit-and-loss' => $this->profitAndLoss($entity['id'], $from, $to, $money),
             'balance-sheet' => $this->balanceSheet($entity['id'], $asOf, $money),
             'account-activity' => $this->accountActivity($entity['id'], $request, $from, $to, $money),
@@ -179,6 +189,51 @@ final class ReportsPageController
                 'earned' => $money($r['earned_premium_minor']), 'incurred' => $money($r['incurred_claims_minor']), 'ratio' => $ratio($r['loss_ratio_bp'])],
                 'link' => isset($r['drill']['claims_expense']) ? self::activityLink($r['drill']['claims_expense']) : null], $result['rows']),
             ['earned' => $money($result['totals']['earned_premium_minor']), 'incurred' => $money($result['totals']['incurred_claims_minor']), 'ratio' => $ratio($result['totals']['loss_ratio_bp'])]);
+    }
+
+    /**
+     * Slice R9: the expiry register as at a date.
+     *
+     * @param callable(int): string $money
+     * @return array<string, mixed>
+     */
+    private function expiryRegister(string $entityId, CarbonImmutable $asOf, callable $money): array
+    {
+        $result = app(ExpiryRegisterReportQuery::class)->register($entityId, $asOf);
+        $summary = fn (string $title, string $label, array $groups): array => self::summary($title, [['group', $label], ['policies', 'Policies'], ['gross', 'Gross premium']],
+            array_map(fn (array $g): array => ['cells' => ['group' => $g['group'], 'policies' => $g['policies'], 'gross' => $money($g['gross_minor'])], 'link' => null], $groups));
+
+        return self::table('Expiry register', 'as_of', [['policy_number', 'Policy'], ['customer', 'Customer'], ['product_code', 'Product'], ['branch_code', 'Branch'], ['producer_code', 'Producer'],
+            ['expiry', 'Expires on'], ['days_left', 'Days left', 'right'], ['bucket', 'Bucket', 'right'], ['status', 'Renewal'], ['renewal_quotation', 'Renewal quotation'], ['gross', 'Gross premium', 'right']],
+            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'customer' => $r['customer'], 'product_code' => $r['product_code'], 'branch_code' => $r['branch_code'],
+                'producer_code' => $r['producer_code'] ?? 'Direct', 'expiry' => $r['expiry'], 'days_left' => $r['days_left'], 'bucket' => $r['bucket'], 'status' => str_replace('_', ' ', $r['status']),
+                'renewal_quotation' => $r['renewal_quotation'], 'gross' => $money($r['gross_minor'])], 'link' => "/policies/{$r['policy_id']}"], $result['rows']),
+            ['policies' => $result['totals']['policies'].' policies', 'gross' => $money($result['totals']['gross_minor'])],
+            [$summary('By bucket', 'Bucket', $result['by_bucket']), $summary('By branch', 'Branch', $result['by_branch']), $summary('By producer', 'Producer', $result['by_producer'])]);
+    }
+
+    /**
+     * Slice R9: renewal conversion for policies expiring in a period, grouped by branch, agent (producer) or product, with the reasons policies were not renewed.
+     *
+     * @return array<string, mixed>
+     */
+    private function renewalConversion(string $entityId, CarbonImmutable $from, CarbonImmutable $to, string $by): array
+    {
+        $result = app(RenewalConversionQuery::class)->conversion($entityId, $from, $to, $by, CarbonImmutable::today());
+        $percent = fn (?int $bp): string => $bp === null ? '—' : sprintf('%d.%02d%%', intdiv($bp, 100), $bp % 100);
+        $label = ['branch' => 'Branch', 'agent' => 'Producer', 'product' => 'Product'][$by] ?? 'Branch';
+
+        return self::table("Renewal conversion by {$by}", 'range_by', [['policy_number', 'Expiring policy'], ['group', $label], ['expiry', 'Expires on'], ['outcome', 'Outcome'], ['reason', 'Reason'], ['renewal_policy_number', 'Renewal policy']],
+            array_map(fn (array $r): array => ['cells' => ['policy_number' => $r['policy_number'], 'group' => $r['group'], 'expiry' => $r['expiry'], 'outcome' => str_replace('_', ' ', $r['outcome']),
+                'reason' => \App\Modules\Insurance\Renewal\Domain\RenewalReasons::label($r['reason']), 'renewal_policy_number' => $r['renewal_policy_number']], 'link' => "/policies/{$r['policy_id']}",
+                'links' => $r['renewal_policy_id'] === null ? [] : ['renewal_policy_number' => "/policies/{$r['renewal_policy_id']}"]], $result['rows']),
+            ['expiring' => $result['totals']['expiring'].' policies', 'renewed' => $result['totals']['renewed'].' policies', 'not_renewed' => $result['totals']['not_renewed'].' policies',
+                'conversion' => $percent($result['totals']['conversion_bp'])],
+            [self::summary("Conversion by {$by}", [['group', $label], ['expiring', 'Expiring'], ['renewed', 'Renewed'], ['not_renewed', 'Not renewed'], ['open', 'Open'], ['conversion', 'Conversion']],
+                array_map(fn (array $g): array => ['cells' => ['group' => $g['group'], 'expiring' => $g['expiring'], 'renewed' => $g['renewed'], 'not_renewed' => $g['not_renewed'], 'open' => $g['open'],
+                    'conversion' => $percent($g['conversion_bp'])], 'link' => null], $result['groups'])),
+                self::summary('Not renewed by reason', [['reason', 'Reason'], ['policies', 'Policies']],
+                    array_map(fn (array $r): array => ['cells' => ['reason' => (string) \App\Modules\Insurance\Renewal\Domain\RenewalReasons::label($r['reason']), 'policies' => $r['policies']], 'link' => null], $result['reasons']))]);
     }
 
     /**

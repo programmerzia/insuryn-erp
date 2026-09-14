@@ -33,6 +33,8 @@ final class PermissionsSeeder extends Seeder
         'underwriting.decide','underwriting.manage_limits',
         // Phase 3 cover notes (slice R6, A-94)
         'cover_note.issue','cover_note.cancel',
+        // Phase 3 renewals (slice R9, A-126)
+        'renewal.manage',
     ];
 
     /**

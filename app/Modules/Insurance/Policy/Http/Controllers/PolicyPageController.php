@@ -131,7 +131,8 @@ final class PolicyPageController
                 'cancel' => in_array($status, [PolicyStatus::Issued, PolicyStatus::Active], true) && $can('policy.cancel'),
                 'lapse' => $status === PolicyStatus::Active && $can('policy.cancel'),
                 'reinstate' => $status === PolicyStatus::Lapsed && $can('policy.issue'),
-                'renew' => in_array($status, [PolicyStatus::Active, PolicyStatus::Expired], true) && $can('policy.create'),
+                // Slice R9 (A-130): a rated policy renews through its renewal quotation (Renewals), not by a typed renewal quote.
+                'renew' => $model->rating_result === null && in_array($status, [PolicyStatus::Active, PolicyStatus::Expired], true) && $can('policy.create'),
             ],
         ]);
     }

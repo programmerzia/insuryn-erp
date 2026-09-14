@@ -163,6 +163,14 @@ function populateEveryTenantTable(array $ctx): void
         DB::table('cover_notes')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // Phase 3 R6
             'proposal_id' => $proposalId, 'number' => 'CVN-ISOLATION', 'class_code' => 'motor', 'valid_from' => '2026-09-15', 'valid_to' => '2026-09-30', 'status' => 'active',
             'issued_by' => $world['admin'], 'issued_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('expiry_register')->insert(['id' => $registerId = (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], // Phase 3 R9
+            'policy_id' => $policy->id, 'policy_number' => 'POL-ISOLATION', 'product_id' => $world['product_id'], 'policyholder_party_id' => $world['policyholder_id'], 'expiry' => '2027-09-14',
+            'rated' => false, 'bucket' => 60, 'days_left' => 50, 'as_of' => '2027-07-26', 'status' => 'upcoming', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('renewal_notices')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'expiry_register_id' => $registerId, 'policy_id' => $policy->id,
+            'offset_days' => 45, 'kind' => 'notice', 'quotation_id' => $quotationId, 'notification_ids' => '[]', 'sent_on' => '2027-07-31', 'created_at' => now()]);
+        DB::table('notifications')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'channel' => 'email', 'adapter' => 'log', 'recipient_type' => 'party',
+            'recipient_id' => $world['policyholder_id'], 'recipient_name' => 'Rahima Akter', 'subject_type' => 'policy', 'subject_id' => $policy->id, 'title' => 'Renewal notice',
+            'body' => 'Isolation', 'idempotency_key' => 'isolation', 'status' => 'sent', 'sent_at' => now(), 'created_at' => now()]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
     });
     activeRatingPlan($ctx['tenant_id'], ['code' => 'MOTOR-ISOLATION', 'name' => 'Isolation plan', 'class_code' => 'motor', 'effective_from' => '2026-01-01', // Phase 3 R2

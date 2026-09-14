@@ -41,7 +41,8 @@ final class InsuranceServiceProvider extends ServiceProvider
         $this->app->tag([PremiumEarningCloseCheck::class, SuspenseReviewCloseCheck::class], CloseTaskCheck::class);
         // Slice R8: printable documents. A new document for an object is one DocumentDataProvider class tagged here.
         $this->app->tag([PolicyScheduleDocumentData::class, EndorsementDocumentData::class, ReceiptDocumentData::class,
-            \App\Modules\Insurance\Quotation\Application\Documents\QuotationDocumentData::class, \App\Modules\Insurance\CoverNote\Application\Documents\CoverNoteDocumentData::class], DocumentDataProvider::class);
+            \App\Modules\Insurance\Quotation\Application\Documents\QuotationDocumentData::class, \App\Modules\Insurance\CoverNote\Application\Documents\CoverNoteDocumentData::class,
+            \App\Modules\Insurance\Renewal\Application\Documents\RenewalNoticeDocumentData::class], DocumentDataProvider::class); // slice R9: renewal notice
     }
 
     public function boot(ApprovalHandlerRegistry $approvals): void
@@ -54,6 +55,7 @@ final class InsuranceServiceProvider extends ServiceProvider
         Event::listen(PolicyCancelled::class, [ClawBackCommissionOnCancellation::class, 'handle']);
         Event::listen(ReceiptAllocated::class, [EarnCommissionOnAllocation::class, 'handle']);
         Event::listen(PolicyIssued::class, [EarnCommissionOnIssue::class, 'handle']);
+        Event::listen(\App\Modules\Insurance\Policy\Domain\Events\PolicyRenewed::class, [\App\Modules\Insurance\Renewal\Application\ExpiryRegister::class, 'markRenewed']); // slice R9
         Event::listen(ReceiptAllocationReversed::class, [ClawBackCommissionOnReversal::class, 'handle']);
     }
 }

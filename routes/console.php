@@ -21,6 +21,8 @@ Schedule::job(new LicenceExpiryAlertJob(), 'batch')->dailyAt('01:45')->withoutOv
 Schedule::job(new App\Modules\Insurance\Quotation\Infrastructure\Jobs\QuotationExpiryJob(), 'batch')->dailyAt('00:15')->withoutOverlapping();
 // Phase 3 R6: active cover notes past their last day expire.
 Schedule::job(new App\Modules\Insurance\CoverNote\Infrastructure\Jobs\CoverNoteExpiryJob(), 'batch')->dailyAt('00:20')->withoutOverlapping();
+// Phase 3 R9: expiry register, renewal quotations at T-45 and renewal notices (after quotations expire, so an expired renewal quotation gets no reminder).
+Schedule::job(new App\Modules\Insurance\Renewal\Infrastructure\Jobs\RenewalRunJob(), 'batch')->dailyAt('00:30')->withoutOverlapping();
 
 // Slice D9: regenerate the producer portal's OpenAPI document from the routes and their PortalOperation attributes.
 Illuminate\Support\Facades\Artisan::command('portal:openapi', function (App\Http\Portal\OpenApi\PortalOpenApi $openApi): void {

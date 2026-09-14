@@ -39,6 +39,8 @@ use Illuminate\Support\Str;
 final class QuotationService
 {
     public const PERMISSION = 'quotation.create';
+    /** Slice R9: offering a renewal quotation from the expiry register (A-126). */
+    public const RENEWAL_PERMISSION = 'renewal.manage';
 
     public function __construct(
         private readonly PermissionChecker $permissions,
@@ -211,6 +213,94 @@ final class QuotationService
         $this->audit->record('quotation.converted', AuditSubject::of('quotation', $quotation->id), ['status' => 'issued'], ['status' => 'converted'], null, self::PERMISSION, Actor::user($actorUserId));
 
         return $quotation;
+    }
+
+    /**
+     * Slice R9 (design §4 "renewal quotation auto-created at T-45 by re-rating with the current tariff"): an issued quotation for an expiring policy, rated on the
+     * product version and tariff in force on the renewal's cover start, linked to the policy it renews (`renewal_of_policy_id`, D-40) and valid until the
+     * renew-by date (A-127). Offered by the nightly renewal run (no actor: created by the system) or by someone holding renewal.manage on the policy's branch.
+     * The number, freeze and audit trail are those of `issue`; at most one open renewal quotation per policy.
+     *
+     * @throws BusinessRuleViolation PRODUCT_NOT_RATED, QUOTATION_INCEPTION_IN_PAST, RENEWAL_QUOTATION_OPEN
+     * @throws RiskInputsInvalid
+     * @throws RatingFailed
+     */
+    public function offerRenewal(RenewalQuotationTerms $terms, CarbonImmutable $on, ?string $actorUserId): Quotation
+    {
+        $entityId = Str::isUuid($terms->branchId) ? DB::table('branches')->where('id', $terms->branchId)->value('entity_id') : null;
+        if (! is_string($entityId)) {
+            throw new BusinessRuleViolation('BRANCH_UNKNOWN', 'Choose a branch of this company.');
+        }
+        if ($actorUserId !== null) {
+            $this->permissions->authorize($actorUserId, self::RENEWAL_PERMISSION, AuthorizationScope::branch($entityId, $terms->branchId));
+        }
+        if ($terms->inception->lessThan($on->startOfDay())) {
+            throw new BusinessRuleViolation('QUOTATION_INCEPTION_IN_PAST', "The policy expired before {$on->toDateString()}; a renewal quotation cannot start cover in the past.");
+        }
+        $policyStatus = DB::table('policies')->where('id', $terms->renewalOfPolicyId)->value('status');
+        if (! in_array($policyStatus, ['issued', 'active', 'expired'], true)) {
+            throw new BusinessRuleViolation('RENEWAL_BASE_NOT_RENEWABLE', 'Only an issued, active or expired policy that is not yet renewed can be offered a renewal.');
+        }
+        if (self::openRenewal($terms->renewalOfPolicyId) !== null) {
+            throw new BusinessRuleViolation('RENEWAL_QUOTATION_OPEN', 'This policy already has an open renewal quotation.');
+        }
+        $version = $this->products->versionOn($terms->productId, $terms->inception);
+        if ($version->class_code === null) {
+            throw new BusinessRuleViolation('PRODUCT_NOT_RATED', 'This product has no product class and rating plan, so its renewal cannot be quoted.');
+        }
+        $inputs = self::scalarInputs($version, $terms->riskInputs);
+        $result = $this->engine->rate($version, $inputs, $terms->inception, $terms->coverages);
+        $currency = (string) DB::table('legal_entities')->where('id', $entityId)->value('base_currency');
+        $number = $this->numbers->reserve(new DocumentNumberScope($entityId, $terms->branchId, 'quotation', 'QUO', $on), $actorUserId);
+        $actor = $actorUserId === null ? Actor::system() : Actor::user($actorUserId);
+        $permission = $actorUserId === null ? null : self::RENEWAL_PERMISSION;
+
+        return DB::transaction(function () use ($terms, $on, $actorUserId, $entityId, $version, $result, $currency, $number, $actor, $permission): Quotation {
+            $quotation = new Quotation(['id' => (string) Str::uuid7()]);
+            $quotation->forceFill([
+                'entity_id' => $entityId, 'branch_id' => $terms->branchId, 'product_id' => $terms->productId, 'product_version_id' => $version->id, 'class_code' => $version->class_code,
+                'customer_party_id' => $terms->customerPartyId, 'producer_id' => $terms->producerId, 'inception' => $terms->inception->toDateString(),
+                'risk_inputs' => $result->riskInputs, 'coverages' => array_values(array_unique($terms->coverages)), 'risk_keys' => RiskKeys::for($version->class_code, $result->riskInputs),
+                'currency' => $currency, ...self::ratingColumns($result, $result->riskInputs), 'status' => QuotationStatus::Issued->value, 'number' => $number->number,
+                'valid_until' => ($terms->validUntil->lessThan($on) ? $on : $terms->validUntil)->toDateString(), 'issued_by' => $actorUserId, 'issued_at' => CarbonImmutable::now(),
+                // ASSUMPTION: A-133 — a renewal is not new business, so the producer's licence is not checked for it.
+                'producer_eligible' => null, 'producer_eligibility_reason' => 'RENEWAL', 'producer_eligibility_note' => 'A renewal is not new business; the licence check for new business does not apply.',
+                'renewal_of_policy_id' => $terms->renewalOfPolicyId, 'created_by' => $actorUserId, 'updated_by' => $actorUserId,
+            ])->save();
+            $this->numbers->markUsed($number->id, 'quotation', $quotation->id);
+            $policyNumber = DB::table('policies')->where('id', $terms->renewalOfPolicyId)->value('number');
+            $this->audit->record('quotation.created', AuditSubject::of('quotation', $quotation->id), null, [...self::snapshot($quotation), 'renewal_of' => $policyNumber], null, $permission, $actor);
+            $this->audit->record('quotation.issued', AuditSubject::of('quotation', $quotation->id), null, [...self::snapshot($quotation), 'renewal_of' => $policyNumber], null, $permission, $actor);
+
+            return $quotation;
+        });
+    }
+
+    /**
+     * Slice R9: declines the open renewal quotation of a policy that will not be renewed (a person recorded why, or the policy was cancelled). The caller has
+     * checked renewal.manage on the policy's branch; null actor = the system. Does nothing when the quotation is no longer open.
+     */
+    public function declineRenewal(string $quotationId, string $reason, ?string $actorUserId): void
+    {
+        DB::transaction(function () use ($quotationId, $reason, $actorUserId): void {
+            $quotation = Quotation::query()->whereKey($quotationId)->lockForUpdate()->first();
+            if ($quotation === null || $quotation->renewal_of_policy_id === null || ! in_array($quotation->status, [QuotationStatus::Draft, QuotationStatus::Issued], true)) {
+                return;
+            }
+            $before = $quotation->status->value;
+            $quotation->forceFill(['status' => QuotationStatus::Declined->value, 'decline_reason' => trim($reason), 'declined_by' => $actorUserId,
+                'declined_at' => CarbonImmutable::now(), 'updated_by' => $actorUserId])->save();
+            $this->audit->record('quotation.declined', AuditSubject::of('quotation', $quotation->id), ['status' => $before], ['status' => 'declined'], trim($reason),
+                $actorUserId === null ? null : self::RENEWAL_PERMISSION, $actorUserId === null ? Actor::system() : Actor::user($actorUserId));
+        });
+    }
+
+    /** Slice R9: the open (draft or issued) renewal quotation of a policy, if any. */
+    public static function openRenewal(string $policyId): ?string
+    {
+        $id = DB::table('quotations')->where('renewal_of_policy_id', $policyId)->whereIn('status', [QuotationStatus::Draft->value, QuotationStatus::Issued->value])->value('id');
+
+        return $id === null ? null : (string) $id;
     }
 
     public static function validDays(): int

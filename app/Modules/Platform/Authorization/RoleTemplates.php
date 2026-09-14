@@ -25,7 +25,9 @@ final class RoleTemplates
         // ASSUMPTION A-83 (slice R4): whoever quotes policies today rates and issues quotations (branch officer, and the branch manager through "+").
         'quotation.create',
         // ASSUMPTION A-94 (slice R6): the officer who prepares a proposal issues its cover note.
-        'cover_note.issue'];
+        'cover_note.issue',
+        // ASSUMPTION A-126 (slice R9): the branch that sold and quotes a policy works its expiry register (branch officer, and the branch manager through "+").
+        'renewal.manage'];
     private const CLAIMS_OFFICER = ['claim.register', 'claim.reserve'];
     private const ACCOUNTANT = ['accounting.view_journals', 'accounting.create_manual_journal', 'bank.match', 'bank.import', 'receipt.allocate'];
     private const FINANCE_MANAGER_EXTRA = ['accounting.approve_journal', 'accounting.reverse_journal', 'periods.soft_lock', 'periods.lock',

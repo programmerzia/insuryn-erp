@@ -207,6 +207,9 @@ final class QuotationPageController
             'producer_eligible' => $quotation->producer_eligible, 'producer_eligibility_note' => $quotation->producer_eligibility_note,
             'decline_reason' => $quotation->decline_reason, 'issued_at' => $quotation->issued_at?->toIso8601String(),
             'proposal_id' => ($proposal = DB::table('proposals')->where('quotation_id', $quotation->id)->value('id')) === null ? null : (string) $proposal,
+            // Slice R9: the expiring policy a renewal quotation renews.
+            'renewal_of' => $quotation->renewal_of_policy_id === null ? null
+                : ['id' => $quotation->renewal_of_policy_id, 'number' => (string) DB::table('policies')->where('id', $quotation->renewal_of_policy_id)->value('number')],
         ];
     }
 

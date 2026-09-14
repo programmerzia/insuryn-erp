@@ -12,6 +12,7 @@ use App\Modules\Insurance\Policy\Domain\Enums\PolicyTransactionType;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyCancelled;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyEndorsed;
 use App\Modules\Insurance\Policy\Domain\Events\PolicyIssued;
+use App\Modules\Insurance\Policy\Domain\Events\PolicyRenewed;
 use App\Modules\Insurance\Policy\Domain\Models\Policy;
 use App\Modules\Insurance\Policy\Domain\Models\PolicyTransaction;
 use App\Modules\Insurance\Policy\Domain\PremiumMath;
@@ -177,7 +178,7 @@ final class PolicyLifecycle
         if ($installmentCount < 1 || $installmentCount > 12) {
             throw new BusinessRuleViolation('INSTALLMENTS_INVALID', 'A policy has between 1 and 12 installments.');
         }
-        $quotation = DB::table('quotations')->where('id', $approved->quotationId)->first(['number', 'status', 'valid_until']);
+        $quotation = DB::table('quotations')->where('id', $approved->quotationId)->first(['number', 'status', 'valid_until', 'renewal_of_policy_id']);
         if ($quotation === null || $quotation->status !== 'converted') {
             throw new BusinessRuleViolation('QUOTATION_BASIS_INVALID', "Proposal {$approved->number} has no accepted quotation to issue on.");
         }
@@ -196,13 +197,20 @@ final class PolicyLifecycle
         if (mb_strlen($reference) > 128) {
             throw new BusinessRuleViolation('PREMIUM_REFERENCE_INVALID', 'The premium reference is at most 128 characters.');
         }
-        if ($approved->producerId !== null) {
+        // Slice R9: a renewal quotation's policy renews the policy it names (design previous_policy_id = renewal_of_policy_id, D-38).
+        $renews = $quotation->renewal_of_policy_id === null ? null : (string) $quotation->renewal_of_policy_id;
+        if ($renews !== null) {
+            $this->assertRenewable($renews);
+        }
+        if ($approved->producerId !== null && $renews === null) {
+            // Renewals are not new business (Distribution design note §3, as `issue`).
             app(LicenceRegistry::class)->assertMayWriteNewBusiness($approved->producerId, (string) DB::table('products')->where('id', $approved->productId)->value('insurance_class'), $on);
         }
         $number = $this->numbers->reserve(new DocumentNumberScope($approved->entityId, $approved->branchId, 'policy', 'POL', $on), $actorUserId);
 
-        return DB::transaction(function () use ($approved, $version, $premium, $reference, $installmentCount, $on, $actorUserId, $number): Policy {
+        return DB::transaction(function () use ($approved, $version, $premium, $reference, $installmentCount, $on, $actorUserId, $number, $renews): Policy {
             $result = $approved->ratingResult;
+            $previous = $renews === null ? null : $this->lock($renews, [PolicyStatus::Active, PolicyStatus::Expired], 'renew');
             $coverNoteId = DB::table('cover_notes')->where('proposal_id', $approved->proposalId)->whereIn('status', ['active', 'expired'])->orderByDesc('issued_at')->value('id');
             $policy = new Policy(['id' => (string) \Illuminate\Support\Str::uuid7()]);
             $policy->forceFill([
@@ -218,6 +226,7 @@ final class PolicyLifecycle
                 'special_terms' => $approved->manualLoadingBp === null ? [] : [['code' => 'manual_loading', 'loading_bp' => $approved->manualLoadingBp, 'reason' => (string) $approved->specialTerms,
                     'text' => (new ManualLoading($approved->manualLoadingBp, (string) $approved->specialTerms))->labelEn().': '.$approved->specialTerms]],
                 'issue_basis' => $reference !== '' ? 'premium_received' : 'credit', 'premium_received_reference' => $reference === '' ? null : $reference,
+                'renewal_of_policy_id' => $previous?->id,
             ])->save();
             $this->numbers->markUsed($number->id, 'policy', $policy->id);
             $transaction = $this->record($policy, PolicyTransactionType::New, $policy->inception, $policy->gross_premium_minor, $policy->net_premium_minor, $policy->tax_minor,
@@ -231,8 +240,16 @@ final class PolicyLifecycle
                 'gross_premium_minor' => $policy->gross_premium_minor, 'net_premium_minor' => $policy->net_premium_minor, 'tax_minor' => $policy->tax_minor,
                 'stamp_duty_minor' => $policy->stamp_duty_minor, 'installments' => $installmentCount, 'issue_basis' => $policy->issue_basis,
                 'premium_received_reference' => $policy->premium_received_reference, 'cover_notes_superseded' => $superseded,
+                'renewal_of' => $previous?->number,
             ], null, 'policy.issue', Actor::user($actorUserId));
             Event::dispatch(new PolicyIssued($policy->id, $transaction->id));
+            if ($previous !== null) {
+                $before = $previous->status->value;
+                $previous->forceFill(['status' => PolicyStatus::Renewed->value])->save();
+                $this->audit->record('policy.renewed', AuditSubject::of('policy', $previous->id), ['status' => $before], ['status' => 'renewed', 'renewal_policy_id' => $policy->id,
+                    'renewal_number' => $policy->number], null, 'policy.issue', Actor::user($actorUserId));
+                Event::dispatch(new PolicyRenewed($previous->id, $policy->id));
+            }
 
             return $policy;
         });
@@ -402,10 +419,16 @@ final class PolicyLifecycle
         });
     }
 
-    /** Marks the policy renewed and creates the renewal as a new quote from the day after expiry (it is issued separately). */
+    /**
+     * Marks the policy renewed and creates the renewal as a new quote from the day after expiry (it is issued separately). Products without a rating plan only:
+     * a rated policy is renewed through its renewal quotation (slice R9, A-130).
+     */
     public function renew(string $policyId, string $actorUserId): Policy
     {
         $policy = Policy::query()->findOrFail($policyId);
+        if ($policy->rating_result !== null || self::isRated(ProductVersion::query()->findOrFail($policy->product_version_id))) {
+            throw new BusinessRuleViolation('RENEWAL_BY_QUOTATION', 'This policy is priced by its tariff. Renew it from its renewal quotation on Renewals: the customer accepts it and the proposal issues the renewal.');
+        }
 
         return DB::transaction(function () use ($policy, $actorUserId): Policy {
             $this->simpleTransition($policy->id, [PolicyStatus::Active, PolicyStatus::Expired], PolicyStatus::Renewed, 'renew', 'policy.create', null, $actorUserId);
@@ -418,7 +441,20 @@ final class PolicyLifecycle
         });
     }
 
-    /** Design §5.4 "inception reached": issued policies whose cover has started become active. Returns how many. */
+    /**
+     * Slice R9: an expiring policy can be renewed only while it is active or expired and not already renewed (design §5.4 active | expired ─renew─▶ renewed).
+     *
+     * @throws BusinessRuleViolation RENEWAL_BASE_NOT_RENEWABLE
+     */
+    private function assertRenewable(string $policyId): void
+    {
+        $previous = Policy::query()->findOrFail($policyId);
+        if (! in_array($previous->status, [PolicyStatus::Active, PolicyStatus::Expired], true)) {
+            throw new BusinessRuleViolation('RENEWAL_BASE_NOT_RENEWABLE', "Policy {$previous->number} is {$previous->status->value}, so it cannot be renewed.");
+        }
+    }
+
+    /** Design §5.4 "inception reached":issued policies whose cover has started become active. Returns how many. */
     public function activateDue(CarbonImmutable $today): int
     {
         return Policy::query()->where('status', PolicyStatus::Issued->value)->where('inception', '<=', $today->toDateString())

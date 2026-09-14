@@ -197,6 +197,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('proposals/{proposal}/cover-notes', [\App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::class, 'store'])->whereUuid('proposal');
     Route::get('cover-notes', [\App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::class, 'index']);
     Route::post('cover-notes/{coverNote}/cancel', [\App\Modules\Insurance\CoverNote\Http\Controllers\CoverNotesPageController::class, 'cancel'])->whereUuid('coverNote');
+    // Phase 3 R9: expiry register (renewals queue), renewal quotation now, not renewed with a reason.
+    Route::get('renewals', [\App\Modules\Insurance\Renewal\Http\Controllers\RenewalsPageController::class, 'index']);
+    Route::post('renewals/{entry}/quote', [\App\Modules\Insurance\Renewal\Http\Controllers\RenewalsPageController::class, 'offer'])->whereUuid('entry');
+    Route::post('renewals/{entry}/not-renewed', [\App\Modules\Insurance\Renewal\Http\Controllers\RenewalsPageController::class, 'notRenewed'])->whereUuid('entry');
     Route::get('underwriting/referrals', [\App\Modules\Insurance\Underwriting\Http\Controllers\ReferralsPageController::class, 'index']);
     Route::post('underwriting/referrals/{proposal}/decide', [\App\Modules\Insurance\Underwriting\Http\Controllers\ReferralsPageController::class, 'decide'])->whereUuid('proposal');
 

@@ -46,6 +46,20 @@ final class DocumentGenerator
      */
     public function generate(DocumentTemplateCode|string $templateCode, string $objectType, string $objectId, string $actorUserId, ?string $locale = null): GeneratedDocument
     {
+        return $this->produce($templateCode, $objectType, $objectId, $actorUserId, $locale);
+    }
+
+    /**
+     * Slice R9 (DECISION D-41): a document produced by a scheduled system run (the renewal notice at T-45), not by a person — so no permission applies; the
+     * generated row has no `rendered_by` and the audit row names the system. Everything else is `generate`.
+     */
+    public function generateBySystem(DocumentTemplateCode|string $templateCode, string $objectType, string $objectId, ?string $locale = null): GeneratedDocument
+    {
+        return $this->produce($templateCode, $objectType, $objectId, null, $locale);
+    }
+
+    private function produce(DocumentTemplateCode|string $templateCode, string $objectType, string $objectId, ?string $actorUserId, ?string $locale): GeneratedDocument
+    {
         $code = $templateCode instanceof DocumentTemplateCode ? $templateCode
             : (DocumentTemplateCode::tryFrom($templateCode) ?? throw new BusinessRuleViolation('DOCUMENT_TEMPLATE_CODE_UNKNOWN', "There is no document type {$templateCode}."));
         $locale ??= (string) config('erp.documents.default_locale', 'en');
@@ -57,7 +71,9 @@ final class DocumentGenerator
         }
         $provider = $this->providers->for($objectType, $code);
         $subject = $provider->subject($objectId, $code);
-        $this->permissions->authorize($actorUserId, self::PERMISSION, $subject->scope);
+        if ($actorUserId !== null) {
+            $this->permissions->authorize($actorUserId, self::PERMISSION, $subject->scope);
+        }
         $template = $this->templates->active($code, $subject->productClass, $locale)
             ?? throw new BusinessRuleViolation('DOCUMENT_TEMPLATE_MISSING', 'No '.$code->title().' template is active in '.($locale === 'bn' ? 'Bangla' : 'English').'. Ask an administrator to activate one on the templates screen.');
 

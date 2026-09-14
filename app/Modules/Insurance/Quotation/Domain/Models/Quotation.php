@@ -48,7 +48,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonImmutable|null $issued_at
  * @property CarbonImmutable|null $expired_at
  * @property CarbonImmutable|null $converted_at
- * @property string $created_by
+ * @property string|null $created_by null only for a renewal quotation offered by the nightly renewal run (slice R9)
+ * @property string|null $renewal_of_policy_id slice R9: the expiring policy this quotation renews
  * @property string|null $updated_by
  * @property CarbonImmutable $created_at
  */
