@@ -123,7 +123,7 @@ it('drills suspense ageing and the commission statement to their journals', func
 
         expect($suspense['total_minor'])->toBe(80_000)
             ->and($suspense['items'][0]['journals'][0]['journal_id'])->toBe(($this->journalOf)('receipt', $suspense['items'][0]['receipt_id']))
-            ->and($statement['totals']['earned_minor'])->toBe(400_000)
+            ->and($statement['totals']['earned_minor'])->toBe(347_826) // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
             ->and($statement['entries'][0]['journals'][0]['journal_id'])->toBe(($this->journalOf)('commission_entry', $entryId));
     });
 });

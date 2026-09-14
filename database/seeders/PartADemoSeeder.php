@@ -48,7 +48,7 @@ use RuntimeException;
 /**
  * The market cross-check Part A story, "a week in a non-life insurer" (session S2), in its own tenant so it stays exactly that story:
  *
- * - Padma General Insurance, Head Office; 3 products (motor, fire, marine; rated by placeholder tariffs, monthly earning, issued on credit); 5 customers;
+ * - Padma General Insurance, Head Office; 3 products (motor, fire, marine; rated by placeholder tariffs, earned 1/365 per day, issued on credit); 5 customers;
  *   2 producers — Jamal Uddin, an agent on 10% commission, and Nasima Akter, a salaried BDO with none (the zero-commission case).
  * - August: three policies issued and paid by bank transfer, one issued and later cancelled; a motor claim registered, reserved at
  *   200,000, approved at 180,000, paid by finance and closed (the 20,000 left released); the bank statement fully matched; the month closed and locked.
@@ -138,7 +138,8 @@ final class PartADemoSeeder extends Seeder
         $product = function (string $code, string $name, string $lob, string $class) use ($catalogue, $finance): string {
             $product = $catalogue->createProduct($code, $name, $lob, $finance, 'non_life');
             // Phase 3 R1 (class, risk schema, coverages); R7: the story's premiums are paid after issue, so the demo products issue on credit (A-117).
-            $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'monthly',
+            // Gap audit GA-44 (D-71, A-182): premium is earned 1/365 per day on cover, so a policy starting mid-August earns its August days in August.
+            $catalogue->addVersion($product->id, ['effective_from' => '2026-01-01', 'term_months' => 12, 'earning_method' => 'daily_365',
                 'tax_profile' => ['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true], ...DemoRatingCatalogue::versionTerms($class), 'allow_credit_issue' => true], $finance);
 
             return $product->id;

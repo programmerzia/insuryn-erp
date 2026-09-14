@@ -138,7 +138,7 @@ it('manages commission plans and pays an approved statement by someone else', fu
     actingAs($payer)->post("/commission/statements/{$statementId}/pay", ['paid_on' => '2026-10-02'], $this->headers)->assertSessionHasNoErrors();
 
     actingAs($approver)->get('/commission', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page->component('commission/Index')
-        ->has('plans', 2)->has('statements', 1)->where('statements.0.status', 'paid')->where('statements.0.net', '12,000.00'));
+        ->has('plans', 2)->has('statements', 1)->where('statements.0.status', 'paid')->where('statements.0.net', '10,434.78')); // gap audit GA-42: 10% of the 104,347.83 net premium in the 120,000.00 received (VAT excluded)
     actingAs($approver)->get("/commission/agents/{$this->world['agent_id']}?from=2026-09-01&to=2026-10-31", $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->component('commission/Statement')->has('statement.entries', 1)->where('statement.totals.net', '12,000.00')->where('statement.closing_payable', '0.00'));
+        ->component('commission/Statement')->has('statement.entries', 1)->where('statement.totals.net', '10,434.78')->where('statement.closing_payable', '0.00'));
 });

@@ -20,6 +20,8 @@ use Illuminate\Support\Str;
 /**
  * Design §4.5 commission earned on receipt (10% on 50,000, 5% withholding), §4.4 event C clawback on the unearned share, §2.4
  * commission_entries, §5.6 entry states; spec §4 Commission "earned on receipt; clawback netting; withholding tax via tax engine".
+ * Gap audit GA-42 (D-70): the base is the net premium inside the money allocated, without the 15% VAT the test product includes, so the expected
+ * figures are 10% of the net share (`$this->commission`) instead of 10% of the cash; the rates, withholding and postings are checked as before.
  */
 beforeEach(function (): void {
     $this->ctx = seedDemoTenant();
@@ -37,6 +39,17 @@ beforeEach(function (): void {
         app(PolicyLifecycle::class)->issue($policy->id, CarbonImmutable::parse('2026-09-01'), $this->world['admin']);
 
         return [$policy->id, DB::table('installments')->where('policy_id', $policy->id)->orderBy('no')->pluck('id')->map(fn ($id): string => (string) $id)->all()];
+    };
+    // GA-42: the net premium inside $cash allocated to a policy of this world (12,000.00 gross, VAT inclusive), and 10% commission with 5% withheld on it.
+    $this->netShare = function (int $cash): int {
+        $policy = DB::table('policies')->orderBy('created_at')->first(['net_premium_minor', 'gross_premium_minor']);
+
+        return PremiumMath::prorate($cash, (int) $policy?->net_premium_minor, (int) $policy?->gross_premium_minor);
+    };
+    $this->commission = function (int $cash, int $rateBp = 1000, int $withholdingBp = 500): array {
+        $amount = PremiumMath::prorate(($this->netShare)($cash), $rateBp, 10_000);
+
+        return [$amount, PremiumMath::prorate($amount, $withholdingBp, 10_000)];
     };
     $this->receive = function (int $amount, array $allocations, string $date = '2026-09-15'): void {
         app(ReceiptService::class)->record(new RecordReceiptRequest($this->ctx['entity_id'], $this->ctx['branch_id'], null, 'bank_transfer', $amount, 'BDT',
@@ -57,18 +70,20 @@ it('earns commission with withholding when premium is allocated (§4.5)', functi
         [$policyId, $installments] = ($this->issue)($this->world['agent_id']);
         ($this->receive)(5_000_000, [new AllocationLine($installments[0], 5_000_000)]);
         $entry = DB::table('commission_entries')->first();
+        [$amount, $withholding] = ($this->commission)(5_000_000);
 
-        expect(DB::table('commission_entries')->count())->toBe(1)
+        expect(($this->netShare)(5_000_000))->toBeLessThan(5_000_000)
+            ->and(DB::table('commission_entries')->count())->toBe(1)
             ->and([$entry?->kind, (int) $entry?->base_minor, (int) $entry?->rate_bp, (int) $entry?->amount_minor, (int) $entry?->withholding_minor, $entry?->status])
-                ->toBe(['earned', 5_000_000, 1000, 500_000, 25_000, 'accrued'])
+                ->toBe(['earned', ($this->netShare)(5_000_000), 1000, $amount, $withholding, 'accrued'])
             ->and($entry?->agent_id)->toBe($this->world['agent_id'])
             ->and($entry?->policy_id)->toBe($policyId)
             ->and($entry?->receipt_allocation_id)->toBe(DB::table('receipt_allocations')->value('id'))
             ->and(DB::table('accounting_events')->where('event_type', 'COMMISSION_EARNED')->value('idempotency_key'))->toBe('COMMISSION_EARNED:'.$entry?->id)
             ->and(commissionLines('COMMISSION_EARNED'))->toBe([
-                ['role' => 'commission_expense', 'side' => 'debit', 'amount' => 500_000],
-                ['role' => 'commission_payable', 'side' => 'credit', 'amount' => 475_000],
-                ['role' => 'commission_withholding_payable', 'side' => 'credit', 'amount' => 25_000],
+                ['role' => 'commission_expense', 'side' => 'debit', 'amount' => $amount],
+                ['role' => 'commission_payable', 'side' => 'credit', 'amount' => $amount - $withholding],
+                ['role' => 'commission_withholding_payable', 'side' => 'credit', 'amount' => $withholding],
             ]);
     });
 });
@@ -79,7 +94,7 @@ it('earns commission when suspense is allocated, on the allocation date', functi
         ($this->receive)(1_000_000, []);
         app(SuspenseService::class)->allocate((string) DB::table('suspense_items')->value('id'), $installments[0], 1_000_000, $this->world['admin'], CarbonImmutable::parse('2026-09-20'));
 
-        expect((int) DB::table('commission_entries')->value('amount_minor'))->toBe(100_000)
+        expect((int) DB::table('commission_entries')->value('amount_minor'))->toBe(($this->commission)(1_000_000)[0])
             ->and(DB::table('commission_entries')->value('earned_on'))->toBe('2026-09-20')
             ->and(DB::table('accounting_events')->where('event_type', 'COMMISSION_EARNED')->value('transaction_date'))->toBe('2026-09-20');
     });
@@ -113,7 +128,7 @@ it('takes the product version plan before the agent plan by default, configurabl
         ($this->receive)(1_000_000, [new AllocationLine($installments[1], 1_000_000)]);
 
         expect(DB::table('commission_entries')->orderBy('id')->get(['rate_bp', 'withholding_minor'])->map(fn (object $e): array => [(int) $e->rate_bp, (int) $e->withholding_minor])->all())
-            ->toBe([[1000, 5_000], [700, 0]]);
+            ->toBe([[1000, ($this->commission)(1_000_000)[1]], [700, 0]]);
     });
 });
 
@@ -126,8 +141,9 @@ it('claws back commission on the unearned share when the policy is cancelled (§
         $policy = DB::table('policies')->where('id', $policyId)->first();
         $cancellation = DB::table('policy_transactions')->where('policy_id', $policyId)->where('type', 'cancellation')->first();
         $unearned = (int) json_decode((string) $cancellation?->amounts, true)['unearned_remaining'];
-        $amount = PremiumMath::prorate(1_200_000, $unearned, (int) $policy?->net_premium_minor);
-        $withholding = PremiumMath::prorate(60_000, $unearned, (int) $policy?->net_premium_minor);
+        [$earned, $earnedWithholding] = ($this->commission)(6_000_000);
+        $amount = PremiumMath::prorate(2 * $earned, $unearned, (int) $policy?->net_premium_minor);
+        $withholding = PremiumMath::prorate(2 * $earnedWithholding, $unearned, (int) $policy?->net_premium_minor);
         $clawback = DB::table('commission_entries')->where('kind', 'clawback')->first();
 
         expect([(int) $clawback?->amount_minor, (int) $clawback?->withholding_minor, $clawback?->policy_transaction_id])->toBe([-$amount, -$withholding, $cancellation?->id])
@@ -178,15 +194,16 @@ it('produces an agent statement with earned, clawed back, withholding and net to
         $october = app(CommissionStatementQuery::class)->statement($this->world['agent_id'], CarbonImmutable::parse('2026-10-01'), CarbonImmutable::parse('2026-12-31'));
         $clawback = (int) DB::table('commission_entries')->where('kind', 'clawback')->value('amount_minor');
         $clawbackWithholding = (int) DB::table('commission_entries')->where('kind', 'clawback')->value('withholding_minor');
+        [$earned, $withheld] = ($this->commission)(6_000_000);
 
         expect(array_column($october['entries'], 'kind'))->toBe(['earned', 'clawback'])
             ->and($october['entries'][0]['policy_number'])->toStartWith('POL-')
             ->and($october['totals'])->toBe([
-                'earned_minor' => 600_000, 'clawback_minor' => $clawback, 'withholding_minor' => 30_000 + $clawbackWithholding,
-                'net_minor' => 600_000 + $clawback - 30_000 - $clawbackWithholding,
+                'earned_minor' => $earned, 'clawback_minor' => $clawback, 'withholding_minor' => $withheld + $clawbackWithholding,
+                'net_minor' => $earned + $clawback - $withheld - $clawbackWithholding,
             ])
-            ->and($october['opening_payable_minor'])->toBe(570_000)
-            ->and($october['closing_payable_minor'])->toBe(570_000 + 570_000 + $clawback - $clawbackWithholding);
+            ->and($october['opening_payable_minor'])->toBe($earned - $withheld)
+            ->and($october['closing_payable_minor'])->toBe(2 * ($earned - $withheld) + $clawback - $clawbackWithholding);
     });
 });
 

@@ -42,7 +42,7 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 | C7 | Delegation of approvals | none | 2.2 | build |
 | C8 | Escalation times and SLA calendar | none | 2.2 | build |
 | C9 | Limits on premium refunds and commission payouts | maker-checker only | 2.2 (object types) | finish |
-| D1 | Earning method and short-rate table | 365ths or monthly, pro-rata only (A-4) | — | go-live |
+| D1 | Earning method and short-rate table | 365ths (daily) for the demo and new products, monthly on request; pro-rata only (A-4, A-182) | — | go-live |
 | D2 | Tariff values per class | placeholders marked verify | — | go-live |
 | D3 | No-claim bonus scale and how it moves | 0/10/20/30%, +1 year per claim-free year (A-128) | — | go-live |
 | D4 | Risk details captured per class | illustrative schemas | — | go-live |
@@ -70,6 +70,7 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 | F5 | Commission schedule | as configured per scheme | — | go-live |
 | F6 | Persistency and incentive periods | A-23, A-24, A-25 | — | go-live |
 | F7 | Producer portal access | one portal user per active producer (A-26) | — | go-live |
+| F8 | Commission base: net premium or premium received with VAT and stamp duty | net premium share of each allocation (A-181) | — | go-live |
 | G1 | Reopening closed claims | claim approvers (limit optional) | — | go-live |
 | G2 | Deductibles, co-insurance, batch payments, SLA timers | not built | scope decision | go-live |
 | H1 | Opening balances and chart of accounts source | CSV import (A-3) | 2.7, 2.10 cut-over data | finish |
@@ -276,7 +277,7 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 
 ### D1. How is premium earned for each product, and do you use a short-rate table on cancellation?
 - **Why it matters:** the earning method changes monthly revenue; short-rate changes refunds. (Design v1 OPEN #4.)
-- **Default today:** by day (365ths) or by month; 24ths and short-rate tables refused, so cancellations are pro-rata (A-4).
+- **Default today:** by day (365ths): the demo products and the first product made in the setup wizard earn 1/365 of the net premium per day on cover (A-182, gap audit GA-44, product owner decision D-71 to confirm). By month stays available per product version (and `erp.setup.earning_method`). 24ths and short-rate tables are refused, so cancellations are pro-rata (A-4).
 - **Blocked until answered:** none. Go-live.
 - **Status:** unanswered (Phase 1 Q8).
 - **Your answer:**
@@ -480,6 +481,13 @@ completed or switched on; **go-live** = no slice is blocked, but the system shou
 - **Default today:** one portal user per active producer, read-only except recording cash collections for their own policies (A-26). No staff screen grants portal access yet.
 - **Blocked until answered:** none.
 - **Status:** new since Phase 1.
+- **Your answer:**
+
+### F8. Is agent commission a percentage of net premium, or of the premium received including VAT and stamp duty?
+- **Why it matters:** commission is earned when premium is received. Paying on the whole receipt pays commission on VAT and stamp duty; the gap audit found 50,775 minor too much across the demo (GA-42).
+- **Default today:** net premium, without VAT and stamp duty, as is usual in Bangladesh and as IDRA's commission caps are expressed (A-181, product owner decision D-70 to confirm). Each allocation's net share is its proportion of the installment's net premium to its gross premium. `erp.commission.premium_received_base = gross` pays on the cash received instead; one setting for every scheme and plan.
+- **Blocked until answered:** none.
+- **Status:** new (gap audit).
 - **Your answer:**
 
 ---

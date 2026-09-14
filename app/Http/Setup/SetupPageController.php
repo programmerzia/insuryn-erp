@@ -177,8 +177,9 @@ final class SetupPageController
                 $taxRates->ensure($jurisdiction, 'VAT', self::basisPoints((string) $data['vat_rate_percent']), (bool) ($data['vat_inclusive'] ?? true), $from, $actor);
             }
             $product = $catalogue->createProduct(strtoupper($data['code']), $data['name'], $data['lob'], $actor, $data['insurance_class']);
-            // Part A step 11: the month-end close earns 1/12 of an annual policy each month.
-            $catalogue->addVersion($product->id, ['effective_from' => $from->toDateString(), 'term_months' => (int) $data['term_months'], 'earning_method' => 'monthly',
+            // Part A step 11: the month-end close earns the premium for the days on cover in the month. Gap audit GA-44 (D-71, A-182): 1/365 per day
+            // (`daily_365`) by default; `monthly` stays available per product version and through erp.setup.earning_method.
+            $catalogue->addVersion($product->id, ['effective_from' => $from->toDateString(), 'term_months' => (int) $data['term_months'], 'earning_method' => (string) config('erp.setup.earning_method', 'daily_365'),
                 'tax_profile' => ['tax_type' => $withVat ? 'VAT' : null, 'jurisdiction' => $withVat ? $jurisdiction : null, 'inclusive' => (bool) ($data['vat_inclusive'] ?? true)]], $actor);
         });
 

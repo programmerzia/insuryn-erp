@@ -87,7 +87,7 @@ it('reconciles clean at every month end of real business, as of that date', func
         [$claims, $commission, $premium, $suspense] = ($this->runs)(($this->periodFor)('2026-09-30'));
         expect($premium[1])->toBe(24_000_000 - 4_000_000)     // two policies issued, one allocation in September
             ->and($suspense[1])->toBe(1_000_000 + 2_000_000)  // r1 remainder + unallocated r2 (allocated in October)
-            ->and($commission[1])->toBe(400_000)
+            ->and($commission[1])->toBe(347_826) // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
             ->and($claims[1])->toBe(0)
             ->and(DB::table('reconciliation_exceptions')->count())->toBe(0);
     });

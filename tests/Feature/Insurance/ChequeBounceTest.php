@@ -99,7 +99,7 @@ it('claws back commission earned on bounced money without double counting a late
         app(ChequeBounceService::class)->bounce($receipt->id, 'Account closed', $this->accountant, CarbonImmutable::parse('2026-09-15'));
 
         $bounceClawback = DB::table('commission_entries')->where('kind', 'clawback')->whereNotNull('receipt_allocation_id')->first();
-        expect([(int) $bounceClawback?->amount_minor, $bounceClawback?->earned_on])->toBe([-400_000, '2026-09-15'])
+        expect([(int) $bounceClawback?->amount_minor, $bounceClawback?->earned_on])->toBe([-347_826, '2026-09-15']) // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
             ->and(DB::table('accounting_events')->where('event_type', 'COMMISSION_CLAWBACK')->count())->toBe(1);
 
         app(PolicyLifecycle::class)->cancel($this->policyId, CarbonImmutable::parse('2026-10-01'), 'sold', $this->world['admin']);
@@ -107,7 +107,7 @@ it('claws back commission earned on bounced money without double counting a late
         $unearned = (int) json_decode((string) DB::table('policy_transactions')->where('policy_id', $this->policyId)->where('type', 'cancellation')->value('amounts'), true)['unearned_remaining'];
         $cancellationClawback = (int) DB::table('commission_entries')->where('kind', 'clawback')->whereNull('receipt_allocation_id')->value('amount_minor');
 
-        expect($cancellationClawback)->toBe(-App\Modules\Insurance\Policy\Domain\PremiumMath::prorate(400_000, $unearned, (int) $policy?->net_premium_minor));
+        expect($cancellationClawback)->toBe(-App\Modules\Insurance\Policy\Domain\PremiumMath::prorate(347_826, $unearned, (int) $policy?->net_premium_minor));
         app(ReconciliationService::class)->runAll((string) DB::table('fiscal_periods')->where('ends', '2026-10-31')->value('id'));
         expect(DB::table('reconciliation_runs')->where('subledger', 'commission')->value('status'))->toBe('clean');
     });

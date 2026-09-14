@@ -52,12 +52,12 @@ beforeEach(function (): void {
 
 it('approves a netted statement up to a date and pays it by another user, posting COMMISSION_PAID', function (): void {
     asTenant($this->ctx['tenant_id'], function (): void {
-        ($this->receive)(0, 4_000_000, '2026-09-10');                          // 400,000 commission, 20,000 withheld
+        ($this->receive)(0, 4_000_000, '2026-09-10');                          // 347,826 commission (gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash), 17,391 withheld
         ($this->receive)(1, 4_000_000, '2026-10-10');                          // after the statement date: not included
         $payouts = app(CommissionPayoutService::class);
 
         $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-02'));
-        expect([$statement->gross_minor, $statement->withholding_minor, $statement->net_minor, $statement->status])->toBe([400_000, 20_000, 380_000, 'approved'])
+        expect([$statement->gross_minor, $statement->withholding_minor, $statement->net_minor, $statement->status])->toBe([347_826, 17_391, 330_435, 'approved'])
             ->and($statement->number)->toStartWith('CST-2026-')
             ->and(DB::table('commission_entries')->where('statement_id', $statement->id)->pluck('status')->all())->toBe(['approved'])
             ->and(DB::table('commission_entries')->whereNull('statement_id')->pluck('status')->all())->toBe(['accrued']);
@@ -70,8 +70,8 @@ it('approves a netted statement up to a date and pays it by another user, postin
         expect(DB::table('commission_statements')->where('id', $statement->id)->value('status'))->toBe('paid')
             ->and(DB::table('commission_entries')->where('statement_id', $statement->id)->get(['status', 'paid_on'])->map(fn (object $e): array => [(string) $e->status, (string) $e->paid_on])->all())->toBe([['paid', '2026-10-05']])
             ->and([$event?->idempotency_key, $event?->transaction_date, $event?->status])->toBe(['COMMISSION_PAID:'.$statement->id, '2026-10-05', 'posted'])
-            ->and($lines)->toBe([['commission_payable', 'debit', 380_000], ['bank_main', 'credit', 380_000]])
-            ->and(($this->payableGl)())->toBe(380_000); // only the October entry remains payable
+            ->and($lines)->toBe([['commission_payable', 'debit', 330_435], ['bank_main', 'credit', 330_435]])
+            ->and(($this->payableGl)())->toBe(330_435); // only the October entry remains payable
     });
 });
 
@@ -85,8 +85,8 @@ it('nets clawbacks into the statement and refuses when nothing is payable', func
         $clawback = DB::table('commission_entries')->where('kind', 'clawback')->first();
         $statement = $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-01'));
 
-        expect($statement->gross_minor)->toBe(400_000 + (int) $clawback?->amount_minor)
-            ->and($statement->net_minor)->toBe(380_000 + (int) $clawback?->amount_minor - (int) $clawback?->withholding_minor)
+        expect($statement->gross_minor)->toBe(347_826 + (int) $clawback?->amount_minor) // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
+            ->and($statement->net_minor)->toBe(330_435 + (int) $clawback?->amount_minor - (int) $clawback?->withholding_minor)
             ->and(DB::table('commission_entries')->where('statement_id', $statement->id)->count())->toBe(2)
             ->and(thrownBy(fn () => $payouts->approve($this->world['agent_id'], CarbonImmutable::parse('2026-09-30'), $this->approver, CarbonImmutable::parse('2026-10-01')), BusinessRuleViolation::class)->reasonCode)->toBe('NOTHING_TO_PAY');
     });
@@ -130,7 +130,7 @@ it('pays from a named bank account and keeps the commission subledger reconciled
             ->map(fn (object $r): array => [(int) $r->subledger_balance_minor, (string) $r->status])->all();
 
         expect(DB::table('journal_lines')->where('role_code', 'bank_main')->where('side', 'credit')->value('account_id'))->toBe($gl)
-            ->and($runs)->toBe([[380_000, 'clean'], [0, 'clean']]);
+            ->and($runs)->toBe([[330_435, 'clean'], [0, 'clean']]); // gap audit GA-42: 10% of the 3,478,261 net premium in the 4,000,000 allocated (the 15% VAT excluded), not of the cash
     });
 });
 
@@ -142,7 +142,7 @@ it('exposes approval and payment over the API with the commission permissions', 
 
     Pest\Laravel\actingAs($payer)->postJson("/api/insurance/agents/{$this->world['agent_id']}/commission-statements", ['up_to' => '2026-09-30', 'on' => '2026-10-01'], $headers)->assertForbidden();
     $statementId = Pest\Laravel\actingAs($approver)->postJson("/api/insurance/agents/{$this->world['agent_id']}/commission-statements", ['up_to' => '2026-09-30', 'on' => '2026-10-01'], $headers)
-        ->assertCreated()->assertJsonPath('data.net_minor', 380_000)->json('data.id');
+        ->assertCreated()->assertJsonPath('data.net_minor', 330_435)->json('data.id');
     Pest\Laravel\actingAs($approver)->postJson("/api/insurance/commission-statements/{$statementId}/pay", ['paid_on' => '2026-10-05'], $headers)->assertForbidden();
     Pest\Laravel\actingAs($payer)->postJson("/api/insurance/commission-statements/{$statementId}/pay", ['paid_on' => '2026-10-05'], $headers)->assertOk()->assertJsonPath('data.status', 'paid');
 });

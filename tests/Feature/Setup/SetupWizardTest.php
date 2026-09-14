@@ -189,6 +189,7 @@ it('creates the first product with its term and VAT through the product catalogu
         $version = DB::table('product_versions')->where('product_id', $product->id)->sole(['term_months', 'tax_profile', 'effective_from', 'earning_method']);
         expect($product->code)->toBe('MOTOR')->and($product->insurance_class)->toBe('non_life')
             ->and((int) $version->term_months)->toBe(12)
+            ->and($version->earning_method)->toBe('daily_365') // gap audit GA-44
             ->and(json_decode((string) $version->tax_profile, true))->toMatchArray(['tax_type' => 'VAT', 'jurisdiction' => 'BD', 'inclusive' => true])
             ->and(DB::table('tax_rates')->where('tax_type', 'VAT')->where('withholding', false)->value('rate_bp'))->toBe(1500)
             ->and(DB::table('audit_events')->where('action', 'product.created')->count())->toBe(1);

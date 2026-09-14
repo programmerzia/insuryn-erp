@@ -25,6 +25,9 @@ return [
     'commission' => [
         // ASSUMPTION: A-7 — whose commission plan applies when both the product version and the agent name one is not specified.
         'plan_precedence' => ['product_version', 'agent'],
+        // ASSUMPTION: A-181 (gap audit GA-42, D-70) — commission on premium received is a percentage of the NET premium in each allocation, without
+        // VAT and stamp duty (Bangladesh practice; IDRA commission caps are on net premium): `net_premium`. `gross` pays on the cash allocated.
+        'premium_received_base' => env('ERP_COMMISSION_PREMIUM_RECEIVED_BASE', 'net_premium'),
     ],
     'products' => [
         // ASSUMPTION: A-17 — products carry an insurance class (life | non_life) that producer licences must cover; a product whose line of
@@ -112,6 +115,9 @@ return [
         // Session S1 setup wizard: the jurisdiction a first product's premium tax (VAT) is recorded under, and the template offered first.
         'tax_jurisdiction' => env('ERP_TAX_JURISDICTION', 'BD'),
         'chart_of_accounts_template' => 'non-life-insurance',
+        // ASSUMPTION: A-182 (gap audit GA-44, D-71) — the first product's earning method: 1/365 per day on cover (`daily_365`), the common method in
+        // Bangladesh non-life; `monthly` (each calendar month's share) stays available here and per product version.
+        'earning_method' => env('ERP_SETUP_EARNING_METHOD', 'daily_365'),
     ],
     'ui' => [
         // UX U1 date picker. ASSUMPTION: A-165 — the calendar week starts on Sunday: Bangladesh's working week runs Sunday to Thursday and CLDR
