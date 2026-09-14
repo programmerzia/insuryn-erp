@@ -66,21 +66,19 @@ function save(): void {
         preserveScroll: true, onStart: () => (saving.value = true), onFinish: () => (saving.value = false), onSuccess: () => (dirty.value = false),
     });
 }
-function branch(event: Event): void {
-    router.get(`/budgets/${props.budget.id}`, { branch: (event.target as HTMLSelectElement).value });
+function branch(id: string | undefined): void {
+    if (id && id !== props.branchId) router.get(`/budgets/${props.budget.id}`, { branch: id });
 }
 const act = (action: string) => router.post(`/budgets/${props.budget.id}/${action}`, {}, { preserveScroll: true });
 </script>
 
 <template>
-    <AppLayout :title="`${budget.name} ${budget.year}`" fill>
+    <AppLayout help="budgets" :title="`${budget.name} ${budget.year}`" fill>
         <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Budgets', href: '/budgets' }]" /></div>
         <header class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2">
             <h1 class="text-section font-semibold">{{ budget.name }} · {{ budget.year }} · version {{ budget.version }}</h1>
             <StatusBadge :status="budget.status" />
-            <select class="h-8 rounded-control border border-line-control bg-surface px-2 text-body text-ink" aria-label="Branch" :value="branchId" @change="branch">
-                <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.label }}</option>
-            </select>
+            <SelectInput :model-value="branchId" :options="branches.map((b) => ({ value: b.id, label: b.label }))" class="w-auto" aria-label="Branch" @update:model-value="branch" />
             <span class="text-ui text-ink-2">Total {{ formatMoney(budget.total) }} BDT<template v-for="t in budget.branch_totals" :key="t.branch"> · {{ t.branch }} {{ formatMoney(t.total) }}</template></span>
             <div class="ml-auto flex flex-wrap items-center gap-2">
                 <template v-if="can.edit">
@@ -90,11 +88,11 @@ const act = (action: string) => router.post(`/budgets/${props.budget.id}/${actio
                 </template>
                 <button v-if="can.submit" type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover disabled:opacity-50" :disabled="dirty" @click="act('submit')">Send for approval</button>
                 <template v-if="can.decide">
-                    <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="returning = true">Return</button>
+                    <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="returning = true">Return to draft</button>
                     <button type="button" class="h-8 rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover" @click="act('approve')">Approve</button>
                 </template>
                 <button v-if="can.revise" type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="act('revise')">New version</button>
-                <Link href="/budgets/variance" class="text-ui text-accent-text hover:underline">Variance</Link>
+                <Link href="/budgets/variance" class="text-ui text-accent-text hover:underline">Budget variance</Link>
             </div>
         </header>
         <p v-if="budget.status === 'draft' && budget.note" class="border-b border-line bg-surface-2 px-4 py-2 text-ui">Returned: {{ budget.note }}</p>
@@ -153,8 +151,8 @@ const act = (action: string) => router.post(`/budgets/${props.budget.id}/${actio
                 <Field id="percent" label="Change (%)" hint="8 for 8% more, -2.5 for 2.5% less." :error="copy.errors.percent"><TextInput v-model="copy.percent" inputmode="decimal" /></Field>
             </FormLayout>
         </Drawer>
-        <Drawer v-model:open="returning" title="Return the budget">
-            <FormLayout submit-label="Return to the preparer" :dirty="back.isDirty" :processing="back.processing" :error="(back.errors as Record<string, string>).form" @submit="back.post(`/budgets/${budget.id}/return`, { onSuccess: () => (returning = false) })" @cancel="returning = false">
+        <Drawer v-model:open="returning" :title="`Return ${budget.name} ${budget.year} to draft`">
+            <FormLayout submit-label="Return to draft" :dirty="back.isDirty" :processing="back.processing" :error="(back.errors as Record<string, string>).form" @submit="back.post(`/budgets/${budget.id}/return`, { onSuccess: () => (returning = false) })" @cancel="returning = false">
                 <Field id="reason" label="What to change" :error="back.errors.reason"><TextInput v-model="back.reason" /></Field>
             </FormLayout>
         </Drawer>

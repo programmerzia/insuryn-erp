@@ -2,6 +2,7 @@
 import { Link, router } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
+import SelectInput from '@/components/forms/SelectInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { drillFrom } from '@/lib/drill';
 import { formatMoney } from '@/lib/format';
@@ -30,21 +31,20 @@ const groups = computed(() => {
 });
 const tone = (favourable: boolean, variance: string) => (variance === '0.00' ? 'text-ink-2' : favourable ? 'text-ok' : 'text-danger');
 const exportQuery = computed(() => new URLSearchParams({ year: props.filters.year, period: props.filters.period, ...(props.filters.branch ? { branch: props.filters.branch } : {}) }).toString());
-function apply(): void {
+function set(key: 'year' | 'period' | 'branch', value: string | undefined): void {
+    filters[key] = value ?? '';
     router.get('/budgets/variance', { year: filters.year, period: filters.period, ...(filters.branch ? { branch: filters.branch } : {}) }, { preserveState: true });
 }
 </script>
 
 <template>
-    <AppLayout help="reports" title="Budget variance" fill>
-        <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Reports', href: '/reports' }]" /></div>
+    <AppLayout help="budgets" title="Budget variance" fill>
+        <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Budgets', href: '/budgets' }]" /></div>
         <header class="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 text-ui">
             <h1 class="mr-2 text-section font-semibold">Budget variance</h1>
-            <select v-model="filters.year" class="h-8 rounded-control border border-line-control bg-surface px-2" aria-label="Fiscal year" @change="apply"><option v-for="y in years" :key="y.value" :value="y.value">{{ y.label }}</option></select>
-            <select v-model="filters.period" class="h-8 rounded-control border border-line-control bg-surface px-2" aria-label="Month" @change="apply"><option v-for="p in periods" :key="p.value" :value="p.value">{{ p.label }}</option></select>
-            <select v-model="filters.branch" class="h-8 rounded-control border border-line-control bg-surface px-2" aria-label="Branch" @change="apply">
-                <option value="">All branches</option><option v-for="b in branches" :key="b.value" :value="b.value">{{ b.label }}</option>
-            </select>
+            <SelectInput :model-value="filters.year" :options="years" class="w-auto" aria-label="Fiscal year" @update:model-value="set('year', $event)" />
+            <SelectInput :model-value="filters.period" :options="periods" class="w-auto" aria-label="Month" @update:model-value="set('period', $event)" />
+            <SelectInput :model-value="filters.branch" :options="branches" placeholder="All branches" class="w-auto" aria-label="Branch" @update:model-value="set('branch', $event)" />
             <span v-if="budget" class="text-ink-2">against <Link :href="`/budgets/${budget.id}`" class="text-accent-text hover:underline">{{ budget.name }} v{{ budget.version }}</Link></span>
             <span v-else class="text-danger">No approved budget for this year: actuals only.</span>
             <div class="ml-auto flex items-center gap-1">
