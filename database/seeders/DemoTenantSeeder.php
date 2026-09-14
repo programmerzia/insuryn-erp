@@ -85,6 +85,11 @@ final class DemoTenantSeeder extends Seeder
                 '2610' => ['Due to Reinsurers', 'liability', 'credit', 'ri_payable', false, null],
                 '4310' => ['Reinsurance Commission Income', 'income', 'credit', 'ri_commission_income', false, null],
                 '5410' => ['Reinsurance Premium Ceded', 'expense', 'debit', 'ri_premium_ceded', false, null],
+                // Design addendum v2 §B.7 fixed assets: the default accounts an asset class starts with.
+                '1600' => ['Fixed Assets at Cost', 'asset', 'debit', 'fixed_asset_cost', false, null],
+                '1690' => ['Accumulated Depreciation', 'asset', 'credit', 'accumulated_depreciation', false, null],
+                '5710' => ['Depreciation', 'expense', 'debit', 'depreciation_expense', false, null],
+                '4800' => ['Gain/Loss on Disposal of Assets', 'income', 'credit', 'asset_disposal_gain_loss', false, null],
             ];
             $accounts = [];
             foreach ($coa as $code => [$name, $type, $side, $role, $control, $sub]) {

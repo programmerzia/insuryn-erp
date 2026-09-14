@@ -21,7 +21,7 @@ return [
         'transient_retry_attempts' => 5,
         // Roles an event may point at a specific account through payload.account_overrides (design §4.2: a receipt's bank account).
         // D-100 (addendum v2 §B.2.1 PD-4): ap_expense lines take the account of each supplier bill line.
-        'overridable_roles' => ['bank_main', 'ap_expense'],
+        'overridable_roles' => ['bank_main', 'ap_expense', 'fixed_asset_cost', 'accumulated_depreciation', 'depreciation_expense', 'asset_disposal_gain_loss'], // + design addendum v2 PD-4: fixed assets post to their class's accounts
         // ASSUMPTION A-173 (gap fix GA-08): a queued event not posted after this many minutes is listed as stuck on Accounting events (the worker was down).
         'stale_after_minutes' => (int) env('ERP_POSTING_STALE_AFTER_MINUTES', 15),
     ],
@@ -335,5 +335,27 @@ return [
         ],
         // ASSUMPTION A-245 (CQ-I1 unanswered): a generic BEFTN-style CSV until the bank names its upload format.
         'bank_file_format' => 'beftn_csv',
+    ],
+
+    // Design addendum v2 §B.6–B.8 finance modules: fixed assets, budgets, petty cash.
+    'reports' => [
+        // Registers served on their own screens, listed on the reports index with their exports.
+        'screens' => [
+            ['title' => 'Fixed asset register', 'description' => 'Cost, accumulated depreciation and net book value per asset at a date, by class and branch, reconciled to the ledger.',
+                'href' => '/fixed-assets/register', 'export' => '/fixed-assets/register/export'],
+        ],
+    ],
+    'fixed_assets' => [
+        /*
+         * ASSUMPTION: A-271 — default asset classes offered to a new register (Bangladesh practice, PLACEHOLDER rates: verify with the insurer's finance team and
+         * auditors; the Third Schedule of the Income Tax Act gives tax rates, which differ from book depreciation). code => [name, method, life months | yearly rate %, residual %, threshold BDT].
+         */
+        'default_classes' => [
+            'FURN' => ['Furniture and fixtures', 'straight_line', 120, 0, 10000],
+            'IT' => ['Computers and IT equipment', 'straight_line', 36, 0, 10000],
+            'VEH' => ['Motor vehicles', 'reducing_balance', 20, 0, 10000],
+            'OFFEQ' => ['Office equipment', 'straight_line', 60, 0, 10000],
+            'LHI' => ['Leasehold improvements', 'straight_line', 60, 0, 10000],
+        ],
     ],
 ];

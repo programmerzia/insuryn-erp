@@ -47,6 +47,8 @@ final class PermissionsSeeder extends Seeder
         'ri.manage_treaties','ri.place_facultative','ri.view',
         // Slices 2.3/2.4 accounts payable (addendum v2 B.4; codes as named for the demo build, D-102)
         'ap.manage_suppliers','ap.enter_bills','ap.approve_bills','ap.prepare_payments','ap.approve_payments','ap.release_payments',
+        // Design addendum v2 §B.7 fixed assets (A-276)
+        'fa.manage','fa.post_depreciation',
     ];
 
     /**

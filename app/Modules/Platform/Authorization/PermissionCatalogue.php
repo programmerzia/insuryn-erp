@@ -18,6 +18,7 @@ final class PermissionCatalogue
         'numbering' => 'Numbering', 'reports' => 'Reports', 'regulatory' => 'Regulatory returns', 'provisions' => 'Technical provisions', 'audit' => 'Audit', 'platform' => 'Administration',
         'numbering' => 'Numbering', 'ri' => 'Reinsurance', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
         'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'ap' => 'Payables', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
+        'product' => 'Products', 'rating' => 'Tariffs', 'document' => 'Documents', 'bank' => 'Bank', 'fa' => 'Fixed assets', 'accounting' => 'Accounting', 'periods' => 'Periods and close',
         'numbering' => 'Numbering', 'reports' => 'Reports', 'audit' => 'Audit', 'platform' => 'Administration',
     ];
 
@@ -92,6 +93,9 @@ final class PermissionCatalogue
         'ri.manage_treaties' => ['Set up reinsurance treaties', 'Add reinsurers, set up treaties and their shares, and prepare reinsurer statements.'],
         'ri.place_facultative' => ['Place facultative reinsurance', 'Place a share of a policy with a reinsurer on its own slip; the placement posts the ceded premium.'],
         'ri.view' => ['See reinsurance', 'See cessions, the reinsurance of each policy and reinsurer statements.'],
+        // Design addendum v2 §B.7 fixed assets (A-276)
+        'fa.manage' => ['Maintain the fixed asset register', 'Set asset classes, capitalise assets, move them between branches and dispose of them.'],
+        'fa.post_depreciation' => ['Post depreciation', 'Post the monthly depreciation of the fixed asset register.'],
     ];
 
     public static function groupLabel(string $code): string

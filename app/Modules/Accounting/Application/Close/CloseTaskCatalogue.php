@@ -16,7 +16,7 @@ use App\Modules\Accounting\Application\Contracts\CloseTaskContributor;
 final class CloseTaskCatalogue
 {
     /** Gap fix GA-09: tasks that post journals (premium earning's events, the year-end closing journal), so the checklist previews them. */
-    public const POSTING_TASKS = ['premium_earning', 'ri_unearned_premium', 'year_end_close'];
+    public const POSTING_TASKS = ['premium_earning', 'ri_unearned_premium', 'year_end_close', 'depreciation'];
 
     /** Market gap G5: tasks listed only where a ConditionalCloseTask says they apply. */
     public const CONDITIONAL_TASKS = ['technical_provisions'];
@@ -26,7 +26,7 @@ final class CloseTaskCatalogue
 
     /**
      * The tasks of a close run. Gap fix GA-15: the year-end close task only in the close of a fiscal year's last month ($yearEnd); the other
-     * months' runs do not list it.
+     * months' runs do not list it. D-115: with an entity, the conditional tasks that apply to it (depreciation) come before the trial balance.
      *
      * @param list<string> $conditional codes of conditional tasks that apply to the run (ConditionalCloseTask)
      * @return list<CloseTaskDefinition>

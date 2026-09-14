@@ -203,6 +203,21 @@ function populateEveryTenantTable(array $ctx): void
             'prepared_by' => $world['admin'], 'prepared_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         DB::table('claims_paid_history')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $ctx['tenant_id'], 'entity_id' => $ctx['entity_id'], 'class' => 'motor',
             'accident_quarter_start' => '2026-01-01', 'paid_quarter_start' => '2026-04-01', 'paid_minor' => 1]);
+        // Design addendum v2 §B.7 fixed assets: a class, an asset, a depreciation run and row, a movement and a disposal.
+        $t = $ctx['tenant_id'];
+        DB::table('asset_classes')->insert(['id' => $classId = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'code' => 'IT', 'name' => 'IT', 'method' => 'straight_line',
+            'useful_life_months' => 36, 'cost_account_id' => $ctx['accounts']['fixed_asset_cost'], 'accumulated_account_id' => $ctx['accounts']['accumulated_depreciation'], 'expense_account_id' => $ctx['accounts']['depreciation_expense']]);
+        DB::table('fixed_assets')->insert(['id' => $assetId = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'branch_id' => $ctx['branch_id'], 'class_id' => $classId,
+            'number' => 'FA-ISOLATION-'.$t, 'description' => 'Laptop', 'acquired_on' => '2026-09-01', 'currency' => 'BDT', 'cost_minor' => 100, 'method' => 'straight_line', 'useful_life_months' => 36,
+            'source_type' => 'manual', 'paid_via' => 'payable', 'status' => 'disposed', 'created_by' => $world['admin']]);
+        DB::table('asset_depreciation_runs')->insert(['id' => $runId = (string) Str::uuid7(), 'tenant_id' => $t, 'entity_id' => $ctx['entity_id'], 'period_id' => DB::table('fiscal_periods')->value('id'),
+            'period_ends' => '2026-09-30', 'assets_count' => 1, 'total_minor' => 3, 'posted_by' => $world['admin'], 'posted_at' => now()]);
+        DB::table('asset_depreciation')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'asset_id' => $assetId, 'run_id' => $runId, 'period_id' => DB::table('fiscal_periods')->value('id'),
+            'period_ends' => '2026-09-30', 'branch_id' => $ctx['branch_id'], 'amount_minor' => 3, 'accumulated_minor' => 3, 'nbv_minor' => 97]);
+        DB::table('asset_movements')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'asset_id' => $assetId, 'moved_on' => '2026-09-15', 'from_branch_id' => $ctx['branch_id'],
+            'to_branch_id' => (string) Str::uuid7(), 'reason' => 'Isolation', 'cost_minor' => 100, 'accumulated_minor' => 0, 'moved_by' => $world['admin']]);
+        DB::table('asset_disposals')->insert(['id' => (string) Str::uuid7(), 'tenant_id' => $t, 'asset_id' => $assetId, 'number' => 'ADS-ISOLATION-'.$t, 'disposal_date' => '2026-10-01', 'kind' => 'write_off',
+            'proceeds_minor' => 0, 'cost_minor' => 100, 'accumulated_minor' => 3, 'nbv_minor' => 97, 'gain_loss_minor' => -97, 'reason' => 'Isolation', 'disposed_by' => $world['admin']]);
         app(App\Modules\Insurance\Underwriting\Application\UnderwritingLimits::class)->set((string) DB::table('roles')->where('code', 'like', 'test-%')->value('code'), 'motor', 1, CarbonImmutable::today()->addYear(), $world['admin']);
         // Reinsurance MVP (G4): every reinsurance table.
         $t = $ctx['tenant_id'];

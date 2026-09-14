@@ -331,3 +331,5 @@ require __DIR__.'/people.php';
 require __DIR__.'/reinsurance.php'; // reinsurance MVP (G4)
 // Slices 2.3/2.4 accounts payable.
 require __DIR__.'/payables.php';
+// Design addendum v2 §B.6–B.8: fixed assets, budgets and petty cash.
+require __DIR__.'/finance.php';

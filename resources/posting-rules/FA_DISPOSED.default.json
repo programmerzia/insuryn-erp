@@ -1,0 +1,21 @@
+{
+  "code": "FA_DISPOSED.default",
+  "version": 1,
+  "event_type": "FA_DISPOSED",
+  "_comment": "Design addendum v2 §B.7 ASSET_DISPOSED: accumulated depreciation and cost leave the books, sale proceeds go to the bank; payload.loss = NBV − proceeds, negative for a gain (the engine then credits it).",
+  "applies_to": { "product_codes": ["*"], "lob": ["*"], "channels": ["*"] },
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "books": ["LOCAL"],
+  "dimensions": { "required": ["branch","asset"], "inherit_from_event": true },
+  "lines": [
+    { "role": "accumulated_depreciation", "side": "debit",  "amount": "payload.accumulated" },
+    { "role": "bank_main",                "side": "debit",  "amount": "payload.proceeds" },
+    { "role": "asset_disposal_gain_loss", "side": "debit",  "amount": "payload.loss" },
+    { "role": "fixed_asset_cost",         "side": "credit", "amount": "payload.cost" }
+  ],
+  "validation": ["cost > 0", "period.open"],
+  "reversal": { "strategy": "mirror", "allowed_until": "period_locked" },
+  "idempotency": { "key": "FA_DISPOSED:{asset_disposal_id}" },
+  "rounding": { "mode": "half_even", "residual_role": "rounding_difference" }
+}

@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2, Truck, FileInput, Send } from 'lucide-vue-next';
+import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2, Truck, FileInput, Send, Armchair, TrendingDown } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). GA-37: each label is the title of the page it opens, in the words of docs/glossary.md, and no two items share an icon. Order is frequency of use, not the org chart. `any` mirrors the server's area permissions (a page opens
@@ -14,6 +14,8 @@ export interface NavItem {
     any: string[];
     badge?: string;
     secondary?: boolean;
+    /** Design addendum v2 §B.6–B.8: the heading of a named sidebar group the item sits in. */
+    group?: string;
     /** Inertia page components (the list and the record it opens), so their code can be fetched ahead of the first visit. */
     page?: string;
     detail?: string;
@@ -60,6 +62,9 @@ export const navigation: NavItem[] = [
     { id: 'regulatory', page: 'regulatory/Dashboard', label: 'Regulatory dashboard', href: '/regulatory', icon: ShieldCheck, any: ['reports.regulatory', 'regulatory.file', 'provisions.run', 'provisions.approve'] },
     { id: 'regulatory-returns', page: 'regulatory/Returns', label: 'Regulatory returns', href: '/regulatory/returns', icon: FileSpreadsheet, any: ['reports.regulatory', 'regulatory.file', 'provisions.run', 'provisions.approve'], secondary: true },
     { id: 'technical-provisions', page: 'regulatory/Provisions', label: 'Technical provisions', href: '/regulatory/provisions', icon: Sigma, any: ['reports.regulatory', 'provisions.run', 'provisions.approve'], secondary: true },
+    // Design addendum v2 §B.7: fixed assets (register, depreciation, classes) in the Assets & budgets group.
+    { id: 'fixed-assets', detail: 'fixedAssets/Show', page: 'fixedAssets/Index', label: 'Fixed assets', href: '/fixed-assets', icon: Armchair, any: ['fa.manage', 'fa.post_depreciation', reader], group: 'Assets & budgets' },
+    { id: 'depreciation', page: 'fixedAssets/Depreciation', label: 'Monthly depreciation', href: '/fixed-assets/depreciation', icon: TrendingDown, any: ['fa.manage', 'fa.post_depreciation', reader], group: 'Assets & budgets' },
     { id: 'parties', label: 'Parties', href: '/parties', icon: Users, any: ['party.manage', 'agent.manage', 'policy.create', reader], secondary: true },
     { id: 'producers', detail: 'distribution/producers/Show', page: 'distribution/producers/Index', label: 'Producers', href: '/distribution/producers', icon: UsersRound, any: ['agent.manage', 'commission.approve', 'commission.pay', 'commission.manage_plans', reader, 'reports.regulatory'], secondary: true },
     { id: 'hierarchy', page: 'distribution/hierarchy/Index', label: 'Hierarchy', href: '/distribution/hierarchy', icon: Network, any: ['agent.manage', 'commission.manage_plans', 'commission.approve', reader], secondary: true },

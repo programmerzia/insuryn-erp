@@ -58,6 +58,14 @@ final class ReasonMessages
         'MIN_PREMIUM_INVALID' => 'Enter a minimum premium of zero or more.',
         'RECOGNISE_AT_INVALID' => 'Choose when the premium is recognised: at the policy or at the cover note.',
         'JOB_FAILED' => 'The job did not finish; the error is in the application log. Try again, or ask your administrator if it fails again.',
+        // Design addendum v2 §B.7 fixed assets.
+        'ASSET_CLASS_INVALID' => 'Check the asset class: an active class, a useful life or yearly rate for its method, and active postable accounts of the right kind.',
+        'ASSET_BELOW_THRESHOLD' => 'This cost is below the class\'s capitalisation threshold, so it is an expense, not an asset. Post it as an expense instead.',
+        'ASSET_BANK_ACCOUNT_REQUIRED' => 'Choose the bank account the money was paid from or went into.',
+        'ASSET_PERIOD_NOT_OPEN' => 'That date is in a month that is not open for posting. Choose a date in an open month.',
+        'ASSET_NOT_IN_SERVICE' => 'This asset has been disposed of, so nothing more can be done with it. Refresh the page.',
+        'ASSET_SAME_BRANCH' => 'The asset is already at that branch. Choose another branch.',
+        'ASSET_DEPRECIATED_AFTER_DISPOSAL' => 'Depreciation is already posted for the month of this disposal or later. Date the disposal after the last depreciated month.',
         'EVENT_NOT_STUCK' => 'This accounting event has already been posted or is waiting its turn; only failed or long-queued events can be sent again. Refresh the list.',
         'COVERAGE_INVALID' => 'Each coverage needs a code (lower-case letters, digits and underscores), an English and a Bangla name, and a basis: sum insured, flat, per unit or a percentage of a base.',
         // Gap fix GA-14: cheques in clearing.

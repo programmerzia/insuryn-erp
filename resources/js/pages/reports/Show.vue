@@ -28,6 +28,8 @@ const props = defineProps<{
     summaries?: Summary[];
     /** Flow fix X11: the other financial statements for the same period. */
     related?: { label: string; href: string }[];
+    /** Design addendum v2 §B.7: a register served by its own screen filters at its own URL. */
+    baseUrl?: string;
 }>();
 
 // A report opened without a start date covers everything before `to`; show that instead of a default start that was not applied.
@@ -50,7 +52,7 @@ function apply(): void {
     const query: Record<string, string> = Object.fromEntries(new URLSearchParams(window.location.search).entries());
     if (props.filter === 'as_of') query.as_of = filters.as_of;
     else Object.assign(query, { from: filters.from, to: filters.to }, props.filter === 'range_by' ? { by: filters.by } : {});
-    router.get(`/reports/${props.report}`, query, { preserveState: true });
+    router.get(props.baseUrl ?? `/reports/${props.report}`, query, { preserveState: true });
 }
 
 function open(row: Row): void {

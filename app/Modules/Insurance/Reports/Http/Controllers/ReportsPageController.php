@@ -76,6 +76,12 @@ final class ReportsPageController
                 'exports' => ['csv' => "/reports/{$key}/export?format=csv", 'xlsx' => "/reports/{$key}/export?format=xlsx"]];
         }
 
+        // Design addendum v2 §B.7–B.8: registers other contexts serve on their own screens (fixed asset register, budget variance, petty cash book), from config.
+        foreach ((array) config('erp.reports.screens', []) as $screen) {
+            $screens[] = ['key' => null, 'title' => (string) $screen['title'], 'description' => (string) $screen['description'], 'filter' => null, 'href' => (string) $screen['href'],
+                'exports' => ['csv' => "{$screen['export']}?format=csv", 'xlsx' => "{$screen['export']}?format=xlsx"]];
+        }
+
         return Inertia::render('reports/Index', ['reports' => array_merge($exports, $screens)]);
     }
 

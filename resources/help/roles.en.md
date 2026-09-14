@@ -50,6 +50,10 @@ account role (do not translate it); the others say what a debit or a credit to t
 | ri_unearned_premium | The reinsurers' share of premium for cover not yet given | That share earned as time on cover passes |
 | ri_outstanding_claims | A reinsurer's share of an open claim reserve | That share reduced: the reserve fell, or a payment became recoverable |
 | ri_claims_recoverable | A reinsurer owes us its share of a claim we paid | A reinsurer paid its share, or the share was reduced |
+| fixed_asset_cost | An asset the company bought, at its cost | The asset left the books: sold, scrapped or moved |
+| accumulated_depreciation | Depreciation taken off an asset that left the books | Part of the asset's cost used up so far |
+| depreciation_expense | This month's cost of using the company's assets | Depreciation cost reduced |
+| asset_disposal_gain_loss | Loss on selling or scrapping an asset | Gain on selling an asset for more than its book value |
 
 ## When one event changes what a line means
 

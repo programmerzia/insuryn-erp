@@ -1,0 +1,1 @@
+{"event_type": "FA_DISPOSED", "payload": {"cost": 12000000, "accumulated": 4666662, "proceeds": 7000000, "loss": 333338}, "dimensions": {"branch": "B1", "asset": "FA1"}, "expected": [["accumulated_depreciation", "debit", 4666662], ["bank_main", "debit", 7000000], ["asset_disposal_gain_loss", "debit", 333338], ["fixed_asset_cost", "credit", 12000000]]}

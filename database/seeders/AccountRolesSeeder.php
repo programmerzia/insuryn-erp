@@ -58,6 +58,11 @@ final class AccountRolesSeeder extends Seeder
         'ri_unearned_premium' => 'Reinsurers\' share of unearned premium (asset)',
         'ri_outstanding_claims' => 'Reinsurers\' share of outstanding claims (asset)',
         'ri_claims_recoverable' => 'Claims recoverable from reinsurers',
+        // Design addendum v2 §B.7 fixed assets (migration 2026_10_05_000271)
+        'fixed_asset_cost' => 'Fixed assets at cost (per asset class)',
+        'accumulated_depreciation' => 'Accumulated depreciation on fixed assets (per asset class)',
+        'depreciation_expense' => 'Depreciation charged to profit and loss (per asset class)',
+        'asset_disposal_gain_loss' => 'Gain or loss on disposal of fixed assets',
     ];
 
     public function run(): void

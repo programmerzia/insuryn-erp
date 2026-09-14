@@ -1,0 +1,1 @@
+{"event_type": "DEPRECIATION_POSTED", "payload": {"amount": 333333}, "dimensions": {"branch": "B1", "asset": "FA1"}, "expected": [["depreciation_expense", "debit", 333333], ["accumulated_depreciation", "credit", 333333]]}

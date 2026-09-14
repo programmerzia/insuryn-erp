@@ -43,6 +43,8 @@ const TASK_NAMES: Record<string, string> = {
     ri_unearned_premium: "Reinsurers' share of unearned premium",
     ri_balances_reconciliation: 'Reinsurer balances reconciliation',
     ri_claims_reconciliation: 'Reinsurance claims reconciliation',
+    depreciation: 'Depreciation',
+    fixed_asset_reconciliation: 'Fixed asset register reconciliation',
 };
 const taskName = (code: string) => TASK_NAMES[code] ?? words(code);
 const month = computed(() => (props.run.starts ? formatMonth(props.run.starts, 'long') : props.run.period));
@@ -70,6 +72,8 @@ const queueFor = (code: string): { label: string; href: string } | null =>
         year_end_close: { label: 'Profit and loss', href: `/reports/profit-and-loss?from=${props.run.starts}&to=${end.value}` },
         accruals: { label: 'New manual journal', href: '/accounting/journals/create' },
         technical_provisions: { label: 'Technical provisions', href: '/regulatory/provisions' }, // market gap G5
+        depreciation: { label: 'Monthly depreciation', href: '/fixed-assets/depreciation' },
+        fixed_asset_reconciliation: { label: 'Fixed asset register', href: `/fixed-assets/register?as_of=${end.value}` },
         trial_balance: { label: 'Trial balance', href: `/accounting/trial-balance?as_of=${end.value}` },
         financial_statements: { label: 'Balance sheet', href: `/reports/balance-sheet?as_of=${end.value}` },
     })[code] ?? null;

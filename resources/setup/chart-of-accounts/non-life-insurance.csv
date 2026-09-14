@@ -12,6 +12,8 @@ code,name,type,normal_side,is_control,control_subledger,role
 1420,Reinsurers' Share of Outstanding Claims,asset,debit,false,,ri_outstanding_claims
 1430,Reinsurance Claims Recoverable,asset,debit,false,,ri_claims_recoverable
 1310,Input VAT Receivable,asset,debit,false,,input_vat_receivable
+1600,Fixed Assets at Cost,asset,debit,false,,fixed_asset_cost
+1690,Accumulated Depreciation,asset,credit,false,,accumulated_depreciation
 2010,Suspense - Unallocated Receipts,liability,credit,true,suspense,suspense_receipts
 2100,Unearned Premium Reserve,liability,credit,false,,unearned_premium
 2150,Premium Tax Payable (VAT),liability,credit,false,,premium_tax_payable
@@ -33,6 +35,7 @@ code,name,type,normal_side,is_control,control_subledger,role
 4100,Premium Income,income,credit,false,,premium_income
 4200,Claims Recovery Income,income,credit,false,,claims_recovery_income
 4310,Reinsurance Commission Income,income,credit,false,,ri_commission_income
+4800,Gain/Loss on Disposal of Assets,income,credit,false,,asset_disposal_gain_loss
 4900,FX Gain/Loss,income,credit,false,,fx_gain_loss
 5100,Claims Incurred,expense,debit,false,,claims_expense
 5200,Commission Expense,expense,debit,false,,commission_expense
@@ -44,4 +47,5 @@ code,name,type,normal_side,is_control,control_subledger,role
 5500,Printing and Stationery,expense,debit,false,,
 5600,Bank Charges,expense,debit,false,,bank_charges
 5700,General and Administrative Expenses,expense,debit,false,,ap_expense
+5710,Depreciation,expense,debit,false,,depreciation_expense
 5900,Rounding Differences,expense,debit,false,,rounding_difference

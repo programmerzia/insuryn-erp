@@ -37,7 +37,8 @@ final class ClosePageController
         'stamp_duty_reconciliation' => 'Stamp duty payable reconciliation', 'year_end_close' => 'Year-end close to retained earnings',
         'technical_provisions' => 'Technical provisions', // market gap G5
         // Reinsurance MVP (G4).
-        'ri_unearned_premium' => 'Reinsurers\' share of unearned premium', 'ri_balances_reconciliation' => 'Reinsurer balances reconciliation', 'ri_claims_reconciliation' => 'Reinsurance claims reconciliation', 'ap_reconciliation' => 'Accounts payable reconciliation'];
+        'ri_unearned_premium' => 'Reinsurers\' share of unearned premium', 'ri_balances_reconciliation' => 'Reinsurer balances reconciliation', 'ri_claims_reconciliation' => 'Reinsurance claims reconciliation', 'ap_reconciliation' => 'Accounts payable reconciliation',
+        'depreciation' => 'Depreciation', 'fixed_asset_reconciliation' => 'Fixed asset register reconciliation'];
 
     public function __construct(
         private readonly PermissionChecker $permissions,

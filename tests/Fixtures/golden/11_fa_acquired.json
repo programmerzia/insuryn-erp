@@ -1,0 +1,1 @@
+{"event_type": "FA_ACQUIRED", "payload": {"cost": 12000000, "paid_by_bank": 0, "on_credit": 12000000}, "dimensions": {"branch": "B1", "asset": "FA1"}, "expected": [["fixed_asset_cost", "debit", 12000000], ["accounts_payable", "credit", 12000000]]}
