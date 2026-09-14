@@ -16,15 +16,19 @@ use App\Modules\Insurance\Reports\Application\PremiumRegisterQuery;
 use App\Modules\Insurance\Reports\Application\ReceivableAgeingQuery;
 use App\Modules\Insurance\Reports\Application\UnearnedPremiumQuery;
 use App\Modules\Platform\Authorization\PermissionChecker;
+use App\Modules\Platform\Exports\XlsxWriter;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Report screens (reports.financial). Every report renders through one table page: columns, rows (each optionally linking to account activity or
  * its journal, and cells such as a policy number to their record) and totals, so figures always drill down to the journals behind them. Summary
  * tables under the rows give subtotals (by class, branch or product) and reconciliations to a control account.
+ * Flow fix X12: each report's table downloads as CSV or XLSX (GET /reports/{report}/export) with the same filters and defaults, linked from the index.
  */
 final class ReportsPageController
 {
@@ -48,7 +52,9 @@ final class ReportsPageController
     {
         $this->authorize($request);
 
-        return Inertia::render('reports/Index', ['reports' => array_merge(self::CATALOGUE, [
+        $exports = array_map(fn (array $r): array => $r + ['exports' => ['csv' => "/reports/{$r['key']}/export?format=csv", 'xlsx' => "/reports/{$r['key']}/export?format=xlsx"]], self::CATALOGUE);
+
+        return Inertia::render('reports/Index', ['reports' => array_merge($exports, [
             ['key' => null, 'title' => 'Suspense ageing', 'description' => 'Unidentified receipts by age.', 'filter' => null, 'href' => '/suspense'],
             ['key' => null, 'title' => 'Agent cash', 'description' => 'Collections, deposits and the ledger per agent.', 'filter' => null, 'href' => '/agent-cash'],
             ['key' => null, 'title' => 'Commission statements', 'description' => 'Per agent, with payouts.', 'filter' => null, 'href' => '/commission'],
@@ -59,6 +65,62 @@ final class ReportsPageController
     public function show(Request $request, string $report): Response
     {
         $this->authorize($request);
+        [$page, $filters] = $this->page($request, $report);
+
+        return Inertia::render('reports/Show', $page + ['report' => $report, 'filters' => $filters]);
+    }
+
+    /** Flow fix X12: the report's table as a CSV or XLSX download — the columns and rows the page shows, on the same filters (defaults: this month, as of today). */
+    public function export(Request $request, string $report): StreamedResponse
+    {
+        $this->authorize($request);
+        /** @var array{format: string} $data */
+        $data = $request->validate(['format' => ['required', Rule::in(['csv', 'xlsx'])]]);
+        abort_unless(in_array($report, array_column(self::CATALOGUE, 'key'), true), 404);
+        [$page, $filters] = $this->page($request, $report);
+        /** @var list<array{key: string, label: string, align: string}> $columns */
+        $columns = $page['columns'];
+        /** @var list<array{cells: array<string, mixed>}> $rows */
+        $rows = $page['rows'];
+        $header = array_column($columns, 'label');
+        $table = array_map(fn (array $row): array => array_map(fn (array $c): string => is_scalar($row['cells'][$c['key']] ?? null) ? (string) $row['cells'][$c['key']] : '', $columns), $rows);
+        $period = in_array($page['filter'], ['range', 'range_by'], true) ? "{$filters['from']}-to-{$filters['to']}" : $filters['as_of'];
+        [$body, $type] = $data['format'] === 'xlsx'
+            ? [XlsxWriter::workbook(mb_substr((string) $page['title'], 0, 31), $header, $table), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+            : [self::csv($header, $table), 'text/csv; charset=UTF-8'];
+
+        return response()->streamDownload(function () use ($body): void {
+            echo $body;
+        }, "{$report}-{$period}.{$data['format']}", ['Content-Type' => $type]);
+    }
+
+    /**
+     * @param list<string> $header
+     * @param list<list<string>> $rows
+     */
+    private static function csv(array $header, array $rows): string
+    {
+        $stream = fopen('php://temp', 'r+');
+        if ($stream === false) {
+            throw new \RuntimeException('Cannot open a temporary stream for the report export.');
+        }
+        foreach ([$header, ...$rows] as $line) {
+            fputcsv($stream, $line, escape: '');
+        }
+        rewind($stream);
+        $csv = (string) stream_get_contents($stream);
+        fclose($stream);
+
+        return $csv;
+    }
+
+    /**
+     * The report's table and the filters it was built on.
+     *
+     * @return array{0: array<string, mixed>, 1: array{from: string, to: string, as_of: string, by: string}}
+     */
+    private function page(Request $request, string $report): array
+    {
         $entity = PageSupport::entity();
         $money = fn (int $minor): string => PageSupport::money($minor, $entity['currency']);
         $from = self::date($request, 'from', CarbonImmutable::today()->startOfMonth());
@@ -84,7 +146,7 @@ final class ReportsPageController
             default => abort(404),
         };
 
-        return Inertia::render('reports/Show', $page + ['report' => $report, 'filters' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'as_of' => $asOf->toDateString(), 'by' => $by]]);
+        return [$page, ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'as_of' => $asOf->toDateString(), 'by' => $by]];
     }
 
     /**
