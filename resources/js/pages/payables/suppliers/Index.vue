@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
@@ -14,6 +15,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { type Paginated, serverPage } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Payables → Suppliers (addendum v2 §B.4): who we pay, on what terms, with which taxes deducted at source and into which bank account. */
 interface SupplierRow { id: string; code: string; name: string; category: string; category_label: string; status: string; terms: number; tin: string | null; bin: string | null; bank: string | null; owed: string; next_due: string | null }
@@ -47,7 +49,7 @@ function submit(): void {
             :rows="suppliers.data"
             :page="serverPage(suppliers)"
             :row-key="(s) => s.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No suppliers yet: add the landlord, utilities and garages you pay."
             :empty-action="canManage ? { label: 'Add a supplier' } : null"
             :action="canManage ? { label: 'Add a supplier' } : null"
@@ -57,7 +59,7 @@ function submit(): void {
             @action="adding = true"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Owed', value: `${formatMoney(row.owed)} BDT`, num: true }, { label: 'Next due', value: formatDate(row.next_due) }, { label: 'TIN', value: row.tin ?? '—' }, { label: 'BIN', value: row.bin ?? '—' }, { label: 'Paid into', value: row.bank ?? 'No bank account' }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Owed', value: `${formatMoney(row.owed, currency)}`, num: true }, { label: 'Next due', value: formatDate(row.next_due) }, { label: 'TIN', value: row.tin ?? '—' }, { label: 'BIN', value: row.bin ?? '—' }, { label: 'Paid into', value: row.bank ?? 'No bank account' }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div class="mt-4 flex gap-2">

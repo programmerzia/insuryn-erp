@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Deferred, Link, router, useForm } from '@inertiajs/vue3';
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
 import { ref, watch } from 'vue';
@@ -24,6 +25,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
+const currency = useEntityCurrency();
 
 /** Distribution design note §6 producer page: Overview · Hierarchy · Compensation · Production · Statements · Documents · Audit. */
 interface Licence { id: string; authority: string; licence_no: string; class: string; issued_on: string; expires_on: string; status: string; status_reason: string | null }
@@ -173,7 +175,7 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                         <section>
                             <h2 class="mb-2 text-ui font-medium">Commission entries</h2>
                             <div class="border border-line" data-testid="producer-commission-entries">
-                                <DataTable id="producer-commission-entries" label="Commission entries" :columns="entryColumns" :rows="compensation.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false"
+                                <DataTable id="producer-commission-entries" label="Commission entries" :columns="entryColumns" :rows="compensation.entries" :row-key="(e) => e.id" :currency="currency" :url-sync="false"
                                     :open-on-click="false" compact-toolbar :total="compensation.entries_total ?? null" empty-text="No commission yet." />
                             </div>
                         </section>
@@ -254,6 +256,6 @@ const advance = useMoneyForm(() => `${base}/advances`, { amount: '', issued_on: 
                 </Field>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="advance.previewOpen.value" :result="advance.preview.value" :title="`Pay an advance to ${producer.code}?`" confirm-label="Pay the advance" currency="BDT" :processing="advance.form.processing" @confirm="advance.post" />
+        <JournalPreviewDialog v-model:open="advance.previewOpen.value" :result="advance.preview.value" :title="`Pay an advance to ${producer.code}?`" confirm-label="Pay the advance" :currency="currency" :processing="advance.form.processing" @confirm="advance.post" />
     </AppLayout>
 </template>

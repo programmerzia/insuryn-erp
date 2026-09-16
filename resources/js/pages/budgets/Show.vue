@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -11,6 +12,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMinor, parseMoney } from '@/lib/money';
 import { formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /**
  * Design addendum v2 §B.8.1 budget grid: income and expense accounts × fiscal months for one branch at a time. Amounts are typed in, pasted from a spreadsheet
@@ -79,7 +81,7 @@ const act = (action: string) => router.post(`/budgets/${props.budget.id}/${actio
             <h1 class="text-section font-semibold">{{ budget.name }} · {{ budget.year }} · version {{ budget.version }}</h1>
             <StatusBadge :status="budget.status" />
             <SelectInput :model-value="branchId" :options="branches.map((b) => ({ value: b.id, label: b.label }))" class="w-auto" aria-label="Branch" @update:model-value="branch" />
-            <span class="text-ui text-ink-2">Total {{ formatMoney(budget.total) }} BDT<template v-for="t in budget.branch_totals" :key="t.branch"> · {{ t.branch }} {{ formatMoney(t.total) }}</template></span>
+            <span class="text-ui text-ink-2">Total {{ formatMoney(budget.total) }} {{ currency }}<template v-for="t in budget.branch_totals" :key="t.branch"> · {{ t.branch }} {{ formatMoney(t.total) }}</template></span>
             <div class="ml-auto flex flex-wrap items-center gap-2">
                 <template v-if="can.edit">
                     <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui hover:bg-surface-2" @click="pasting = true">Paste from spreadsheet</button>
@@ -103,7 +105,7 @@ const act = (action: string) => router.post(`/budgets/${props.budget.id}/${actio
                     <tr class="h-(--row-h)">
                         <th class="sticky left-0 z-20 min-w-[260px] border-b border-r border-line bg-surface-2 px-3 text-left font-medium">Account</th>
                         <th v-for="m in months" :key="m" class="min-w-[104px] border-b border-line px-2 text-right font-medium">{{ m }}</th>
-                        <th class="min-w-[120px] border-b border-l border-line px-3 text-right font-medium">Year (BDT)</th>
+                        <th class="min-w-[120px] border-b border-l border-line px-3 text-right font-medium">Year ({{ currency }})</th>
                     </tr>
                 </thead>
                 <tbody>

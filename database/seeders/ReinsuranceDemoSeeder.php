@@ -46,7 +46,7 @@ final class ReinsuranceDemoSeeder
         $terms = fn (string $code, string $name, string $class, string $type, ?int $cessionBp, ?int $retention, ?int $lines, int $commissionBp): array => [
             'entity_id' => $entityId, 'code' => $code, 'name' => $name, 'class_code' => $class, 'underwriting_year' => 2026, 'period_from' => '2026-07-01', 'period_to' => '2027-06-30',
             'type' => $type, 'cession_bp' => $cessionBp, 'retention_minor' => $retention, 'lines' => $lines, 'commission_bp' => $commissionBp,
-            'sbc_share_bp' => (int) config('erp.reinsurance.sbc_share_bp', 5000), 'currency' => 'BDT', 'status' => 'active'];
+            'sbc_share_bp' => (int) config('erp.reinsurance.sbc_share_bp', 5000), 'currency' => (string) config('erp.default_currency', 'KES'), 'status' => 'active'];
         $treaties->save(null, $terms('MOT-QS-FY26', 'Motor quota share FY2026', 'motor', 'quota_share', 4000, null, null, 2500), [$globalRe => 6000, $asiaRe => 4000], $finance);
         $treaties->save(null, $terms('FIRE-SUR-FY26', 'Fire surplus FY2026', 'fire', 'surplus', null, 5_000_000_000, 9, 3000), [$globalRe => 5000, $asiaRe => 5000], $finance);
         $treaties->save(null, $terms('MAR-QS-FY26', 'Marine cargo quota share FY2026', 'marine_cargo', 'quota_share', 5000, null, null, 2750), [$globalRe => 10_000], $finance);

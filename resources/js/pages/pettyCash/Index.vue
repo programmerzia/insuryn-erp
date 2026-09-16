@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -17,6 +18,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.6: petty cash floats per branch, with cash on hand and what is waiting to be replenished. */
 interface FloatRow { id: string; code: string; name: string; branch: string; custodian: string; limit: string; on_hand: string; to_replenish: string; pending: boolean; status: string }
@@ -49,7 +51,7 @@ const columns: DataColumn<FloatRow>[] = [
             :columns="columns"
             :rows="floats"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No petty cash floats yet. Give each branch a float for small expenses."
             :action="can.create ? { label: 'New float' } : null"
             :hint="can.create ? null : 'Only the finance manager or CFO can open a float.'"
@@ -61,7 +63,7 @@ const columns: DataColumn<FloatRow>[] = [
         >
             <template #toolbar><Link href="/petty-cash/book" class="ml-3 text-ui text-accent-text hover:underline">Petty cash book</Link></template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Float limit', value: `${formatMoney(row.limit)} BDT`, num: true }, { label: 'Cash on hand', value: `${formatMoney(row.on_hand)} BDT`, num: true }, { label: 'Spent, to replenish', value: `${formatMoney(row.to_replenish)} BDT`, num: true }, { label: 'Custodian', value: row.custodian }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Float limit', value: `${formatMoney(row.limit, currency)}`, num: true }, { label: 'Cash on hand', value: `${formatMoney(row.on_hand, currency)}`, num: true }, { label: 'Spent, to replenish', value: `${formatMoney(row.to_replenish, currency)}`, num: true }, { label: 'Custodian', value: row.custodian }]">
                     <template #Status><StatusBadge :status="row.pending ? 'pending_approval' : row.status" /></template>
                 </DetailList>
             </template>
@@ -72,12 +74,12 @@ const columns: DataColumn<FloatRow>[] = [
                 <Field id="code" label="Code" :error="create.form.errors.code"><TextInput v-model="create.form.code" placeholder="PC-HO" /></Field>
                 <Field id="name" label="Name" :error="create.form.errors.name"><TextInput v-model="create.form.name" /></Field>
                 <Field id="custodian_user_id" label="Custodian" :error="create.form.errors.custodian_user_id"><SelectInput id="custodian_user_id" v-model="create.form.custodian_user_id" placeholder="Who holds the cash" :options="users.map((u) => ({ value: u.id, label: u.label }))" /></Field>
-                <Field id="limit" label="Float limit (BDT)" :error="create.form.errors.limit"><MoneyInput v-model="create.form.limit" /></Field>
+                <Field id="limit" label="Float limit ({{ currency }})" :error="create.form.errors.limit"><MoneyInput v-model="create.form.limit" /></Field>
                 <Field id="gl_account_id" label="Petty cash account" :error="create.form.errors.gl_account_id"><SelectInput id="gl_account_id" v-model="create.form.gl_account_id" :options="accounts.map((a) => ({ value: a.id, label: a.label }))" /></Field>
                 <Field id="bank_account_id" label="Drawn from" :error="create.form.errors.bank_account_id"><SelectInput id="bank_account_id" v-model="create.form.bank_account_id" :options="bankAccounts.map((b) => ({ value: b.id, label: b.label }))" /></Field>
                 <Field id="issued_on" label="Issued on" :error="create.form.errors.issued_on"><DateInput v-model="create.form.issued_on" /></Field>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="create.previewOpen.value" :result="create.preview.value" title="Issue this float?" confirm-label="Issue the float" currency="BDT" :processing="create.form.processing" @confirm="create.post" />
+        <JournalPreviewDialog v-model:open="create.previewOpen.value" :result="create.preview.value" title="Issue this float?" confirm-label="Issue the float" :currency="currency" :processing="create.form.processing" @confirm="create.post" />
     </AppLayout>
 </template>

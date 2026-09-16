@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -16,6 +17,7 @@ import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 import { runStatusLabel } from '@/lib/people';
+const currency = useEntityCurrency();
 
 /**
  * Addendum §B.10.11 run page: the preview per employee (earnings, deductions, net, and how each was worked out) → approve and post (journal preview,
@@ -81,10 +83,10 @@ function recalculate(): void {
     router.post('/people/payroll', { period: props.run.period }, { preserveScroll: true });
 }
 function approve(): void {
-    void confirm.request(`/people/payroll/${props.run.id}/approve`, {}, `Approve and post the payroll for ${month.value}?`, `Post ${formatMoney(props.run.net)} BDT net pay`);
+    void confirm.request(`/people/payroll/${props.run.id}/approve`, {}, `Approve and post the payroll for ${month.value}?`, `Post ${formatMoney(props.run.net, currency)} net pay`);
 }
 function pay(): void {
-    void confirm.request(`/people/payroll/${props.run.id}/pay`, { bank_account_id: bankAccount.value, paid_on: paidOn.value }, `Release the salaries for ${month.value}?`, `Release ${formatMoney(props.run.net)} BDT`);
+    void confirm.request(`/people/payroll/${props.run.id}/pay`, { bank_account_id: bankAccount.value, paid_on: paidOn.value }, `Release the salaries for ${month.value}?`, `Release ${formatMoney(props.run.net, currency)}`);
 }
 </script>
 
@@ -96,7 +98,7 @@ function pay(): void {
             :status="run.status"
             :facts="facts"
             :crumbs="[{ label: 'Payroll runs', href: '/people/payroll' }]"
-            currency="BDT"
+            :currency="currency"
             :accounting="accounting"
             :audit="audit"
             :extra-tabs="[{ value: 'inputs', label: `Inputs (${inputs.length})` }]"
@@ -124,7 +126,7 @@ function pay(): void {
                     :columns="columns"
                     :rows="payslips"
                     :row-key="(s) => s.id"
-                    currency="BDT"
+                    :currency="currency"
                     :url-sync="false"
                     empty-text="Nobody is on this payroll."
                     @open="(s) => (opened = s)"
@@ -134,7 +136,7 @@ function pay(): void {
             <template #tab-inputs>
                 <p class="mb-3 max-w-[900px] text-ui text-ink-2">One-off earnings for {{ month }}. Commission paid through payroll is shown on the payslip and paid, but not posted as an expense again.</p>
                 <div class="max-w-[1100px]">
-                    <DataTable id="people-payroll-inputs" label="Inputs" :columns="inputColumns" :rows="inputs" :row-key="(i) => i.id" currency="BDT" :url-sync="false" empty-text="No inputs this month." compact-toolbar />
+                    <DataTable id="people-payroll-inputs" label="Inputs" :columns="inputColumns" :rows="inputs" :row-key="(i) => i.id" :currency="currency" :url-sync="false" empty-text="No inputs this month." compact-toolbar />
                 </div>
             </template>
         </ObjectPage>
@@ -164,6 +166,6 @@ function pay(): void {
                 </ul>
             </div>
         </Drawer>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

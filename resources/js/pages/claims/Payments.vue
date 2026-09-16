@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -8,6 +9,7 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { type Paginated, serverPage } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Gap audit GA-26: the claim payments queue. Payments still to approve, request or release come first; each opens its claim, where it is released. */
 interface PaymentRow { id: string; status: string; approved_on: string; paid_on: string | null; amount: string; claim_id: string; claim_number: string; policy_number: string | null; payee: string }
@@ -35,14 +37,14 @@ const columns: DataColumn<PaymentRow>[] = [
             :rows="payments.data"
             :row-key="(p) => p.id"
             :page="serverPage(payments)"
-            currency="BDT"
+            :currency="currency"
             empty-text="No claim payment has been approved yet."
             :empty-action="{ label: 'Open claims', href: '/claims' }"
             :inspector-title="(p) => p.claim_number"
             :inspector-subtitle="(p) => p.payee"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Payee', value: row.payee }, { label: 'Approved on', value: formatDate(row.approved_on) }, { label: 'Amount', value: `${formatMoney(row.amount)} BDT`, num: true }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Payee', value: row.payee }, { label: 'Approved on', value: formatDate(row.approved_on) }, { label: 'Amount', value: `${formatMoney(row.amount, currency)}`, num: true }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <Link :href="`/claims/${row.claim_id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the claim to release it</Link>

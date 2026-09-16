@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -17,6 +18,7 @@ import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { serverPage, type Paginated } from '@/lib/paging';
 import { employmentTypeLabel, employmentTypes, type PeopleOptions } from '@/lib/people';
+const currency = useEntityCurrency();
 
 /** Addendum §B.9.7 employees queue: who works where, on which grade and basic, and whether pay can reach their bank. */
 interface EmployeeRow {
@@ -62,7 +64,7 @@ const columns: DataColumn<EmployeeRow>[] = [
             :rows="employees.data"
             :page="serverPage(employees)"
             :row-key="(e) => e.id"
-            currency="BDT"
+            :currency="currency"
             :empty-text="emptyText"
             :action="can.manage ? { label: 'Hire employee' } : null"
             :hint="can.manage ? null : 'Only the HR manager can hire employees.'"
@@ -82,7 +84,7 @@ const columns: DataColumn<EmployeeRow>[] = [
                     { label: 'Grade', value: row.grade ?? '—' },
                     { label: 'Employment', value: row.type ? employmentTypeLabel(row.type) : '—' },
                     { label: 'Joined', value: formatDate(row.joined_on) },
-                    { label: 'Basic salary', value: row.basic ? `${formatMoney(row.basic)} BDT` : '—', num: true },
+                    { label: 'Basic salary', value: row.basic ? `${formatMoney(row.basic, currency)}` : '—', num: true },
                     { label: 'Salary account', value: row.bank ?? 'None: payroll cannot be approved' },
                     { label: 'TIN', value: row.tin ?? '—' },
                     { label: 'Producer', value: row.producer_code ?? 'Not a producer' },

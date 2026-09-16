@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -9,6 +10,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
 import { usePermissions } from '@/lib/permissions';
+const currency = useEntityCurrency();
 
 interface ClaimRow { id: string; number: string; status: string; loss_date: string; reported_on: string; reserve: string; policy_number: string | null; policyholder: string }
 const props = defineProps<{ filters: { status: string }; statuses: string[]; claims: { data: ClaimRow[]; current_page: number; last_page: number; total: number } }>();
@@ -36,7 +38,7 @@ const columns: DataColumn<ClaimRow>[] = [
             :rows="claims.data"
             :page="serverPage(claims)"
             :row-key="(c) => c.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No claims yet."
             :empty-action="can('claim.register') ? { label: 'Register a claim', href: '/claims/create' } : null"
             :action="can('claim.register') ? { label: 'Register a claim', href: '/claims/create' } : null"
@@ -44,7 +46,7 @@ const columns: DataColumn<ClaimRow>[] = [
             :inspector-subtitle="(c) => `${c.policy_number ?? ''} · ${c.policyholder}`"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Date of loss', value: formatDate(row.loss_date) }, { label: 'Reported on', value: formatDate(row.reported_on) }, { label: 'Incurred', value: `${formatMoney(row.reserve)} BDT`, num: true }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Date of loss', value: formatDate(row.loss_date) }, { label: 'Reported on', value: formatDate(row.reported_on) }, { label: 'Incurred', value: `${formatMoney(row.reserve, currency)}`, num: true }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <Link :href="`/claims/${row.id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the claim</Link>

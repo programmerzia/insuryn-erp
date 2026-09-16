@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { router } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -11,6 +12,7 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.7 monthly depreciation batch: choose a month, preview each asset's charge, post (journal preview first). Posting a month again posts nothing. */
 interface PreviewRow { asset_id: string; number: string; description: string; class: string; branch: string; amount: string; accumulated: string; nbv: string }
@@ -33,7 +35,7 @@ function choose(id: string | undefined): void {
 }
 function post(): void {
     if (!props.period) return;
-    void confirm.request(`/fixed-assets/depreciation/${props.period.id}`, {}, `Post depreciation for ${props.period.label}?`, `Post ${formatMoney(props.total)} BDT`);
+    void confirm.request(`/fixed-assets/depreciation/${props.period.id}`, {}, `Post depreciation for ${props.period.label}?`, `Post ${formatMoney(props.total, currency)}`);
 }
 const previewColumns: DataColumn<PreviewRow>[] = [
     { id: 'number', header: 'Asset', value: (r) => r.number, href: (r) => `/fixed-assets/${r.asset_id}`, width: 150 },
@@ -65,23 +67,23 @@ const runColumns: DataColumn<RunRow>[] = [
                 </PageHeader>
             </div>
             <p v-if="period" class="text-ui text-ink-2" role="status">
-                <template v-if="preview.length">{{ preview.length }} asset(s) to depreciate for the month ending {{ formatDate(period.ends) }}: {{ formatMoney(total) }} BDT. Nothing is posted until you post it.</template>
-                <template v-else-if="posted.length">Depreciation for {{ period.label }} is posted: {{ posted.map((r) => `${r.assets} asset(s), ${formatMoney(r.total)} BDT`).join('; ') }}.</template>
+                <template v-if="preview.length">{{ preview.length }} asset(s) to depreciate for the month ending {{ formatDate(period.ends) }}: {{ formatMoney(total) }} {{ currency }}. Nothing is posted until you post it.</template>
+                <template v-else-if="posted.length">Depreciation for {{ period.label }} is posted: {{ posted.map((r) => `${r.assets} asset(s), ${formatMoney(r.total, currency)}`).join('; ') }}.</template>
                 <template v-else>Nothing to depreciate for {{ period.label }}.</template>
                 <template v-if="!can.post && preview.length"> The finance manager posts it.</template>
             </p>
             <div v-if="preview.length" class="border border-line">
-                <DataTable id="depreciation-preview" label="Depreciation for the month" :columns="previewColumns" :rows="preview" :row-key="(r) => r.asset_id" currency="BDT" :url-sync="false" compact-toolbar
+                <DataTable id="depreciation-preview" label="Depreciation for the month" :columns="previewColumns" :rows="preview" :row-key="(r) => r.asset_id" :currency="currency" :url-sync="false" compact-toolbar
                     empty-text="Nothing to depreciate for this month." />
             </div>
             <section v-if="runs.length">
                 <h2 class="mb-2 text-ui font-medium">Posted batches</h2>
                 <div class="border border-line">
-                    <DataTable id="depreciation-runs" label="Posted batches" :columns="runColumns" :rows="runs" :row-key="(r) => `${r.period_id}-${r.posted_at}`" currency="BDT" :url-sync="false"
+                    <DataTable id="depreciation-runs" label="Posted batches" :columns="runColumns" :rows="runs" :row-key="(r) => `${r.period_id}-${r.posted_at}`" :currency="currency" :url-sync="false"
                         :open-on-click="false" compact-toolbar empty-text="No depreciation posted yet." />
                 </div>
             </section>
         </div>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

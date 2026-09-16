@@ -38,6 +38,14 @@ Illuminate\Support\Facades\Artisan::command('portal:openapi', function (App\Http
     $this->info("Wrote {$path}");
 })->purpose('Write docs/api/producer-portal.openapi.json from the portal routes');
 
+Illuminate\Support\Facades\Artisan::command('ledger:openapi', function (App\Http\Ledger\OpenApi\LedgerOpenApi $openApi): void {
+    $path = base_path('docs/api/ledger-v1.openapi.json');
+    if (! is_dir(dirname($path))) {
+        mkdir(dirname($path), 0755, true);
+    }
+    file_put_contents($path, json_encode($openApi->document(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n");
+    $this->info("Wrote {$path}");
+})->purpose('Write docs/api/ledger-v1.openapi.json from the ledger API routes');
 
 // Session S1: a tenant on its first day (roles and segregation-of-duties rules, no company or products) and its admin, admin@<slug>.local.
 // Sign in at http://<slug>.localhost:8000; the setup wizard opens.
@@ -62,8 +70,15 @@ Illuminate\Support\Facades\Artisan::command('erp:demo {--tenant=nonlife : slug o
         return 1;
     }
     $slug = is_string($this->option('tenant')) ? $this->option('tenant') : 'nonlife';
-    if (! (new Database\Seeders\PartADemoSeeder())->run($slug)) {
-        $this->info("Tenant {$slug} already has the Part A story; nothing changed.");
+    $seeder = new Database\Seeders\PartADemoSeeder();
+    if (! $seeder->run($slug)) {
+        $backfilled = $seeder->backfillMissingModules($slug);
+        if ($backfilled !== []) {
+            dispatch_sync(new OutboxRelayJob());
+            $this->info('Backfilled demo modules for tenant '.$slug.': '.implode(', ', $backfilled).'. Refresh the browser.');
+        } else {
+            $this->info("Tenant {$slug} already has the Part A story; nothing changed.");
+        }
 
         return 0;
     }

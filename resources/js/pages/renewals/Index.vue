@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /**
  * Phase 3 design §6 "Expiry register queue" (slice R9): policies coming up for renewal, soonest first, by bucket, branch, producer and status. The inspector
@@ -77,7 +79,7 @@ const columns: DataColumn<Entry>[] = [
             :rows="entries"
             :total="entriesTotal ?? null"
             :row-key="(e) => e.id"
-            currency="BDT"
+            :currency="currency"
             :empty-text="filtered ? 'No policies match these filters.' : `No policies expire in the next ${buckets[buckets.length - 1]} days.`"
             :empty-action="filtered ? { label: 'Show all renewals', href: '/renewals' } : { label: 'Open policies', href: '/policies' }"
             :inspector-title="(e) => e.policy_number"

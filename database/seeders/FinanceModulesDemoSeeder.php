@@ -75,6 +75,8 @@ final class FinanceModulesDemoSeeder
     /** @var array<string, string> branch code → id */
     private array $branches = [];
 
+    private bool $skipDisposal = false;
+
     /** @param array<string, string> $users role code → user id */
     public function beforeAugustClose(string $entityId, string $headOfficeId, string $chattogramId, string $bankAccountId, array $users): void
     {
@@ -82,6 +84,35 @@ final class FinanceModulesDemoSeeder
         $this->fixedAssets($entityId, $bankAccountId, $users);
         $this->budgets($entityId, $users);
         $this->pettyCash($entityId, $bankAccountId, $users);
+    }
+
+    /**
+     * Idempotent demo backfill when the Part A story exists but finance modules were never seeded (older demo tenants).
+     *
+     * @param array<string, string> $users role code → user id
+     *
+     * @return list<string> labels of modules that were backfilled
+     */
+    public function ensure(string $entityId, string $headOfficeId, string $chattogramId, string $bankAccountId, array $users): array
+    {
+        $this->branches = ['HO' => $headOfficeId, 'CTG' => $chattogramId];
+        $backfilled = [];
+        if (DB::table('budgets')->where('entity_id', $entityId)->doesntExist()) {
+            $this->budgets($entityId, $users);
+            $backfilled[] = 'budgets';
+        }
+        if (DB::table('asset_classes')->where('entity_id', $entityId)->doesntExist()) {
+            $this->skipDisposal = true;
+            $this->fixedAssets($entityId, $bankAccountId, $users);
+            $this->skipDisposal = false;
+            $backfilled[] = 'fixed assets';
+        }
+        if (DB::table('petty_cash_floats')->where('entity_id', $entityId)->doesntExist()) {
+            $this->pettyCash($entityId, $bankAccountId, $users);
+            $backfilled[] = 'petty cash';
+        }
+
+        return $backfilled;
     }
 
     /** September vouchers: [float, date, paid to, for, account code, BDT] */
@@ -165,7 +196,7 @@ final class FinanceModulesDemoSeeder
             }
             $month = CarbonImmutable::parse($date);
             $journal = $journals->create(new ManualJournalRequest($entityId, $month, 'Monthly operating expenses '.$month->format('F Y'), JournalKind::Manual,
-                'Salaries, office rent, utilities, marketing and IT bills for Head Office and Chattogram', 'BDT', $lines), $users['accountant']);
+                'Salaries, office rent, utilities, marketing and IT bills for Head Office and Chattogram', (string) config('erp.default_currency', 'KES'), $lines), $users['accountant']);
             $journals->submit($journal->id, $users['accountant']);
             $journals->approve($journal->id, $users['finance_manager']);
         }
@@ -219,14 +250,21 @@ final class FinanceModulesDemoSeeder
             $key = "{$class}|{$branch}";
             $opening[$key] = ['cost' => ($opening[$key]['cost'] ?? 0) + $cost * 100, 'accumulated' => ($opening[$key]['accumulated'] ?? 0) + $accumulated];
         }
-        $this->openingJournal($entityId, $opening, $users);
+        if (! $this->skipDisposal) {
+            $this->openingJournal($entityId, $opening, $users);
+        }
 
         foreach (self::NEW_ASSETS as [$branch, $class, $description, $acquiredOn, $cost, $location, $custodian, $supplier, $invoice]) {
+            if ($this->skipDisposal && $acquiredOn < '2026-09-01') {
+                continue;
+            }
             $assets->acquire($entityId, ['class_id' => $classes[$class] ?? '', 'branch_id' => $this->branches[$branch], 'description' => $description, 'location' => $location, 'custodian' => $custodian,
                 'supplier' => $supplier, 'invoice_ref' => $invoice, 'acquired_on' => $acquiredOn, 'cost_minor' => $cost * 100, 'paid_via' => 'payable'], $users['accountant']);
         }
-        // The desktops replaced by the new laptops, sold to a second-hand dealer in August.
-        $assets->dispose((string) $desktops, 'sale', CarbonImmutable::parse('2026-08-20'), 35_000_00, $bankAccountId, 'Replaced by ThinkPad laptops; sold to Elephant Road Computer Market', $users['accountant']);
+        // The desktops replaced by the new laptops, sold to a second-hand dealer in August (skipped when backfilling after the period is closed).
+        if (! $this->skipDisposal && $desktops !== null) {
+            $assets->dispose((string) $desktops, 'sale', CarbonImmutable::parse('2026-08-20'), 35_000_00, $bankAccountId, 'Replaced by ThinkPad laptops; sold to Elephant Road Computer Market', $users['accountant']);
+        }
     }
 
     /**
@@ -249,13 +287,17 @@ final class FinanceModulesDemoSeeder
         $lines[] = new ManualJournalLine($this->account($entityId, '3100'), Side::Credit, $nbv, ['branch' => $this->branches['HO']], 'Fixed assets brought forward at net book value');
         $journals = app(ManualJournalService::class);
         $journal = $journals->create(new ManualJournalRequest($entityId, CarbonImmutable::parse(self::CUT_OVER), 'Fixed assets brought forward', JournalKind::Manual,
-            'Fixed asset register at the 31 July 2026 cut-over: cost and accumulated depreciation per class and branch', 'BDT', $lines), $users['accountant']);
+            'Fixed asset register at the 31 July 2026 cut-over: cost and accumulated depreciation per class and branch', (string) config('erp.default_currency', 'KES'), $lines), $users['accountant']);
         $journals->submit($journal->id, $users['accountant']);
         $journals->approve($journal->id, $users['finance_manager']);
     }
 
     private function newAccount(string $entityId, string $code, string $name, string $normalSide, string $type = 'asset'): string
     {
+        $existing = DB::table('accounts')->where('entity_id', $entityId)->where('code', $code)->value('id');
+        if (is_string($existing)) {
+            return $existing;
+        }
         $id = (string) Str::uuid7();
         DB::table('accounts')->insert(['id' => $id, 'tenant_id' => TenantContext::id(), 'entity_id' => $entityId, 'code' => $code, 'name' => $name, 'type' => $type, 'normal_side' => $normalSide,
             'is_postable' => true, 'is_control' => false, 'control_subledger' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);

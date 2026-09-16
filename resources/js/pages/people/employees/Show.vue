@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -19,6 +20,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { changeKindLabel, employmentTypeLabel, employmentTypes, type PeopleOptions } from '@/lib/people';
+const currency = useEntityCurrency();
 
 /** Addendum §B.9.7 employee page: Overview · Employment history · Payslips · Audit, with a Change drawer for promotions, transfers and pay changes. */
 interface HistoryRow { from: string; to: string | null; kind: string; branch: string; department: string; designation: string; grade: string; type: string; basic: string; note: string | null }
@@ -77,7 +79,7 @@ const payslipColumns: DataColumn<PayslipRow>[] = [
             :status="employee.status"
             :facts="facts"
             :crumbs="[{ label: 'Employees', href: '/people/employees' }]"
-            currency="BDT"
+            :currency="currency"
             :audit="audit"
             :extra-tabs="[{ value: 'history', label: 'Employment history' }, { value: 'payslips', label: 'Payslips' }]"
             :hidden-tabs="['accounting', 'timeline', 'documents']"
@@ -96,20 +98,20 @@ const payslipColumns: DataColumn<PayslipRow>[] = [
                     <section>
                         <h2 class="mb-2 text-section font-semibold">Salary account</h2>
                         <DetailList :items="[{ label: 'Account', value: employee.bank ?? 'None: payroll cannot be approved until one is added' }, { label: 'Routing number', value: employee.routing_no ?? '—' },
-                            { label: 'Basic salary', value: current ? `${formatMoney(current.basic)} BDT` : '—', num: true }]" />
+                            { label: 'Basic salary', value: current ? `${formatMoney(current.basic, currency)}` : '—', num: true }]" />
                         <p v-if="producer" class="mt-3 text-ui text-ink-2">Also a producer: <Link :href="`/distribution/producers/${producer.id}`" class="text-accent-text hover:underline">{{ producer.code }}</Link></p>
                     </section>
                 </div>
             </template>
             <template #tab-history>
                 <div class="max-w-[1200px]">
-                    <DataTable id="people-employee-history" label="Employment history" :columns="historyColumns" :rows="history" :row-key="(h) => `${h.from}-${h.kind}`" currency="BDT" :url-sync="false" empty-text="No employment recorded yet." compact-toolbar />
+                    <DataTable id="people-employee-history" label="Employment history" :columns="historyColumns" :rows="history" :row-key="(h) => `${h.from}-${h.kind}`" :currency="currency" :url-sync="false" empty-text="No employment recorded yet." compact-toolbar />
                     <p class="mt-2 text-dense text-ink-2">History is never edited: a change ends the record in force the day before the new one starts.</p>
                 </div>
             </template>
             <template #tab-payslips>
                 <div class="max-w-[1100px]">
-                    <DataTable id="people-employee-payslips" label="Payslips" :columns="payslipColumns" :rows="payslips" :row-key="(p) => p.id" currency="BDT" :url-sync="false" empty-text="No payslips yet: they appear when a payroll is calculated." compact-toolbar />
+                    <DataTable id="people-employee-payslips" label="Payslips" :columns="payslipColumns" :rows="payslips" :row-key="(p) => p.id" :currency="currency" :url-sync="false" empty-text="No payslips yet: they appear when a payroll is calculated." compact-toolbar />
                 </div>
             </template>
         </ObjectPage>
@@ -129,7 +131,7 @@ const payslipColumns: DataColumn<PayslipRow>[] = [
                     <Field id="grade_id" label="Grade" :error="form.errors.grade_id"><SelectInput id="grade_id" v-model="form.grade_id" :options="choices(options.grades)" /></Field>
                     <Field id="employment_type" label="Employment type" :error="form.errors.employment_type"><SelectInput id="employment_type" v-model="form.employment_type" :options="employmentTypes.map((t) => ({ value: t, label: employmentTypeLabel(t) }))" /></Field>
                 </div>
-                <Field id="basic" label="New basic salary" optional :hint="current ? `Now ${formatMoney(current.basic)} BDT. Empty keeps it.` : undefined" :error="form.errors.basic"><MoneyInput id="basic" v-model="form.basic" /></Field>
+                <Field id="basic" label="New basic salary" optional :hint="current ? `Now ${formatMoney(current.basic, currency)}. Empty keeps it.` : undefined" :error="form.errors.basic"><MoneyInput id="basic" v-model="form.basic" /></Field>
                 <Field id="note" label="Note" optional :error="form.errors.note"><TextInput v-model="form.note" /></Field>
             </FormLayout>
         </Drawer>

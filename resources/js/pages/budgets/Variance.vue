@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -6,6 +7,7 @@ import SelectInput from '@/components/forms/SelectInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { drillFrom } from '@/lib/drill';
 import { formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /**
  * Design addendum v2 §B.8.1 variance report: actual against the approved budget for a month and the year to date, by account group and branch. Green is
@@ -60,7 +62,7 @@ function set(key: 'year' | 'period' | 'branch', value: string | undefined): void
                     </tr>
                     <tr class="h-(--row-h)">
                         <th class="border-b border-line px-3 text-left font-medium">Account</th><th class="border-b border-line px-3 text-left font-medium">Branch</th>
-                        <th class="border-b border-l border-line px-3 text-right font-medium">Budget (BDT)</th><th class="border-b border-line px-3 text-right font-medium">Actual</th><th class="border-b border-line px-3 text-right font-medium">Variance</th><th class="border-b border-line px-3 text-right font-medium">%</th>
+                        <th class="border-b border-l border-line px-3 text-right font-medium">Budget ({{ currency }})</th><th class="border-b border-line px-3 text-right font-medium">Actual</th><th class="border-b border-line px-3 text-right font-medium">Variance</th><th class="border-b border-line px-3 text-right font-medium">%</th>
                         <th class="border-b border-l border-line px-3 text-right font-medium">Budget</th><th class="border-b border-line px-3 text-right font-medium">Actual</th><th class="border-b border-line px-3 text-right font-medium">Variance</th><th class="border-b border-line px-3 text-right font-medium">%</th>
                     </tr>
                 </thead>

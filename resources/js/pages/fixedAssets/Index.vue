@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -18,6 +19,7 @@ import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 import { type Paginated, serverPage } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.7: the fixed asset register queue; capitalise an asset (journal preview), then attach its invoice on the asset page. */
 interface AssetRow { id: string; number: string; description: string; class: string; branch: string; location: string | null; custodian: string | null; acquired_on: string; cost: string; accumulated: string | null; nbv: string; status: string }
@@ -60,7 +62,7 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
             :rows="assets.data"
             :page="serverPage(assets)"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No fixed assets yet. Capitalise the company's furniture, computers and vehicles here."
             :action="can.manage && classes.length ? { label: 'Capitalise an asset' } : null"
             :hint="can.manage ? null : 'Only the accountant can capitalise an asset.'"
@@ -80,8 +82,8 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
             </template>
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Status' }, { label: 'Class', value: row.class }, { label: 'Branch', value: row.branch }, { label: 'Location', value: row.location }, { label: 'Custodian', value: row.custodian },
-                    { label: 'Acquired', value: formatDate(row.acquired_on) }, { label: 'Cost', value: `${formatMoney(row.cost)} BDT`, num: true },
-                    { label: 'Accumulated depreciation', value: row.accumulated ? `${formatMoney(row.accumulated)} BDT` : '—', num: true }, { label: 'Net book value', value: `${formatMoney(row.nbv)} BDT`, num: true }]">
+                    { label: 'Acquired', value: formatDate(row.acquired_on) }, { label: 'Cost', value: `${formatMoney(row.cost, currency)}`, num: true },
+                    { label: 'Accumulated depreciation', value: row.accumulated ? `${formatMoney(row.accumulated, currency)}` : '—', num: true }, { label: 'Net book value', value: `${formatMoney(row.nbv, currency)}`, num: true }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
             </template>
@@ -99,7 +101,7 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
                 <Field id="supplier" label="Supplier" optional :error="acquire.form.errors.supplier"><TextInput v-model="acquire.form.supplier" /></Field>
                 <Field id="invoice_ref" label="Supplier invoice" optional :error="acquire.form.errors.invoice_ref"><TextInput v-model="acquire.form.invoice_ref" /></Field>
                 <Field id="acquired_on" label="Acquired on" :error="acquire.form.errors.acquired_on"><DateInput v-model="acquire.form.acquired_on" /></Field>
-                <Field id="cost" label="Cost (BDT)" :error="acquire.form.errors.cost"><MoneyInput v-model="acquire.form.cost" /></Field>
+                <Field id="cost" label="Cost ({{ currency }})" :error="acquire.form.errors.cost"><MoneyInput v-model="acquire.form.cost" /></Field>
                 <Field id="paid_via" label="Paid" :error="acquire.form.errors.paid_via">
                     <SelectInput id="paid_via" v-model="acquire.form.paid_via" :options="[{ value: 'payable', label: 'On credit (owed to the supplier)' }, { value: 'bank', label: 'From a bank account' }]" />
                 </Field>
@@ -109,6 +111,6 @@ const threshold = (classId: string) => props.classes.find((c) => c.id === classI
                 <p class="text-ui text-ink-2">After capitalising, attach the supplier's invoice on the asset's Documents tab.</p>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="acquire.previewOpen.value" :result="acquire.preview.value" title="Capitalise this asset?" confirm-label="Capitalise" currency="BDT" :processing="acquire.form.processing" @confirm="acquire.post" />
+        <JournalPreviewDialog v-model:open="acquire.previewOpen.value" :result="acquire.preview.value" title="Capitalise this asset?" confirm-label="Capitalise" :currency="currency" :processing="acquire.form.processing" @confirm="acquire.post" />
     </AppLayout>
 </template>

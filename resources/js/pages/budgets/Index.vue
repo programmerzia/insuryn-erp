@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
@@ -12,6 +13,7 @@ import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.8.1: budget versions per fiscal year (draft → submitted → approved → superseded). */
 interface BudgetRow { id: string; year: string; code: string; name: string; version: number; status: string; prepared_by: string; approved_by: string | null; total: string }
@@ -40,7 +42,7 @@ const columns: DataColumn<BudgetRow>[] = [
             :columns="columns"
             :rows="budgets"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No budgets yet. Prepare this year's budget by account, branch and month."
             :action="can.prepare ? { label: 'New budget' } : null"
             :hint="can.prepare ? null : 'Only the accountant can prepare a budget.'"
@@ -54,7 +56,7 @@ const columns: DataColumn<BudgetRow>[] = [
                 <Link href="/budgets/variance" class="ml-3 text-ui text-accent-text hover:underline">Budget variance</Link>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Fiscal year', value: row.year }, { label: 'Version', value: String(row.version) }, { label: 'Total', value: `${formatMoney(row.total)} BDT`, num: true }, { label: 'Prepared by', value: row.prepared_by }, { label: 'Approved by', value: row.approved_by ?? 'Not yet' }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Fiscal year', value: row.year }, { label: 'Version', value: String(row.version) }, { label: 'Total', value: `${formatMoney(row.total, currency)}`, num: true }, { label: 'Prepared by', value: row.prepared_by }, { label: 'Approved by', value: row.approved_by ?? 'Not yet' }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
             </template>

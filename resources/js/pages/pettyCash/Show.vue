@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -19,6 +20,7 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 import { useMoneyForm } from '@/lib/moneyForm';
 import { type PreviewResult, previewJournal } from '@/lib/preview';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.6 float page (an object page like the other documents): vouchers with receipts, replenishments (request ✕ approve), cash counts. */
 type Option = { id: string; label: string };
@@ -41,7 +43,7 @@ const props = defineProps<{
 const today = useBusinessToday();
 const title = computed(() => `${props.float.code} · ${props.float.name}`);
 const facts = computed(() => [
-    { label: 'Float limit (BDT)', value: formatMoney(props.float.limit), num: true },
+    { label: 'Float limit ({{ currency }})', value: formatMoney(props.float.limit), num: true },
     { label: 'Cash on hand', value: formatMoney(props.float.on_hand), num: true },
     { label: 'Spent, to replenish', value: formatMoney(props.float.to_replenish), num: true },
 ]);
@@ -85,7 +87,7 @@ function approve(): void {
     const row = deciding.value?.row;
     if (!row) return;
     deciding.value = null;
-    void confirm.request(`/petty-cash/replenishments/${row.id}/approve`, { paid_on: paidOn.value }, `Approve ${row.number} and pay it from the bank?`, `Pay ${formatMoney(row.amount)} BDT`);
+    void confirm.request(`/petty-cash/replenishments/${row.id}/approve`, { paid_on: paidOn.value }, `Approve ${row.number} and pay it from the bank?`, `Pay ${formatMoney(row.amount, currency)}`);
 }
 function reject(): void {
     const row = deciding.value?.row;
@@ -129,7 +131,7 @@ const countColumns: DataColumn<CountRow>[] = [
             :status="float.status"
             :facts="facts"
             :crumbs="[{ label: 'Petty cash', href: '/petty-cash' }]"
-            currency="BDT"
+            :currency="currency"
             :timeline="timeline"
             :accounting="accounting"
             :audit="audit"
@@ -148,7 +150,7 @@ const countColumns: DataColumn<CountRow>[] = [
                 </p>
                 <h2 class="mb-2 text-ui font-medium">Vouchers</h2>
                 <div class="border border-line">
-                    <DataTable id="petty-cash-vouchers" label="Vouchers" :columns="voucherColumns" :rows="vouchers" :row-key="(v) => v.id" currency="BDT" :url-sync="false" :open-on-click="false" compact-toolbar
+                    <DataTable id="petty-cash-vouchers" label="Vouchers" :columns="voucherColumns" :rows="vouchers" :row-key="(v) => v.id" :currency="currency" :url-sync="false" :open-on-click="false" compact-toolbar
                         empty-text="No vouchers paid from this float yet.">
                         <template #cell-receipts="{ row }">
                             <a v-for="d in row.receipts" :key="d.url" :href="d.url" class="mr-2 text-accent-text hover:underline">{{ d.name }}</a>
@@ -158,7 +160,7 @@ const countColumns: DataColumn<CountRow>[] = [
             </template>
             <template #tab-replenishments>
                 <div class="max-w-[1100px] border border-line">
-                    <DataTable id="petty-cash-replenishments" label="Replenishments" :columns="replenishmentColumns" :rows="replenishments" :row-key="(r) => r.id" currency="BDT" :url-sync="false" :open-on-click="false"
+                    <DataTable id="petty-cash-replenishments" label="Replenishments" :columns="replenishmentColumns" :rows="replenishments" :row-key="(r) => r.id" :currency="currency" :url-sync="false" :open-on-click="false"
                         compact-toolbar empty-text="No replenishment requested yet.">
                         <template #cell-decision="{ row }">
                             <div v-if="can.approve && row.status === 'pending_approval'" class="flex items-center gap-2">
@@ -172,7 +174,7 @@ const countColumns: DataColumn<CountRow>[] = [
             </template>
             <template #tab-counts>
                 <div class="max-w-[1100px] border border-line">
-                    <DataTable id="petty-cash-counts" label="Cash counts" :columns="countColumns" :rows="counts" :row-key="(c) => `${c.date}-${c.counted}-${c.by}`" currency="BDT" :url-sync="false" :open-on-click="false"
+                    <DataTable id="petty-cash-counts" label="Cash counts" :columns="countColumns" :rows="counts" :row-key="(c) => `${c.date}-${c.counted}-${c.by}`" :currency="currency" :url-sync="false" :open-on-click="false"
                         compact-toolbar empty-text="The cash has not been counted yet." />
                 </div>
             </template>
@@ -180,12 +182,12 @@ const countColumns: DataColumn<CountRow>[] = [
 
         <Drawer v-model:open="spending" title="Pay a voucher">
             <FormLayout submit-label="Review the journal" :dirty="voucher.isDirty" :processing="voucher.processing" :error="(voucher.errors as Record<string, string>).form" @submit="reviewVoucher" @cancel="spending = false">
-                <p class="text-ui text-ink-2">Cash on hand {{ formatMoney(float.on_hand) }} BDT.</p>
+                <p class="text-ui text-ink-2">Cash on hand {{ formatMoney(float.on_hand) }} {{ currency }}.</p>
                 <Field id="voucher_date" label="Date" :error="voucher.errors.voucher_date"><DateInput v-model="voucher.voucher_date" /></Field>
                 <Field id="payee" label="Paid to" :error="voucher.errors.payee"><TextInput v-model="voucher.payee" /></Field>
                 <Field id="description" label="For" :error="voucher.errors.description"><TextInput v-model="voucher.description" /></Field>
                 <Field id="account_id" label="Expense account" :error="voucher.errors.account_id"><SelectInput id="account_id" v-model="voucher.account_id" placeholder="Choose an account" :options="accounts.map((a) => ({ value: a.id, label: a.label }))" /></Field>
-                <Field id="amount" label="Amount (BDT)" :error="voucher.errors.amount"><MoneyInput v-model="voucher.amount" /></Field>
+                <Field id="amount" label="Amount ({{ currency }})" :error="voucher.errors.amount"><MoneyInput v-model="voucher.amount" /></Field>
                 <Field id="receipt" label="Receipt photo" optional :error="voucher.errors.receipt">
                     <input id="receipt" type="file" accept="image/*,application/pdf" capture="environment" class="text-ui" @change="(e) => (voucher.receipt = (e.target as HTMLInputElement).files?.[0] ?? null)" />
                 </Field>
@@ -193,21 +195,21 @@ const countColumns: DataColumn<CountRow>[] = [
         </Drawer>
         <Drawer v-model:open="replenishing" title="Request replenishment">
             <FormLayout submit-label="Request replenishment" :dirty="true" :processing="replenish.processing" :error="(replenish.errors as Record<string, string>).form" @submit="replenish.post(`/petty-cash/${float.id}/replenishments`, { onSuccess: () => (replenishing = false) })" @cancel="replenishing = false">
-                <p class="text-ui text-ink-2">Tops the float back up by the {{ formatMoney(float.to_replenish) }} BDT of vouchers paid since the last replenishment. The finance manager approves it.</p>
+                <p class="text-ui text-ink-2">Tops the float back up by the {{ formatMoney(float.to_replenish) }} {{ currency }} of vouchers paid since the last replenishment. The finance manager approves it.</p>
                 <Field id="bank_account_id" label="Pay from" :error="replenish.errors.bank_account_id"><SelectInput id="bank_account_id" v-model="replenish.bank_account_id" :options="bankAccounts.map((b) => ({ value: b.id, label: b.label }))" /></Field>
             </FormLayout>
         </Drawer>
         <Drawer v-model:open="counting" title="Count the cash">
             <FormLayout submit-label="Review" :dirty="count.form.isDirty" :processing="count.form.processing" :error="(count.form.errors as Record<string, string>).form" @submit="count.review" @cancel="counting = false">
-                <p class="text-ui text-ink-2">The book says {{ formatMoney(float.on_hand) }} BDT. A difference is posted as a cash shortage or surplus.</p>
+                <p class="text-ui text-ink-2">The book says {{ formatMoney(float.on_hand) }} {{ currency }}. A difference is posted as a cash shortage or surplus.</p>
                 <Field id="counted_on" label="Counted on" :error="count.form.errors.counted_on"><DateInput v-model="count.form.counted_on" /></Field>
-                <Field id="counted" label="Cash counted (BDT)" :error="count.form.errors.counted"><MoneyInput v-model="count.form.counted" /></Field>
+                <Field id="counted" label="Cash counted ({{ currency }})" :error="count.form.errors.counted"><MoneyInput v-model="count.form.counted" /></Field>
                 <Field id="note" label="Note" optional :error="count.form.errors.note"><TextInput v-model="count.form.note" /></Field>
             </FormLayout>
         </Drawer>
         <Drawer :open="deciding?.decision === 'approve'" :title="`Approve ${deciding?.row.number ?? ''}`" @update:open="(o) => !o && (deciding = null)">
             <FormLayout submit-label="Review the journal" :dirty="true" :processing="confirm.state.processing" @submit="approve" @cancel="deciding = null">
-                <p class="text-ui text-ink-2">Pays {{ formatMoney(deciding?.row.amount ?? '0') }} BDT from the bank into the float.</p>
+                <p class="text-ui text-ink-2">Pays {{ formatMoney(deciding?.row.amount ?? '0') }} {{ currency }} from the bank into the float.</p>
                 <Field id="paid_on" label="Paid on"><DateInput v-model="paidOn" /></Field>
             </FormLayout>
         </Drawer>
@@ -216,8 +218,8 @@ const countColumns: DataColumn<CountRow>[] = [
                 <Field id="reject_reason" label="Reason" :error="rejecting.errors.reason"><TextInput v-model="rejecting.reason" /></Field>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="voucherPreviewOpen" :result="voucherPreview" title="Pay this voucher?" confirm-label="Pay" currency="BDT" :processing="voucher.processing" @confirm="postVoucher" />
-        <JournalPreviewDialog v-model:open="count.previewOpen.value" :result="count.preview.value" title="Record this count?" confirm-label="Record the count" currency="BDT" :processing="count.form.processing" @confirm="count.post" />
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="voucherPreviewOpen" :result="voucherPreview" title="Pay this voucher?" confirm-label="Pay" :currency="currency" :processing="voucher.processing" @confirm="postVoucher" />
+        <JournalPreviewDialog v-model:open="count.previewOpen.value" :result="count.preview.value" title="Record this count?" confirm-label="Record the count" :currency="currency" :processing="count.form.processing" @confirm="count.post" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

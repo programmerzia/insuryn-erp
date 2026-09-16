@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -8,6 +9,7 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { type Paginated, serverPage } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Payables → Payment runs (addendum v2 §B.4): prepared by the accountant, approved by the finance manager, released by the CFO. */
 interface RunRow { id: string; number: string; pay_date: string; status: string; total: string; bills: number; bank: string; prepared_by: string }
@@ -35,7 +37,7 @@ const columns: DataColumn<RunRow>[] = [
             :rows="runs.data"
             :page="serverPage(runs)"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No payment runs yet: pay the bills that fall due."
             :action="canPrepare ? { label: 'New payment run', href: '/payables/payment-runs/create' } : null"
             :hint="canPrepare ? null : 'Only the accountant can prepare a payment run.'"
@@ -43,7 +45,7 @@ const columns: DataColumn<RunRow>[] = [
             :inspector-subtitle="(r) => `${r.bills} bills · ${r.bank}`"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Total', value: `${formatMoney(row.total)} BDT`, num: true }, { label: 'Pay date', value: formatDate(row.pay_date) }, { label: 'Prepared by', value: row.prepared_by }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Total', value: `${formatMoney(row.total, currency)}`, num: true }, { label: 'Pay date', value: formatDate(row.pay_date) }, { label: 'Prepared by', value: row.prepared_by }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <Link :href="`/payables/payment-runs/${row.id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the run</Link>

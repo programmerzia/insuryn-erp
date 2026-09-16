@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -17,6 +18,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
+const currency = useEntityCurrency();
 
 interface RefundRow { id: string; policy_number: string | null; amount: string; reason: string; status: string; requested_at: string; decision_reason: string | null }
 const props = defineProps<{
@@ -53,7 +55,7 @@ const columns: DataColumn<RefundRow>[] = [
 const releasable = (row: RefundRow) => row.status === 'requested' && props.can.release;
 
 function release(row: RefundRow): void {
-    void confirm.request(`/refunds/${row.id}/release`, { paid_on: paidOn.value }, `Pay the refund on ${row.policy_number}?`, `Pay ${formatMoney(row.amount)} BDT`);
+    void confirm.request(`/refunds/${row.id}/release`, { paid_on: paidOn.value }, `Pay the refund on ${row.policy_number}?`, `Pay ${formatMoney(row.amount, currency)}`);
 }
 function reject(row: RefundRow): void {
     router.post(`/refunds/${row.id}/reject`, { reason: rejectReason.value }, { preserveScroll: true, onSuccess: () => (rejectReason.value = '') });
@@ -70,7 +72,7 @@ function reject(row: RefundRow): void {
             :rows="refunds"
             :total="refundsTotal ?? null"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No refunds: they follow cancelled policies with money left over."
             :empty-action="{ label: 'Open policies', href: '/policies' }"
             :action="can.request && refundableCount > 0 ? { label: 'Request a refund' } : null"
@@ -81,7 +83,7 @@ function reject(row: RefundRow): void {
             @primary="release"
         >
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Amount', value: `${formatMoney(row.amount)} BDT`, num: true }, { label: 'Requested', value: formatDate(row.requested_at) }, { label: 'Decision', value: row.decision_reason }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Amount', value: `${formatMoney(row.amount, currency)}`, num: true }, { label: 'Requested', value: formatDate(row.requested_at) }, { label: 'Decision', value: row.decision_reason }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div v-if="releasable(row)" class="mt-4 grid gap-3 border-t border-line pt-4">
@@ -102,6 +104,6 @@ function reject(row: RefundRow): void {
                 <Field id="reason" label="Reason" :error="requestForm.errors.reason"><TextInput v-model="requestForm.reason" /></Field>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

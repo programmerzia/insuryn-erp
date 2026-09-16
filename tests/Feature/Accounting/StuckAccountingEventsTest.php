@@ -100,8 +100,12 @@ it('lists failed and long-queued events, and the finance manager requeues a fail
         ->where('events.1.id', $failed['event'])->where('events.1.event_type', 'POLICY_ISSUED')->where('events.1.status', 'failed')
         ->where('events.1.source', ['url' => "/policies/{$failed['policy']}", 'label' => $number]));
     actingAs($finance)->get('/home', $this->headers)->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('queues.5.key', 'failed_events')->where('queues.5.href', '/accounting/events')->where('queues.5.count', 2)
-        ->where('queues.5.columns.0.type', 'event')->where('queues.5.rows.1.href', '/accounting/events')->where('queues.5.rows.1.cells.reason', 'Not posted after 15 minutes')->where('queues.5.rows.0.cells.event', 'POLICY_ISSUED'));
+        ->where('queues', fn ($queues) => collect($queues)->contains(fn (array $q): bool => $q['key'] === 'failed_events'
+            && $q['href'] === '/accounting/events' && $q['count'] === 2
+            && ($q['columns'][0]['type'] ?? null) === 'event'
+            && ($q['rows'][1]['href'] ?? null) === '/accounting/events'
+            && ($q['rows'][1]['cells']['reason'] ?? null) === 'Not posted after 15 minutes'
+            && ($q['rows'][0]['cells']['event'] ?? null) === 'POLICY_ISSUED')));
 
     // The accountant sees the list but cannot requeue; the fresh queued event cannot be requeued by anyone yet.
     $accountant = ($this->asRole)('accountant');

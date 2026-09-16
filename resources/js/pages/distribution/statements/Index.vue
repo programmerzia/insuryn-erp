@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -16,6 +17,7 @@ import { blankZero } from '@/lib/distribution';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
+const currency = useEntityCurrency();
 
 /**
  * Distribution design note §6 statement run workbench: pick the month, add incentive awards, prepare drafts (a preview nothing is posted from),
@@ -63,9 +65,9 @@ async function prepare(): Promise<void> {
 }
 function primary(s: Statement): void {
     if (s.status === 'draft' && props.can.approve) {
-        void confirm.request(`/distribution/statements/${s.id}/approve`, { on: on.value }, `Approve ${s.producer_code}'s statement for ${monthLabel(props.periodEnd)}?`, `Approve ${formatMoney(s.net)} BDT`);
+        void confirm.request(`/distribution/statements/${s.id}/approve`, { on: on.value }, `Approve ${s.producer_code}'s statement for ${monthLabel(props.periodEnd)}?`, `Approve ${formatMoney(s.net, currency)}`);
     } else if (s.status === 'approved' && props.can.pay && !s.approved_by_me) {
-        void confirm.request(`/distribution/statements/${s.id}/pay`, { paid_on: on.value, bank_account_id: bankAccount.value }, `Pay ${s.number} through ${(routeWords[s.paid_via] ?? '').toLowerCase()}?`, `Pay ${formatMoney(s.net)} BDT`);
+        void confirm.request(`/distribution/statements/${s.id}/pay`, { paid_on: on.value, bank_account_id: bankAccount.value }, `Pay ${s.number} through ${(routeWords[s.paid_via] ?? '').toLowerCase()}?`, `Pay ${formatMoney(s.net, currency)}`);
     }
 }
 const primaryLabel = (s: Statement): string | undefined =>
@@ -81,7 +83,7 @@ const primaryLabel = (s: Statement): string | undefined =>
             :columns="columns"
             :rows="statements"
             :row-key="(s) => s.id"
-            currency="BDT"
+            :currency="currency"
             :url-sync="false"
             empty-text="No statements for this month yet."
             :empty-action="can.approve ? { label: 'Prepare statements' } : { label: 'Open commission history', href: '/commission' }"
@@ -102,7 +104,7 @@ const primaryLabel = (s: Statement): string | undefined =>
             </template>
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Status' }, { label: 'Earned', value: formatMoney(row.earned), num: true }, { label: 'Overrides', value: formatMoney(row.override), num: true }, { label: 'Bonus', value: formatMoney(row.bonus), num: true },
-                    { label: 'Clawback', value: formatMoney(row.clawback), num: true }, { label: 'Tax withheld', value: formatMoney(row.withholding), num: true }, { label: 'Advances recovered', value: formatMoney(row.advances), num: true }, { label: 'Net to pay', value: `${formatMoney(row.net)} BDT`, num: true }]">
+                    { label: 'Clawback', value: formatMoney(row.clawback), num: true }, { label: 'Tax withheld', value: formatMoney(row.withholding), num: true }, { label: 'Advances recovered', value: formatMoney(row.advances), num: true }, { label: 'Net to pay', value: `${formatMoney(row.net, currency)}`, num: true }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div v-if="primaryLabel(row)" class="mt-4 grid gap-3 border-t border-line pt-4">
@@ -121,6 +123,6 @@ const primaryLabel = (s: Statement): string | undefined =>
                 <Link :href="`/distribution/producers/${row.producer_id}?tab=statements`" class="mt-3 inline-block text-ui text-accent-text hover:underline">Open the producer</Link>
             </template>
         </QueueView>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

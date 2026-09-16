@@ -93,6 +93,17 @@ it('seeds the Part A story through the services', function (): void {
         expect(DB::table('fiscal_periods')->where('starts', '2026-08-01')->value('status'))->toBe('locked')
             ->and(DB::table('fiscal_periods')->where('starts', '2026-09-01')->value('status'))->toBe('open')
             ->and(DB::table('period_close_runs')->where('status', 'completed')->count())->toBe(1);
+
+        // Ledger API demo: integration user and a few posted external events for Accounting → Events.
+        expect(DB::table('users')->where('email', 'integration@nonlife.local')->value('kind'))->toBe('integration')
+            ->and(DB::table('external_event_intakes')->count())->toBe(3);
+
+        // Finance modules (design addendum v2 §B.6–B.8): assets, budgets and petty cash for the Kenya accounting demo.
+        $entityId = (string) DB::table('legal_entities')->orderBy('code')->value('id');
+        expect(DB::table('asset_classes')->where('entity_id', $entityId)->count())->toBe(5)
+            ->and(DB::table('fixed_assets')->where('entity_id', $entityId)->count())->toBe(25)
+            ->and(DB::table('budgets')->where('entity_id', $entityId)->count())->toBe(1)
+            ->and(DB::table('petty_cash_floats')->where('entity_id', $entityId)->count())->toBe(2);
     });
     expect(File::exists(storage_path('app/demo/city-bank-2026-09.csv')))->toBeTrue()
         ->and(substr_count((string) File::get(storage_path('app/demo/city-bank-2026-09.csv')), "\n"))->toBeGreaterThanOrEqual(5);
@@ -116,6 +127,23 @@ it('runs the nightly lifecycle once, so the demo shows active policies, payment 
         expect($runs->pluck('job')->unique()->values()->all())->toBe(['dunning', 'policy_lifecycle', 'renewals'])
             ->and($runs->pluck('status')->unique()->all())->toBe(['succeeded'])
             ->and($runs->whereNotNull('triggered_by')->count())->toBe(0);
+    });
+});
+
+it('backfills fixed assets when an older demo tenant is missing them', function (): void {
+    expect(Artisan::call('erp:demo'))->toBe(0);
+    $tenantId = (string) DB::table('tenants')->where('slug', 'nonlife')->value('id');
+    asTenant($tenantId, function (): void {
+        DB::table('asset_depreciation')->delete();
+        DB::table('asset_disposals')->delete();
+        DB::table('asset_movements')->delete();
+        DB::table('fixed_assets')->delete();
+        DB::table('asset_classes')->delete();
+    });
+    expect((new Database\Seeders\PartADemoSeeder())->backfillMissingModules('nonlife'))->toBe(['fixed assets']);
+    asTenant($tenantId, function (): void {
+        $entityId = (string) DB::table('legal_entities')->orderBy('code')->value('id');
+        expect(DB::table('fixed_assets')->where('entity_id', $entityId)->count())->toBeGreaterThanOrEqual(21);
     });
 });
 

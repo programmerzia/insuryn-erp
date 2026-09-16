@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Link, usePage } from '@inertiajs/vue3';
+import { useEntityCurrency } from '@/lib/entityCurrency';
+import { Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Inspector from '@/components/shell/Inspector.vue';
 import SplitPane from '@/components/shell/SplitPane.vue';
@@ -9,7 +10,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
 import { usePermissions } from '@/lib/permissions';
-import type { SharedProps } from '@/types/shared';
+const currency = useEntityCurrency();
 
 // A reader without receipt.create (the auditor, the finance manager) sees who records receipts instead of a link that ends in a 403.
 const { can } = usePermissions();
@@ -28,7 +29,6 @@ interface ReceiptRow {
 
 const props = defineProps<{ receipts: { data: ReceiptRow[]; current_page: number; last_page: number; total: number } }>();
 
-const currency = usePage<SharedProps>().props.shell?.entity?.currency ?? 'BDT';
 const active = ref<string | null>(null);
 const selected = computed(() => props.receipts.data.find((r) => r.id === active.value) ?? null);
 const channel = (value: string) => value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());

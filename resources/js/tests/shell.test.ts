@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyPreference, defaultPreferences, type Preferences } from '@/lib/preferences';
 import { formatKeys, matchesKeys, shortcutKeys } from '@/lib/shortcuts';
+import { readSidebarScroll, writeSidebarScroll } from '@/lib/sidebarScroll';
 import { pinTab, unpinTab } from '@/lib/tabs';
 
 const key = (init: KeyboardEventInit) => new KeyboardEvent('keydown', init);
@@ -42,6 +43,16 @@ describe('preferences', () => {
         applyPreference(prefs, 'sidebar_sections.accounting', true);
         applyPreference(prefs, 'sidebar_sections.sales', false);
         expect(prefs.sidebar_sections).toEqual({ accounting: true, sales: false });
+    });
+});
+
+describe('sidebar scroll', () => {
+    beforeEach(() => sessionStorage.clear());
+
+    it('remembers scroll position across remounts', () => {
+        expect(readSidebarScroll()).toBe(0);
+        writeSidebarScroll(240);
+        expect(readSidebarScroll()).toBe(240);
     });
 });
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { serverPage, type Paginated } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Addendum §B.10.11 payroll runs queue: one regular run a month, preview → posted → paid. */
 interface RunRow { id: string; number: string | null; period: string; status: string; employees: number; gross: string; tax: string; pf: string; commission: string; net: string; posted_on: string | null; paid_on: string | null }
@@ -43,7 +45,7 @@ function calculate(): void {
             :rows="runs.data"
             :page="serverPage(runs)"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No payroll runs yet: calculate the first month."
             :empty-action="can.prepare ? { label: 'Calculate payroll' } : null"
             :hint="can.prepare ? null : 'Only the HR manager can calculate payroll.'"
@@ -61,7 +63,7 @@ function calculate(): void {
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Status' }, { label: 'Employees', value: row.employees, num: true }, { label: 'Gross', value: formatMoney(row.gross), num: true },
                     { label: 'Commission through payroll', value: formatMoney(row.commission), num: true }, { label: 'Tax deducted', value: formatMoney(row.tax), num: true },
-                    { label: 'Provident fund', value: formatMoney(row.pf), num: true }, { label: 'Net pay', value: `${formatMoney(row.net)} BDT`, num: true },
+                    { label: 'Provident fund', value: formatMoney(row.pf), num: true }, { label: 'Net pay', value: `${formatMoney(row.net, currency)}`, num: true },
                     { label: 'Posted', value: row.posted_on ? formatDate(row.posted_on) : '—' }, { label: 'Paid', value: row.paid_on ? formatDate(row.paid_on) : '—' }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>

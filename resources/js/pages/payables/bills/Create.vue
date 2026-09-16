@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -12,6 +13,7 @@ import TextInput from '@/components/forms/TextInput.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMinor, parseMoney } from '@/lib/money';
+const currency = useEntityCurrency();
 
 /**
  * Enter a supplier bill (addendum v2 §B.4): the supplier's invoice number and dates, lines to expense accounts with VAT, and — for garage, surveyor or
@@ -139,7 +141,7 @@ function save(submit: boolean): void {
                 <dt class="text-ink-2">Gross</dt><dd class="text-right tabular-nums">{{ formatMinor(totals.net + totals.vat) }}</dd>
                 <dt class="text-ink-2">Less VAT deducted at source</dt><dd class="text-right tabular-nums">{{ formatMinor(totals.vds) }}</dd>
                 <dt class="text-ink-2">Less tax deducted at source</dt><dd class="text-right tabular-nums">{{ formatMinor(totals.tds) }}</dd>
-                <dt class="font-medium">Payable to the supplier (BDT)</dt><dd class="text-right font-medium tabular-nums">{{ formatMinor(payable) }}</dd>
+                <dt class="font-medium">Payable to the supplier ({{ currency }})</dt><dd class="text-right font-medium tabular-nums">{{ formatMinor(payable) }}</dd>
             </dl>
         </FormLayout>
     </AppLayout>

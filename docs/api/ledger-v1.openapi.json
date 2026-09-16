@@ -1,0 +1,938 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Insuryn Ledger API",
+        "version": "1.0.0",
+        "description": "External accounting event ingest and read-only ledger queries. Integration users (kind=integration) obtain Bearer tokens from POST /api/v1/tokens. Amounts are in minor units."
+    },
+    "servers": [
+        {
+            "url": "/"
+        }
+    ],
+    "paths": {
+        "/api/v1/balances": {
+            "get": {
+                "operationId": "show",
+                "summary": "Account balance as of a date",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "as_of",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    },
+                    {
+                        "name": "account",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Account code (required)"
+                    },
+                    {
+                        "name": "dimension",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional dimension name"
+                    },
+                    {
+                        "name": "value",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Dimension value when dimension is set"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountBalance"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/event-types": {
+            "get": {
+                "operationId": "index",
+                "summary": "Supported event types from posting rules",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EventTypes"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/events": {
+            "post": {
+                "operationId": "store",
+                "summary": "Submit an accounting event (queued by default; ?sync=1 posts immediately)",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EventBody"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EventWrite"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/events/preview": {
+            "post": {
+                "operationId": "preview",
+                "summary": "Preview journal lines without posting",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EventBody"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EventPreview"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/events/{event}": {
+            "get": {
+                "operationId": "show",
+                "summary": "Event status and linked journals",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "event",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EventDetail"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/events/{event}/replay": {
+            "post": {
+                "operationId": "replay",
+                "summary": "Replay rules against a posted event",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "event",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EventReplay"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/journals/{journal}": {
+            "get": {
+                "operationId": "show",
+                "summary": "Journal with lines and totals",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "journal",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalDetail"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/reports/balance-sheet": {
+            "get": {
+                "operationId": "balanceSheet",
+                "summary": "Balance sheet as of a date",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "as_of",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BalanceSheet"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/reports/profit-and-loss": {
+            "get": {
+                "operationId": "profitAndLoss",
+                "summary": "Profit and loss for a date range",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProfitAndLoss"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/tokens": {
+            "post": {
+                "operationId": "issue",
+                "summary": "Issue a Bearer token for an integration user",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tokens/current": {
+            "delete": {
+                "operationId": "revoke",
+                "summary": "Revoke the current token",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Done"
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/trial-balance": {
+            "get": {
+                "operationId": "trialBalance",
+                "summary": "Trial balance as of a date",
+                "tags": [
+                    "Ledger"
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/Tenant"
+                    },
+                    {
+                        "name": "as_of",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "YYYY-MM-DD"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrialBalance"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Refused",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearer": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Sanctum token from POST /api/v1/tokens"
+            }
+        },
+        "parameters": {
+            "Tenant": {
+                "name": "X-Tenant",
+                "in": "header",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                }
+            }
+        },
+        "schemas": {
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TokenRequest": {
+                "type": "object",
+                "required": [
+                    "email",
+                    "password",
+                    "device_name"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    },
+                    "device_name": {
+                        "type": "string"
+                    },
+                    "abilities": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "TokenResponse": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "token": {
+                                "type": "string"
+                            },
+                            "abilities": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "EventBody": {
+                "type": "object",
+                "required": [
+                    "event_type",
+                    "idempotency_key",
+                    "transaction_date",
+                    "currency",
+                    "payload",
+                    "dimensions",
+                    "source"
+                ],
+                "properties": {
+                    "event_type": {
+                        "type": "string"
+                    },
+                    "idempotency_key": {
+                        "type": "string"
+                    },
+                    "transaction_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effective_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "payload": {
+                        "type": "object"
+                    },
+                    "dimensions": {
+                        "type": "object"
+                    },
+                    "source": {
+                        "type": "object"
+                    }
+                }
+            },
+            "EventTypes": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "EventDetail": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "EventWrite": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "JournalDetail": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "AccountBalance": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "TrialBalance": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "EventPreview": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "EventReplay": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "ProfitAndLoss": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "BalanceSheet": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            }
+        }
+    },
+    "security": [
+        {
+            "bearer": []
+        }
+    ]
+}

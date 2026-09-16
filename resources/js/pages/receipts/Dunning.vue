@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { ref } from 'vue';
 import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
 import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+const currency = useEntityCurrency();
 
 interface Notice { id: string; policy_id: string; policy_number: string | null; payer: string; level: number; days_overdue: number; outstanding: string; issued_on: string }
 defineProps<{ from: string; to: string; notices: Notice[] }>();
@@ -21,7 +23,7 @@ const columns: DataColumn<Notice>[] = [
 
 <template>
     <AppLayout help="receipts" title="Payment reminders" fill>
-        <QueueView id="dunning" v-model:active="active" title="Payment reminders" :columns="columns" :rows="notices" :row-key="(n) => n.id" currency="BDT" empty-text="No reminders were issued in this period." :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }">
+        <QueueView id="dunning" v-model:active="active" title="Payment reminders" :columns="columns" :rows="notices" :row-key="(n) => n.id" :currency="currency" empty-text="No reminders were issued in this period." :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }">
             <template #toolbar><DateRangeFilter url="/dunning" :from="from" :to="to" /></template>
         </QueueView>
     </AppLayout>

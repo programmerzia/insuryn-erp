@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import SelectInput from '@/components/forms/SelectInput.vue';
@@ -9,6 +10,7 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney, formatMonth } from '@/lib/format';
 import { serverPage, type Paginated } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Addendum §B.10.1 payslips per run and employee, each printable as a PDF in English or Bangla. */
 interface PayslipRow { id: string; number: string | null; run_id: string; period: string; status: string; employee_id: string; code: string; name: string; gross: string; tax: string; pf: string; net: string }
@@ -42,7 +44,7 @@ function choose(value: string): void {
             :rows="payslips.data"
             :page="serverPage(payslips)"
             :row-key="(p) => p.id"
-            currency="BDT"
+            :currency="currency"
             :url-sync="false"
             :empty-text="runId ? 'No payslips in this run.' : 'No payslips yet: they appear when a payroll is calculated.'"
             :empty-action="runId ? { label: 'Show every payslip', href: '/people/payslips' } : { label: 'Open payroll runs', href: '/people/payroll' }"
@@ -57,7 +59,7 @@ function choose(value: string): void {
             </template>
             <template #details="{ row }">
                 <DetailList :items="[{ label: 'Gross', value: formatMoney(row.gross), num: true }, { label: 'Provident fund', value: formatMoney(row.pf), num: true },
-                    { label: 'Tax deducted', value: formatMoney(row.tax), num: true }, { label: 'Net pay', value: `${formatMoney(row.net)} BDT`, num: true }, { label: 'Run' }]">
+                    { label: 'Tax deducted', value: formatMoney(row.tax), num: true }, { label: 'Net pay', value: `${formatMoney(row.net, currency)}`, num: true }, { label: 'Run' }]">
                     <template #Run><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div class="mt-4 flex gap-4 text-ui">

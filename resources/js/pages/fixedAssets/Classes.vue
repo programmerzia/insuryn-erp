@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Field from '@/components/forms/Field.vue';
@@ -12,6 +13,7 @@ import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.7 asset classes: method, useful life or yearly rate, residual, capitalisation threshold and the GL accounts each class posts to. */
 interface ClassRow { id: string; code: string; name: string; method: string; useful_life_months: string; rate: string; residual: string; threshold: string; cost_account_id: string;
@@ -56,7 +58,7 @@ function save(): void {
             :columns="columns"
             :rows="classes"
             :row-key="(r) => r.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No asset classes yet. Add the usual classes (furniture, IT equipment, vehicles, office equipment, leasehold improvements) and check their rates."
             :action="can.manage ? { label: 'New class' } : null"
             :hint="can.manage ? null : 'Only the accountant can add asset classes.'"
@@ -70,7 +72,7 @@ function save(): void {
                 <Link href="/fixed-assets" class="ml-3 text-ui text-accent-text hover:underline">Fixed assets</Link>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Method', value: row.method === 'straight_line' ? `Straight line over ${row.useful_life_months} months` : `Reducing balance at ${row.rate}% a year` }, { label: 'Residual value', value: `${row.residual}% of cost` }, { label: 'Capitalise from', value: `${formatMoney(row.threshold)} BDT`, num: true }, { label: 'Cost / accumulated / expense accounts', value: row.accounts }, { label: 'Assets in the class', value: String(row.assets) }]" />
+                <DetailList :items="[{ label: 'Method', value: row.method === 'straight_line' ? `Straight line over ${row.useful_life_months} months` : `Reducing balance at ${row.rate}% a year` }, { label: 'Residual value', value: `${row.residual}% of cost` }, { label: 'Capitalise from', value: `${formatMoney(row.threshold, currency)}`, num: true }, { label: 'Cost / accumulated / expense accounts', value: row.accounts }, { label: 'Assets in the class', value: String(row.assets) }]" />
             </template>
         </QueueView>
         <Drawer v-model:open="open" :title="editing ? `Edit ${editing.name}` : 'New asset class'" width="w-[520px]">
@@ -84,7 +86,7 @@ function save(): void {
                 <Field v-if="form.method === 'straight_line'" id="useful_life_months" label="Useful life (months)" :error="form.errors.useful_life_months"><TextInput v-model="form.useful_life_months" inputmode="numeric" /></Field>
                 <Field v-else id="rate" label="Yearly rate (%)" :error="form.errors.rate"><TextInput v-model="form.rate" inputmode="decimal" /></Field>
                 <Field id="residual" label="Residual value (% of cost)" :error="form.errors.residual"><TextInput v-model="form.residual" inputmode="decimal" /></Field>
-                <Field id="threshold" label="Capitalise from (BDT)" hint="Purchases below this are expensed." :error="form.errors.threshold"><MoneyInput v-model="form.threshold" /></Field>
+                <Field id="threshold" label="Capitalise from ({{ currency }})" hint="Purchases below this are expensed." :error="form.errors.threshold"><MoneyInput v-model="form.threshold" /></Field>
                 <Field id="cost_account_id" label="Cost account" :error="form.errors.cost_account_id"><SelectInput id="cost_account_id" v-model="form.cost_account_id" placeholder="Choose an account" :options="options(['asset'])" /></Field>
                 <Field id="accumulated_account_id" label="Accumulated depreciation account" :error="form.errors.accumulated_account_id"><SelectInput id="accumulated_account_id" v-model="form.accumulated_account_id" placeholder="Choose an account" :options="options(['asset'])" /></Field>
                 <Field id="expense_account_id" label="Depreciation expense account" :error="form.errors.expense_account_id"><SelectInput id="expense_account_id" v-model="form.expense_account_id" placeholder="Choose an account" :options="options(['expense'])" /></Field>

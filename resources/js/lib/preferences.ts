@@ -43,6 +43,8 @@ export interface Preferences {
     help_locale: 'en' | 'bn' | null;
     /** Session S4: guided tour progress; null until the user starts or dismisses it. */
     tour: TourState | null;
+    /** Demo pitch: sidebar and palette show accounting, assets, payables and bank only. */
+    accounting_focus: boolean;
 }
 export interface TourState {
     status: 'active' | 'dismissed' | 'finished';
@@ -50,7 +52,7 @@ export interface TourState {
 }
 
 export function defaultPreferences(): Preferences {
-    return { theme: 'system', density: 'compact', sidebar_collapsed: false, sidebar_sections: {}, branch_id: null, splits: {}, tabs: [], tables: {}, views: {}, recents: [], drafts: {}, locale: 'en', help_open: false, help_locale: null, tour: null };
+    return { theme: 'system', density: 'compact', sidebar_collapsed: false, sidebar_sections: {}, branch_id: null, splits: {}, tabs: [], tables: {}, views: {}, recents: [], drafts: {}, locale: 'en', help_open: false, help_locale: null, tour: null, accounting_focus: false };
 }
 
 /** Sets `theme` or a grouped key such as `splits.receipts` on a preferences object. */

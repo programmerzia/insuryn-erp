@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { ref } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
 import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
@@ -6,6 +7,7 @@ import DataTable from '@/components/table/DataTable.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 interface Entry { id: string; earned_on: string; kind: string; policy_number: string | null; base: string; rate_percent: string | null; amount: string; withholding: string; net: string; status: string }
 const props = defineProps<{ agent: { id: string; code: string }; from: string; to: string; statement: { opening_payable: string; closing_payable: string; entries: Entry[]; totals: { earned: string; clawback: string; withholding: string; net: string } } }>();
@@ -29,7 +31,7 @@ void props;
 <template>
     <AppLayout help="commission" :title="`Producer ${agent.code} commission`" fill>
         <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Commission statements', href: '/distribution/statements' }, { label: 'History', href: '/commission' }]" /></div>
-        <DataTable id="commission-entries" v-model:active="active" :label="`Commission for producer ${agent.code}`" :columns="columns" :rows="statement.entries" :row-key="(e) => e.id" currency="BDT" :url-sync="false" empty-text="No commission in this period.">
+        <DataTable id="commission-entries" v-model:active="active" :label="`Commission for producer ${agent.code}`" :columns="columns" :rows="statement.entries" :row-key="(e) => e.id" :currency="currency" :url-sync="false" empty-text="No commission in this period.">
             <template #toolbar>
                 <h1 class="mr-2 shrink-0 text-section font-semibold">Producer {{ agent.code }}</h1>
                 <DateRangeFilter :url="`/commission/agents/${agent.id}`" :from="from" :to="to" />

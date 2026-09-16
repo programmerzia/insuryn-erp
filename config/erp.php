@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 return [
+    // Demo and new tenants default to Kenyan shilling (customer demo); override with ERP_DEFAULT_CURRENCY.
+    'default_currency' => env('ERP_DEFAULT_CURRENCY', 'KES'),
     'seed' => [
         // Password of the per-tenant admin created by AdminUserSeeder (local and single-install use). Change it after first sign-in.
         'admin_password' => env('ERP_ADMIN_PASSWORD', 'ChangeMe123!'),
@@ -14,7 +16,7 @@ return [
     'business_clock' => [
         // Slice 2.1b (D-54, CQ-H2): business dates follow the legal entity's time zone (legal_entities.timezone). This zone is the default for a new
         // entity and the zone used outside a tenant; the nightly jobs are scheduled on it. ASSUMPTION A-151, A-152.
-        'default_timezone' => env('ERP_BUSINESS_TIMEZONE', 'Asia/Dhaka'),
+        'default_timezone' => env('ERP_BUSINESS_TIMEZONE', 'Africa/Nairobi'),
     ],
     'posting' => [
         'rules_path' => resource_path('posting-rules'),

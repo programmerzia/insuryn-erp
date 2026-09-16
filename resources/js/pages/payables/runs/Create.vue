@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -10,6 +11,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatMinor } from '@/lib/money';
+const currency = useEntityCurrency();
 
 /** New payment run (slice 2.4): the posted bills due by a date (optionally one supplier's) that can be paid now; tick the ones to pay. */
 interface DueBill { id: string; number: string | null; supplier: string; reference: string; due_date: string; amount: string; amount_minor: number }
@@ -47,7 +49,7 @@ const cell = 'border-b border-line px-3';
                 <thead class="bg-surface-2 text-ink-2">
                     <tr class="h-(--row-h)">
                         <th :class="cell" class="w-10 text-left"><input type="checkbox" aria-label="Choose every bill" :checked="form.bill_ids.length === bills.length && bills.length > 0" @change="toggleAll(($event.target as HTMLInputElement).checked)" /></th>
-                        <th :class="cell" class="text-left font-medium">Supplier</th><th :class="cell" class="text-left font-medium">Bill</th><th :class="cell" class="text-left font-medium">Invoice</th><th :class="cell" class="text-left font-medium">Due</th><th :class="cell" class="text-right font-medium">To pay (BDT)</th>
+                        <th :class="cell" class="text-left font-medium">Supplier</th><th :class="cell" class="text-left font-medium">Bill</th><th :class="cell" class="text-left font-medium">Invoice</th><th :class="cell" class="text-left font-medium">Due</th><th :class="cell" class="text-right font-medium">To pay ({{ currency }})</th>
                     </tr>
                 </thead>
                 <tbody>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -13,6 +14,7 @@ import type { DataColumn } from '@/components/table/types';
 import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /** The supplier page (addendum v2 §B.4): terms, tax profile and bank account, its bills, and the supplier statement with a running balance. */
 const props = defineProps<{
@@ -29,7 +31,7 @@ const props = defineProps<{
 }>();
 
 const facts = computed(() => [
-    { label: 'Owed (BDT)', value: formatMoney(props.supplier.owed), num: true },
+    { label: 'Owed ({{ currency }})', value: formatMoney(props.supplier.owed), num: true },
     { label: 'Terms', value: `${props.supplier.terms} days` },
     { label: 'Category', value: props.supplier.category_label },
     { label: 'Deducted at source', value: `VDS ${props.supplier.rates.vds}% · TDS ${props.supplier.rates.tds}%` },
@@ -62,7 +64,7 @@ const billColumns: DataColumn<BillRow>[] = [
             :status="supplier.status"
             :facts="facts"
             :crumbs="[{ label: 'Suppliers', href: '/payables/suppliers' }]"
-            currency="BDT"
+            :currency="currency"
             :timeline="timeline"
             :audit="audit"
             :hidden-tabs="['accounting', 'documents']"
@@ -97,7 +99,7 @@ const billColumns: DataColumn<BillRow>[] = [
                     <section class="lg:col-span-2">
                         <h2 class="mb-2 text-ui font-medium">Bills</h2>
                         <div class="border border-line">
-                            <DataTable id="supplier-bills-of-supplier" label="Bills" :columns="billColumns" :rows="bills" :row-key="(b) => b.id" currency="BDT" :url-sync="false" compact-toolbar
+                            <DataTable id="supplier-bills-of-supplier" label="Bills" :columns="billColumns" :rows="bills" :row-key="(b) => b.id" :currency="currency" :url-sync="false" compact-toolbar
                                 empty-text="No bills from this supplier yet." />
                         </div>
                     </section>
@@ -111,7 +113,7 @@ const billColumns: DataColumn<BillRow>[] = [
                 </div>
                 <div class="max-w-[1000px] overflow-x-auto border border-line">
                     <table class="w-full border-separate border-spacing-0 text-dense">
-                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th :class="cell" class="text-left font-medium">Date</th><th :class="cell" class="text-left font-medium">What</th><th :class="cell" class="text-left font-medium">Document</th><th :class="cell" class="text-left font-medium">Reference</th><th :class="cell" class="text-right font-medium">Paid (BDT)</th><th :class="cell" class="text-right font-medium">Billed (BDT)</th><th :class="cell" class="text-right font-medium">Balance owed</th></tr></thead>
+                        <thead class="bg-surface-2 text-ink-2"><tr class="h-(--row-h)"><th :class="cell" class="text-left font-medium">Date</th><th :class="cell" class="text-left font-medium">What</th><th :class="cell" class="text-left font-medium">Document</th><th :class="cell" class="text-left font-medium">Reference</th><th :class="cell" class="text-right font-medium">Paid ({{ currency }})</th><th :class="cell" class="text-right font-medium">Billed ({{ currency }})</th><th :class="cell" class="text-right font-medium">Balance owed</th></tr></thead>
                         <tbody>
                             <tr class="h-(--row-h)"><td :class="cell">{{ formatDate(statement.from) }}</td><td :class="cell" colspan="5" class="text-ink-2">Balance brought forward</td><td :class="cell" class="num">{{ formatMoney(statement.opening) }}</td></tr>
                             <tr v-for="(l, index) in statement.lines" :key="index" class="h-(--row-h)">

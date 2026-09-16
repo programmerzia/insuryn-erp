@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -10,6 +11,7 @@ import { serverPage } from '@/lib/paging';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useOnboarding } from '@/lib/onboarding';
 import { usePermissions } from '@/lib/permissions';
+const currency = useEntityCurrency();
 
 interface PolicyRow { id: string; number: string | null; status: string; inception: string; expiry: string; policyholder: string; product_code: string; gross_premium: string }
 const props = defineProps<{ filters: { status: string; search: string }; statuses: string[]; policies: { data: PolicyRow[]; current_page: number; last_page: number; total: number }; unratedProducts: number }>();
@@ -41,7 +43,7 @@ const columns: DataColumn<PolicyRow>[] = [
             :rows="policies.data"
             :page="serverPage(policies)"
             :row-key="(p) => p.id"
-            currency="BDT"
+            :currency="currency"
             selectable
             :empty-text="onboarding.setupNeeded ? 'No policies yet: a product has to be set up first.' : 'No policies yet.'"
             :empty-action="onboarding.setupNeeded && onboarding.canSetup ? { label: 'Set up a product', href: '/setup?step=product' } : newQuote"
@@ -53,7 +55,7 @@ const columns: DataColumn<PolicyRow>[] = [
                 <Link href="/policies/create" class="text-ui text-accent-text hover:underline">New policy (unrated product)</Link>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Product', value: row.product_code }, { label: 'Cover', value: `${formatDate(row.inception)} to ${formatDate(row.expiry)}` }, { label: 'Gross premium', value: `${formatMoney(row.gross_premium)} BDT`, num: true }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Product', value: row.product_code }, { label: 'Cover', value: `${formatDate(row.inception)} to ${formatDate(row.expiry)}` }, { label: 'Gross premium', value: `${formatMoney(row.gross_premium, currency)}`, num: true }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <Link :href="`/policies/${row.id}`" class="mt-4 inline-block text-ui text-accent-text hover:underline">Open the policy</Link>

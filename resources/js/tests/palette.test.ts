@@ -45,7 +45,7 @@ describe('commands', () => {
 
     it('names sidebar items in the glossary\'s words, each with an icon of its own (GA-37)', () => {
         const labels = navigation.map((item) => item.label);
-        expect(labels).toEqual(expect.arrayContaining(['Bank accounts', 'Month-end close', 'Compensation schemes', 'Cheque register', 'Payment reminders', 'Commission statements', 'Document templates']));
+        expect(labels).toEqual(expect.arrayContaining(['Bank accounts', 'Month-end close', 'Compensation schemes', 'Cheque register', 'Payment reminders', 'Commission statements', 'Document templates', 'Accounting events', 'Ledger API demo']));
         expect(labels).not.toEqual(expect.arrayContaining(['Agents']));
         expect(new Set(navigation.map((item) => item.icon)).size).toBe(navigation.length);
         expect(new Set(labels).size).toBe(labels.length);

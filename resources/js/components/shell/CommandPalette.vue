@@ -50,7 +50,7 @@ const kindWords: Record<string, string> = { policy: 'Policy', claim: 'Claim', re
     quotation: 'Quotation', proposal: 'Proposal', cover_note: 'Cover note', producer: 'Producer',
     supplier_bill: 'Supplier bill', payment_run: 'Payment run', supplier: 'Supplier', treaty: 'Treaty', fixed_asset: 'Fixed asset', employee: 'Employee', reinsurer_statement: 'Reinsurer statement' };
 
-const commands = computed(() => buildCommands(page.props.auth.permissions ?? []));
+const commands = computed(() => buildCommands(page.props.auth.permissions ?? [], preferences.accounting_focus));
 
 function visit(item: Recent): void {
     savePreference('recents', rememberRecent(preferences.recents, item), 0);

@@ -72,8 +72,9 @@ final class BillService
             if (ApBill::query()->where('supplier_id', $supplier->id)->whereRaw('lower(supplier_reference) = lower(?)', [$reference])->where('status', '<>', BillStatus::Cancelled->value)->exists()) {
                 throw new BusinessRuleViolation('DUPLICATE_SUPPLIER_BILL', "Supplier {$supplier->code} already has a bill with reference {$reference}.");
             }
+            $currency = (string) (DB::table('legal_entities')->where('id', $supplier->entity_id)->value('base_currency') ?? config('erp.default_currency', 'KES'));
             $bill = ApBill::query()->create(['entity_id' => $supplier->entity_id, 'branch_id' => $branchId, 'supplier_id' => $supplier->id, 'supplier_reference' => $reference,
-                'bill_date' => $billDate->toDateString(), 'due_date' => $dueDate->toDateString(), 'currency' => 'BDT', 'description' => $description,
+                'bill_date' => $billDate->toDateString(), 'due_date' => $dueDate->toDateString(), 'currency' => $currency, 'description' => $description,
                 'status' => BillStatus::Draft->value, 'source_type' => 'manual', 'created_by' => $actorUserId]);
             $this->writeLines($bill, $supplier, $lines);
             $this->audit->record('ap_bill.created', AuditSubject::of('ap_bill', $bill->id), null, ['supplier_id' => $supplier->id, 'reference' => $reference, 'payable_minor' => $bill->payable_minor],

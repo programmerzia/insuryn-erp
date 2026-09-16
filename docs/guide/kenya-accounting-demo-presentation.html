@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Insuryn — Kenya Accounting Demo</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface2: #243044;
+      --text: #e8edf4;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-soft: rgba(59, 130, 246, 0.15);
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --star: #fbbf24;
+      --border: #2d3a4f;
+      --code-bg: #0d1117;
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    header h1 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    header .meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    button {
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr;
+      overflow: hidden;
+    }
+
+    main.notes-open {
+      grid-template-columns: 1fr 340px;
+    }
+
+    .stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      overflow: auto;
+    }
+
+    .slide {
+      display: none;
+      width: min(920px, 100%);
+      animation: fade 0.25s ease;
+    }
+
+    .slide.active { display: block; }
+
+    @keyframes fade {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .slide-inner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2.5rem 3rem;
+      min-height: 420px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .badge.star { background: rgba(251, 191, 36, 0.15); color: var(--star); }
+    .badge.setup { background: rgba(34, 197, 94, 0.15); color: var(--ok); }
+
+    h2 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    .duration {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 1.25rem 0 0.5rem;
+      color: var(--accent);
+    }
+
+    p, li {
+      font-size: 1.05rem;
+      line-height: 1.55;
+      color: var(--text);
+    }
+
+    ul, ol {
+      margin: 0.5rem 0 0 1.25rem;
+    }
+
+    li { margin: 0.35rem 0; }
+
+    .muted { color: var(--muted); font-size: 0.95rem; }
+
+    blockquote {
+      margin: 1rem 0;
+      padding: 1rem 1.25rem;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 0 8px 8px 0;
+      font-size: 1.05rem;
+      font-style: italic;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      color: #93c5fd;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin: 0.75rem 0;
+      color: #c9d1d9;
+    }
+
+    .nav-path {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--surface2);
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .checklist {
+      list-style: none;
+      margin-left: 0;
+    }
+
+    .checklist li::before {
+      content: "☐ ";
+      color: var(--accent);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .card strong { display: block; margin-bottom: 0.35rem; }
+
+    .title-slide .slide-inner {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 480px;
+    }
+
+    .title-slide h2 {
+      font-size: 2.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .title-slide .subtitle {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 560px;
+      margin: 0 auto 2rem;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .pill {
+      font-size: 0.8rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    aside.notes {
+      display: none;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      padding: 1rem;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+
+    main.notes-open aside.notes { display: block; }
+
+    aside.notes h4 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    aside.notes p {
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 1.5rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .progress {
+      flex: 1;
+      max-width: 200px;
+      height: 4px;
+      background: var(--surface2);
+      border-radius: 2px;
+      margin: 0 1rem;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.2s;
+    }
+
+    .warn { color: var(--warn); }
+    .dont { color: #f87171; }
+
+    kbd {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.15em 0.4em;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface2);
+    }
+
+    @media print {
+      header, footer, aside, .controls { display: none !important; }
+      .slide { display: block !important; page-break-after: always; }
+      .slide-inner { border: none; min-height: auto; }
+      body { overflow: visible; background: #fff; color: #111; }
+      .slide-inner { background: #fff; }
+    }
+
+    @media (max-width: 900px) {
+      main.notes-open { grid-template-columns: 1fr; }
+      aside.notes { display: none !important; }
+      .slide-inner { padding: 1.5rem; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Insuryn ERP — Kenya Accounting Demo</h1>
+        <div class="meta">Presenter script · KES · Ledger API v1</div>
+      </div>
+      <div class="controls">
+        <button type="button" id="btn-notes" title="Toggle speaker notes">Notes</button>
+        <button type="button" id="btn-prev">← Prev</button>
+        <button type="button" id="btn-next" class="primary">Next →</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="stage" id="stage">
+
+        <!-- 0 Title -->
+        <section class="slide active title-slide" data-notes="Open with confidence. Audience: Md. Meherul Islam — integration/payments. Goal: win the deal by showing complete accounting in KES.">
+          <div class="slide-inner">
+            <span class="badge">Customer demo</span>
+            <h2>Kenya Accounting Demo</h2>
+            <p class="subtitle">Ledger Integration API + full GL in KES — for payment systems that need robust, auditable accounting.</p>
+            <div class="pill-row">
+              <span class="pill">35–45 min</span>
+              <span class="pill">KES only</span>
+              <span class="pill">Web + API</span>
+              <span class="pill">Assets &amp; Budgets</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1 Pitch -->
+        <section class="slide" data-notes="Memorise this line. Pause after delivering it.">
+          <div class="slide-inner">
+            <span class="badge star">Memorise</span>
+            <h2>One-line pitch</h2>
+            <blockquote>Your payment system posts accounting events to our Ledger API; Insuryn turns them into balanced journals, trial balance, P&amp;L and balance sheet — all in KES, with full audit trail. Staff use the same GL through the web screens.</blockquote>
+            <p class="muted">Do <strong>not</strong> say “standalone accounting product”. Say <strong>integrated ledger with API</strong>.</p>
+          </div>
+        </section>
+
+        <!-- 2 Setup -->
+        <section class="slide" data-notes="Do this 15 min before the call. If you haven't re-seeded since KES changes, you must run db:fresh.">
+          <div class="slide-inner">
+            <span class="badge setup">Before you present</span>
+            <h2>Setup checklist</h2>
+            <p class="duration">~15 minutes</p>
+            <pre>docker compose up -d
+composer db:fresh && php artisan erp:demo</pre>
+            <table>
+              <tr><th>Item</th><th>Value</th></tr>
+              <tr><td>URL</td><td><code>http://nonlife.localhost:8000</code></td></tr>
+              <tr><td>Primary login</td><td><code>finance.manager@nonlife.local</code> / <code>ChangeMe123!</code></td></tr>
+              <tr><td>Ledger API demo</td><td><code>integration@nonlife.local</code> / <code>ChangeMe123!</code></td></tr>
+              <tr><td>Integration admin</td><td><code>admin@nonlife.local</code> (create API users only)</td></tr>
+            </table>
+            <p class="warn">⚠ Do not use admin for the accounting walkthrough.</p>
+          </div>
+        </section>
+
+        <!-- 3 Tabs -->
+        <section class="slide" data-notes="Have these tabs ready before screen share starts.">
+          <div class="slide-inner">
+            <span class="badge setup">Pre-open tabs</span>
+            <h2>Browser tabs ready</h2>
+            <ol>
+              <li>Home — finance manager logged in</li>
+              <li><strong>Accounting → Ledger API demo</strong></li>
+              <li><strong>Accounting → Trial balance</strong></li>
+              <li><strong>Accounting → Fixed assets</strong></li>
+              <li><strong>Accounting → Budgets</strong></li>
+              <li>OpenAPI: <code>/docs/api/ledger-v1.openapi.json</code></li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- 4 Part A -->
+        <section class="slide" data-notes="Set context in 3 minutes. Don't oversell insurance modules — focus on accounting integration.">
+          <div class="slide-inner">
+            <span class="badge">Part A · 3 min</span>
+            <h2>Context</h2>
+            <ul>
+              <li><strong>Insuryn ERP</strong> with <strong>Ledger Integration API</strong> (v1)</li>
+              <li>Their system sends <strong>payment &amp; finance transactions</strong> as JSON events</li>
+              <li>Same <strong>GL</strong> staff see in the browser</li>
+              <li><strong>KES only</strong> — FX is a later phase</li>
+              <li><strong>Budgets</strong> plan spend; <strong>GL</strong> records what actually happened</li>
+            </ul>
+            <p class="dont" style="margin-top:1rem">✗ Don't say: standalone accounting product</p>
+            <p style="color:var(--ok)">✓ Say: integrated ledger with API</p>
+          </div>
+        </section>
+
+        <!-- 5 Part B intro -->
+        <section class="slide" data-notes="This is the main differentiator — spend full 10 minutes here.">
+          <div class="slide-inner">
+            <span class="badge star">Part B · 10 min ★</span>
+            <h2>Ledger API demo</h2>
+            <div class="nav-path">Accounting → <strong>Ledger API demo</strong></div>
+            <ol>
+              <li><strong>Event types</strong> — 49+ types listed</li>
+              <li><strong>Preview</strong> — <code>PREMIUM_RECEIVED</code> KES 50,000, balanced lines before post</li>
+              <li><strong>Post event</strong> — sync post, show journal id</li>
+              <li><strong>Read APIs</strong> — journals, trial balance, P&amp;L, balance sheet</li>
+              <li><strong>Bank charge</strong> — <code>BANK_CHARGE</code> for M-Pesa / bank fees</li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- 6 Mapping table -->
+        <section class="slide" data-notes="Walk through this table — connect their payment flows to our events.">
+          <div class="slide-inner">
+            <span class="badge star">Part B · Mapping</span>
+            <h2>Their payments → our events</h2>
+            <table>
+              <tr><th>Their transaction</th><th>Event type</th></tr>
+              <tr><td>Premium / policy payment in</td><td><code>PREMIUM_RECEIVED</code></td></tr>
+              <tr><td>Allocate to policies</td><td><code>RECEIPT_ALLOCATED</code></td></tr>
+              <tr><td>Claim payout</td><td><code>CLAIM_PAID</code></td></tr>
+              <tr><td>Supplier payment</td><td><code>AP_PAYMENT_RELEASED</code></td></tr>
+              <tr><td>Salary payment</td><td><code>PAYROLL_PAID</code></td></tr>
+              <tr><td>Bank / wallet fee</td><td><code>BANK_CHARGE</code></td></tr>
+            </table>
+            <p class="muted">Hand them: <code>docs/guide/ledger-event-catalogue-kes.md</code></p>
+          </div>
+        </section>
+
+        <!-- 7 API endpoints -->
+        <section class="slide" data-notes="Point to the in-app endpoint table on Ledger API demo. Hand them ledger-api-quick-reference.md. Auth: POST /api/v1/tokens, Bearer + X-Tenant: nonlife. Demo user integration@nonlife.local after erp:demo.">
+          <div class="slide-inner">
+            <span class="badge star">Part B · API summary</span>
+            <h2>Ledger API v1 — all endpoints</h2>
+            <table style="font-size:0.85rem">
+              <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+              <tr><td>POST</td><td><code>/api/v1/tokens</code></td><td>Get Bearer token</td></tr>
+              <tr><td>POST</td><td><code>/api/v1/events/preview</code></td><td>Dry-run lines</td></tr>
+              <tr><td>POST</td><td><code>/api/v1/events?sync=1</code></td><td>Submit &amp; post</td></tr>
+              <tr><td>GET</td><td><code>/api/v1/journals/{id}</code></td><td>Audit posting</td></tr>
+              <tr><td>GET</td><td><code>/api/v1/trial-balance?as_of=</code></td><td>Verify books</td></tr>
+              <tr><td>GET</td><td><code>/api/v1/reports/profit-and-loss</code></td><td>P&amp;L</td></tr>
+              <tr><td>GET</td><td><code>/api/v1/reports/balance-sheet</code></td><td>Balance sheet</td></tr>
+            </table>
+            <p class="muted" style="margin-top:0.75rem">Full list on <strong>Ledger API demo</strong> page + <code>docs/guide/ledger-api-quick-reference.md</code></p>
+          </div>
+        </section>
+
+        <!-- 7b Implementation -->
+        <section class="slide" data-notes="Walk the 6 steps on the demo page. Amounts in minor units (KES × 100). Idempotency key per business transaction.">
+          <div class="slide-inner">
+            <span class="badge star">Part B · How to integrate</span>
+            <h2>Implementation checklist</h2>
+            <ol>
+              <li>Create integration user (<code>kind=integration</code>)</li>
+              <li><code>POST /api/v1/tokens</code> — store Bearer token</li>
+              <li>Send <code>X-Tenant: nonlife</code> on every call</li>
+              <li><code>POST /api/v1/events/preview</code> — fix rule/dimension errors</li>
+              <li><code>POST /api/v1/events?sync=1</code> — same idempotency key</li>
+              <li>Reconcile with trial balance + reports</li>
+            </ol>
+            <p class="muted">Demo credentials (after <code>erp:demo</code>): <code>integration@nonlife.local</code> / <code>ChangeMe123!</code></p>
+          </div>
+        </section>
+
+        <!-- 7c Accounting events -->
+        <section class="slide" data-notes="Empty top section is GOOD — exception queue only. Bottom shows recently posted including API rows. After erp:demo: 3 API events + full insurance journals.">
+          <div class="slide-inner">
+            <span class="badge">Part B2 · 2 min</span>
+            <h2>Accounting events</h2>
+            <div class="nav-path">Accounting → <strong>Accounting events</strong></div>
+            <ul>
+              <li><strong>Needs attention</strong> — failed/stuck only. <span style="color:var(--ok)">Empty = healthy.</span></li>
+              <li><strong>Recently posted</strong> — latest ledger events; API rows marked <strong>Via API</strong></li>
+            </ul>
+            <p class="muted" style="margin-top:1rem">Seeded: 2× <code>PREMIUM_RECEIVED</code>, 1× <code>BANK_CHARGE</code> + full insurance story journals</p>
+          </div>
+        </section>
+
+        <!-- 8 Part C -->
+        <section class="slide" data-notes="Prove GL integrity — debits equal credits. Drill from trial balance to journal.">
+          <div class="slide-inner">
+            <span class="badge">Part C · 5 min</span>
+            <h2>GL integrity</h2>
+            <div class="nav-path">Accounting → <strong>Journals</strong> → open posted journal</div>
+            <ul>
+              <li>Debit = credit (balanced)</li>
+              <li>Link to <strong>source event</strong></li>
+              <li>Account codes and roles</li>
+            </ul>
+            <div class="nav-path" style="margin-top:1rem">Accounting → <strong>Trial balance</strong></div>
+            <ul>
+              <li>Totals balance</li>
+              <li>Drill to <strong>account activity</strong> → journal</li>
+            </ul>
+            <blockquote style="margin-top:1rem;font-size:0.95rem">Every API post and every web action lands here — one source of truth.</blockquote>
+          </div>
+        </section>
+
+        <!-- 9 Part D -->
+        <section class="slide" data-notes="Quick 3 min — same numbers on API for their data warehouse.">
+          <div class="slide-inner">
+            <span class="badge">Part D · 3 min</span>
+            <h2>Financial statements</h2>
+            <div class="nav-path">Reports → <strong>Profit and loss</strong> + <strong>Balance sheet</strong></div>
+            <blockquote>Same numbers are available on the API for your data warehouse or reconciliation tools.</blockquote>
+          </div>
+        </section>
+
+        <!-- 10 Part E -->
+        <section class="slide" data-notes="Customer asked for assets — don't skip. Show seeded register and depreciation.">
+          <div class="slide-inner">
+            <span class="badge star">Part E · 4 min ★</span>
+            <h2>Fixed assets</h2>
+            <div class="nav-path">Accounting → <strong>Fixed assets</strong></div>
+            <ul>
+              <li>Asset register (seeded demo assets)</li>
+              <li>One asset — cost, depreciation schedule</li>
+              <li><strong>Depreciation</strong> monthly batch → posts to GL</li>
+            </ul>
+            <p class="muted">API: <code>FA_ACQUIRED</code>, <code>FA_DEPRECIATION_POSTED</code></p>
+          </div>
+        </section>
+
+        <!-- 11 Part F -->
+        <section class="slide" data-notes="Customer asked for budgets. Emphasize: planning vs GL actuals.">
+          <div class="slide-inner">
+            <span class="badge star">Part F · 3 min ★</span>
+            <h2>Budgets</h2>
+            <div class="nav-path">Accounting → <strong>Budgets</strong> → <strong>Variance</strong></div>
+            <ul>
+              <li>Approved operating budget (FY)</li>
+              <li><strong>Budget variance</strong> — actual from GL vs budget</li>
+            </ul>
+            <blockquote style="font-size:0.95rem">Budgets are planning and control; they don't duplicate the GL. Variance pulls from posted journals.</blockquote>
+          </div>
+        </section>
+
+        <!-- 12 Part G -->
+        <section class="slide" data-notes="Show money out — bills and payment runs. Optional: petty cash.">
+          <div class="slide-inner">
+            <span class="badge">Part G · 4 min</span>
+            <h2>Payables &amp; cash</h2>
+            <div class="nav-path">Payables → <strong>Suppliers</strong> → <strong>Bills</strong> → <strong>Payment runs</strong></div>
+            <ul>
+              <li>Bill posted to AP</li>
+              <li>Payment run prepared / released</li>
+            </ul>
+            <p class="muted">API: <code>AP_BILL_POSTED</code>, <code>AP_PAYMENT_RELEASED</code></p>
+            <p class="muted" style="margin-top:0.5rem">Optional: Petty cash under Accounting</p>
+          </div>
+        </section>
+
+        <!-- 13 Part H -->
+        <section class="slide" data-notes="Control narrative — period lock applies to API too.">
+          <div class="slide-inner">
+            <span class="badge">Part H · 3 min</span>
+            <h2>Period close &amp; control</h2>
+            <div class="nav-path">Accounting → <strong>Close</strong></div>
+            <ul>
+              <li>Close checklist — reconciliations, pending items</li>
+              <li><strong>Period lock</strong> — nothing posts into locked period</li>
+            </ul>
+            <blockquote style="font-size:0.95rem">API posts respect open periods too — month-end discipline is enforced.</blockquote>
+          </div>
+        </section>
+
+        <!-- 14 Wrap -->
+        <section class="slide" data-notes="Recap checklist. Close strong with integration path.">
+          <div class="slide-inner">
+            <span class="badge">Part I · Wrap</span>
+            <h2>Recap &amp; close</h2>
+            <ul class="checklist">
+              <li>API: events in, journals + reports out</li>
+              <li>KES throughout</li>
+              <li>Assets &amp; budgets working</li>
+              <li>Payables / payroll / bank fees covered</li>
+              <li>Audit trail: event → journal → TB → statements</li>
+            </ul>
+            <blockquote style="margin-top:1.25rem;font-size:0.95rem">Start with preview mode and trial balance reconciliation, then go live event-by-event. Opening balances are one-time import; day-to-day payments use the event API.</blockquote>
+            <h3>Deferred (if asked)</h3>
+            <p class="muted">FX · Webhooks · Batch ingest · Customer portals</p>
+          </div>
+        </section>
+
+        <!-- 15 Accounts -->
+        <section class="slide" data-notes="Reference slide — don't present unless asked.">
+          <div class="slide-inner">
+            <span class="badge setup">Reference</span>
+            <h2>Demo accounts</h2>
+            <p class="muted">Password for all: <code>ChangeMe123!</code></p>
+            <table>
+              <tr><th>Email</th><th>Use</th></tr>
+              <tr><td><code>finance.manager@nonlife.local</code></td><td><strong>Primary</strong> — full accounting demo</td></tr>
+              <tr><td><code>accountant@nonlife.local</code></td><td>Manual journals, close, COA</td></tr>
+              <tr><td><code>cfo@nonlife.local</code></td><td>Approve payment runs, lock periods</td></tr>
+              <tr><td><code>admin@nonlife.local</code></td><td>Create integration users only</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- 16 Troubleshooting -->
+        <section class="slide" data-notes="Keep this slide hidden unless something breaks mid-demo.">
+          <div class="slide-inner">
+            <span class="badge setup">Troubleshooting</span>
+            <h2>If something breaks</h2>
+            <table>
+              <tr><th>Problem</th><th>Fix</th></tr>
+              <tr><td>Blank / error after login</td><td><code>composer db:fresh && php artisan erp:demo</code></td></tr>
+              <tr><td>Vite compile error</td><td>Restart <code>composer dev</code></td></tr>
+              <tr><td>Event stays "queued"</td><td>Queue worker must run</td></tr>
+              <tr><td>Period closed on API</td><td>Use open period (Sep 2026)</td></tr>
+              <tr><td>Admin can't see accounting</td><td>Use finance.manager login</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- 17 Practice -->
+        <section class="slide" data-notes="Run this solo once before the real call. 20 minutes.">
+          <div class="slide-inner">
+            <span class="badge setup">Practice run · 20 min</span>
+            <h2>Solo rehearsal</h2>
+            <ol>
+              <li>Fresh seed → login finance manager</li>
+              <li>Ledger API: preview → post → note journal id</li>
+              <li>Trial balance → one account drill</li>
+              <li>Fixed assets → one asset</li>
+              <li>Budgets → variance</li>
+              <li>Payables → one bill or payment run</li>
+              <li>Close checklist (don't lock period)</li>
+            </ol>
+            <p style="color:var(--ok);margin-top:1rem">If all seven work — you're ready.</p>
+          </div>
+        </section>
+
+        <!-- 18 Must not skip -->
+        <section class="slide" data-notes="Final reminder before the call.">
+          <div class="slide-inner">
+            <span class="badge star">Must not skip</span>
+            <h2>Non-negotiables</h2>
+            <ol>
+              <li><strong>Ledger API demo</strong> — preview + post + trial balance</li>
+              <li><strong>Trial balance</strong> — proves books balance</li>
+              <li><strong>Fixed assets</strong> — customer requirement</li>
+              <li><strong>Budgets + variance</strong> — customer requirement</li>
+              <li><strong>KES</strong> — no BDT anywhere</li>
+            </ol>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="notes" id="notes">
+        <h4>Speaker notes</h4>
+        <p id="notes-text"></p>
+      </aside>
+    </main>
+
+    <footer>
+      <span id="slide-label">1 / 19</span>
+      <div class="progress"><div class="progress-bar" id="progress"></div></div>
+      <span><kbd>←</kbd> <kbd>→</kbd> navigate · <kbd>N</kbd> notes</span>
+    </footer>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll('.slide')];
+    const notesEl = document.getElementById('notes-text');
+    const labelEl = document.getElementById('slide-label');
+    const progressEl = document.getElementById('progress');
+    const mainEl = document.getElementById('main');
+    let index = 0;
+
+    function show(i) {
+      index = Math.max(0, Math.min(i, slides.length - 1));
+      slides.forEach((s, j) => s.classList.toggle('active', j === index));
+      notesEl.textContent = slides[index].dataset.notes || '';
+      labelEl.textContent = `${index + 1} / ${slides.length}`;
+      progressEl.style.width = `${((index + 1) / slides.length) * 100}%`;
+      history.replaceState(null, '', `#${index + 1}`);
+    }
+
+    document.getElementById('btn-prev').onclick = () => show(index - 1);
+    document.getElementById('btn-next').onclick = () => show(index + 1);
+    document.getElementById('btn-notes').onclick = () => mainEl.classList.toggle('notes-open');
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); show(index + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); show(index - 1); }
+      if (e.key === 'n' || e.key === 'N') mainEl.classList.toggle('notes-open');
+      if (e.key === 'Home') show(0);
+      if (e.key === 'End') show(slides.length - 1);
+    });
+
+    const hash = parseInt(location.hash.replace('#', ''), 10);
+    show(Number.isFinite(hash) && hash >= 1 && hash <= slides.length ? hash - 1 : 0);
+  </script>
+</body>
+</html>

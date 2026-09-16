@@ -31,9 +31,10 @@ it('stores preferences per user, merges keys and shares them with every page', f
     actingAs($this->user)->putJson('/preferences/density', ['value' => 'comfortable'], $this->headers)->assertNoContent();
     actingAs($this->user)->putJson('/preferences/splits.receipts', ['value' => 420], $this->headers)->assertNoContent();
     actingAs($this->user)->putJson('/preferences/sidebar_collapsed', ['value' => true], $this->headers)->assertNoContent();
+    actingAs($this->user)->putJson('/preferences/accounting_focus', ['value' => true], $this->headers)->assertNoContent();
 
     expect(asTenant($this->ctx['tenant_id'], fn () => app(UserPreferences::class)->of($this->user->id)))
-        ->toMatchArray(['theme' => 'dark', 'density' => 'comfortable', 'splits' => ['receipts' => 420], 'sidebar_collapsed' => true]);
+        ->toMatchArray(['theme' => 'dark', 'density' => 'comfortable', 'splits' => ['receipts' => 420], 'sidebar_collapsed' => true, 'accounting_focus' => true]);
     expect(asTenant($this->ctx['tenant_id'], fn () => app(UserPreferences::class)->of($this->other->id)))->toMatchArray(['theme' => 'system', 'density' => 'compact']);
     expect(asTenant($this->ctx['tenant_id'], fn () => DB::table('user_preferences')->count()))->toBe(1);
 

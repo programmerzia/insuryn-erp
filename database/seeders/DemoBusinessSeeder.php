@@ -141,14 +141,14 @@ final class DemoBusinessSeeder extends Seeder
             $valueDate = $day((string) $installment->due_date)->addDays(3);
             $channel = ['bank_transfer', 'cheque', 'cash', 'mobile_money'][$i % 4];
             $cheque = $channel === 'cheque' ? new ChequeDetails((string) (88200 + $i), 'Sonali Bank', $valueDate->subDay()) : null;
-            $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, $channel, (int) $installment->amount_minor, 'BDT', $valueDate, null,
+            $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, $channel, (int) $installment->amount_minor, (string) config('erp.default_currency', 'KES'), $valueDate, null,
                 "REF-{$i}", [new AllocationLine((string) $installment->id, (int) $installment->amount_minor)], $cheque), $users['branch_manager']);
         }
         foreach ([['2026-09-02', 2_500_000, 'unreadable ref'], ['2026-08-21', 1_150_000, 'TT 4471'], ['2026-07-28', 640_000, 'cash deposit']] as [$date, $amount, $ref]) {
-            $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, 'bank_transfer', $amount, 'BDT', $day($date), null, $ref, []), $users['branch_officer']);
+            $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, 'bank_transfer', $amount, (string) config('erp.default_currency', 'KES'), $day($date), null, $ref, []), $users['branch_officer']);
         }
 
-        $bank = app(BankAccountService::class)->create($entityId, $accounts['1010'], 'City Bank', '****4471', 'BDT', $users['finance_manager']);
+        $bank = app(BankAccountService::class)->create($entityId, $accounts['1010'], 'City Bank', '****4471', (string) config('erp.default_currency', 'KES'), $users['finance_manager']);
         // Statement lines near real receipts so matching has work: one strong suggestion (reference), one possible (amount and date), one fee, one unknown.
         $recent = DB::table('receipts')->where('value_date', '>=', '2026-08-25')->whereNotNull('reference')->orderBy('value_date')->get(['reference', 'value_date', 'amount_minor']);
         $lines = ['date,description,reference,amount'];
@@ -192,7 +192,7 @@ final class DemoBusinessSeeder extends Seeder
         app(\App\Modules\Accounting\Application\Close\PeriodCloseService::class)->execute($firstTask, $users['finance_manager'], 'August earning run');
 
         $journals = app(ManualJournalService::class);
-        $journal = $journals->create(new ManualJournalRequest($entityId, $day('2026-09-10'), 'Office rent accrual for September', JournalKind::Manual, 'Rent invoice 9/26', 'BDT', [
+        $journal = $journals->create(new ManualJournalRequest($entityId, $day('2026-09-10'), 'Office rent accrual for September', JournalKind::Manual, 'Rent invoice 9/26', (string) config('erp.default_currency', 'KES'), [
             new ManualJournalLine($accounts['5300'], Side::Debit, 85_000_00, ['branch' => $branchId], 'Rent'),
             new ManualJournalLine($accounts['1010'], Side::Credit, 85_000_00, ['branch' => $branchId], null),
         ]), $users['accountant']);

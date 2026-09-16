@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -15,6 +16,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { employmentTypeLabel, employmentTypes } from '@/lib/people';
+const currency = useEntityCurrency();
 
 /**
  * Addendum §B.10.2 payroll rules as data: provident fund, festival bonuses and tax exemption; salary structure per grade; the income tax slab table per tax year.
@@ -102,7 +104,7 @@ const slabColumns: DataColumn<SlabRow>[] = [
 
             <section class="mt-8 max-w-[1100px]">
                 <h2 class="mb-2 text-section font-semibold">Salary structure per grade</h2>
-                <DataTable id="people-salary-structures" label="Salary structure per grade" :columns="gradeColumns" :rows="grades" :row-key="(g) => g.id" currency="BDT" :url-sync="false" empty-text="No grades yet." compact-toolbar>
+                <DataTable id="people-salary-structures" label="Salary structure per grade" :columns="gradeColumns" :rows="grades" :row-key="(g) => g.id" :currency="currency" :url-sync="false" empty-text="No grades yet." compact-toolbar>
                     <template #cell-actions="{ row }">
                         <span class="flex items-center justify-end gap-3"><span v-if="row.structure?.verify" class="text-warn">verify</span><Button v-if="can.manage" variant="secondary" size="sm" @click.stop="editGrade(row.id)">Edit</Button></span>
                     </template>
@@ -118,7 +120,7 @@ const slabColumns: DataColumn<SlabRow>[] = [
                         <Button v-if="can.manage" variant="secondary" size="sm" @click="drawer = 'slabs'">Edit</Button>
                     </div>
                 </div>
-                <DataTable id="people-tax-slabs" label="Income tax slabs" :columns="slabColumns" :rows="slabs.map((s, no) => ({ ...s, no }))" :row-key="(s) => String(s.no)" currency="BDT" :url-sync="false" :empty-text="`No slabs for FY ${taxYear}: payroll for that year is refused until they are entered.`" compact-toolbar />
+                <DataTable id="people-tax-slabs" label="Income tax slabs" :columns="slabColumns" :rows="slabs.map((s, no) => ({ ...s, no }))" :row-key="(s) => String(s.no)" :currency="currency" :url-sync="false" :empty-text="`No slabs for FY ${taxYear}: payroll for that year is refused until they are entered.`" compact-toolbar />
                 <p v-if="slabs.some((s) => s.verify)" class="mt-2 text-dense text-warn">Placeholder slabs: verify against the Finance Act for FY {{ taxYear }}.</p>
             </section>
         </div>

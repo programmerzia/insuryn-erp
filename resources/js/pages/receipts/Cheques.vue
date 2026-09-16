@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
@@ -11,6 +12,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 import { usePermissions } from '@/lib/permissions';
+const currency = useEntityCurrency();
 
 /**
  * Cheque register. Gap fix GA-14: a cheque waits in clearing until the bank credits it; "Clear" moves it into the bank (with the journal preview), and a
@@ -38,7 +40,7 @@ const columns: DataColumn<Row>[] = [
 const clearable = (r: Row) => r.state === 'in_clearing' && can('receipt.allocate');
 
 function clear(r: Row): void {
-    void confirm.request(`/receipts/${r.receipt_id}/clear`, { cleared_on: clearedOn.value }, `Clear cheque ${r.cheque_no} into the bank?`, `Clear ${formatMoney(r.amount)} BDT`);
+    void confirm.request(`/receipts/${r.receipt_id}/clear`, { cleared_on: clearedOn.value }, `Clear cheque ${r.cheque_no} into the bank?`, `Clear ${formatMoney(r.amount, currency)}`);
 }
 </script>
 
@@ -51,7 +53,7 @@ function clear(r: Row): void {
             :columns="columns"
             :rows="register.rows"
             :row-key="(r) => r.receipt_id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No cheques in this period."
             :empty-action="{ label: 'Record a receipt', href: '/receipts/create' }"
             :inspector-title="(r) => `Cheque ${r.cheque_no}`"
@@ -64,7 +66,7 @@ function clear(r: Row): void {
                 <span class="ml-3 text-ui text-ink-2">In clearing <span class="tabular-nums text-ink">{{ formatMoney(register.totals.in_clearing) }}</span> · cleared <span class="tabular-nums text-ink">{{ formatMoney(register.totals.cleared) }}</span> · bounced <span class="tabular-nums text-ink">{{ formatMoney(register.totals.bounced) }}</span></span>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Receipt', value: row.receipt_number }, { label: 'Amount', value: `${formatMoney(row.amount)} BDT`, num: true }, { label: 'Received', value: formatDate(row.value_date) },
+                <DetailList :items="[{ label: 'Receipt', value: row.receipt_number }, { label: 'Amount', value: `${formatMoney(row.amount, currency)}`, num: true }, { label: 'Received', value: formatDate(row.value_date) },
                     { label: 'Cleared', value: formatDate(row.cleared_on) }, { label: 'Bounced', value: row.bounced_on ? `${formatDate(row.bounced_on)}: ${row.bounce_reason}` : null }]" />
                 <p v-if="row.state === 'in_clearing'" class="mt-3 text-ui text-ink-2">The money is in cheques in clearing until the bank credits it. If the bank returns the cheque, record the bounce on the receipt.</p>
                 <div v-if="clearable(row)" class="mt-4 grid gap-3 border-t border-line pt-4">
@@ -72,6 +74,6 @@ function clear(r: Row): void {
                 </div>
             </template>
         </QueueView>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

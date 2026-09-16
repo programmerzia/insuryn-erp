@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Finance\Payables\Application;
 
 use App\Modules\Finance\Bank\Application\BankAccountQuery;
+use App\Modules\Finance\Bank\Domain\Models\BankAccount;
 use App\Modules\Finance\Payables\Domain\Enums\BillStatus;
 use App\Modules\Finance\Payables\Domain\Enums\PaymentRunStatus;
 use App\Modules\Finance\Payables\Domain\Models\ApBill;
@@ -84,12 +85,17 @@ final class PaymentRunService
         if ($billIds === []) {
             throw new BusinessRuleViolation('PAYMENT_RUN_EMPTY', 'Choose at least one bill to pay.');
         }
-        $this->bankAccounts->glAccountFor($bankAccountId, $entityId, 'BDT');
+        $bankAccount = BankAccount::query()->find($bankAccountId);
+        if ($bankAccount === null) {
+            throw new BusinessRuleViolation('INVALID_BANK_ACCOUNT', "Bank account {$bankAccountId} is not an active account of this entity.");
+        }
+        $currency = (string) $bankAccount->currency;
+        $this->bankAccounts->glAccountFor($bankAccountId, $entityId, $currency);
         $number = $this->numbers->reserve(new DocumentNumberScope($entityId, null, 'payment_run', 'PRN', $payDate), $actorUserId);
 
-        return DB::transaction(function () use ($entityId, $bankAccountId, $payDate, $billIds, $actorUserId, $number): PaymentRun {
+        return DB::transaction(function () use ($entityId, $bankAccountId, $payDate, $billIds, $actorUserId, $number, $currency): PaymentRun {
             $run = PaymentRun::query()->create(['entity_id' => $entityId, 'number' => $number->number, 'bank_account_id' => $bankAccountId, 'pay_date' => $payDate->toDateString(),
-                'currency' => 'BDT', 'status' => PaymentRunStatus::Draft->value, 'created_by' => $actorUserId]);
+                'currency' => $currency, 'status' => PaymentRunStatus::Draft->value, 'created_by' => $actorUserId]);
             $this->numbers->markUsed($number->id, 'payment_run', $run->id);
             $total = 0;
             foreach (array_values(array_unique($billIds)) as $billId) {

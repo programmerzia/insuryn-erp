@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Pages;
 
+use App\Modules\Accounting\Application\Events\RecentAccountingEventsQuery;
 use App\Modules\Accounting\Application\Events\StuckAccountingEvents;
 use App\Modules\Platform\Authorization\AuthorizationScope;
 use App\Modules\Platform\Authorization\PermissionChecker;
@@ -24,7 +25,7 @@ final class AccountingEventsPageController
 {
     public function __construct(private readonly PermissionChecker $permissions, private readonly StuckAccountingEvents $events) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, RecentAccountingEventsQuery $recent): Response
     {
         $actor = PageSupport::actor($request);
         $entity = PageSupport::entity();
@@ -41,6 +42,7 @@ final class AccountingEventsPageController
 
         return Inertia::render('accounting/events/Index', [
             'events' => $rows,
+            'recentPosted' => $recent->list($entity['id']),
             'staleAfterMinutes' => StuckAccountingEvents::staleAfterMinutes(),
             'can' => ['requeue' => $this->permissions->has($actor, StuckAccountingEvents::PERMISSION, AuthorizationScope::entity($entity['id']))],
         ]);

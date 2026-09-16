@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -8,6 +9,7 @@ import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
 import { type Paginated, serverPage } from '@/lib/paging';
+const currency = useEntityCurrency();
 
 /** Payables → Supplier bills (addendum v2 §B.4): every bill, with the views finance works from — awaiting approval, due this week, overdue. */
 interface BillRow { id: string; number: string; supplier: string; reference: string; bill_date: string; due_date: string; branch: string; gross: string; payable: string; outstanding: string; status: string; description: string | null }
@@ -48,7 +50,7 @@ function show(view: string): void {
             :rows="bills.data"
             :page="serverPage(bills)"
             :row-key="(b) => b.id"
-            currency="BDT"
+            :currency="currency"
             :url-sync="false"
             empty-text="No supplier bills in this view."
             :empty-action="canEnter && view === 'all' ? { label: 'Enter a bill', href: '/payables/bills/create' } : null"
@@ -63,7 +65,7 @@ function show(view: string): void {
                 </div>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Payable', value: `${formatMoney(row.payable)} BDT`, num: true }, { label: 'Outstanding', value: `${formatMoney(row.outstanding)} BDT`, num: true }, { label: 'Due', value: formatDate(row.due_date) }, { label: 'Branch', value: row.branch }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Payable', value: `${formatMoney(row.payable, currency)}`, num: true }, { label: 'Outstanding', value: `${formatMoney(row.outstanding, currency)}`, num: true }, { label: 'Due', value: formatDate(row.due_date) }, { label: 'Branch', value: row.branch }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <p v-if="row.description" class="mt-3 text-ui text-ink-2">{{ row.description }}</p>

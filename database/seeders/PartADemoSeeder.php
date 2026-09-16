@@ -154,6 +154,68 @@ final class PartADemoSeeder extends Seeder
         return true;
     }
 
+    /**
+     * Backfill fixed assets, budgets and petty cash when an older demo tenant has the insurance story but not the finance-module seed.
+     *
+     * @return list<string> modules backfilled (empty when nothing was missing)
+     */
+    public function backfillMissingModules(string $slug = 'nonlife'): array
+    {
+        $tenantId = (string) DB::table('tenants')->where('slug', $slug)->value('id');
+        if ($tenantId === '') {
+            return [];
+        }
+
+        return TenantContext::run($tenantId, function () use ($slug): array {
+            if (! DB::table('policies')->exists()) {
+                return [];
+            }
+            $users = $this->demoRoleUsers($slug);
+            if ($users === null) {
+                return [];
+            }
+            $entityId = (string) DB::table('legal_entities')->orderBy('code')->value('id');
+            $branchId = (string) DB::table('branches')->where('entity_id', $entityId)->where('code', 'HO')->value('id');
+            $secondBranchId = (string) DB::table('branches')->where('entity_id', $entityId)->where('code', 'CTG')->value('id');
+            $bankAccountId = (string) DB::table('bank_accounts')->where('entity_id', $entityId)->where('status', 'active')->orderBy('created_at')->value('id');
+            if ($entityId === '' || $branchId === '' || $bankAccountId === '') {
+                return [];
+            }
+            $backfilled = (new FinanceModulesDemoSeeder())->ensure($entityId, $branchId, $secondBranchId !== '' ? $secondBranchId : $branchId, $bankAccountId, $users);
+            if ($backfilled === []) {
+                return [];
+            }
+            $this->postQueuedEvents();
+            $currency = (string) config('erp.default_currency', 'KES');
+            if (DB::table('external_event_intakes')->count() === 0) {
+                (new AccountingIntegrationDemoSeeder())->run($entityId, $branchId, $currency);
+                $this->postQueuedEvents();
+            }
+
+            return $backfilled;
+        });
+    }
+
+    /** @return array<string, string>|null role code → user id */
+    private function demoRoleUsers(string $slug): ?array
+    {
+        $users = [];
+        foreach (self::ROLES as $role) {
+            $id = DB::table('users')->where('email', str_replace('_', '.', $role)."@{$slug}.local")->value('id');
+            if ($id === null) {
+                return null;
+            }
+            $users[$role] = (string) $id;
+        }
+        $ctgOfficer = DB::table('users')->where('email', self::SECOND_BRANCH_OFFICER."@{$slug}.local")->value('id');
+        if ($ctgOfficer === null) {
+            return null;
+        }
+        $users[self::SECOND_BRANCH_OFFICER] = (string) $ctgOfficer;
+
+        return $users;
+    }
+
     /** @param array<string, string> $accounts role → account id */
     private function story(array $accounts): void
     {
@@ -186,13 +248,13 @@ final class PartADemoSeeder extends Seeder
             'FIRE-SP' => $product('FIRE-SP', 'Fire Short Period (seasonal stock)', 'fire', 'fire', 1)];
         DemoRatingPlans::seed($finance, $this->users['cfo']); // Phase 3 R3: placeholder tariffs and duties (verify)
         ReinsuranceDemoSeeder::setUp($this->entityId, $this->users); // reinsurance MVP (G4): SBC, reinsurers and FY2026 treaties before the first sale
-        $this->bankAccountId = app(BankAccountService::class)->create($this->entityId, $accounts['bank_main'], 'City Bank', '****4471', 'BDT', $finance)->id;
+        $this->bankAccountId = app(BankAccountService::class)->create($this->entityId, $accounts['bank_main'], 'City Bank', '****4471', (string) config('erp.default_currency', 'KES'), $finance)->id;
         $journals = app(ManualJournalService::class);
         // GA-35: the balance brought forward is the paid-up share capital, not retained earnings (nothing has been earned yet).
         $shareCapital = (string) Str::uuid7();
         DB::table('accounts')->insert(['id' => $shareCapital, 'tenant_id' => TenantContext::id(), 'entity_id' => $this->entityId, 'code' => '3000', 'name' => 'Share Capital',
             'type' => 'equity', 'normal_side' => 'credit', 'is_postable' => true, 'is_control' => false, 'control_subledger' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
-        $opening = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Bank balance brought forward', JournalKind::Manual, 'Opening balance at City Bank: paid-up share capital', 'BDT', [
+        $opening = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Bank balance brought forward', JournalKind::Manual, 'Opening balance at City Bank: paid-up share capital', (string) config('erp.default_currency', 'KES'), [
             new ManualJournalLine($accounts['bank_main'], Side::Debit, 2_000_000_00, ['branch' => $this->branchId], 'City Bank'),
             new ManualJournalLine($shareCapital, Side::Credit, 2_000_000_00, ['branch' => $this->branchId], 'Paid-up share capital'),
         ]), $accountant);
@@ -203,7 +265,7 @@ final class PartADemoSeeder extends Seeder
         $fdr = (string) Str::uuid7();
         DB::table('accounts')->insert(['id' => $fdr, 'tenant_id' => TenantContext::id(), 'entity_id' => $this->entityId, 'code' => '1300', 'name' => 'Fixed Deposits (FDR)',
             'type' => 'asset', 'normal_side' => 'debit', 'is_postable' => true, 'is_control' => false, 'control_subledger' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
-        $capital = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Paid-up capital in fixed deposits', JournalKind::Manual, 'Opening balance: paid-up share capital held in FDRs', 'BDT', [
+        $capital = $journals->create(new ManualJournalRequest($this->entityId, $day('2026-08-01'), 'Paid-up capital in fixed deposits', JournalKind::Manual, 'Opening balance: paid-up share capital held in FDRs', (string) config('erp.default_currency', 'KES'), [
             new ManualJournalLine($fdr, Side::Debit, 60_00_00_000_00, ['branch' => $this->branchId], 'FDRs at Sonali, Dutch-Bangla and BRAC Bank'),
             new ManualJournalLine($shareCapital, Side::Credit, 60_00_00_000_00, ['branch' => $this->branchId], 'Paid-up share capital'),
         ]), $accountant);
@@ -239,7 +301,7 @@ final class PartADemoSeeder extends Seeder
             $installment = $policyId === null ? null : DB::table('installments')->where('policy_id', $policyId)->orderBy('no')->value('id');
             $allocations = $installment === null ? [] : [new AllocationLine((string) $installment, $amountMinor)];
 
-            return $receipts->record(new RecordReceiptRequest($this->entityId, $this->branchId, null, 'bank_transfer', $amountMinor, 'BDT', $day($on), $this->bankAccountId,
+            return $receipts->record(new RecordReceiptRequest($this->entityId, $this->branchId, null, 'bank_transfer', $amountMinor, (string) config('erp.default_currency', 'KES'), $day($on), $this->bankAccountId,
                 $reference, $allocations), $manager)->id;
         };
 
@@ -298,6 +360,8 @@ final class PartADemoSeeder extends Seeder
         ReinsuranceDemoSeeder::finish($this->entityId, $this->branchId, $products['FIRE'], $this->users); // reinsurance MVP (G4): a facultative placement and Q3 statements
         (new PayablesDemoSeeder())->run($this->entityId, $this->branchId, $this->bankAccountId, $this->users); // slices 2.3/2.4 accounts payable
         $this->postQueuedEvents();
+        $currency = (string) config('erp.default_currency', 'KES');
+        (new AccountingIntegrationDemoSeeder())->run($this->entityId, $this->branchId, $currency);
     }
 
     /**

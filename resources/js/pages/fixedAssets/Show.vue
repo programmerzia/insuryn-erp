@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
 import Field from '@/components/forms/Field.vue';
@@ -16,6 +17,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney, formatMonth } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
+const currency = useEntityCurrency();
 
 /** Design addendum v2 §B.7 asset page: Overview · Depreciation schedule · Movements · Documents · Accounting · Audit, with Move and Dispose drawers. */
 type Option = { id: string; label: string };
@@ -41,14 +43,14 @@ const disposing = ref(false);
 const move = useMoneyForm(() => `/fixed-assets/${props.asset.id}/transfer`, { to_branch_id: props.branches.find((b) => b.id !== props.asset.branch_id)?.id ?? '', moved_on: today, location: '', reason: '' }, () => (moving.value = false));
 const dispose = useMoneyForm(() => `/fixed-assets/${props.asset.id}/dispose`, { kind: 'sale', disposal_date: today, proceeds: '', bank_account_id: props.bankAccounts[0]?.id ?? '', reason: '' }, () => (disposing.value = false));
 const facts = computed(() => [
-    { label: 'Cost (BDT)', value: formatMoney(props.asset.cost), num: true },
+    { label: 'Cost ({{ currency }})', value: formatMoney(props.asset.cost), num: true },
     { label: 'Accumulated depreciation', value: formatMoney(props.asset.accumulated), num: true },
     { label: 'Net book value', value: formatMoney(props.asset.nbv), num: true },
     { label: 'Class', value: props.asset.class },
     { label: 'Branch', value: props.asset.branch },
 ]);
 const details = computed(() => [
-    ['Description', props.asset.description], ['Method', props.asset.method], ['Residual value', `${formatMoney(props.asset.residual)} BDT`], ['Acquired', formatDate(props.asset.acquired_on)],
+    ['Description', props.asset.description], ['Method', props.asset.method], ['Residual value', `${formatMoney(props.asset.residual, currency)}`], ['Acquired', formatDate(props.asset.acquired_on)],
     ['How acquired', props.asset.source], ['Location', props.asset.location], ['Custodian', props.asset.custodian], ['Serial number', props.asset.serial_no], ['Supplier', props.asset.supplier], ['Supplier invoice', props.asset.invoice_ref],
 ] as [string, string | null][]);
 type ScheduleRow = (typeof props.schedule)[number];
@@ -76,7 +78,7 @@ const movementColumns: DataColumn<MovementRow>[] = [
             :status="asset.status"
             :facts="facts"
             :crumbs="[{ label: 'Fixed assets', href: '/fixed-assets' }]"
-            currency="BDT"
+            :currency="currency"
             :timeline="timeline"
             :accounting="accounting"
             :audit="audit"
@@ -94,14 +96,14 @@ const movementColumns: DataColumn<MovementRow>[] = [
                 </dl>
                 <div v-if="disposal" class="mt-4 max-w-[760px] rounded-panel border border-line p-3 text-ui">
                     <p class="font-medium">{{ disposal.kind === 'sale' ? 'Sold' : 'Written off' }} on {{ formatDate(disposal.date) }} ({{ disposal.number }})</p>
-                    <p class="text-ink-2">Proceeds {{ formatMoney(disposal.proceeds) }} BDT · net book value {{ formatMoney(disposal.nbv) }} BDT ·
-                        <span :class="disposal.gain_loss.startsWith('-') ? 'text-danger' : 'text-ok'">{{ disposal.gain_loss.startsWith('-') ? 'loss' : 'gain' }} {{ formatMoney(disposal.gain_loss.replace('-', '')) }} BDT</span></p>
+                    <p class="text-ink-2">Proceeds {{ formatMoney(disposal.proceeds) }} {{ currency }} · net book value {{ formatMoney(disposal.nbv) }} {{ currency }} ·
+                        <span :class="disposal.gain_loss.startsWith('-') ? 'text-danger' : 'text-ok'">{{ disposal.gain_loss.startsWith('-') ? 'loss' : 'gain' }} {{ formatMoney(disposal.gain_loss.replace('-', '')) }} {{ currency }}</span></p>
                     <p class="text-ink-2">{{ disposal.reason }}</p>
                 </div>
             </template>
             <template #tab-schedule>
                 <div class="max-w-[760px] border border-line">
-                    <DataTable id="fixed-asset-schedule" label="Depreciation schedule" :columns="scheduleColumns" :rows="schedule" :row-key="(r) => `${r.opening ? 'b' : 'm'}-${r.period}`" currency="BDT" :url-sync="false"
+                    <DataTable id="fixed-asset-schedule" label="Depreciation schedule" :columns="scheduleColumns" :rows="schedule" :row-key="(r) => `${r.opening ? 'b' : 'm'}-${r.period}`" :currency="currency" :url-sync="false"
                         :open-on-click="false" compact-toolbar empty-text="No depreciation posted yet; the monthly batch posts it." />
                 </div>
             </template>
@@ -123,17 +125,17 @@ const movementColumns: DataColumn<MovementRow>[] = [
         </Drawer>
         <Drawer v-model:open="disposing" title="Dispose of the asset">
             <FormLayout submit-label="Review the gain or loss" :dirty="dispose.form.isDirty" :processing="dispose.form.processing" :error="(dispose.form.errors as Record<string, string>).form" @submit="dispose.review" @cancel="disposing = false">
-                <p class="text-ui text-ink-2">Net book value today {{ formatMoney(asset.nbv) }} BDT. The month of disposal is not depreciated.</p>
+                <p class="text-ui text-ink-2">Net book value today {{ formatMoney(asset.nbv) }} {{ currency }}. The month of disposal is not depreciated.</p>
                 <Field id="kind" label="How" :error="dispose.form.errors.kind"><SelectInput id="kind" v-model="dispose.form.kind" :options="[{ value: 'sale', label: 'Sold' }, { value: 'write_off', label: 'Scrapped or written off' }]" /></Field>
                 <Field id="disposal_date" label="Date" :error="dispose.form.errors.disposal_date"><DateInput v-model="dispose.form.disposal_date" /></Field>
                 <template v-if="dispose.form.kind === 'sale'">
-                    <Field id="proceeds" label="Sale proceeds (BDT)" :error="dispose.form.errors.proceeds"><MoneyInput v-model="dispose.form.proceeds" /></Field>
+                    <Field id="proceeds" label="Sale proceeds ({{ currency }})" :error="dispose.form.errors.proceeds"><MoneyInput v-model="dispose.form.proceeds" /></Field>
                     <Field id="bank_account_id" label="Received into" :error="dispose.form.errors.bank_account_id"><SelectInput id="bank_account_id" v-model="dispose.form.bank_account_id" :options="bankAccounts.map((b) => ({ value: b.id, label: b.label }))" /></Field>
                 </template>
                 <Field id="reason" label="Reason" :error="dispose.form.errors.reason"><TextInput v-model="dispose.form.reason" /></Field>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="move.previewOpen.value" :result="move.preview.value" :title="`Move ${asset.number}?`" confirm-label="Move the asset" currency="BDT" :processing="move.form.processing" @confirm="move.post" />
-        <JournalPreviewDialog v-model:open="dispose.previewOpen.value" :result="dispose.preview.value" :title="`Dispose of ${asset.number}?`" confirm-label="Dispose" currency="BDT" :processing="dispose.form.processing" @confirm="dispose.post" />
+        <JournalPreviewDialog v-model:open="move.previewOpen.value" :result="move.preview.value" :title="`Move ${asset.number}?`" confirm-label="Move the asset" :currency="currency" :processing="move.form.processing" @confirm="move.post" />
+        <JournalPreviewDialog v-model:open="dispose.previewOpen.value" :result="dispose.preview.value" :title="`Dispose of ${asset.number}?`" confirm-label="Dispose" :currency="currency" :processing="dispose.form.processing" @confirm="dispose.post" />
     </AppLayout>
 </template>

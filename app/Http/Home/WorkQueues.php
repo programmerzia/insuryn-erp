@@ -76,7 +76,8 @@ final class WorkQueues
 
     /** Sidebar badge → the queue whose count it shows (lib/navigation.ts badge keys). */
     private const BADGES = ['receipts' => 'installments_due', 'policies' => 'lapsing_policies', 'bank' => ['receipts_to_record', 'unmatched_bank_lines'],
-        'suspense' => 'unallocated_receipts', 'journals' => 'journals_to_approve', 'claims' => ['claims_awaiting_reserve', 'claims_to_settle', 'payments_to_release'], 'close' => 'reconciliation_variances'];
+        'suspense' => 'unallocated_receipts', 'journals' => 'journals_to_approve', 'failed_events' => 'failed_events',
+        'claims' => ['claims_awaiting_reserve', 'claims_to_settle', 'payments_to_release'], 'close' => 'reconciliation_variances'];
 
     private const TOP = 5;
 

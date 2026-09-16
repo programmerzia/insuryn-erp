@@ -2,10 +2,11 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { ChevronRight } from 'lucide-vue-next';
 import { TooltipContent, TooltipPortal, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui';
-import { computed, onMounted } from 'vue';
-import { activeItem, type NavItem, type NavSection, sections, visibleNavigation } from '@/lib/navigation';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { activeItem, type NavItem, type NavSection, filterNavigationFocus, sections, visibleNavigation } from '@/lib/navigation';
 import { navOpen, usePhone } from '@/lib/phone';
 import { savePreference, usePreferences } from '@/lib/preferences';
+import { readSidebarScroll, writeSidebarScroll } from '@/lib/sidebarScroll';
 import { warmPages } from '@/lib/warmup';
 import type { SharedProps } from '@/types/shared';
 
@@ -19,10 +20,21 @@ const page = usePage<SharedProps>();
 const preferences = usePreferences();
 const phone = usePhone();
 const collapsed = computed(() => preferences.sidebar_collapsed && !phone.value);
-const items = computed(() => visibleNavigation(page.props.auth.permissions ?? []));
+const items = computed(() => filterNavigationFocus(visibleNavigation(page.props.auth.permissions ?? []), preferences.accounting_focus));
 const active = computed(() => activeItem(items.value, page.url));
 const badges = computed(() => ({ ...(page.props.shell?.badges ?? {}), approvals: page.props.shell?.approvals ?? 0 }) as Record<string, number>);
-onMounted(() => warmPages([...new Set(items.value.flatMap((item) => [item.page, item.detail].filter((p): p is string => !!p)))]));
+const navEl = ref<HTMLElement | null>(null);
+onMounted(async () => {
+    warmPages([...new Set(items.value.flatMap((item) => [item.page, item.detail].filter((p): p is string => !!p)))]);
+    await nextTick();
+    if (navEl.value) navEl.value.scrollTop = readSidebarScroll();
+});
+onBeforeUnmount(() => {
+    if (navEl.value) writeSidebarScroll(navEl.value.scrollTop);
+});
+function rememberScroll(): void {
+    if (navEl.value) writeSidebarScroll(navEl.value.scrollTop);
+}
 const count = (badge?: string) => (badge ? (badges.value[badge] ?? 0) : 0);
 
 interface Group {
@@ -52,9 +64,11 @@ function fullLabelWhenClipped(event: MouseEvent, label: string): void {
 <template>
     <nav
         id="main-navigation"
+        ref="navEl"
         class="relative flex min-h-0 flex-col overflow-y-auto border-r border-line bg-surface-2 py-2"
         :class="[collapsed ? 'w-12' : 'w-56', navOpen ? 'max-sm:fixed max-sm:top-(--topbar-h) max-sm:bottom-0 max-sm:left-0 max-sm:z-40 max-sm:w-64 max-sm:shadow-float' : 'max-sm:hidden']"
         aria-label="Main"
+        @scroll="rememberScroll"
     >
         <TooltipProvider :delay-duration="300">
             <!-- data-hrefs lets the browser flows (scripts/flow-audit.mjs, tests/e2e) open the section a link lives in before clicking it. -->
@@ -82,7 +96,7 @@ function fullLabelWhenClipped(event: MouseEvent, label: string): void {
                                 :class="{ 'bg-accent-soft font-medium text-ink hover:bg-accent-soft': active?.id === item.id, 'justify-center': collapsed }"
                                 :aria-current="active?.id === item.id ? 'page' : undefined"
                                 :aria-label="collapsed ? `${item.label}${count(item.badge) ? `, ${count(item.badge)} need action` : ''}` : undefined"
-                                @click="navOpen = false"
+                                @click="rememberScroll(); navOpen = false"
                             >
                                 <span class="relative inline-flex shrink-0">
                                     <component :is="item.icon" :size="16" :stroke-width="1.5" aria-hidden="true" />

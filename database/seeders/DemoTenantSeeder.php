@@ -20,12 +20,14 @@ final class DemoTenantSeeder extends Seeder
     public function run(string $slug = 'demo'): array
     {
         $tenantId = (string) Str::uuid7();
-        DB::table('tenants')->insert(['id' => $tenantId, 'name' => 'Demo Insurance', 'slug' => $slug, 'timezone' => 'Asia/Dhaka',
-            'fiscal_year_start_month' => 7, 'base_currency' => 'BDT', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $currency = (string) config('erp.default_currency', 'KES');
+        $timezone = (string) config('erp.business_clock.default_timezone', 'Africa/Nairobi');
+        DB::table('tenants')->insert(['id' => $tenantId, 'name' => 'Demo Insurance', 'slug' => $slug, 'timezone' => $timezone,
+            'fiscal_year_start_month' => 7, 'base_currency' => $currency, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
 
-        return TenantContext::run($tenantId, function () use ($tenantId): array {
+        return TenantContext::run($tenantId, function () use ($tenantId, $currency): array {
             $entityId = (string) Str::uuid7();
-            DB::table('legal_entities')->insert(['id' => $entityId, 'tenant_id' => $tenantId, 'code' => 'DEMO', 'name' => 'Demo Insurance Ltd', 'base_currency' => 'BDT', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('legal_entities')->insert(['id' => $entityId, 'tenant_id' => $tenantId, 'code' => 'DEMO', 'name' => 'Demo Insurance Ltd', 'base_currency' => $currency, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
             $branchId = (string) Str::uuid7();
             DB::table('branches')->insert(['id' => $branchId, 'tenant_id' => $tenantId, 'entity_id' => $entityId, 'code' => 'HO', 'name' => 'Head Office', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
             $bookId = (string) Str::uuid7();

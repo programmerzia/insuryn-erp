@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateRangeFilter from '@/components/forms/DateRangeFilter.vue';
@@ -7,6 +8,7 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 interface Item { id: string; receipt_id: string; receipt_number: string; reference: string | null; aged_since: string; days: number; open: string }
 const props = defineProps<{ asOf: string; ageing: { buckets: Record<string, string>; total: string; items: Item[] }; installments: { id: string; label: string; outstanding: string }[] }>();
@@ -33,7 +35,7 @@ void props;
             :columns="columns"
             :rows="ageing.items"
             :row-key="(i) => i.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No unallocated receipts."
             :empty-action="{ label: 'Import a bank statement', href: '/bank' }"
             :inspector-title="(i) => i.receipt_number"
@@ -46,7 +48,7 @@ void props;
                 </span>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Unallocated', value: `${formatMoney(row.open)} BDT`, num: true }, { label: 'Waiting since', value: formatDate(row.aged_since) }, { label: 'Days waiting', value: row.days }]" />
+                <DetailList :items="[{ label: 'Unallocated', value: `${formatMoney(row.open, currency)}`, num: true }, { label: 'Waiting since', value: formatDate(row.aged_since) }, { label: 'Days waiting', value: row.days }]" />
                 <Link :href="`/receipts/${row.receipt_id}/allocate`" class="mt-4 inline-flex h-8 items-center rounded-control bg-accent px-3 text-ui font-medium text-accent-ink hover:bg-accent-hover">Open the allocation workbench</Link>
             </template>
         </QueueView>

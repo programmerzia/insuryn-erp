@@ -143,6 +143,13 @@ Route::middleware('auth')->prefix('documents/templates')->group(function (): voi
     Route::get('{template}/preview', [\App\Modules\Platform\Documents\Http\DocumentTemplatesPageController::class, 'previewSaved'])->whereUuid('template');
 });
 
+Route::get('/docs/api/ledger-v1.openapi.json', function (): \Symfony\Component\HttpFoundation\BinaryFileResponse {
+    $path = base_path('docs/api/ledger-v1.openapi.json');
+    abort_unless(is_file($path), 404);
+
+    return response()->file($path, ['Content-Type' => 'application/json']);
+});
+
 // Read-only accounting pages (slice 0.6). Every web route runs ResolveTenant before auth (bootstrap/app.php);
 // sign-in, sign-out, password reset and two-factor routes come from Fortify (config/fortify.php).
 Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting')->name('accounting.')->group(function (): void {
@@ -159,6 +166,10 @@ Route::middleware(['auth', 'can:accounting.view_journals'])->prefix('accounting'
     // Gap fix GA-08: accounting events that failed or wait too long, with Requeue (accounting.requeue_event, checked by the service).
     Route::get('events', [\App\Http\Pages\AccountingEventsPageController::class, 'index'])->name('events.index');
     Route::post('events/{event}/requeue', [\App\Http\Pages\AccountingEventsPageController::class, 'requeue'])->whereUuid('event')->name('events.requeue');
+    Route::get('ledger-api', [\App\Http\Pages\LedgerApiDemoPageController::class, 'index'])->name('ledger-api');
+    Route::post('ledger-api/preview', [\App\Http\Pages\LedgerApiDemoPageController::class, 'preview'])->name('ledger-api.preview');
+    Route::post('ledger-api/post', [\App\Http\Pages\LedgerApiDemoPageController::class, 'post'])->name('ledger-api.post');
+    Route::post('ledger-api/integration-users', [\App\Http\Pages\LedgerApiDemoPageController::class, 'createIntegrationUser'])->middleware('can:platform.manage_users')->name('ledger-api.integration-users');
     // GA-31: the supporting voucher of a manual journal.
     Route::post('journals/{journal}/documents', [\App\Http\Pages\JournalPageController::class, 'attachDocument'])->whereUuid('journal');
     Route::get('journals/{journal}/documents/{document}', [\App\Http\Pages\JournalPageController::class, 'downloadDocument'])->whereUuid(['journal', 'document']);

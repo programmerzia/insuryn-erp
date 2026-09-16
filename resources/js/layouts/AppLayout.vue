@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, defineAsyncComponent, onBeforeUnmount, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue';
 import ConfirmHost from '@/components/shell/ConfirmHost.vue';
 import GuidedTour from '@/components/shell/GuidedTour.vue';
 import HelpPanel from '@/components/shell/HelpPanel.vue';
@@ -12,6 +12,8 @@ import TopBar from '@/components/shell/TopBar.vue';
 import { type HelpModule, helpModule } from '@/lib/help';
 import { openPalette, paletteOpen } from '@/lib/palette';
 import { navOpen, toggleNavigation } from '@/lib/phone';
+import { isPageVisibleInAccountingFocus } from '@/lib/accountingFocus';
+import { ACCOUNTING_FOCUS_LANDING } from '@/lib/navigation';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { useShortcut } from '@/lib/shortcuts';
 import { confirmationToast, followStep, type NextStep, toast } from '@/lib/toasts';
@@ -34,6 +36,11 @@ onBeforeUnmount(() => {
 
 const page = usePage<SharedProps>();
 const preferences = usePreferences();
+onMounted(() => {
+    if (preferences.accounting_focus && !isPageVisibleInAccountingFocus(page.url, page.props.auth.permissions ?? [])) {
+        router.visit(ACCOUNTING_FOCUS_LANDING);
+    }
+});
 // Gap fixes W7 (L5): the browser's constraint messages in the user's language (installed once for the whole app).
 if (typeof document !== 'undefined') installLocalizedValidity(() => preferences.locale);
 useShortcut('app.sidebar', () => toggleNavigation(() => savePreference('sidebar_collapsed', !preferences.sidebar_collapsed)));

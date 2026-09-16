@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -10,6 +11,7 @@ import { drillFrom } from '@/lib/drill';
 import { eventLabel, isEventType } from '@/lib/events';
 import { formatMoney } from '@/lib/format';
 import { reportColumnWidth } from '@/lib/reportColumns';
+const currency = useEntityCurrency();
 
 /**
  * One report on the shared table: period filter, drill links on rows and on cells such as a policy number (brief §6.6), totals under the table,
@@ -42,7 +44,7 @@ const columns = computed<DataColumn<Row>[]>(() =>
         const sample = props.rows.find((r) => r.cells[column.key] !== null)?.cells[column.key];
         const type = column.align === 'right' ? (isMoney(sample) ? 'money' : 'number') : /date|as_of|on$/.test(column.key) ? 'date' : 'text';
         // Gap audit GA-34: only event types become words ("HO" stays HO); columns are sized to their header and values (GA-06: no cut-off headers).
-        const header = type === 'money' ? `${column.label} (BDT)` : column.label;
+        const header = type === 'money' ? `${column.label} (${currency.value})` : column.label;
         const width = reportColumnWidth(header, props.rows.map((r) => r.cells[column.key]), type);
         return { id: column.key, header: column.label, type, value: (row: Row) => { const v = row.cells[column.key]; return typeof v === 'string' && isEventType(v) ? eventLabel(v) : v; }, href: index === 0 ? (row: Row) => row.link : row => row.links?.[column.key] ?? null, width };
     }),
@@ -66,7 +68,7 @@ function open(row: Row): void {
     <AppLayout help="reports" :title="title" fill>
         <div class="border-b border-line px-4 pt-2"><Breadcrumb :base="[{ label: 'Reports', href: '/reports' }]" /></div>
         <div class="flex min-h-0 flex-1 flex-col" @click.capture="(e) => (e.target as HTMLElement).closest('tbody a[href]') && drillFrom(title)">
-        <DataTable id="report" v-model:active="active" :label="title" :columns="columns" :rows="rows" :row-key="(r) => r.__key" currency="BDT" :url-sync="false" empty-text="Nothing in this period." @open="open">
+        <DataTable id="report" v-model:active="active" :label="title" :columns="columns" :rows="rows" :row-key="(r) => r.__key" :currency="currency" :url-sync="false" empty-text="Nothing in this period." @open="open">
             <template #toolbar>
                 <h1 class="mr-2 shrink-0 text-section font-semibold">{{ title }}</h1>
                 <form class="flex items-center gap-1.5 text-ui text-ink-2" @submit.prevent="apply">

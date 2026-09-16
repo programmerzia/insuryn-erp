@@ -132,12 +132,12 @@ final class DistributionDemoSeeder extends Seeder
             if (is_array($premiumOrRisk)) {
                 $policyId = DemoNewBusiness::sell($branchId, $productId, $holders[$holder % count($holders)], $producerId, $issued, $premiumOrRisk, $manager);
             } else {
-                $policyId = $lifecycle->quote(new QuoteRequest($entityId, $branchId, $productId, $holders[$holder % count($holders)], $producerId, $day($issued), $premiumOrRisk, 'BDT', 1), $manager)->id;
+                $policyId = $lifecycle->quote(new QuoteRequest($entityId, $branchId, $productId, $holders[$holder % count($holders)], $producerId, $day($issued), $premiumOrRisk, (string) config('erp.default_currency', 'KES'), 1), $manager)->id;
                 $lifecycle->issue($policyId, $day($issued), $manager);
             }
             if ($received !== null) {
                 $premium = (int) DB::table('policies')->where('id', $policyId)->value('gross_premium_minor');
-                $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, 'bank_transfer', $premium, 'BDT', $day($received), null, 'DIST-'.substr($policyId, -6),
+                $receipts->record(new RecordReceiptRequest($entityId, $branchId, null, 'bank_transfer', $premium, (string) config('erp.default_currency', 'KES'), $day($received), null, 'DIST-'.substr($policyId, -6),
                     [new AllocationLine((string) DB::table('installments')->where('policy_id', $policyId)->value('id'), $premium)]), $manager);
             }
         };

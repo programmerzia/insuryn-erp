@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -8,6 +9,7 @@ import QueueView from '@/components/table/QueueView.vue';
 import type { DataColumn } from '@/components/table/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDate, formatMoney } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /**
  * GA-10 (D-75): commission history, read-only. Every approved or paid commission statement, whichever run made it, and the Phase 1 commission plans that still
@@ -59,7 +61,7 @@ const planColumns: DataColumn<Plan>[] = [
             :rows="statements"
             :total="statementsTotal ?? null"
             :row-key="(s) => s.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No commission statement has been approved yet."
             :empty-action="{ label: 'Open commission statements', href: '/distribution/statements' }"
             :inspector-title="(s) => s.number"
@@ -69,7 +71,7 @@ const planColumns: DataColumn<Plan>[] = [
                 <Link href="/distribution/statements" class="text-ui text-accent-text hover:underline">{{ can.run ? 'Approve or pay in Commission statements' : 'Open Commission statements' }}</Link>
             </template>
             <template #details="{ row }">
-                <DetailList :items="[{ label: 'Status' }, { label: 'Gross', value: `${formatMoney(row.gross)} BDT`, num: true }, { label: 'Tax withheld', value: `${formatMoney(row.withholding)} BDT`, num: true }, { label: 'Advances recovered', value: `${formatMoney(row.advances)} BDT`, num: true }, { label: 'Net', value: `${formatMoney(row.net)} BDT`, num: true }, { label: 'Paid through', value: routeWords[row.paid_via] ?? row.paid_via }, { label: 'Approved on', value: formatDate(row.approved_on) }, { label: 'Paid on', value: formatDate(row.paid_on) }]">
+                <DetailList :items="[{ label: 'Status' }, { label: 'Gross', value: `${formatMoney(row.gross, currency)}`, num: true }, { label: 'Tax withheld', value: `${formatMoney(row.withholding, currency)}`, num: true }, { label: 'Advances recovered', value: `${formatMoney(row.advances, currency)}`, num: true }, { label: 'Net', value: `${formatMoney(row.net, currency)}`, num: true }, { label: 'Paid through', value: routeWords[row.paid_via] ?? row.paid_via }, { label: 'Approved on', value: formatDate(row.approved_on) }, { label: 'Paid on', value: formatDate(row.paid_on) }]">
                     <template #Status><StatusBadge :status="row.status" /></template>
                 </DetailList>
                 <div class="mt-4 flex flex-col gap-2">

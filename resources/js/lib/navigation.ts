@@ -1,5 +1,5 @@
 import type { Component } from 'vue';
-import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2, Truck, FileInput, Send, Armchair, TrendingDown, PiggyBank, Coins, ScrollText, Shapes } from 'lucide-vue-next';
+import { Banknote, Calculator, FileType, House, BookOpen, CalendarCheck, ChartColumn, CheckCheck, CircleAlert, FileText, Inbox, Landmark, ListChecks, Package, Percent, Receipt, Scale, ShieldAlert, Tags, Upload, Users, Wallet, BellRing, KeyRound, Network, Settings2, Target, UserCog, UsersRound, ClipboardCheck, Gauge, FileClock, RefreshCw, ListTree, BadgePercent, Grid3x3, BanknoteArrowDown, ShieldCheck, FileSpreadsheet, Sigma, IdCard, HandCoins, ReceiptText, SlidersHorizontal, Handshake, Share2, Truck, FileInput, Send, Armchair, TrendingDown, PiggyBank, Coins, ScrollText, Shapes, Globe } from 'lucide-vue-next';
 
 /**
  * Sidebar navigation (UX brief §3). GA-37: each label is the title of the page it opens, in the words of docs/glossary.md, and no two items share an icon. `any` mirrors the server's area permissions (a page opens
@@ -95,6 +95,8 @@ export const navigation: NavItem[] = [
     { id: 'budgets', detail: 'budgets/Show', page: 'budgets/Index', label: 'Budgets', href: '/budgets', icon: PiggyBank, section: 'assets', any: ['budget.prepare', 'budget.approve', reader] },
     { id: 'petty-cash', detail: 'pettyCash/Show', page: 'pettyCash/Index', label: 'Petty cash', href: '/petty-cash', icon: Coins, section: 'assets', any: ['pettycash.spend', 'pettycash.replenish', 'pettycash.approve', reader] },
     { id: 'journals', detail: 'accounting/journals/Show', page: 'accounting/journals/Index', label: 'Journals', href: '/accounting/journals', icon: BookOpen, section: 'accounting', any: ['accounting.view_journals'], badge: 'journals' },
+    { id: 'accounting-events', page: 'accounting/events/Index', label: 'Accounting events', href: '/accounting/events', icon: CircleAlert, section: 'accounting', any: ['accounting.view_journals'], badge: 'failed_events' },
+    { id: 'ledger-api', page: 'accounting/LedgerApiDemo', label: 'Ledger API demo', href: '/accounting/ledger-api', icon: Globe, section: 'accounting', any: ['accounting.view_journals'] },
     { id: 'chart-of-accounts', page: 'accounting/ChartOfAccounts', label: 'Chart of accounts', href: '/accounting/chart-of-accounts', icon: ListTree, section: 'accounting', any: ['accounting.view_journals', 'accounting.manage_coa'] },
     { id: 'account-roles', page: 'accounting/AccountRoles', label: 'Account roles', href: '/accounting/account-roles', icon: Tags, section: 'accounting', any: ['accounting.manage_coa'] },
     { id: 'imports', label: 'Imports', href: '/accounting/imports', icon: Upload, section: 'accounting', any: ['accounting.view_journals'] },
@@ -112,9 +114,27 @@ export const navigation: NavItem[] = [
     { id: 'document-templates', detail: 'documents/templates/Edit', page: 'documents/templates/Index', label: 'Document templates', href: '/documents/templates', icon: FileType, section: 'admin', any: ['document.manage_templates'] },
 ];
 
+/** Sidebar sections kept in accounting focus mode (demo / integration pitch). */
+export const ACCOUNTING_FOCUS_SECTIONS: readonly SectionId[] = ['accounting', 'assets', 'payables'];
+
+/** Finance pages listed under other sections but shown in accounting focus mode. */
+export const ACCOUNTING_FOCUS_ITEM_IDS: readonly string[] = ['bank'];
+
+export const ACCOUNTING_FOCUS_LANDING = '/accounting/ledger-api';
+
 export function visibleNavigation(permissions: string[]): NavItem[] {
     const held = new Set(permissions);
     return navigation.filter((item) => item.any.length === 0 || item.any.some((permission) => held.has(permission)));
+}
+
+/** Hides insurance operations menus; keeps accounting, assets, budgets, payables and bank. */
+export function filterNavigationFocus(items: NavItem[], accountingFocus: boolean): NavItem[] {
+    if (!accountingFocus) {
+        return items;
+    }
+    const sections = new Set(ACCOUNTING_FOCUS_SECTIONS);
+    const extras = new Set(ACCOUNTING_FOCUS_ITEM_IDS);
+    return items.filter((item) => sections.has(item.section) || extras.has(item.id));
 }
 
 /** The navigation item a URL belongs to: the longest matching href prefix. */

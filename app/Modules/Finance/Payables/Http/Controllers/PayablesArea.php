@@ -30,7 +30,9 @@ final class PayablesArea
     /** @return list<array{id: string, label: string}> */
     public static function bankAccounts(string $entityId): array
     {
-        return array_values(DB::table('bank_accounts')->where('entity_id', $entityId)->where('status', 'active')->where('currency', 'BDT')->orderBy('bank_name')
+        $currency = PageSupport::entity()['currency'];
+
+        return array_values(DB::table('bank_accounts')->where('entity_id', $entityId)->where('status', 'active')->where('currency', $currency)->orderBy('bank_name')
             ->get(['id', 'bank_name', 'account_no_masked'])->map(fn (object $b): array => ['id' => (string) $b->id, 'label' => "{$b->bank_name} {$b->account_no_masked}"])->all());
     }
 

@@ -29,7 +29,7 @@ final class BlankTenantSeeder extends Seeder
         }
         $tenantId = (string) Str::uuid7();
         DB::table('tenants')->insert(['id' => $tenantId, 'name' => $name, 'slug' => $slug, 'timezone' => 'Asia/Dhaka', 'fiscal_year_start_month' => 7,
-            'base_currency' => 'BDT', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+            'base_currency' => (string) config('erp.default_currency', 'KES'), 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
 
         TenantContext::run($tenantId, function () use ($tenantId): void {
             RoleTemplates::seedCurrentTenant();

@@ -37,6 +37,10 @@ const form = useForm(newAccountDraft());
 const locks = computed(() => (editing.value ? editLocks(editing.value) : { typeAndSide: false, postable: false }));
 const parents = computed(() => parentOptions(props.accounts, editing.value?.id ?? null));
 const subledgerOptions = computed(() => props.subledgers.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })));
+const currencyOptions = computed(() => [
+    { value: '', label: `Any (books kept in ${props.entity.currency})` },
+    { value: props.entity.currency, label: props.entity.currency },
+]);
 
 function openNew(parent: ChartAccount | null = null): void {
     editing.value = null;
@@ -154,7 +158,7 @@ const columns: DataColumn<ChartAccount>[] = [
                 {{ editing ? 'The code stays. Type and normal side stay once a journal line uses the account.' : 'Pick the type first: the normal side follows it. Put the account under a heading so reports group it.' }}
             </p>
             <FormLayout :submit-label="editing ? 'Save account' : 'Add account'" :dirty="form.isDirty" :processing="form.processing" :error="(form.errors as Record<string, string>).form" @submit="save" @cancel="drawerOpen = false">
-                <div class="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
+                <div class="grid grid-cols-2 gap-3">
                     <Field id="coa-code" label="Code" :hint="editing ? undefined : 'Unique in the chart, e.g. 6150.'" :error="form.errors.code">
                         <TextInput id="coa-code" v-model="form.code" :maxlength="32" :disabled="!!editing" />
                     </Field>
@@ -181,8 +185,8 @@ const columns: DataColumn<ChartAccount>[] = [
                     <Field v-if="form.is_control" id="coa-subledger" label="Subledger" :error="form.errors.control_subledger">
                         <SelectInput id="coa-subledger" v-model="form.control_subledger" placeholder="Choose the subledger" :options="subledgerOptions" />
                     </Field>
-                    <Field id="coa-currency" label="Currency" optional :hint="`Leave empty to accept any currency. Books are kept in ${entity.currency}.`" :error="form.errors.currency">
-                        <div class="w-24"><TextInput id="coa-currency" v-model="form.currency" :maxlength="3" /></div>
+                    <Field id="coa-currency" label="Currency" optional :hint="`Restrict this account to one currency, or leave as Any. Books are kept in ${entity.currency}.`" :error="form.errors.currency">
+                        <SelectInput id="coa-currency" v-model="form.currency" :options="currencyOptions" />
                     </Field>
                 </template>
             </FormLayout>

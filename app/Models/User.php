@@ -24,7 +24,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $email
  * @property string $name
  * @property string $status
- * @property string $kind staff (web app) | portal (API tokens only, slice D9)
+ * @property string $kind staff (web app) | portal (producer API tokens, slice D9) | integration (ledger API tokens)
  * @property string|null $two_factor_secret
  * @property \Carbon\CarbonImmutable|null $two_factor_confirmed_at
  */

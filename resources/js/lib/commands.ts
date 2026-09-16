@@ -1,7 +1,7 @@
 import type { Component } from 'vue';
 import { ArrowRight, Keyboard, Monitor, Moon, PanelLeft, Plus, Rows3, Sun, Upload } from 'lucide-vue-next';
 import { fuzzyScore } from '@/lib/fuzzy';
-import { navigation } from '@/lib/navigation';
+import { filterNavigationFocus, navigation } from '@/lib/navigation';
 import type { Preferences, Recent } from '@/lib/preferences';
 import type { ShortcutId } from '@/lib/shortcuts';
 
@@ -57,12 +57,18 @@ const settings: Command[] = [
     { id: 'shortcuts', group: 'Settings', label: 'Show keyboard shortcuts', icon: Keyboard, special: 'shortcuts', keywords: 'keys help' },
 ];
 
-export function buildCommands(permissions: string[]): Command[] {
+const ACCOUNTING_FOCUS_ACTION_IDS = new Set([
+    'new-journal', 'import-coa', 'import-statement', 'start-close', 'new-supplier-bill', 'new-payment-run', 'new-bill', 'post-depreciation', 'new-asset', 'new-budget', 'petty-cash-voucher',
+]);
+
+export function buildCommands(permissions: string[], accountingFocus = false): Command[] {
     const held = new Set(permissions);
     const allowed = (any: string[]) => any.length === 0 || any.some((p) => held.has(p));
+    const nav = filterNavigationFocus(navigation.filter((item) => allowed(item.any)), accountingFocus);
+    const actionList = actions.filter((action) => allowed(action.any) && (!accountingFocus || ACCOUNTING_FOCUS_ACTION_IDS.has(action.id)));
     return [
-        ...navigation.filter((item) => allowed(item.any)).map((item): Command => ({ id: `go-${item.id}`, group: 'Go to', label: `Go to ${item.label.toLowerCase()}`, icon: item.icon, href: item.href })),
-        ...actions.filter((action) => allowed(action.any)).map(({ any: _any, icon, ...action }): Command => ({ ...action, group: 'Actions', icon: icon ?? Plus })),
+        ...nav.map((item): Command => ({ id: `go-${item.id}`, group: 'Go to', label: `Go to ${item.label.toLowerCase()}`, icon: item.icon, href: item.href })),
+        ...actionList.map(({ any: _any, icon, ...action }): Command => ({ ...action, group: 'Actions', icon: icon ?? Plus })),
         ...settings,
     ];
 }

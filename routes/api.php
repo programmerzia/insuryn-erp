@@ -20,8 +20,27 @@ use App\Modules\Insurance\Product\Http\Controllers\ProductController;
 use App\Modules\Insurance\Reports\Http\Controllers\InsuranceReportController;
 use Illuminate\Support\Facades\Route;
 
-// JSON API. Every api route runs ResolveTenant (bootstrap/app.php). Authentication is the default guard:
-// token authentication for external clients (Sanctum, design §0) is not built yet.
+// JSON API. Every api route runs ResolveTenant (bootstrap/app.php).
+// Ledger integration API (docs/plan/api-accounting-v1.md): Sanctum tokens for kind=integration users.
+Route::prefix('v1')->group(function (): void {
+    Route::post('tokens', [\App\Http\Ledger\LedgerTokenController::class, 'issue'])->middleware('throttle:10,1');
+    Route::middleware(['auth:sanctum', 'ledger-integration'])->group(function (): void {
+        Route::delete('tokens/current', [\App\Http\Ledger\LedgerTokenController::class, 'revoke']);
+        Route::middleware('abilities:integration:events:read')->group(function (): void {
+            Route::get('event-types', [\App\Modules\Accounting\Http\Controllers\Ledger\EventTypeController::class, 'index']);
+            Route::post('events/preview', [\App\Modules\Accounting\Http\Controllers\Ledger\PreviewController::class, 'preview']);
+            Route::post('events/{event}/replay', [\App\Modules\Accounting\Http\Controllers\Ledger\PreviewController::class, 'replay'])->whereUuid('event');
+            Route::get('events/{event}', [\App\Modules\Accounting\Http\Controllers\Ledger\EventController::class, 'show'])->whereUuid('event');
+            Route::get('journals/{journal}', [\App\Modules\Accounting\Http\Controllers\Ledger\JournalController::class, 'show'])->whereUuid('journal');
+            Route::get('balances', [\App\Modules\Accounting\Http\Controllers\Ledger\BalanceController::class, 'show']);
+            Route::get('trial-balance', [\App\Modules\Accounting\Http\Controllers\Ledger\BalanceController::class, 'trialBalance']);
+            Route::get('reports/profit-and-loss', [\App\Modules\Accounting\Http\Controllers\Ledger\ReportController::class, 'profitAndLoss']);
+            Route::get('reports/balance-sheet', [\App\Modules\Accounting\Http\Controllers\Ledger\ReportController::class, 'balanceSheet']);
+        });
+        Route::post('events', [\App\Modules\Accounting\Http\Controllers\Ledger\EventController::class, 'store'])->middleware('abilities:integration:events:write');
+    });
+});
+
 Route::middleware('auth')->prefix('accounting')->group(function (): void {
     Route::post('imports/{type}', [ImportController::class, 'api'])->whereIn('type', ['chart-of-accounts', 'opening-balances'])->name('api.accounting.imports');
     Route::post('periods/{period}/close', [PeriodCloseController::class, 'start'])->whereUuid('period');

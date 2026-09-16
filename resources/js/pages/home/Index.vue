@@ -31,7 +31,7 @@ interface Queue {
 /** Flow fix X4: work started from Home (New quote, Record a receipt, Register a claim, New manual journal), for the user's permissions. */
 const props = defineProps<{ queues: Queue[]; starts: { label: string; href: string }[] }>();
 const page = usePage<SharedProps>();
-const currency = computed(() => page.props.shell?.entity?.currency ?? 'BDT');
+const currency = computed(() => page.props.shell?.entity?.currency ?? 'KES');
 const preferences = usePreferences();
 const onboarding = useOnboarding();
 // Session S4: start the guided tour, or resume it where it was ended.

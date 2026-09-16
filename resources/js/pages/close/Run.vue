@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { Check, Lock } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
@@ -12,6 +13,7 @@ import { formatDate, formatMonth } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
 import { activeItem, navigation } from '@/lib/navigation';
 import { usePermissions } from '@/lib/permissions';
+const currency = useEntityCurrency();
 
 /**
  * UX brief §6.5 month-end close: the task checklist in order with owners, what each waits for, results and progress; each task opens the
@@ -176,6 +178,6 @@ async function lockPeriod(): Promise<void> {
                 </button>
             </section>
         </div>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

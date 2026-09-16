@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
@@ -16,6 +17,7 @@ import { type PreviewResult, previewJournal } from '@/lib/preview';
 import { useShortcut } from '@/lib/shortcuts';
 import { toast } from '@/lib/toasts';
 import { useUnsavedGuard } from '@/lib/unsaved';
+const currency = useEntityCurrency();
 
 /**
  * UX brief §6.3 allocation workbench: the receipt on the left with a running remaining balance, candidate installments on the right (the
@@ -122,7 +124,7 @@ useShortcut('inspector.primary', () => void review(), { allowInInputs: true });
                 </div>
             </section>
             <section class="flex min-h-0 flex-col" aria-label="Candidate installments">
-                <DataTable id="allocation-candidates" :open-on-click="false" compact-toolbar label="Candidate installments" :columns="columns" :rows="available" :row-key="(c) => c.id" currency="BDT" :url-sync="false" :total="(candidatesTotal ?? 0) > candidates.length ? candidatesTotal : null" empty-text="No installments are waiting for payment." @open="add">
+                <DataTable id="allocation-candidates" :open-on-click="false" compact-toolbar label="Candidate installments" :columns="columns" :rows="available" :row-key="(c) => c.id" :currency="currency" :url-sync="false" :total="(candidatesTotal ?? 0) > candidates.length ? candidatesTotal : null" empty-text="No installments are waiting for payment." @open="add">
                     <template #toolbar>
                         <h2 class="text-section font-semibold whitespace-nowrap">Waiting for payment</h2>
                         <span class="ml-3 text-dense whitespace-nowrap text-ink-2 max-xl:hidden">↑↓ choose · Enter adds · / filters</span>

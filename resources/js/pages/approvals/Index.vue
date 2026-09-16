@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import JournalPreviewDialog from '@/components/forms/JournalPreviewDialog.vue';
@@ -9,6 +10,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { approvalOutcome, type ApprovalPreview, stepLabel } from '@/lib/approvals';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { useJournalConfirm } from '@/lib/journalConfirm';
+const currency = useEntityCurrency();
 
 interface ApprovalRow {
     id: string;
@@ -59,7 +61,7 @@ void props;
             :columns="columns"
             :rows="approvals"
             :row-key="(a) => a.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="Nothing is waiting for your decision."
             :empty-action="{ label: 'Back to Home', href: '/home' }"
             :inspector-title="(a) => a.title"
@@ -70,7 +72,7 @@ void props;
             <template #details="{ row }">
                 <DetailList
                     :items="[
-                        { label: 'Amount', value: row.amount ? `${formatMoney(row.amount)} BDT` : null, num: true },
+                        { label: 'Amount', value: row.amount ? `${formatMoney(row.amount, currency)}` : null, num: true },
                         { label: 'Requested by', value: row.requested_by },
                         { label: 'Requested', value: row.requested_at_label ?? formatDateTime(row.requested_at) },
                         { label: 'Step', value: stepLabel(row.step, row.steps_total) },
@@ -105,6 +107,6 @@ void props;
                 <button type="button" class="h-8 rounded-control border border-line-control px-3 text-ui text-ink hover:bg-surface-2" :disabled="reason.trim() === ''" @click="reject(row)">Reject</button>
             </template>
         </QueueView>
-        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" currency="BDT" :processing="confirm.state.processing" @confirm="confirm.confirm" />
+        <JournalPreviewDialog v-model:open="confirm.state.open" :result="confirm.state.result" :title="confirm.state.title" :confirm-label="confirm.state.label" :currency="currency" :processing="confirm.state.processing" @confirm="confirm.confirm" />
     </AppLayout>
 </template>

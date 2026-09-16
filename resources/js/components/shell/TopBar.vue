@@ -8,6 +8,7 @@ import { Menu, MenuContent, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, 
 import { helpModule } from '@/lib/help';
 import { openPalette } from '@/lib/palette';
 import { navOpen, toggleNavigation } from '@/lib/phone';
+import { toggleAccountingFocus } from '@/lib/accountingFocus';
 import { savePreference, usePreferences } from '@/lib/preferences';
 import { shortcutKeys } from '@/lib/shortcuts';
 import type { SharedProps } from '@/types/shared';
@@ -105,6 +106,7 @@ const signOut = () => router.post('/logout');
                     <MenuRadioItem value="comfortable">Comfortable (40px rows)</MenuRadioItem>
                 </MenuRadioGroup>
                 <MenuSeparator class="my-1 h-px bg-line" />
+                <MenuItem @select="toggleAccountingFocus">{{ preferences.accounting_focus ? 'Show all menus' : 'Accounting focus mode' }}</MenuItem>
                 <MenuItem shortcut="app.sidebar" @select="toggleSidebar">{{ preferences.sidebar_collapsed ? 'Expand' : 'Collapse' }} the sidebar</MenuItem>
             </MenuContent>
         </Menu>

@@ -29,7 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [ResolveTenant::class, HandleInertiaRequests::class, \App\Http\Preview\PreviewJournal::class]);
         $middleware->alias(['moves-money' => \App\Http\Preview\MovesMoney::class, 'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
-            'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class, 'producer-portal' => \App\Http\Portal\EnsureProducerPortal::class]);
+            'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class, 'producer-portal' => \App\Http\Portal\EnsureProducerPortal::class,
+            'ledger-integration' => \App\Http\Ledger\EnsureLedgerIntegration::class]);
         $middleware->api(append: [ResolveTenant::class]);
         // Tenant must be known before auth loads a (tenant-scoped) user, and after the session exists.
         // Anchor on StartSession: Authenticate itself is not in the priority list, so anchoring on it

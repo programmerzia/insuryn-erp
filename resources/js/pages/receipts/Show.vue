@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -15,6 +16,7 @@ import { useBusinessToday } from '@/lib/businessToday';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useMoneyForm } from '@/lib/moneyForm';
 import { usePreferences } from '@/lib/preferences';
+const currency = useEntityCurrency();
 
 const props = defineProps<{
     receipt: { id: string; number: string; channel: string; amount: string; value_date: string; reference: string | null; status: string; cheque_no: string | null; cheque_bank: string | null; bounced_on: string | null; bounce_reason: string | null;
@@ -73,7 +75,7 @@ const facts = computed(() => [
             :status="receipt.status"
             :facts="facts"
             :crumbs="[{ label: 'Receipts', href: '/receipts' }]"
-            currency="BDT"
+            :currency="currency"
             :timeline="timeline"
             :accounting="accounting"
             :audit="audit"
@@ -125,7 +127,7 @@ const facts = computed(() => [
                 <Field id="cleared_on" label="Cleared on" :error="clear.form.errors.cleared_on"><DateInput v-model="clear.form.cleared_on" /></Field>
             </FormLayout>
         </Drawer>
-        <JournalPreviewDialog v-model:open="clear.previewOpen.value" :result="clear.preview.value" :title="`Clear cheque ${receipt.cheque_no}?`" confirm-label="Clear into the bank" currency="BDT" :processing="clear.form.processing" @confirm="clear.post" />
-        <JournalPreviewDialog v-model:open="bounce.previewOpen.value" :result="bounce.preview.value" :title="`Reverse ${receipt.number}?`" confirm-label="Reverse the receipt" currency="BDT" :processing="bounce.form.processing" @confirm="bounce.post" />
+        <JournalPreviewDialog v-model:open="clear.previewOpen.value" :result="clear.preview.value" :title="`Clear cheque ${receipt.cheque_no}?`" confirm-label="Clear into the bank" :currency="currency" :processing="clear.form.processing" @confirm="clear.post" />
+        <JournalPreviewDialog v-model:open="bounce.previewOpen.value" :result="bounce.preview.value" :title="`Reverse ${receipt.number}?`" confirm-label="Reverse the receipt" :currency="currency" :processing="bounce.form.processing" @confirm="bounce.post" />
     </AppLayout>
 </template>

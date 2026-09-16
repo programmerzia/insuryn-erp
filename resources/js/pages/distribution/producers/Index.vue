@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEntityCurrency } from '@/lib/entityCurrency';
 import { Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import DateInput from '@/components/forms/DateInput.vue';
@@ -15,6 +16,7 @@ import Drawer from '@/components/ui/Drawer.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { producerTypeCodes, producerTypeLabel } from '@/lib/distribution';
 import { formatDate } from '@/lib/format';
+const currency = useEntityCurrency();
 
 /** Distribution design note §6 producers queue: what needs attention first (licence expiring, advance outstanding, statement pending). */
 interface ProducerRow {
@@ -58,7 +60,7 @@ const columns: DataColumn<ProducerRow>[] = [
             :columns="columns"
             :rows="producers"
             :row-key="(p) => p.id"
-            currency="BDT"
+            :currency="currency"
             empty-text="No producers yet: add the first agent, BDO or broker."
             :action="can.manage ? { label: 'New producer' } : null"
             :inspector-title="(p) => `${p.code} · ${p.name}`"

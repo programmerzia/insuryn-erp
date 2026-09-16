@@ -27,6 +27,7 @@ const facts = computed(() => {
             <span v-if="bar.message" class="text-ink">{{ bar.message }}</span>
         </p>
         <div class="ml-auto flex min-w-0 items-center gap-4">
+            <span v-if="preferences.accounting_focus" class="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-dense font-medium text-accent">Accounting focus</span>
             <div v-if="bar.page && bar.page.last > 1" class="num flex items-center gap-1">
                 <button type="button" class="inline-flex size-5 items-center justify-center rounded-control hover:bg-surface disabled:opacity-40" :disabled="bar.page.current <= 1" aria-label="Previous page" @click="bar.page.go(bar.page.current - 1)">
                     <ChevronLeft :size="14" :stroke-width="1.5" />
