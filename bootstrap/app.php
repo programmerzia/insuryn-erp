@@ -71,6 +71,32 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (\App\Modules\Accounting\Application\Integration\LedgerRequestRejected $e, Request $request) => $wantsJson($request)
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reason, 'errors' => $e->errors()], 422)
             : null);
+        // Ledger API (and every api route): no debug detail leaves the server, whatever APP_DEBUG says. A missing token ability or refused
+        // authorization is a clean 403, an unauthenticated call a 401, a posting that hit a bug a 500 with the event id; the cause stays in the log.
+        $isApi = fn (Request $request): bool => $request->is('api/*');
+        $exceptions->render(fn (\Illuminate\Auth\AuthenticationException $e, Request $request) => $isApi($request)
+            ? response()->json(['message' => 'Unauthenticated.', 'reason' => 'UNAUTHENTICATED'], 401)
+            : null);
+        $exceptions->render(fn (\Illuminate\Auth\Access\AuthorizationException|\Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException $e, Request $request) => $isApi($request)
+            ? response()->json(['message' => $e instanceof \Laravel\Sanctum\Exceptions\MissingAbilityException || str_contains($e->getMessage(), 'ability')
+                ? 'This token lacks the ability for this call.' : ($e->getMessage() !== '' ? $e->getMessage() : 'This action is not allowed.'), 'reason' => 'ABILITY_MISSING'], 403)
+            : null);
+        $exceptions->render(fn (\App\Modules\Accounting\Exceptions\UnexpectedPostingException $e, Request $request) => $isApi($request)
+            ? response()->json(['message' => 'The event could not be posted.', 'reason' => 'UNEXPECTED', 'event_id' => $e->eventId], 500)
+            : null);
+        $exceptions->render(function (Throwable $e, Request $request) use ($isApi) {
+            if (! $isApi($request) || $e instanceof \Illuminate\Validation\ValidationException) {
+                return null; // validation keeps its own JSON body; browser requests keep the default handling
+            }
+            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $e->getStatusCode() < 500) {
+                $status = $e->getStatusCode();
+                $reason = match ($status) { 404 => 'NOT_FOUND', 405 => 'METHOD_NOT_ALLOWED', 429 => 'TOO_MANY_REQUESTS', 403 => 'FORBIDDEN', default => 'HTTP_'.$status };
+
+                return response()->json(['message' => $e->getMessage() !== '' ? $e->getMessage() : (SymfonyResponse::$statusTexts[$status] ?? 'Request refused.'), 'reason' => $reason], $status, $e->getHeaders());
+            }
+
+            return response()->json(['message' => 'The request could not be completed.', 'reason' => 'UNEXPECTED'], 500);
+        });
         // Gap fix GA-07: other refusals (403 from `can:` middleware), missing pages and records (404), expired forms (419) and failures (500, 503) render the
         // same in-app error page for browsers. JSON and API responses are unchanged; with APP_DEBUG a 500 keeps Laravel's debug page.
         $exceptions->respond(function (SymfonyResponse $response, Throwable $e, Request $request) use ($wantsJson): SymfonyResponse {
