@@ -244,8 +244,8 @@ steps[3] = async () => {
     const desc = `Demo server ${Date.now()}`;
     await drawer.getByLabel('Description').fill(desc);
     await drawer.locator('#branch_id').selectOption({ label: 'HO · Head Office' });
-    await drawer.getByLabel('Cost (BDT)').fill('150000');
-    await drawer.getByLabel('Cost (BDT)').press('Tab');
+    await drawer.getByLabel(/^Cost \(/).fill('150000');
+    await drawer.getByLabel(/^Cost \(/).press('Tab');
     await drawer.getByRole('button', { name: /Review the journal/ }).click();
     await confirmPreview(acc, 'capitalise');
     await acc.waitForURL(/\/fixed-assets\/[0-9a-f-]{36}/, { timeout: 15000 });
@@ -397,8 +397,8 @@ steps[5] = async () => {
     await clickButton(acc, 'Count the cash', { noWait: true });
     const c = acc.locator('[role=dialog]').filter({ hasText: 'Count the cash' });
     await c.waitFor({ state: 'visible' });
-    await c.getByLabel('Cash counted (BDT)').fill('19900');
-    await c.getByLabel('Cash counted (BDT)').press('Tab');
+    await c.getByLabel(/^Cash counted \(/).fill('19900');
+    await c.getByLabel(/^Cash counted \(/).press('Tab');
     await c.getByRole('button', { name: /^Review/ }).click();
     await confirmPreview(acc, 'cash count');
     await expectText(acc, 'Cash count recorded', 'count recorded');
