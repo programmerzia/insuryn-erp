@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Pages;
 
 use App\Http\Ledger\LedgerApiCatalogue;
+use App\Modules\Accounting\Application\Integration\ExternalEventValidator;
+use App\Modules\Accounting\Application\Integration\LedgerRequestRejected;
 use App\Modules\Accounting\Application\Integration\LedgerScope;
 use App\Modules\Accounting\Application\Integration\PreviewExternalEvent;
 use App\Modules\Accounting\Application\Integration\SubmitExternalEvent;
@@ -30,7 +32,8 @@ final class LedgerApiDemoPageController
     public function index(Request $request): Response
     {
         $scope = LedgerScope::resolve();
-        $branchId = (string) DB::table('branches')->where('entity_id', $scope->entityId)->orderBy('code')->value('id');
+        $branchCode = (string) DB::table('branches')->where('entity_id', $scope->entityId)->orderBy('code')->value('code');
+        $productCode = (string) (DB::table('products')->orderBy('code')->value('code') ?? 'MOTOR');
         $tenant = DB::table('tenants')->where('id', TenantContext::id())->first(['id', 'slug']);
         $sample = [
             'event_type' => 'PREMIUM_RECEIVED',
@@ -38,10 +41,10 @@ final class LedgerApiDemoPageController
             'transaction_date' => app(BusinessClock::class)->today($scope->entityId)->toDateString(),
             'currency' => $scope->currency,
             'payload' => ['amount' => 5_000_000],
+            // Codes and the caller's own references: the API resolves branch/product codes to ids and maps other references to stable uuids (ExternalEventValidator).
             'dimensions' => [
-                'branch' => $branchId, 'product' => (string) Str::uuid7(), 'product_code' => 'MOTOR', 'lob' => 'motor',
-                'channel' => 'agent', 'policy' => (string) Str::uuid7(), 'customer' => (string) Str::uuid7(),
-                'agent' => (string) Str::uuid7(), 'claim' => (string) Str::uuid7(),
+                'branch' => $branchCode, 'product' => $productCode, 'product_code' => $productCode, 'lob' => 'motor',
+                'channel' => 'agent', 'policy' => 'POL-DEMO-'.Str::upper(Str::random(4)), 'customer' => 'CUST-DEMO-1', 'agent' => 'AGT-DEMO-1',
             ],
             'source' => ['type' => 'receipt', 'id' => 'RCT-DEMO-1', 'number' => 'RCT-HO-DEMO-001'],
         ];
@@ -61,25 +64,27 @@ final class LedgerApiDemoPageController
         ]);
     }
 
-    public function preview(Request $request, PreviewExternalEvent $preview): RedirectResponse
+    public function preview(Request $request, PreviewExternalEvent $preview, ExternalEventValidator $validator): RedirectResponse
     {
         $data = $this->validatedBody($request);
         $scope = LedgerScope::resolve();
         $effective = CarbonImmutable::parse($data['effective_date'] ?? $data['transaction_date']);
-        $result = $preview->preview($scope->entityId, $data['event_type'], $effective, strtoupper($data['currency']), $data['payload'], $data['dimensions']);
+        $validated = $this->boundary(fn () => $validator->validate($scope->entityId, $data['event_type'], CarbonImmutable::parse($data['transaction_date']), $effective, strtoupper($data['currency']), $data['payload'], $data['dimensions'], checkPeriod: false));
+        $result = $preview->preview($scope->entityId, $data['event_type'], $effective, strtoupper($data['currency']), $data['payload'], $validated->dimensions);
 
         return redirect()->route('accounting.ledger-api')->with('ledger_demo_result', ['kind' => 'preview', 'data' => $result]);
     }
 
-    public function post(Request $request, SubmitExternalEvent $submit): RedirectResponse
+    public function post(Request $request, SubmitExternalEvent $submit, ExternalEventValidator $validator): RedirectResponse
     {
         $data = $this->validatedBody($request);
         $scope = LedgerScope::resolve();
         $transaction = CarbonImmutable::parse($data['transaction_date']);
         $effective = CarbonImmutable::parse($data['effective_date'] ?? $data['transaction_date']);
+        $validated = $this->boundary(fn () => $validator->validate($scope->entityId, $data['event_type'], $transaction, $effective, strtoupper($data['currency']), $data['payload'], $data['dimensions']));
         $result = $submit->submit(
             $scope->entityId, $data['event_type'], $data['idempotency_key'], $transaction, $effective,
-            strtoupper($data['currency']), $data['payload'], $data['dimensions'], $data['source'],
+            strtoupper($data['currency']), $data['payload'], $validated->dimensions, $data['source'],
             $request->user()?->getAuthIdentifier(), true,
         );
         $event = $result->event->fresh() ?? $result->event;
@@ -112,6 +117,27 @@ final class LedgerApiDemoPageController
         return redirect()->route('accounting.ledger-api')->with('status', "Integration user {$data['email']} created. Obtain a token with POST /api/v1/tokens.");
     }
 
+    /**
+     * The page shows one error under the JSON body, so a boundary refusal (the same 422 the API returns) is shown as `field: message`.
+     *
+     * @template T
+     *
+     * @param callable(): T $check
+     * @return T
+     */
+    private function boundary(callable $check): mixed
+    {
+        try {
+            return $check();
+        } catch (LedgerRequestRejected $e) {
+            $messages = [];
+            foreach ($e->errors() as $field => $errors) {
+                $messages[] = $field.': '.implode(' ', $errors);
+            }
+            throw \Illuminate\Validation\ValidationException::withMessages(['body' => implode(' ', $messages).' ('.$e->reason.')']);
+        }
+    }
+
     /** @return array{event_type: string, idempotency_key: string, transaction_date: string, effective_date?: string, currency: string, payload: array<string, mixed>, dimensions: array<string, mixed>, source: array{type: string, id: string, number?: string|null}} */
     private function validatedBody(Request $request): array
     {
@@ -131,7 +157,7 @@ final class LedgerApiDemoPageController
             'transaction_date' => ['required', 'date_format:Y-m-d'],
             'effective_date' => ['sometimes', 'date_format:Y-m-d'],
             'currency' => ['required', 'string', 'size:3'],
-            'payload' => ['required', 'array'],
+            'payload' => ['present', 'array'],
             'dimensions' => ['required', 'array'],
             'source' => ['required', 'array'],
             'source.type' => ['required', 'string', 'max:64'],

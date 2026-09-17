@@ -67,6 +67,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reasonCode]
                 + ($e instanceof \App\Modules\Accounting\Exceptions\PeriodTransitionException && $e->details !== [] ? ['details' => $e->details] : []), 422)
             : $backToForm($request, $e->getMessage(), $e->reasonCode));
+        // Ledger API boundary (ExternalEventValidator): a refused body answers with the field, the message and the machine-readable reason.
+        $exceptions->render(fn (\App\Modules\Accounting\Application\Integration\LedgerRequestRejected $e, Request $request) => $wantsJson($request)
+            ? response()->json(['message' => $e->getMessage(), 'reason' => $e->reason, 'errors' => $e->errors()], 422)
+            : null);
         // Gap fix GA-07: other refusals (403 from `can:` middleware), missing pages and records (404), expired forms (419) and failures (500, 503) render the
         // same in-app error page for browsers. JSON and API responses are unchanged; with APP_DEBUG a 500 keeps Laravel's debug page.
         $exceptions->respond(function (SymfonyResponse $response, Throwable $e, Request $request) use ($wantsJson): SymfonyResponse {
