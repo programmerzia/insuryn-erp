@@ -74,7 +74,7 @@ final class EventController
             // and a resend of the same idempotency_key with a corrected body replaces it.
             return response()->json(['message' => (string) $event->failure_reason, 'reason' => 'POSTING_FAILED', 'data' => $body], 422);
         }
-        $status = $sync && $result->journals !== [] ? 201 : ($result->created ? 202 : 200);
+        $status = $result->resubmitted ? 200 : ($sync && $result->journals !== [] ? 201 : ($result->created ? 202 : 200));
 
         return response()->json(['data' => $body], $status);
     }

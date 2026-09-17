@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Application\Integration;
 
+use App\Modules\Accounting\Application\Contracts\PostingDispatcher;
 use App\Modules\Accounting\Application\PostingEngine;
 use App\Modules\Accounting\Application\SubmitAccountingEvent;
+use App\Modules\Accounting\Domain\Enums\EventStatus;
 use App\Modules\Accounting\Domain\Models\AccountingEvent;
+use App\Modules\Platform\Audit\Actor;
+use App\Modules\Platform\Audit\Audit;
+use App\Modules\Platform\Audit\AuditSubject;
 use App\Modules\Platform\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -15,12 +20,18 @@ use Illuminate\Support\Str;
 /**
  * The ledger API write path (docs/plan/api-accounting-v1.md): one intake row and one accounting event commit together,
  * then posting runs on the queue or synchronously when the caller asks for it.
+ *
+ * Resend rule: the same idempotency_key returns the existing event (created: false) while it is queued, posting or posted. When
+ * its event has FAILED, the resend replaces the body (payload, dimensions, dates, currency, source) on the intake and the event,
+ * queues it again and answers resubmitted: true, so a caller fixes its data and retries under the key it already holds.
  */
 final class SubmitExternalEvent
 {
     public function __construct(
         private readonly SubmitAccountingEvent $submit,
         private readonly PostingEngine $engine,
+        private readonly Audit $audit,
+        private readonly PostingDispatcher $dispatcher,
     ) {}
 
     /**
@@ -52,10 +63,13 @@ final class SubmitExternalEvent
                 'submitted_by' => $submittedBy, 'created_at' => now(),
             ]);
             if ($inserted === 0) {
-                $existing = DB::table('external_event_intakes')->where('idempotency_key', $idempotencyKey)->first(['id', 'accounting_event_id']);
+                $existing = DB::table('external_event_intakes')->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first(['id', 'accounting_event_id']);
                 $event = AccountingEvent::query()->findOrFail((string) ($existing->accounting_event_id ?? throw new \RuntimeException('Duplicate intake without event.')));
+                if ($event->status !== EventStatus::Failed) {
+                    return ExternalEventResult::of((string) $existing->id, $event, false);
+                }
 
-                return ExternalEventResult::of((string) $existing->id, $event, false);
+                return ExternalEventResult::of((string) $existing->id, $this->resubmit((string) $existing->id, $event, $transactionDate, $effectiveDate, $currency, $payload, $dimensions, $source, $submittedBy), false, [], true);
             }
 
             $event = ($this->submit)(
@@ -70,9 +84,58 @@ final class SubmitExternalEvent
         if ($syncPost && $result->event->status->value === 'queued') {
             $journals = $this->engine->post($result->event->id);
 
-            return ExternalEventResult::of($result->intakeId, $result->event->fresh() ?? $result->event, $result->created, $journals);
+            return ExternalEventResult::of($result->intakeId, $result->event->fresh() ?? $result->event, $result->created, $journals, $result->resubmitted);
         }
 
         return $result;
+    }
+
+    /**
+     * A failed event under the caller's key takes the new body and goes back to the queue; the previous body and failure reason are in the audit
+     * trail (ledger.event_resubmitted). Runs inside the submit transaction.
+     *
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $dimensions
+     * @param array{type: string, id: string, number?: string|null} $source
+     */
+    private function resubmit(
+        string $intakeId,
+        AccountingEvent $event,
+        CarbonImmutable $transactionDate,
+        CarbonImmutable $effectiveDate,
+        string $currency,
+        array $payload,
+        array $dimensions,
+        array $source,
+        ?string $submittedBy,
+    ): AccountingEvent {
+        $before = [
+            'status' => $event->status->value, 'failure_reason' => $event->failure_reason, 'transaction_date' => $event->transaction_date->toDateString(),
+            'effective_date' => $event->effective_date->toDateString(), 'currency' => $event->currency, 'payload' => $event->payload, 'dimensions' => $event->dimensions,
+        ];
+        DB::table('external_event_intakes')->where('id', $intakeId)->update([
+            'transaction_date' => $transactionDate->toDateString(), 'effective_date' => $effectiveDate->toDateString(), 'currency' => $currency,
+            'payload' => json_encode($payload, JSON_THROW_ON_ERROR), 'dimensions' => json_encode($dimensions, JSON_THROW_ON_ERROR),
+            'source_type' => $source['type'], 'source_id' => $source['id'], 'source_number' => $source['number'] ?? null, 'submitted_by' => $submittedBy,
+        ]);
+        $updated = DB::table('accounting_events')->where('id', $event->id)->where('status', EventStatus::Failed->value)->update([
+            'transaction_date' => $transactionDate->toDateString(), 'effective_date' => $effectiveDate->toDateString(), 'currency' => $currency,
+            'payload' => json_encode($payload, JSON_THROW_ON_ERROR), 'dimensions' => json_encode($dimensions, JSON_THROW_ON_ERROR),
+            'status' => EventStatus::Queued->value, 'failure_reason' => null,
+        ]);
+        if ($updated !== 1) {
+            throw new \RuntimeException("Event {$event->id} is no longer failed; the resend was not applied.");
+        }
+        DB::table('outbox')->insert([
+            'id' => (string) Str::uuid7(), 'tenant_id' => $event->tenant_id, 'message_type' => 'PostAccountingEvent',
+            'payload' => json_encode(['event_id' => $event->id], JSON_THROW_ON_ERROR), 'created_at' => now(),
+        ]);
+        $this->audit->record('ledger.event_resubmitted', AuditSubject::of('accounting_event', $event->id), $before, [
+            'status' => EventStatus::Queued->value, 'transaction_date' => $transactionDate->toDateString(), 'effective_date' => $effectiveDate->toDateString(),
+            'currency' => $currency, 'payload' => $payload, 'dimensions' => $dimensions, 'intake_id' => $intakeId,
+        ], null, null, $submittedBy === null ? Actor::system() : Actor::user($submittedBy));
+        $this->dispatcher->dispatchAfterCommit($event->tenant_id, $event->id); // fast path; the outbox row is the guarantee
+
+        return $event->fresh() ?? $event;
     }
 }
