@@ -1,16 +1,18 @@
 # Ledger API — event catalogue (KES demo)
 
-External systems post accounting through `POST /api/v1/events`. Amounts are **minor units** (KES cents: 1 KES = 100). Use the tenant's branch UUID from setup. Currency must match the entity base currency (`KES` for the demo tenant).
+External systems post accounting through `POST /api/v1/events`. Amounts are **minor units** (KES cents: 1 KES = 100). Send the branch **code** (`HO`, `CTG`) and the product **code** (`MOTOR`, `FIRE`, …); the API resolves them to ids. Your own policy, customer, claim and agent references are accepted as they are (kept as `policy_ref` etc. on every journal line). Currency must match the entity base currency (`KES` for the demo tenant).
 
 ## Authentication
 
 ```http
 POST /api/v1/tokens
-X-Tenant: {tenant_uuid}
+Host: nonlife.localhost:8765
 Content-Type: application/json
 
-{"email":"integration@demo.test","password":"…","device_name":"payments"}
+{"email":"integration@nonlife.local","password":"…","device_name":"payments"}
 ```
+
+The tenant is the host name (`{slug}.your-domain`); there is no tenant header.
 
 Use `Authorization: Bearer {token}` on all other calls.
 
@@ -29,8 +31,8 @@ Use `Authorization: Bearer {token}` on all other calls.
 | Salaries paid | `PAYROLL_PAID` | Net pay leaves bank |
 | Bank / M-Pesa fee | `BANK_CHARGE` | Statement fee, not tied to a bounced cheque |
 | Acquire fixed asset | `FA_ACQUIRED` | Capitalise equipment over threshold |
-| Monthly depreciation | `FA_DEPRECIATION_POSTED` | Period-end (or use web batch) |
-| Petty cash voucher | `PETTY_CASH_VOUCHER_POSTED` | Small cash expense from float |
+| Monthly depreciation | `DEPRECIATION_POSTED` | Period-end (or use web batch) |
+| Petty cash voucher | `PETTY_CASH_SPENT` | Small cash expense from float |
 
 ## Sample payloads (KES)
 
@@ -44,15 +46,14 @@ Use `Authorization: Bearer {token}` on all other calls.
   "currency": "KES",
   "payload": { "amount": 5000000 },
   "dimensions": {
-    "branch": "{branch_uuid}",
-    "product": "{product_uuid}",
+    "branch": "HO",
+    "product": "MOTOR",
     "product_code": "MOTOR",
     "lob": "motor",
     "channel": "agent",
-    "policy": "{policy_uuid}",
-    "customer": "{party_uuid}",
-    "agent": "{agent_uuid}",
-    "claim": "{claim_uuid}"
+    "policy": "POL-2026-000123",
+    "customer": "CUST-000045",
+    "agent": "AGT-0007"
   },
   "source": { "type": "receipt", "id": "RCT-2026-001", "number": "RCT-HO-2026-000001" }
 }
@@ -67,7 +68,7 @@ Use `Authorization: Bearer {token}` on all other calls.
   "transaction_date": "2026-09-15",
   "currency": "KES",
   "payload": { "amount": 25000 },
-  "dimensions": { "branch": "{branch_uuid}", "product_code": "MOTOR", "lob": "motor", "channel": "direct" },
+  "dimensions": { "branch": "HO" },
   "source": { "type": "bank_fee", "id": "MPESA-2026-09-001", "number": "FEE-001" }
 }
 ```
@@ -80,9 +81,9 @@ Use `Authorization: Bearer {token}` on all other calls.
   "idempotency_key": "AP_PAYMENT_RELEASED:PAY-2026-001",
   "transaction_date": "2026-09-15",
   "currency": "KES",
-  "payload": { "amount": 12000000, "supplier_id": "{supplier_uuid}" },
-  "dimensions": { "branch": "{branch_uuid}" },
-  "source": { "type": "payment_run", "id": "{run_uuid}", "number": "PAY-2026-001" }
+  "payload": { "amount": 12000000 },
+  "dimensions": { "branch": "CTG" },
+  "source": { "type": "payment_run", "id": "PAY-2026-001", "number": "PAY-2026-001" }
 }
 ```
 
@@ -96,6 +97,8 @@ Use `Authorization: Bearer {token}` on all other calls.
 | `GET /api/v1/reports/balance-sheet?as_of=` | Balance sheet |
 | `GET /api/v1/journals/{id}` | Audit a posting |
 | `POST /api/v1/events/preview` | Dry-run before live post |
+
+A 422 names the field and a `reason` (see the [quick reference](./ledger-api-quick-reference.md#refusals-422)); nothing is written on a 422.
 
 ## Web-only (demo via UI, not API)
 

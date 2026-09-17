@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\Integration\ExternalEventValidator;
 use App\Modules\Accounting\Application\Integration\SubmitExternalEvent;
 use App\Modules\Platform\Administration\IntegrationAccounts;
 use App\Modules\Platform\Tenancy\TenantContext;
@@ -25,21 +26,26 @@ final class AccountingIntegrationDemoSeeder
     {
         $this->ensureIntegrationUser();
         $submit = app(SubmitExternalEvent::class);
+        $validator = app(ExternalEventValidator::class);
         $date = CarbonImmutable::parse('2026-09-14');
-        $dims = fn (): array => [
-            'branch' => $branchId, 'product' => (string) Str::uuid7(), 'product_code' => 'MOTOR', 'lob' => 'motor',
-            'channel' => 'agent', 'policy' => (string) Str::uuid7(), 'customer' => (string) Str::uuid7(),
-            'agent' => (string) Str::uuid7(), 'claim' => (string) Str::uuid7(),
+        // What a customer system sends: the branch and product CODES and its own policy/customer/agent references. The API boundary
+        // (ExternalEventValidator) turns codes into ids and references into stable uuids with `<name>_ref` kept for drill-down.
+        $branchCode = (string) (DB::table('branches')->where('id', $branchId)->value('code') ?? 'HO');
+        $productCode = (string) (DB::table('products')->where('code', 'MOTOR')->value('code') ?? DB::table('products')->orderBy('code')->value('code') ?? 'MOTOR');
+        $dims = fn (string $policy, string $customer): array => [
+            'branch' => $branchCode, 'product' => $productCode, 'product_code' => $productCode, 'lob' => 'motor', 'channel' => 'agent',
+            'policy' => $policy, 'customer' => $customer, 'agent' => 'AGT-API-7',
         ];
 
         $samples = [
-            ['PREMIUM_RECEIVED', 'PREMIUM_RECEIVED:DEMO-API-001', ['amount' => 5_000_000], ['type' => 'receipt', 'id' => 'RCT-API-001', 'number' => 'RCT-HO-2026-API-001']],
-            ['BANK_CHARGE', 'BANK_CHARGE:DEMO-API-001', ['amount' => 25_000], ['type' => 'bank_fee', 'id' => 'MPESA-SEP-001', 'number' => 'MPESA-FEE-001']],
-            ['PREMIUM_RECEIVED', 'PREMIUM_RECEIVED:DEMO-API-002', ['amount' => 1_250_000], ['type' => 'receipt', 'id' => 'RCT-API-002', 'number' => 'RCT-HO-2026-API-002']],
+            ['PREMIUM_RECEIVED', 'PREMIUM_RECEIVED:DEMO-API-001', ['amount' => 5_000_000], $dims('POL-API-2026-0001', 'CUST-API-0001'), ['type' => 'receipt', 'id' => 'RCT-API-001', 'number' => 'RCT-HO-2026-API-001']],
+            ['BANK_CHARGE', 'BANK_CHARGE:DEMO-API-001', ['amount' => 25_000], ['branch' => $branchCode], ['type' => 'bank_fee', 'id' => 'MPESA-SEP-001', 'number' => 'MPESA-FEE-001']],
+            ['PREMIUM_RECEIVED', 'PREMIUM_RECEIVED:DEMO-API-002', ['amount' => 1_250_000], $dims('POL-API-2026-0002', 'CUST-API-0002'), ['type' => 'receipt', 'id' => 'RCT-API-002', 'number' => 'RCT-HO-2026-API-002']],
         ];
 
-        foreach ($samples as [$type, $key, $payload, $source]) {
-            $submit->submit($entityId, $type, $key, $date, $date, $currency, $payload, $dims(), $source, null, true);
+        foreach ($samples as [$type, $key, $payload, $dimensions, $source]) {
+            $validated = $validator->validate($entityId, $type, $date, $date, $currency, $payload, $dimensions);
+            $submit->submit($entityId, $type, $key, $date, $date, $currency, $payload, $validated->dimensions, $source, null, true);
         }
     }
 

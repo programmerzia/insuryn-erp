@@ -758,6 +758,21 @@
                     },
                     "reason": {
                         "type": "string"
+                    },
+                    "errors": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "field => messages on a 422"
+                    },
+                    "event_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "on a 500 UNEXPECTED from a synchronous post"
                     }
                 }
             },
@@ -868,7 +883,67 @@
                 "type": "object",
                 "properties": {
                     "data": {
-                        "type": "object"
+                        "type": "object",
+                        "properties": {
+                            "intake_id": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "event_id": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "event_type": {
+                                "type": "string"
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "queued",
+                                    "posting",
+                                    "posted",
+                                    "failed"
+                                ]
+                            },
+                            "idempotency_key": {
+                                "type": "string"
+                            },
+                            "created": {
+                                "type": "boolean",
+                                "description": "true when this call created the event; false when the idempotency_key was already known"
+                            },
+                            "resubmitted": {
+                                "type": "boolean",
+                                "description": "true when the key belonged to a failed event and this body replaced it and queued it again"
+                            },
+                            "failure_reason": {
+                                "type": "string",
+                                "nullable": true
+                            },
+                            "journals": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        },
+                                        "number": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "posting_date": {
+                                            "type": "string",
+                                            "format": "date"
+                                        }
+                                    }
+                                },
+                                "description": "present after a synchronous post (?sync=1)"
+                            }
+                        }
                     }
                 }
             },
